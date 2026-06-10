@@ -12,9 +12,10 @@ from urllib.request import Request, urlopen
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT_PATH = PROJECT_ROOT / "pyproject.toml"
-PACKAGE_NAME = "edautopilot"
-REPOSITORY_OWNER = "NicholasClooney"
-REPOSITORY_NAME = "EDAutoPilotMKII"
+PACKAGE_NAME = "EDControlRoom"
+REPOSITORY_OWNER = "TheClooneyCollection"
+REPOSITORY_NAME = "EDControlRoom"
+PROJECT_DISPLAY_NAME = "EDControlRoom"
 LATEST_RELEASE_API_URL = (
     f"https://api.github.com/repos/{REPOSITORY_OWNER}/{REPOSITORY_NAME}/releases/latest"
 )

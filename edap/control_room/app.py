@@ -717,16 +717,16 @@ class ControlRoomApp(App[None]):
         if is_latest is True:
             self._log(
                 f"[dim]Currently running latest version "
-                f"(*{escape(current)}*) of EDAutoPilotMKII[/]"
+                f"(*{escape(current)}*) of {_version.PROJECT_DISPLAY_NAME}[/]"
             )
             return
         self._log(
-            f"[dim]Currently running version *{escape(current)}* of EDAutoPilotMKII[/]"
+            f"[dim]Currently running version *{escape(current)}* of {_version.PROJECT_DISPLAY_NAME}[/]"
         )
 
     def _log_update_available(self, release: _version.GitHubRelease) -> None:
         self._log(
-            f"[yellow]A newer ED AutoPilot Mk II release is available: "
+            f"[yellow]A newer {_version.PROJECT_DISPLAY_NAME} release is available: "
             f"{escape(release.display_name)}[/]"
         )
         self._log_current_version(is_latest=False)

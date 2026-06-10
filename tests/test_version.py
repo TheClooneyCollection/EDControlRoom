@@ -35,8 +35,8 @@ class VersionTests(unittest.TestCase):
     def test_fetch_latest_github_release_parses_response(self) -> None:
         payload = {
             "tag_name": "v1.8.0",
-            "name": "EDAutoPilot Mk II v1.8.0 - Test",
-            "html_url": "https://github.com/NicholasClooney/EDAutoPilotMKII/releases/tag/v1.8.0",
+            "name": "EDControlRoom v1.8.0 - Test",
+            "html_url": "https://github.com/TheClooneyCollection/EDControlRoom/releases/tag/v1.8.0",
             "published_at": "2026-06-10T00:00:00Z",
         }
 

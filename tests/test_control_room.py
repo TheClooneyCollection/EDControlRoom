@@ -1437,7 +1437,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
 
         self.app._log_current_version(is_latest=None)
 
-        self.assertIn("Currently running version *v1.7.1* of EDAutoPilotMKII", "\n".join(self.app.logged))
+        self.assertIn("Currently running version *v1.7.1* of EDControlRoom", "\n".join(self.app.logged))
 
     def test_log_current_version_reports_latest_version(self) -> None:
         self.app._current_version = "1.7.1"
@@ -1445,7 +1445,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.app._log_current_version(is_latest=True)
 
         self.assertIn(
-            "Currently running latest version (*v1.7.1*) of EDAutoPilotMKII",
+            "Currently running latest version (*v1.7.1*) of EDControlRoom",
             "\n".join(self.app.logged),
         )
 
@@ -1471,7 +1471,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
 
         mock_check.assert_not_called()
         self.assertIn(
-            "Currently running version *v9.9.9* of EDAutoPilotMKII",
+            "Currently running version *v9.9.9* of EDControlRoom",
             "\n".join(self.app.logged),
         )
 
@@ -1482,14 +1482,14 @@ class ControlRoomDispatchTests(unittest.TestCase):
             GitHubRelease(
                 tag_name="v1.8.0",
                 name="",
-                html_url="https://github.com/NicholasClooney/EDAutoPilotMKII/releases/tag/v1.8.0",
+                html_url="https://github.com/TheClooneyCollection/EDControlRoom/releases/tag/v1.8.0",
                 published_at="2026-06-10T00:00:00Z",
             )
         )
 
         output = "\n".join(self.app.logged)
-        self.assertIn("A newer ED AutoPilot Mk II release is available: v1.8.0", output)
-        self.assertIn("Currently running version *v1.7.1* of EDAutoPilotMKII", output)
+        self.assertIn("A newer EDControlRoom release is available: v1.8.0", output)
+        self.assertIn("Currently running version *v1.7.1* of EDControlRoom", output)
         self.assertIn("releases/tag/v1.8.0", output)
 
     def test_log_bindings_status_reports_effective_bindings_file(self) -> None:

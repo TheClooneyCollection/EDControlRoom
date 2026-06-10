@@ -1,7 +1,7 @@
 [project]
-name = "edautopilot"
+name = "EDControlRoom"
 version = "1.7.3"
-description = "Elite Dangerous autopilot experimentation"
+description = "Elite Dangerous control-room and routine tooling"
 requires-python = ">=3.12"
 dependencies = [
   "pyobjc-framework-Quartz>=12.1; sys_platform == 'darwin'",
