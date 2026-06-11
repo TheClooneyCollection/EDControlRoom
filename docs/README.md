@@ -17,9 +17,11 @@
 
 ## Maintainer Handoff
 
-- [STATUS.md](STATUS.md): maintained current status and next recommended work
-- [session-log.md](session-log.md): bounded recent session notes
-- [status-archive.md](status-archive.md): archived detailed validation and older handoff notes
+- [status/README.md](status/README.md): maintained status entrypoint and area map
+- [status/](status/): split current-state handoff files by durable area
+- [iteration-logs/](iteration-logs/): per-iteration maintained notes, one file per substantive work session
+- [iteration-archive.md](iteration-archive.md): generated archive of iteration logs, normally refreshed on the promotion branch or during release prep
+- [status-archive.md](status-archive.md): legacy archived validation and older pre-migration handoff notes
 
 ## Deep Reference
 

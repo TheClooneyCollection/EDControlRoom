@@ -1,0 +1,93 @@
+name: Promote Dev to Main
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: promote-dev-to-main
+  cancel-in-progress: true
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+
+    env:
+      PROMOTION_BRANCH: promote-dev-to-main--generated-iteration-archive
+      PR_TITLE: chore: promote dev to main
+      GH_TOKEN: ${{ secrets.PROMOTION_PR_TOKEN || secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Generate iteration archive
+        run: uv run python3 tools/iteration_logs.py render-archive
+
+      - name: Prepare promotion branch
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main dev
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$PROMOTION_BRANCH"
+          if ! git diff --quiet -- docs/iteration-archive.md; then
+            git add docs/iteration-archive.md
+            git commit -m "chore: update iteration archive"
+          fi
+          ahead_count="$(git rev-list --count origin/main..HEAD)"
+          echo "ahead_count=$ahead_count" >> "$GITHUB_OUTPUT"
+          echo "branch=$PROMOTION_BRANCH" >> "$GITHUB_OUTPUT"
+          if [ "$ahead_count" -gt 0 ]; then
+            git push --force origin HEAD:"$PROMOTION_BRANCH"
+          fi
+
+      - name: Create or update promotion PR
+        if: steps.prepare.outputs.ahead_count != '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(cat <<'EOF'
+          Automated promotion PR from `dev` to `main`.
+
+          - Head branch is rebuilt from the latest `dev`.
+          - `docs/iteration-archive.md` is regenerated on the promotion branch instead of committing generated archive churn directly onto `dev`.
+          - Title stays `chore: promote dev to main`.
+
+          If you want the normal PR workflows to run on this bot-authored PR, provide `PROMOTION_PR_TOKEN` or reuse `RELEASE_PLEASE_TOKEN` instead of relying only on the default `GITHUB_TOKEN`.
+          EOF
+          )"
+          pr_number="$(gh pr list \
+            --state open \
+            --base main \
+            --head "$PROMOTION_BRANCH" \
+            --json number \
+            --jq '.[0].number')"
+          if [ -n "$pr_number" ]; then
+            gh pr edit "$pr_number" --title "$PR_TITLE" --body "$body"
+          else
+            gh pr create \
+              --base main \
+              --head "$PROMOTION_BRANCH" \
+              --title "$PR_TITLE" \
+              --body "$body"
+          fi

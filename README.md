@@ -6,7 +6,7 @@ The current operator surface is [`control_room.py`](control_room.py). The projec
 
 ![ED Control Room](docs/assets/control-room.png)
 
-See [docs/STATUS.md](docs/STATUS.md) for the maintained status, validation notes, and next recommended work.
+See [docs/status/README.md](docs/status/README.md) for the maintained status entrypoint, area handoff files, validation notes, and next recommended work.
 
 ## Contents
 
@@ -156,6 +156,8 @@ uv run python3 -m unittest discover -s tests
 ```
 
 Releases are now PR-driven through `.github/workflows/release-please.yml`. If you want the repo's normal CI to run on bot-authored release PRs as well, add a `RELEASE_PLEASE_TOKEN` repository secret backed by a PAT or GitHub App token instead of relying only on the default `GITHUB_TOKEN`.
+
+`dev` -> `main` promotion is also PR-driven through `.github/workflows/promote-dev-to-main.yml`. That workflow rebuilds a dedicated branch named `promote-dev-to-main--generated-iteration-archive` from the latest `dev`, regenerates `docs/iteration-archive.md` there, and creates or updates the standing `chore: promote dev to main` PR. If you want the repo's normal CI to run on that bot-authored PR too, add `PROMOTION_PR_TOKEN` or let it reuse `RELEASE_PLEASE_TOKEN`.
 
 For commits, use Conventional Commits.
 

@@ -53,7 +53,7 @@ Rebuild `README.md` around the current product story:
 - primary entrypoints
 - routine overview, highlighting `haul`
 - docs map linking deeper operational pages
-- link to `docs/STATUS.md` for maintained status
+- link to `docs/status/README.md` for maintained status
 
 Move detailed utility usage, diagnostics detail, and scratch-script detail out of the README.
 
@@ -78,7 +78,7 @@ Introduce clearer docs groupings:
 - `docs/diagnostics/`
 - `docs/assets/`
 
-Keep `docs/STATUS.md` as the maintained status document, and keep `docs/plans/`, `docs/research/`, `docs/design/`, and `docs/devlog/` for deeper material.
+Keep `docs/status/` as the maintained status surface, and keep `docs/plans/`, `docs/research/`, `docs/design/`, and `docs/devlog/` for deeper material.
 
 ### 4. Group scratch and probe scripts
 
@@ -160,7 +160,7 @@ The root should communicate “current runtime surface” rather than “full hi
 4. Move legacy code into `archive/legacy-windows/`.
 5. Move scratch/probe scripts into `tools/scratch/`.
 6. Split low-level utility and diagnostics docs out of `README.md`.
-7. Update `docs/STATUS.md` to reflect the new layout and entrypoints.
+7. Update `docs/status/README.md` and the relevant area files to reflect the new layout and entrypoints.
 
 ## Acceptance Criteria
 

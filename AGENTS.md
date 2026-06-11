@@ -15,29 +15,30 @@ Near-term work should optimize for:
 
 The immediate product goal is not a full rewrite and not a full-featured autopilot. The macOS MVP portability milestone is complete. Current work focuses on the follow-up plans: CV pipeline validation, journal-driven routines, and a diagnostics dashboard.
 
-See [docs/STATUS.md](docs/STATUS.md) for the current port status, what is stubbed, what is unverified, and which plan to pick up next.
+See [docs/status/README.md](docs/status/README.md) for the maintained status entrypoint, current area breakdown, and which area files to read before resuming work.
 
-`docs/STATUS.md` is the canonical maintained-over-time status document for this repo. It is not meant to be a frozen snapshot.
+`docs/status/*.md` are the canonical maintained current-state handoff documents for this repo. They are not frozen snapshots and they are not rolling logs.
 
-- Read `docs/STATUS.md` before starting substantial work.
-- Update `docs/STATUS.md` at the end of any session that changes project understanding, port status, completed work, open gaps, or recommended next steps.
-- Treat the `Last updated: YYYY-MM-DD (session N)` line in `docs/STATUS.md` as the canonical session counter for the repo.
-- Whenever `docs/STATUS.md` or `docs/session-log.md` is updated, increment that `session N` value exactly once for the current work session, even if only one of those two files changed.
-- Keep it concise and current so the next agent can resume from it directly.
-- Keep `docs/STATUS.md` bounded to at most 80 lines. If a new update would push it past the limit, move displaced older status/session detail into `docs/status-archive.md` or a more specific supporting doc, then rewrite `docs/STATUS.md` back down to a compact handoff instead of letting it grow indefinitely.
-- When adding bullets to `docs/STATUS.md`, insert new bullets at the top of the relevant section so the newest handoff detail is encountered first.
-- The "newest first" rule applies within each suitable section body. Do not reorder the document headers or the `Last updated` line to satisfy it.
-- If `docs/STATUS.md` goes over 80 lines, trim each bullet-based status section down to its 5 newest bullets and move the older trimmed bullets into `docs/status-archive.md`.
-- When archiving trimmed `docs/STATUS.md` content, prepend the newest archive block at the top of `docs/status-archive.md`.
-- Do not read the whole `docs/status-archive.md` file just to prepend new archival content. Read only enough of the top of the file to insert the new block correctly, roughly `head -n 15`.
-- `docs/STATUS.md` is a handoff document, not a policy document. If a working rule, architectural constraint, or style preference belongs in `AGENTS.md`, put it there once and do not restate it across `Current Snapshot`, `Active Capabilities`, or `Key Caveats`. A single short pointer in `docs/STATUS.md` (e.g. "new callback policy lives in AGENTS.md") is enough when the next session needs to know the rule exists.
-- Before adding a new bullet to `docs/STATUS.md`, check whether the same idea is already present in another section in different words. If it is, update the existing bullet in place instead of adding a parallel one. Status-file duplication eats the 80-line budget without adding information.
+- Read `docs/status/README.md` plus the relevant `docs/status/<area>.md` files before starting substantial work.
+- Update only the affected `docs/status/<area>.md` files at the end of any session that changes project understanding, port status, completed work, open gaps, or recommended next steps for that area.
+- Keep each `docs/status/<area>.md` concise, current, and bounded to at most 20 lines so the next agent can resume from it directly.
+- Each status file should contain only high-value current truth: active capabilities, key caveats, and next steps for that area. Iteration logs hold chronology and detail.
+- When adding bullets to `docs/status/<area>.md`, insert new bullets at the top of the relevant section so the newest current handoff detail is encountered first.
+- Before adding a new bullet to an area status file, check whether the same idea is already present in different words. If it is, update the existing bullet in place instead of adding a parallel one.
+- If a `docs/status/<area>.md` file would exceed 20 lines, first compress or replace older bullets that no longer reflect the latest truth. If it still does not fit, move the displaced older bullets into `docs/status/archive/<area>.md`.
+- When archiving trimmed status content, prepend the newest archive block at the top of `docs/status/archive/<area>.md`.
+- Do not read the whole `docs/status/archive/<area>.md` file just to prepend a new block. Read only enough of the top of the file to insert the new archive block correctly.
+- `docs/status/*.md` are handoff documents, not policy documents. If a working rule, architectural constraint, or style preference belongs in `AGENTS.md`, put it there once and keep the area status files focused on current repo truth.
 
-Use [docs/session-log.md](docs/session-log.md) for concise rolling session notes.
+Use [docs/iteration-logs/](docs/iteration-logs/) for concise per-iteration notes.
 
-- Append short session entries to `docs/session-log.md` when the detail is useful for future operators/agents but too transient or verbose for `docs/STATUS.md`.
-- Keep `docs/session-log.md` bounded to at most 20 lines. If a new entry would push it past that limit, append the full current contents of `docs/session-log.md` to `docs/status-archive.md` and then reset `docs/session-log.md` to a fresh empty log template before writing the new entry.
-- Treat `docs/status-archive.md` as cold storage for displaced older status/session content. Do not open or read it during normal work unless the user explicitly asks for archive/history detail or you are blocked and need older context that is not available in `docs/STATUS.md` or `docs/session-log.md`.
+- Create one iteration log file for each substantive work session that changes project understanding, status, code, docs workflow, or recommended next steps.
+- Name each file `YYYY-MM-DD-HH-MM_<area>_<title>.md`.
+- `_` separates fields; `-` separates words inside each field.
+- `<area>` is a short kebab-case slug center-padded with underscores to width `12` so `control-room` fits exactly. Example: `2026-06-11-13-45_____docs_____iteration-log-migration.md`.
+- Do not hand-edit an iteration number anywhere; derive it from `docs/iteration-logs/` with `uv run python3 tools/iteration_logs.py next-number` or the generated archive.
+- `docs/iteration-archive.md` is generated from `docs/iteration-logs/`. Prefer the dedicated promotion workflow branch to refresh it for `dev -> main` PRs, and refresh it manually only when needed for local verification or release prep.
+- Treat `docs/status-archive.md` as legacy cold storage for displaced older status/session content from the pre-iteration-log and pre-area-status workflows. Do not open or read it during normal work unless the user explicitly asks for archive/history detail or you are blocked and need older context that is not available in `docs/status/` or `docs/iteration-logs/`.
 
 ## Testing
 
@@ -98,9 +99,9 @@ When work is delegated to agents:
 
 After an agent finishes:
 
-- capture the result in `docs/STATUS.md` if it changes project understanding, status, or next steps
-- capture concise operational detail in `docs/session-log.md` when it is useful to retain but does not belong in `docs/STATUS.md`
-- update any deeper supporting docs only when the change needs more detail than `docs/STATUS.md` should carry
+- capture the result in the affected `docs/status/<area>.md` files if it changes project understanding, status, or next steps
+- capture concise operational detail in a new file under `docs/iteration-logs/` when it is useful to retain but does not belong in `docs/status/<area>.md`
+- update any deeper supporting docs only when the change needs more detail than the relevant `docs/status/<area>.md` file should carry
 - integrate and commit the work atomically in logically grouped commits
 - when bringing work back from a branch or worktree, keep history linear: prefer cherry-pick or rebase, and do not create merge commits
 - close the completed agent once its work has been captured
