@@ -4,12 +4,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import sys
 import tomllib
+import yaml
 
 
 DEFAULT_CONFIG_PATH = Path("config.toml")
 EXAMPLE_CONFIG_PATH = Path("config.example.toml")
 DEFAULT_TTS_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "tts.toml"
-DEFAULT_ERROR_MESSAGES_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "error_messages.toml"
+DEFAULT_ERROR_MESSAGES_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "error_messages.yaml"
+DEFAULT_MESSAGES_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "messages.yaml"
 
 VALID_PLATFORMS = {"linux", "macos", "windows"}
 VALID_CAPTURE_MODES = {"fullscreen", "region"}
@@ -113,8 +115,17 @@ class ErrorMessagesConfig:
     templates: dict[str, str] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class MessagesConfig:
+    templates: dict[str, str] = field(default_factory=dict)
+
+
 def default_error_messages_config() -> ErrorMessagesConfig:
-    return ErrorMessagesConfig(templates=_string_dict(_load_default_error_messages_table(), "templates"))
+    return ErrorMessagesConfig(templates=_message_template_dict(_load_default_error_messages_table(), "templates"))
+
+
+def default_messages_config() -> MessagesConfig:
+    return MessagesConfig(templates=_string_dict(_load_default_messages_table(), "templates"))
 
 
 @dataclass(frozen=True)
@@ -125,6 +136,7 @@ class AppConfig:
     runtime: RuntimeConfig
     control_room: ControlRoomConfig
     tts: TTSConfig = field(default_factory=TTSConfig)
+    messages: MessagesConfig = field(default_factory=default_messages_config)
     error_messages: ErrorMessagesConfig = field(default_factory=default_error_messages_config)
 
 
@@ -144,14 +156,33 @@ def _load_default_tts_table() -> dict[str, object]:
 
 
 def _load_default_error_messages_table() -> dict[str, object]:
-    with DEFAULT_ERROR_MESSAGES_CONFIG_PATH.open("rb") as handle:
-        raw = tomllib.load(handle)
+    raw = _load_yaml_table(DEFAULT_ERROR_MESSAGES_CONFIG_PATH)
     if not isinstance(raw, dict):
-        raise ConfigError("Default error-messages config root must be a TOML table.")
+        raise ConfigError("Default error-messages config root must be a YAML mapping.")
     value = raw.get("error_messages", {})
     if not isinstance(value, dict):
-        raise ConfigError("Default error-messages config section `error_messages` must be a table.")
+        raise ConfigError("Default error-messages config section `error_messages` must be a mapping.")
     return value
+
+
+def _load_default_messages_table() -> dict[str, object]:
+    raw = _load_yaml_table(DEFAULT_MESSAGES_CONFIG_PATH)
+    if not isinstance(raw, dict):
+        raise ConfigError("Default messages config root must be a YAML mapping.")
+    value = raw.get("messages", {})
+    if not isinstance(value, dict):
+        raise ConfigError("Default messages config section `messages` must be a mapping.")
+    return value
+
+
+def _load_yaml_table(path: Path) -> dict[str, object]:
+    with path.open("r", encoding="utf-8") as handle:
+        raw = yaml.safe_load(handle)
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ConfigError(f"Default YAML config root must be a mapping: {path}")
+    return raw
 
 
 def _optional_path(value: object) -> Path | None:
@@ -251,6 +282,30 @@ def _string_dict(raw: dict[str, object], key: str) -> dict[str, str]:
         if not isinstance(sub_key, str) or not isinstance(sub_value, str):
             raise ConfigError(f"Config section `{key}` must contain only string values.")
         result[sub_key] = sub_value
+    return result
+
+
+def _message_template_dict(raw: dict[str, object], key: str) -> dict[str, str]:
+    value = raw.get(key, {})
+    if not isinstance(value, dict):
+        raise ConfigError(f"Config section `{key}` must be a table.")
+    result: dict[str, str] = {}
+    for sub_key, sub_value in value.items():
+        if not isinstance(sub_key, str):
+            raise ConfigError(f"Config section `{key}` must contain only string keys.")
+        if isinstance(sub_value, str):
+            result[sub_key] = sub_value
+            continue
+        if not isinstance(sub_value, dict):
+            raise ConfigError(
+                f"Config section `{key}.{sub_key}` must be a string or a table with string fields."
+            )
+        for field_name, field_value in sub_value.items():
+            if field_name not in {"message", "suggestion"} or not isinstance(field_value, str):
+                raise ConfigError(
+                    f"Config section `{key}.{sub_key}` must contain only string `message`/`suggestion` fields."
+                )
+            result[f"{sub_key}_{field_name}"] = field_value
     return result
 
 
@@ -396,8 +451,10 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     runtime = _require_table(raw, "runtime")
     control_room = _optional_table(raw, "control_room")
     tts = _optional_table(raw, "tts")
+    messages = _optional_table(raw, "messages")
     error_messages = _optional_table(raw, "error_messages")
     default_tts = _load_default_tts_table()
+    default_messages = _load_default_messages_table()
     default_error_messages = _load_default_error_messages_table()
 
     capture_regions: dict[str, CaptureRegionConfig] = {
@@ -574,10 +631,16 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
                 **_string_dict(tts, "phrases"),
             },
         ),
+        messages=MessagesConfig(
+            templates={
+                **_string_dict(default_messages, "templates"),
+                **_string_dict(messages, "templates"),
+            },
+        ),
         error_messages=ErrorMessagesConfig(
             templates={
-                **_string_dict(default_error_messages, "templates"),
-                **_string_dict(error_messages, "templates"),
+                **_message_template_dict(default_error_messages, "templates"),
+                **_message_template_dict(error_messages, "templates"),
             },
         ),
     )

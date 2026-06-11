@@ -4,6 +4,7 @@ version = "1.7.3"
 description = "Elite Dangerous control-room and routine tooling"
 requires-python = ">=3.12"
 dependencies = [
+  "PyYAML>=6.0",
   "pyobjc-framework-Quartz>=12.1; sys_platform == 'darwin'",
   "rich>=14.0",
   "textual>=0.60.0",

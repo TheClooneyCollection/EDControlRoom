@@ -38,10 +38,19 @@ disabled_messages = []
 # from defaults/tts.toml.
 # destination_set = "Setting destination to {system_name}."
 
+[messages.templates]
+# Override only the operator-facing non-error lines you want to change. Unspecified
+# entries still come from defaults/messages.yaml.
+# dest_usage = "Usage: dest <system name>"
+
 [error_messages.templates]
 # Override only the operator-facing error lines you want to change. Unspecified
-# entries still come from defaults/error_messages.toml.
-# station_mismatch_message = "Station mismatch: market data indicates {market_station}, but we are docked at {docked_station}."
+# entries still come from defaults/error_messages.yaml. Paired error entries use
+# nested tables so message/suggestion text stays grouped together.
+#
+# [error_messages.templates.station_mismatch]
+# message = "Station mismatch: market data indicates {market_station}, but we are docked at {docked_station}."
+# suggestion = "Open replay history with Ctrl-R, press e to edit the station name, then rerun."
 
 [controls]
 start_hotkey = "home"

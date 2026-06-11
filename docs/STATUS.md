@@ -2,7 +2,7 @@
 
 _This is the startup handoff document for the repo. Keep it current, compact, and biased toward what the next session needs immediately. Hard limit: 80 lines. If an update would push this file past the limit, move displaced older status/session detail to `docs/status-archive.md` or a more specific doc, then trim this file back down._
 
-Last updated: 2026-06-11 (session 128)
+Last updated: 2026-06-11 (session 129)
 
 ## Current Snapshot
 
@@ -21,7 +21,7 @@ Last updated: 2026-06-11 (session 128)
 
 ## Active Capabilities
 
-- Operator-facing Control Room error text now lives in `defaults/error_messages.toml`, loads through `AppConfig.error_messages`, and can be overridden from `[error_messages.templates]` in `config.toml`; routine failures, startup path errors, command usage errors, and haul-prompt validation now render through that shared template table instead of hardcoded strings.
+- Operator-facing Control Room text now splits between YAML defaults: `defaults/error_messages.yaml` for paired failure `message`/`suggestion` entries and `defaults/messages.yaml` for other prompts/usage lines; `config.toml` overrides stay supported, including legacy flat error override keys.
 - Control Room routine failures now surface as `Failed: ...` with operator-facing explanations plus `Try:` recovery guidance for station mismatches, destination mismatches, and commodity-name mismatches; the suggested recovery path points at replay history (`Ctrl-R` then `e`) or restarting the haul with corrected parameters instead of leaving only `Done: <step> (error)`.
 - Market buy/sell routines now back out to station services before returning lookup or station-check errors that happen after the commodity market opens, so failed market selection does not leave the operator stranded inside the market UI.
 - `release-please` now patches both `pyproject.toml` and the root `EDControlRoom` package entry in `uv.lock`, so release PRs can keep repo version metadata aligned without needing a separate `uv sync` commit step.

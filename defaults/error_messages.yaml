@@ -1,0 +1,57 @@
+error_messages:
+  templates:
+    controls_unavailable:
+      message: "Controls are unavailable. Check the bindings path and binding names, then try again."
+    routine_unexpected_exception:
+      message: "Routine hit an unexpected error: {error}."
+      suggestion: "Review the latest ACTIVITY lines for the last completed step, then retry."
+    station_mismatch:
+      message: "Station mismatch: market data indicates {market_station}, but we are docked at {docked_station}."
+      suggestion: "Open replay history with Ctrl-R, press e to edit the station name, then rerun. If this is a different route, start a new haul with the correct station parameters."
+    route_mismatch:
+      message: "Destination mismatch: expected a route to {expected}, but Elite plotted {actual}."
+      suggestion: "Use Ctrl-R then e to edit the destination or haul parameters, or start a new haul with the correct route."
+    market_target_not_found:
+      message: "Commodity mismatch: {target} was not found in this station's market list."
+      suggestion: "Check the commodity name and station, then use Ctrl-R and e to edit the saved command or start a new haul with the correct parameters."
+    market_target_data_mismatch:
+      message: "Commodity mismatch: {target} appeared in the station list, but the market data for that commodity did not line up."
+      suggestion: "Refresh the station market, then retry. If the route parameters are wrong, use Ctrl-R and e to edit them."
+    journal_docked_state_missing:
+      message: "Couldn't confirm the current docked station from the journal yet."
+      suggestion: "Wait until Elite finishes writing the docked state, then retry."
+    market_data_missing:
+      message: "Couldn't read the station market data yet."
+      suggestion: "Open the commodities market fully, wait a moment, then retry."
+    sell_requires_docked:
+      message: "Sell can only start while we are docked at a station."
+      suggestion: "Dock first, then rerun the sell step."
+    sell_return_station_check:
+      message: "Sell completed, but we could not confirm the ship returned to a docked station state afterward."
+      suggestion: "Check whether the station menu is fully open again, then retry or resume from replay history."
+    amount_minimum:
+      message: "Amount must be at least 1."
+    trade_event_timeout:
+      message: "The game did not confirm {event_type} for {target} within {timeout_s:.0f}s."
+      suggestion: "Check whether the market dialog stayed focused and whether Elite finished writing the trade event, then retry."
+    cargo_hold_empty:
+      message: "Cargo hold is empty, so there is nothing to sell or continue hauling."
+      suggestion: "Restock cargo or start a new haul with the correct station and commodity parameters."
+    jump_retry_exhausted:
+      message: "Jump did not complete before the retry limit was exhausted."
+      suggestion: "Check FSD state, route, and ship alignment, then retry the jump."
+    docked_timeout:
+      message: "Docking did not complete before the timeout."
+      suggestion: "Confirm docking permission was granted and the ship stayed on the docking path, then retry."
+    supercruise_exit_timeout:
+      message: "Supercruise exit was not detected before the timeout."
+      suggestion: "Make sure the ship actually dropped at the target and the journal is still updating, then retry."
+    docking_request_timeout:
+      message: "Docking permission was not confirmed before the retry limit was exhausted."
+      suggestion: "Check station distance, left-panel focus, and docking eligibility, then retry."
+    undocked_timeout:
+      message: "Launch started, but Undocked was not confirmed in time."
+      suggestion: "Check whether the Launch menu step landed correctly, then retry."
+    no_track_timeout:
+      message: "Undocked was seen, but station-clear confirmation did not arrive in time."
+      suggestion: "Wait until the ship is fully clear of the station, then resume or retry."

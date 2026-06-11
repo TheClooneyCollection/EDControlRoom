@@ -5,6 +5,8 @@ from edap.config import AppConfig
 
 def template(config: AppConfig, key: str) -> str:
     value = config.error_messages.templates.get(key)
+    if value is None:
+        value = config.messages.templates.get(key)
     if value is not None:
         return value
     return key.replace("_", " ")
