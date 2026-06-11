@@ -1211,6 +1211,16 @@ class ControlRoomBindingsTests(unittest.TestCase):
 
         self.assertIn((AnnouncementId.UNDOCKING, {}), self.app._tts.calls)
 
+    def test_handle_event_announces_sale_revenue_not_profit(self) -> None:
+        self.app._tts = _FakeTTS()
+
+        self.app._handle_event({"event": "MarketSell", "TotalSale": 250_000})
+
+        self.assertIn(
+            (AnnouncementId.SALE_PROFIT, {"revenue_short": "250 thousand credits"}),
+            self.app._tts.calls,
+        )
+
     def test_handle_event_appends_to_control_room_artifact_log(self) -> None:
         log_path = Path(self.tmpdir.name) / "control-room-artifact.log"
         self.app._journal_artifact_log_path = log_path

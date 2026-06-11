@@ -836,7 +836,7 @@ class ControlRoomApp(App[None]):
         elif event == "MarketSell" and "TotalSale" in ev:
             self._announce_tts(
                 AnnouncementId.SALE_PROFIT,
-                profit_short=format_credits_short(int(ev["TotalSale"])),
+                revenue_short=format_credits_short(int(ev["TotalSale"])),
             )
 
     def _default_haul_matches(self, entry: CommandHistoryEntry) -> bool:
