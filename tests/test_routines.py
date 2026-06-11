@@ -1203,6 +1203,58 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(result.dispatch.status, "error")
         self.assertIn("no docked station state found", result.dispatch.reason or "")
 
+    def test_market_buy_missing_target_backs_out_to_station_menu_before_returning_error(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher([])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            (journal_dir / "Journal.240101000000.01.log").write_text(
+                json.dumps({
+                    "timestamp": "2024-01-01T00:00:00Z",
+                    "event": "Docked",
+                    "StationName": "Pawelczyk Dock",
+                }) + "\n",
+                encoding="utf-8",
+            )
+            market_path = journal_dir / "Market.json"
+            market_path.write_text(
+                json.dumps(
+                    {
+                        "StationName": "Pawelczyk Dock",
+                        "Items": [
+                            {"Category": "Metals", "Name": "aluminium", "Stock": 10},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = market_buy(
+                controls,
+                watcher,
+                market_path=market_path,
+                target="gold",
+                amount=1,
+                step_delay_s=0.0,
+                nav_delay_s=0.0,
+                trade_timeout_s=30.0,
+                time_fn=lambda: 0.0,
+                sleeper=lambda _: None,
+            )
+
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertIn("'gold' not found in market list", result.dispatch.reason or "")
+        self.assertEqual(
+            controls.calls[-4:],
+            [
+                {"action": "UI_Back", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Back", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Back", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Back", "repeat": 1, "hold_s": 0.0},
+            ],
+        )
+
     def test_market_sell_warns_and_announces_when_demand_is_low(self) -> None:
         controls = FakeShipControls()
         watcher = FakeWatcher(

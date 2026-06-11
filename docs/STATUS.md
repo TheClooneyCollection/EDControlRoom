@@ -2,7 +2,7 @@
 
 _This is the startup handoff document for the repo. Keep it current, compact, and biased toward what the next session needs immediately. Hard limit: 80 lines. If an update would push this file past the limit, move displaced older status/session detail to `docs/status-archive.md` or a more specific doc, then trim this file back down._
 
-Last updated: 2026-06-10 (session 125)
+Last updated: 2026-06-11 (session 127)
 
 ## Current Snapshot
 
@@ -20,6 +20,8 @@ Last updated: 2026-06-10 (session 125)
 
 ## Active Capabilities
 
+- Control Room routine failures now surface as `Failed: ...` with operator-facing explanations plus `Try:` recovery guidance for station mismatches, destination mismatches, and commodity-name mismatches; the suggested recovery path points at replay history (`Ctrl-R` then `e`) or restarting the haul with corrected parameters instead of leaving only `Done: <step> (error)`.
+- Market buy/sell routines now back out to station services before returning lookup or station-check errors that happen after the commodity market opens, so failed market selection does not leave the operator stranded inside the market UI.
 - `release-please` now patches both `pyproject.toml` and the root `EDControlRoom` package entry in `uv.lock`, so release PRs can keep repo version metadata aligned without needing a separate `uv sync` commit step.
 - Market trade routines now re-center the commodity quantity dialog with `UI_Left x5` then `UI_Up x5`, giving buy/sell flows a wider safety margin when the commodity view opens off-focus.
 - Journal/runtime: journal tailing, bindings lookup, runtime construction, and shared platform seams are working.
@@ -40,6 +42,7 @@ Last updated: 2026-06-10 (session 125)
 
 ## Current Next Steps
 
+1. Live-validate the new market error back-out path against the real station-services/menu stack, especially after stale `Market.json` or missing-commodity failures.
 1. Decide whether to keep GitHub release names manually curated to the `EDControlRoom vX.Y.Z - <short release label>` house style or add a follow-up workflow that rewrites the stock `release-please` release title after publish.
 1. Live-validate the updated two-way haul startup/resume path and haul telemetry, especially station-2 starts, station-1 run finalization, and `Market.json` fallback behavior.
 2. Live-test haul with auto launch/landing disabled where possible, especially whether routing still holds once `Undocked` fires and whether `Music` `NoTrack` needs a fallback clear-of-station signal.

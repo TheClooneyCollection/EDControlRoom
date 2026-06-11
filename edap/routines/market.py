@@ -313,6 +313,36 @@ def _market_error(action: str, reason: str) -> RoutineResult:
     )
 
 
+def _market_error_with_back_out(
+    controls: SupportsMarketControls,
+    *,
+    action: str,
+    reason: str,
+    step_delay_s: float,
+    sleeper: Callable[[float], None],
+    progress_fn: ProgressCallback,
+    phase: str,
+) -> RoutineResult:
+    error_result = _market_error(action, reason)
+    back_dispatch = _market_back_out_to_station_menu(
+        controls,
+        step_delay_s=step_delay_s,
+        sleeper=sleeper,
+        progress_fn=progress_fn,
+    )
+    if back_dispatch.status != "ok":
+        return RoutineResult(
+            action="UI_Back",
+            dispatch=back_dispatch,
+            details={"phase": phase, "market_error": reason},
+        )
+    return RoutineResult(
+        action=action,
+        dispatch=error_result.dispatch,
+        details={"phase": phase},
+    )
+
+
 def _market_ui_reset(
     controls: SupportsMarketControls,
     *,
@@ -614,7 +644,15 @@ def _market_trade_attempt(
                 progress_fn(f"  Retrying in {_RETRY_DELAY_S:.0f}s...")
                 sleeper(_RETRY_DELAY_S)
             else:
-                return _market_error(event_type, f"Station check failed after {_RETRIES} attempts: {fail_reason}")
+                return _market_error_with_back_out(
+                    controls,
+                    action=event_type,
+                    reason=f"Station check failed after {_RETRIES} attempts: {fail_reason}",
+                    step_delay_s=step_delay_s,
+                    sleeper=sleeper,
+                    progress_fn=progress_fn,
+                    phase="station_check",
+                )
 
     items: list[dict] = data.get("Items", [])
 
@@ -627,9 +665,25 @@ def _market_trade_attempt(
     try:
         item_index = _market_item_index(sorted_items, target)
     except ValueError as exc:
-        return _market_error(event_type, str(exc))
+        return _market_error_with_back_out(
+            controls,
+            action=event_type,
+            reason=str(exc),
+            step_delay_s=step_delay_s,
+            sleeper=sleeper,
+            progress_fn=progress_fn,
+            phase="resolve_target",
+        )
     if item is None:
-        return _market_error(event_type, f"'{target}' matched navigation list but not market item data")
+        return _market_error_with_back_out(
+            controls,
+            action=event_type,
+            reason=f"'{target}' matched navigation list but not market item data",
+            step_delay_s=step_delay_s,
+            sleeper=sleeper,
+            progress_fn=progress_fn,
+            phase="resolve_target",
+        )
 
     progress_fn(f"Target '{target}' at position {item_index} in {side} list ({len(sorted_items)} items)")
     _report_market_level(

@@ -2,8 +2,12 @@
 
 _This is the rolling short-form log for recent sessions. Keep entries concise and operational. Hard limit: 20 lines. If a new entry would exceed the limit, append the full current log to `docs/status-archive.md`, then reset this file to a fresh empty log template before writing the new entry._
 
-## 2026-06-10
+## 2026-06-11
 
+- Added a central Control Room failure-message formatter so routine errors now log `Failed:` plus a plain-English reason and `Try:` guidance; covered station mismatch, route mismatch, and commodity mismatch cases and rechecked the full suite at `359 tests in 0.128s`.
+
+## 2026-06-10
+- Fixed the market-routine UX when commodity lookup or station verification fails after opening the commodities market: the routine now backs out to station services before returning the error, added a missing-target regression test, and rechecked the full suite at `355 tests in 0.135s`.
 - Switched release/update metadata to the moved GitHub repository `TheClooneyCollection/EDControlRoom`, updated test release URLs to match, and kept the full suite green afterward.
 - Updated release-please to patch the root `EDControlRoom` version inside `uv.lock` via TOML `jsonpath`, renamed the Python distribution/runtime metadata from `edautopilot` to `EDControlRoom`, refreshed the Control Room update-status strings/tests, and rechecked the full suite at `354 tests in 0.131s`.
 - Added `.github/workflows/release-please.yml` plus manifest/config files so releases are opened as PRs against protected `main`; seeded the manifest at `1.7.3`, documented the optional `RELEASE_PLEASE_TOKEN` secret for CI-on-release-PRs, and rechecked the full suite at `354 tests in 0.134s`.
