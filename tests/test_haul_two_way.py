@@ -410,10 +410,10 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             )
 
         self.assertEqual(result.dispatch.status, "ok")
-        raw_k_calls = [call for call in controls.calls if call["action"] == "raw:k"]
-        self.assertEqual(len(raw_k_calls), 1)
+        hyperspace_calls = [call for call in controls.calls if call["action"] == "HyperSuperCombination"]
+        self.assertEqual(len(hyperspace_calls), 1)
 
-    def test_departure_engages_raw_k_after_mass_lock_clears_by_default(self) -> None:
+    def test_departure_engages_hyper_super_combination_after_mass_lock_clears_by_default(self) -> None:
         controls = FakeShipControls()
         watcher = FakeWatcher([])
 
@@ -461,10 +461,10 @@ class TwoWayHaulLoopTests(unittest.TestCase):
 
         self.assertEqual(result.dispatch.status, "error")
         actions = [call["action"] for call in controls.calls]
-        self.assertIn("raw:k", actions)
-        self.assertLess(actions.index("SetSpeed100"), actions.index("raw:k"))
+        self.assertIn("HyperSuperCombination", actions)
+        self.assertLess(actions.index("SetSpeed100"), actions.index("HyperSuperCombination"))
 
-    def test_departure_skips_raw_k_when_auto_hyperspace_disabled(self) -> None:
+    def test_departure_skips_hyper_super_combination_when_auto_hyperspace_disabled(self) -> None:
         controls = FakeShipControls()
         watcher = FakeWatcher([])
 
@@ -511,7 +511,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 )
 
         self.assertEqual(result.dispatch.status, "error")
-        self.assertNotIn("raw:k", [call["action"] for call in controls.calls])
+        self.assertNotIn("HyperSuperCombination", [call["action"] for call in controls.calls])
 
     def test_transit_opens_nav_panel_after_hyperspace_arrival_by_default(self) -> None:
         controls = FakeShipControls()

@@ -256,9 +256,9 @@ class _HaulCtx:
 def _engage_hyperspace_after_escape(ctx: _HaulCtx) -> None:
     if not ctx.auto_hyperspace_engage:
         return
-    ctx.progress_fn('Mass lock cleared - engaging hyperspace via raw key "k"...')
+    ctx.progress_fn("Mass lock cleared - engaging hyperspace via HyperSuperCombination...")
     ctx.announce_fn(AnnouncementId.STATION_CLEARED)
-    ctx.controls.tap_key("k")
+    ctx.controls.hyper_super_combination()
 
 
 def _open_navigation_panel_after_arrival(ctx: _HaulCtx) -> None:
