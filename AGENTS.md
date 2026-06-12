@@ -91,6 +91,8 @@ Use [docs/iteration-logs/](docs/iteration-logs/) for concise per-iteration notes
 
 When work is delegated to agents:
 
+- start each agent in its own git worktree on its own branch; do not let multiple agents share the main checkout or a branch
+- name the branch and worktree for the slice they own so the result is easy to inspect, test, and clean up
 - spawn agents only for narrow, disjoint slices that can be integrated independently
 - prefer concrete implementation or verification slices over broad analysis
 - require the agent to verify its own work locally when practical
@@ -103,6 +105,7 @@ After an agent finishes:
 - capture concise operational detail in a new file under `docs/iteration-logs/` when it is useful to retain but does not belong in `docs/status/<area>.md`
 - update any deeper supporting docs only when the change needs more detail than the relevant `docs/status/<area>.md` file should carry
 - integrate and commit the work atomically in logically grouped commits
+- remove the agent worktree after its changes are integrated or intentionally discarded so stale checkouts do not accumulate
 - when bringing work back from a branch or worktree, keep history linear: prefer cherry-pick or rebase, and do not create merge commits
 - close the completed agent once its work has been captured
 
