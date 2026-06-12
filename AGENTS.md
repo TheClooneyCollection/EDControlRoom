@@ -36,8 +36,10 @@ Use [docs/iteration-logs/](docs/iteration-logs/) for concise per-iteration notes
 - Name each file `YYYY-MM-DD-HH-MM_<area>_<title>.md`.
 - `_` separates fields; `-` separates words inside each field.
 - `<area>` is a short kebab-case slug center-padded with underscores to width `12` so `control-room` fits exactly. Example: `2026-06-11-13-45_____docs_____iteration-log-migration.md`.
+- Always create iteration logs with `uv run python3 tools/iteration_logs.py new "<area>" "<title>"`; do not handcraft filenames.
 - Do not hand-edit an iteration number anywhere; derive it from `docs/iteration-logs/` with `uv run python3 tools/iteration_logs.py next-number` or the generated archive.
 - `docs/iteration-archive.md` is generated from `docs/iteration-logs/`. Prefer the dedicated promotion workflow branch to refresh it for `dev -> main` PRs, and refresh it manually only when needed for local verification or release prep.
+- Run `uv run python3 tools/iteration_logs.py validate` before committing, pushing, or opening a PR so invalid iteration-log filenames are caught before archive generation or review.
 - Treat `docs/status-archive.md` as legacy cold storage for displaced older status/session content from the pre-iteration-log and pre-area-status workflows. Do not open or read it during normal work unless the user explicitly asks for archive/history detail or you are blocked and need older context that is not available in `docs/status/` or `docs/iteration-logs/`.
 
 ## Testing

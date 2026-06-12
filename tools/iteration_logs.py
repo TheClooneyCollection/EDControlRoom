@@ -12,8 +12,10 @@ if str(REPO_ROOT) not in sys.path:
 from edap.iteration_logs import (
     LEGACY_SESSION_BASELINE,
     create_iteration_log,
+    iter_iteration_log_paths,
     next_iteration_number,
     render_iteration_archive,
+    validate_iteration_logs,
 )
 
 DEFAULT_LOGS_DIR = REPO_ROOT / "docs" / "iteration-logs"
@@ -84,6 +86,17 @@ def parse_args() -> argparse.Namespace:
         help="Legacy manual session number used as the pre-migration baseline.",
     )
 
+    validate_parser = subparsers.add_parser(
+        "validate",
+        help="Validate all iteration log filenames under docs/iteration-logs/.",
+    )
+    validate_parser.add_argument(
+        "--logs-dir",
+        type=Path,
+        default=DEFAULT_LOGS_DIR,
+        help="Directory containing iteration logs. Default: docs/iteration-logs/",
+    )
+
     return parser.parse_args()
 
 
@@ -108,6 +121,15 @@ def main() -> int:
 
     if args.command == "next-number":
         print(next_iteration_number(logs_dir=args.logs_dir, baseline=args.baseline))
+        return 0
+
+    if args.command == "validate":
+        errors = validate_iteration_logs(logs_dir=args.logs_dir)
+        if errors:
+            for error in errors:
+                print(f"{error.path}: {error.message}", file=sys.stderr)
+            return 1
+        print(f"validated {len(iter_iteration_log_paths(args.logs_dir))} iteration log files")
         return 0
 
     raise AssertionError(f"unhandled command: {args.command}")

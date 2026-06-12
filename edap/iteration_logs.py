@@ -25,6 +25,12 @@ class IterationLogName:
         return f"{self.timestamp[:10]} {self.timestamp[11:13]}:{self.timestamp[14:16]}"
 
 
+@dataclass(frozen=True)
+class IterationLogValidationError:
+    path: Path
+    message: str
+
+
 def pad_area(area: str) -> str:
     if not _AREA_RE.fullmatch(area):
         raise ValueError(
@@ -93,6 +99,16 @@ def iter_iteration_log_paths(logs_dir: Path) -> list[Path]:
         for path in logs_dir.glob("*.md")
         if path.is_file() and path.name != "README.md"
     )
+
+
+def validate_iteration_logs(*, logs_dir: Path) -> list[IterationLogValidationError]:
+    errors: list[IterationLogValidationError] = []
+    for path in iter_iteration_log_paths(logs_dir):
+        try:
+            parse_iteration_log_filename(path.name)
+        except ValueError as exc:
+            errors.append(IterationLogValidationError(path=path, message=str(exc)))
+    return errors
 
 
 def next_iteration_number(*, logs_dir: Path, baseline: int = LEGACY_SESSION_BASELINE) -> int:

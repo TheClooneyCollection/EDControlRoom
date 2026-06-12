@@ -9,10 +9,12 @@ from edap.iteration_logs import (
     LEGACY_SESSION_BASELINE,
     build_iteration_log_filename,
     create_iteration_log,
+    iter_iteration_log_paths,
     next_iteration_number,
     pad_area,
     parse_iteration_log_filename,
     render_iteration_archive,
+    validate_iteration_logs,
 )
 
 
@@ -82,3 +84,25 @@ class IterationLogWorkflowTests(unittest.TestCase):
             self.assertIn("- Area: `ci`", archive)
             self.assertIn("First body.", archive)
             self.assertIn("Second body.", archive)
+
+    def test_validate_iteration_logs_reports_all_invalid_filenames(self) -> None:
+        with TemporaryDirectory() as tmp:
+            logs_dir = Path(tmp)
+            (logs_dir / "README.md").write_text("# Iteration Logs\n", encoding="utf-8")
+            (logs_dir / "2026-06-11-13-45_____docs_____valid-name.md").write_text(
+                "# Iteration Log\n",
+                encoding="utf-8",
+            )
+            (logs_dir / "2026-06-11-16-16____haul____broken-name.md").write_text(
+                "# Iteration Log\n",
+                encoding="utf-8",
+            )
+            (logs_dir / "bad.md").write_text("# Iteration Log\n", encoding="utf-8")
+
+            errors = validate_iteration_logs(logs_dir=logs_dir)
+
+            self.assertEqual(len(iter_iteration_log_paths(logs_dir)), 3)
+            self.assertEqual([error.path.name for error in errors], [
+                "2026-06-11-16-16____haul____broken-name.md",
+                "bad.md",
+            ])
