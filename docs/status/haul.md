@@ -1,5 +1,6 @@
 # Haul Status
 ## Current
+- Two-way `haul` now accepts one-sided loops: station 1 or station 2 buy cargo may be blank as long as the other side is configured, and the routine skips the missing buy/sell leg cleanly during prompt flow, launch, and resume detection.
 - Two-way and multi-leg haul transit now announce the next station immediately after hyperspace arrival and before opening the nav panel, using a haul-specific TTS line instead of the generic `FSDJump` announcer.
 - Market sell routines now merge the hidden-cargo subset from `Cargo.json` back into the demand-sorted `Market.json` sell list so hidden commodities no longer misindex later sale rows.
 - Two-way `haul` remains the primary operator path.
@@ -7,6 +8,7 @@
 - Multi-leg resume derives state from live journal, cargo, and market data instead of persisted routine state.
 ## Caveats
 - Station automation still assumes `DockingGranted`/`Docked` on arrival and `Music` `NoTrack` as the clear-of-station cue after launch.
+- One-sided haul loops still need live validation to confirm station-side UI timing and resume behavior when a station intentionally has no configured buy cargo.
 - Multi-leg flow still needs live validation for repeated stations, consecutive trades, and final-leg completion semantics.
 ## Next
-- Live-validate both two-way and multi-leg haul around resume, station-role detection, and post-launch routing behavior.
+- Live-validate one-sided and two-way haul around resume, station-role detection, skipped station-side trade legs, and post-launch routing behavior.

@@ -113,12 +113,12 @@ def start_haul_prompt(
         app._haul_prompt_step = "station_1_buying"
         default_commodity = app._haul_prompt_defaults.get("station_1_buying", "")
         if default_commodity:
-            app._log(f"[dim]Station 1 buying? (Enter = {escape(default_commodity)})[/]")
+            app._log(f"[dim]Station 1 buying? (optional, Enter = {escape(default_commodity)})[/]")
             app.query_one("#cmd", Input).placeholder = (
                 f"station 1 buying (Enter = {default_commodity})..."
             )
         else:
-            app._log("[dim]Station 1 buying? (this cargo will be sold at station 2)[/]")
+            app._log("[dim]Station 1 buying? (optional; this cargo will be sold at station 2)[/]")
             app.query_one("#cmd", Input).placeholder = "station 1 buying..."
         return
 
@@ -190,11 +190,11 @@ def handle_haul_prompt(
 ) -> None:
     if app._haul_prompt_step == "station_1_buying":
         resolved = value.strip() or app._haul_prompt_defaults.get("station_1_buying", "")
-        if not resolved:
-            app._log(f"[red]{escape(error_text.render(app._config, 'station_1_buying_required'))}[/]")
-            return
         app._haul_params["station_1_buying"] = resolved
-        app._log(f"  Station 1 buying: [cyan]{escape(resolved)}[/]")
+        if resolved:
+            app._log(f"  Station 1 buying: [cyan]{escape(resolved)}[/]")
+        else:
+            app._log("  Station 1 buying: [dim](none)[/]")
         app._haul_prompt_step = "station_1"
         default_station_1 = app._haul_prompt_defaults.get("station_1", "")
         if default_station_1:
@@ -240,23 +240,22 @@ def handle_haul_prompt(
         app._haul_prompt_step = "station_2_buying"
         default_station_2_buying = app._haul_prompt_defaults.get("station_2_buying", "")
         if default_station_2_buying:
-            app._log(f"[dim]Station 2 buying? (Enter = {escape(default_station_2_buying)})[/]")
+            app._log(f"[dim]Station 2 buying? (optional, Enter = {escape(default_station_2_buying)})[/]")
             app.query_one("#cmd", Input).placeholder = (
                 f"station 2 buying (Enter = {default_station_2_buying})..."
             )
         else:
-            app._log("[dim]Station 2 buying? (this cargo will be sold at station 1)[/]")
+            app._log("[dim]Station 2 buying? (optional; this cargo will be sold at station 1)[/]")
             app.query_one("#cmd", Input).placeholder = "station 2 buying..."
         return
 
     if app._haul_prompt_step == "station_2_buying":
         resolved = value.strip() or app._haul_prompt_defaults.get("station_2_buying", "")
-        if not resolved:
-            app._log(f"[red]{escape(error_text.render(app._config, 'station_2_buying_required'))}[/]")
-            return
         app._haul_params["station_2_buying"] = resolved
         if resolved:
             app._log(f"  Station 2 buying: [cyan]{escape(resolved)}[/]")
+        else:
+            app._log("  Station 2 buying: [dim](none)[/]")
         app._haul_prompt_step = "station_2"
         default_station_2 = app._haul_prompt_defaults.get("station_2", "")
         if default_station_2:

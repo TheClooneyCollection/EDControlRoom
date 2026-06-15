@@ -49,8 +49,8 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
     CommandHelp(
         name="haul",
         usage="haul [commodity]",
-        summary="Run the two-station haul loop, prompting for both stations and both cargo legs.",
-        detail="Starts a symmetric loop: at station 1 it sells the cargo bought at station 2, then buys station 1's outbound cargo; at station 2 it does the reverse. Control room prompts for both station names, both systems, both outbound cargo names, the galaxy-map settle delay, and the docking timeout.",
+        summary="Run the two-station haul loop, prompting for both stations and up to two cargo legs.",
+        detail="Starts a two-station loop: each station sells the other station's outbound cargo if present, then buys its own outbound cargo if configured. Control room prompts for both station names, both systems, both outbound cargo names, the galaxy-map settle delay, and the docking timeout. At least one station buy commodity is required.",
     ),
     CommandHelp(
         name="multi_leg_haul",
