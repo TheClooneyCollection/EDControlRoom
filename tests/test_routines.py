@@ -1644,7 +1644,7 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(
             controls.calls[dialog_index + 11:dialog_index + 14],
             [
-                {"action": "UI_Right", "repeat": 1, "hold_s": 0.64},
+                {"action": "UI_Right", "repeat": 1, "hold_s": 1.0},
                 {"action": "UI_Down", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Select", "repeat": 1, "hold_s": 0.0},
             ],
@@ -1704,10 +1704,10 @@ class RoutinesTests(unittest.TestCase):
 
         self.assertEqual(result.dispatch.status, "ok")
         self.assertIn(
-            "  UI_Right hold 0.32s (restore sell quantity to 32t at 0.0100s/t)",
+            "  UI_Right hold 1.00s (restore sell quantity to 32t with 1.00s minimum at 0.0100s/t)",
             progress,
         )
-        self.assertIn({"action": "UI_Right", "repeat": 1, "hold_s": 0.32}, controls.calls)
+        self.assertIn({"action": "UI_Right", "repeat": 1, "hold_s": 1.0}, controls.calls)
 
 
 class EscapeMassLockTests(unittest.TestCase):

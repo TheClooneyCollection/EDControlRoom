@@ -22,6 +22,7 @@
       "destination": {
         "system": "HIP 68076",
         "station": "Bolivar Horizons",
+        "on_land": false,
         "distance_to_arrival": 1214
       },
       "distance_ly": 39.0604999487974,
@@ -43,11 +44,13 @@
       "source": {
         "system": "HIP 68076",
         "station": "Bolivar Horizons",
+        "on_land": false,
         "distance_to_arrival": 1214
       },
       "destination": {
         "system": "HIP 58412",
         "station": "Pawelczyk Dock",
+        "on_land": false,
         "distance_to_arrival": 18
       },
       "distance_ly": 30.068232951281,

@@ -58,6 +58,7 @@ def _make_config(journal_dir: Path, *, activity_log_max_lines: int = 2000) -> Ap
             market_nav_delay_seconds=0.1,
             market_trade_max_attempts=3,
             market_buy_hold_seconds_per_ton=0.01,
+            market_sell_min_hold_seconds=1.0,
             market_critical_level_multiplier=10.0,
             haul_post_sell_settle_seconds=2.0,
             haul_two_way_auto_hyperspace_engage=True,
@@ -859,6 +860,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.assertIn("kwargs", captured)
         self.assertEqual(captured["kwargs"]["undock_timeout_s"], 30.0)
         self.assertEqual(captured["kwargs"]["undock_no_track_timeout_s"], 600.0)
+        self.assertEqual(captured["kwargs"]["market_sell_min_hold_s"], 1.0)
         self.assertFalse(captured["kwargs"]["stop_requested_fn"]())
         self.app._haul_stop_requested = True
         self.assertTrue(captured["kwargs"]["stop_requested_fn"]())
@@ -903,6 +905,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
 
         self.assertEqual(captured["kwargs"]["station_1"], "Mystery Base")
         self.assertEqual(captured["kwargs"]["station_1_system"], "Sol")
+        self.assertFalse(captured["kwargs"]["station_1_on_land"])
         self.assertIn("Station 1 defaulting to current station", "\n".join(self.app.logged))
 
     def test_haul_dispatch_allows_empty_station_2_buying(self) -> None:
@@ -940,6 +943,43 @@ class ControlRoomBindingsTests(unittest.TestCase):
 
         self.assertEqual(captured["kwargs"]["station_2_buying"], "")
         self.assertIn("station 2 [cyan]Trevithick Dock[/]: [dim]no buy[/]", "\n".join(self.app.logged))
+
+    def test_haul_dispatch_passes_on_land_flags(self) -> None:
+        captured: dict[str, object] = {}
+
+        self.app._ship.status = "in_station"
+        self.app._haul_params = {
+            "station_1_buying": "Aluminium",
+            "station_1": "Pawelczyk Dock",
+            "station_1_system": "Sol",
+            "station_1_on_land": "false",
+            "station_2_buying": "Bertrandite",
+            "station_2": "Trevithick Dock",
+            "station_2_system": "Achenar",
+            "station_2_on_land": "true",
+            "galaxy_map_settle": "",
+            "dock_timeout": "",
+        }
+        self.app._controls = object()
+        self.app._make_progress = lambda: (lambda _: None)
+        self.app._make_controls = lambda progress: object()
+        self.app._make_sleeper = lambda: (lambda _: None)
+        self.app._make_watcher = lambda: object()
+        self.app._run_in_thread = lambda fn: fn()
+
+        def fake_haul_loop(controls, watcher, **kwargs):
+            captured["kwargs"] = kwargs
+            return RoutineResult(
+                action="haul_loop",
+                dispatch=ActionDispatchResult(action="haul_loop", status="ok"),
+            )
+
+        with patch("edap.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
+            self.app._dispatch_haul_loop()
+
+        self.assertFalse(captured["kwargs"]["station_1_on_land"])
+        self.assertTrue(captured["kwargs"]["station_2_on_land"])
+        self.assertIn("station 2 landing: [cyan]on land[/]", "\n".join(self.app.logged))
 
     def test_multi_leg_haul_dispatch_loads_route_and_starts_routine(self) -> None:
         captured: dict[str, object] = {}
@@ -1066,6 +1106,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
                 "station_1_buying": "Aluminium",
                 "station_1": "Pawelczyk Dock",
                 "station_1_system": "Sol",
+                "station_1_on_land": "false",
                 "station_2_buying": "Bertrandite",
                 "station_2": "Trevithick Dock",
                 "station_2_system": "Achenar",
@@ -1079,6 +1120,8 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.app._handle_haul_prompt("Pawelczyk Dock")
         self.assertEqual(input_stub.value, "Sol")
         self.app._handle_haul_prompt("Sol")
+        self.assertEqual(self.app._haul_prompt_step, "station_1_on_land")
+        self.app._handle_haul_prompt("no")
         self.assertEqual(input_stub.value, "Bertrandite")
 
         self.app._handle_haul_prompt("")

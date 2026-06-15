@@ -11,6 +11,13 @@ from edap.multi_leg_haul import load_multi_leg_haul_definition
 from edap.routines import haul_loop_two_way, multi_leg_haul
 
 
+def _haul_param_as_bool(value: str, *, default: bool = False) -> bool:
+    raw = value.strip().lower()
+    if not raw:
+        return default
+    return raw in {"1", "true", "y", "yes", "land", "surface"}
+
+
 def cmd_haul(
     app: HaulHost,
     rest: str,
@@ -46,9 +53,11 @@ def dispatch_haul_loop(
     station_1_buying = app._haul_params.get("station_1_buying", "")
     station_1 = app._haul_params.get("station_1", "")
     station_1_system = app._haul_params.get("station_1_system", "")
+    station_1_on_land = _haul_param_as_bool(app._haul_params.get("station_1_on_land", ""))
     station_2_buying = app._haul_params.get("station_2_buying", "")
     station_2 = app._haul_params.get("station_2", "")
     station_2_system = app._haul_params.get("station_2_system", "")
+    station_2_on_land = _haul_param_as_bool(app._haul_params.get("station_2_on_land", ""))
     galaxy_map_settle_raw = app._haul_params.get("galaxy_map_settle", "")
     dock_timeout_raw = app._haul_params.get("dock_timeout", "")
 
@@ -95,9 +104,11 @@ def dispatch_haul_loop(
             "station_1_buying": station_1_buying,
             "station_1": station_1,
             "station_1_system": station_1_system,
+            "station_1_on_land": "true" if station_1_on_land else "false",
             "station_2_buying": station_2_buying,
             "station_2": station_2,
             "station_2_system": station_2_system,
+            "station_2_on_land": "true" if station_2_on_land else "false",
             "galaxy_map_settle": str(galaxy_map_settle),
             "dock_timeout": str(dock_timeout),
         },
@@ -118,8 +129,12 @@ def dispatch_haul_loop(
     ]
     if station_1_system:
         label_parts.append(f"station 1 sys: [cyan]{escape(station_1_system)}[/]")
+    if station_1_on_land:
+        label_parts.append("station 1 landing: [cyan]on land[/]")
     if station_2_system:
         label_parts.append(f"station 2 sys: [cyan]{escape(station_2_system)}[/]")
+    if station_2_on_land:
+        label_parts.append("station 2 landing: [cyan]on land[/]")
     label_parts.append(f"map settle: [cyan]{galaxy_map_settle:.1f}s[/]")
     label_parts.append(f"dock timeout: [cyan]{dock_timeout:.1f}s[/]")
 
@@ -143,9 +158,11 @@ def dispatch_haul_loop(
             station_1=station_1,
             station_1_buying=station_1_buying,
             station_1_system=station_1_system,
+            station_1_on_land=station_1_on_land,
             station_2=station_2,
             station_2_buying=station_2_buying,
             station_2_system=station_2_system,
+            station_2_on_land=station_2_on_land,
             step_delay_s=step_delay,
             dock_timeout_s=dock_timeout,
             undock_timeout_s=undock_timeout,
@@ -160,6 +177,7 @@ def dispatch_haul_loop(
             ),
             nav_panel_open_delay_s=app._config.controls.haul_two_way_nav_panel_open_delay_seconds,
             market_buy_hold_seconds_per_ton=app._config.controls.market_buy_hold_seconds_per_ton,
+            market_sell_min_hold_s=app._config.controls.market_sell_min_hold_seconds,
             market_critical_level_multiplier=app._config.controls.market_critical_level_multiplier,
             time_fn=time_fn,
             sleeper=sleeper,
@@ -253,6 +271,7 @@ def dispatch_multi_leg_haul(
             ),
             nav_panel_open_delay_s=app._config.controls.haul_two_way_nav_panel_open_delay_seconds,
             market_buy_hold_seconds_per_ton=app._config.controls.market_buy_hold_seconds_per_ton,
+            market_sell_min_hold_s=app._config.controls.market_sell_min_hold_seconds,
             market_critical_level_multiplier=app._config.controls.market_critical_level_multiplier,
             time_fn=time_fn,
             sleeper=sleeper,

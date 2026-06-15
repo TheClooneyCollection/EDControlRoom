@@ -121,7 +121,7 @@ def _detect_transit_resume_state(events: list[dict], destination_leg: StationLeg
         if evt_name == "SupercruiseExit":
             body_type = str(event.get("BodyType", "")).lower()
             system_name = str(event.get("StarSystem", "")).lower()
-            if body_type != "station":
+            if not destination_leg.on_land and body_type != "station":
                 return _TransitResumeState.NONE
             return (
                 _TransitResumeState.POST_DROP_NEAR_STATION
@@ -219,6 +219,7 @@ class StationLeg:
     system: str
     buy_commodity: str
     sell_commodity: str
+    on_land: bool = False
 
     @property
     def label(self) -> str:
@@ -236,6 +237,7 @@ class _HaulCtx:
     step_delay_s: float
     max_hold_s: float
     market_buy_hold_seconds_per_ton: float
+    market_sell_min_hold_s: float
     dock_timeout_s: float
     request_timeout_s: float
     undock_timeout_s: float
@@ -257,6 +259,9 @@ class _HaulCtx:
     sleeper: Callable[[float], None]
     progress_fn: ProgressCallback
     announce_fn: AnnouncementCallback
+
+
+_MANUAL_LANDING_REASON = "manual landing required"
 
 
 def _engage_hyperspace_after_escape(ctx: _HaulCtx) -> None:
@@ -284,18 +289,66 @@ def _open_navigation_panel_after_arrival(ctx: _HaulCtx, *, station_name: str = "
 def _wait_for_arrival_or_approach_event(
     watcher: SupportsPollEvents,
     *,
+    destination_system: str,
     deadline: float,
     time_fn: Callable[[], float],
 ) -> tuple[bool, list[dict[str, object]]]:
     approach_events = {"SupercruiseExit", "DockingRequested", "DockingGranted", "Docked"}
+    destination_system_lower = destination_system.lower()
     while time_fn() <= deadline:
         batch = watcher.poll()
         for index, event in enumerate(batch):
             if _is_in_supercruise_event(event):
+                system_name = str(event.get("StarSystem", "")).lower()
+                if destination_system_lower and system_name and system_name != destination_system_lower:
+                    continue
                 return True, batch[index + 1:]
             if event.get("event") in approach_events:
                 return False, batch[index:]
     return False, []
+
+
+def _wait_for_on_land_handoff(
+    watcher: SupportsPollEvents,
+    *,
+    destination_leg: StationLeg,
+    pending_events: list[dict[str, object]],
+    deadline: float,
+    time_fn: Callable[[], float],
+) -> dict[str, object] | None:
+    queued_events = list(pending_events)
+    destination_system_lower = destination_leg.system.lower()
+    while time_fn() <= deadline:
+        batch = queued_events if queued_events else watcher.poll()
+        queued_events = []
+        for event in batch:
+            if event.get("event") != "SupercruiseExit":
+                continue
+            system_name = str(event.get("StarSystem", "")).lower()
+            if destination_system_lower and system_name and system_name != destination_system_lower:
+                continue
+            return event
+    return None
+
+
+def _manual_landing_result(destination_leg: StationLeg) -> RoutineResult:
+    return RoutineResult(
+        action="manual_landing",
+        dispatch=ActionDispatchResult(
+            action="manual_landing",
+            status="ok",
+            reason=_MANUAL_LANDING_REASON,
+        ),
+        details={
+            "station": destination_leg.station,
+            "system": destination_leg.system,
+            "on_land": True,
+        },
+    )
+
+
+def _is_manual_landing_result(result: RoutineResult | None) -> bool:
+    return result is not None and result.dispatch.reason == _MANUAL_LANDING_REASON
 
 
 def _detect_start_phase(
@@ -455,6 +508,7 @@ def _run_market_sell(
         step_delay_s=ctx.step_delay_s,
         max_hold_s=ctx.max_hold_s,
         buy_hold_seconds_per_ton=ctx.market_buy_hold_seconds_per_ton,
+        sell_min_hold_s=ctx.market_sell_min_hold_s,
         trade_timeout_s=ctx.trade_timeout_s,
         time_fn=ctx.time_fn,
         sleeper=ctx.sleeper,
@@ -643,7 +697,10 @@ def _run_transit(
     elif resume_state == _TransitResumeState.ARRIVED_IN_DESTINATION_SYSTEM:
         ctx.progress_fn(f"Already in supercruise in {destination_leg.label} system - opening navigation panel.")
     elif resume_state == _TransitResumeState.POST_DROP_NEAR_STATION:
-        ctx.progress_fn(f"Already in normal space near {destination_leg.label} - skipping drop wait.")
+        if destination_leg.on_land:
+            ctx.progress_fn(f"Already in normal space near on-land {destination_leg.label} - handing off for manual landing.")
+        else:
+            ctx.progress_fn(f"Already in normal space near {destination_leg.label} - skipping drop wait.")
     else:
         ctx.progress_fn(f"Waiting for hyperspace arrival in {destination_leg.label} system...")
 
@@ -664,6 +721,7 @@ def _run_transit(
     if resume_state == _TransitResumeState.NONE:
         arrival_observed, pending_events = _wait_for_arrival_or_approach_event(
             ctx.watcher,
+            destination_system=destination_leg.system,
             deadline=ctx.time_fn() + ctx.dock_timeout_s,
             time_fn=ctx.time_fn,
         )
@@ -674,6 +732,41 @@ def _run_transit(
             _open_navigation_panel_after_arrival(ctx, station_name=destination_leg.station)
     elif resume_state == _TransitResumeState.ARRIVED_IN_DESTINATION_SYSTEM:
         _open_navigation_panel_after_arrival(ctx, station_name=destination_leg.station)
+
+    if destination_leg.on_land:
+        if resume_state == _TransitResumeState.POST_DROP_NEAR_STATION:
+            ctx.progress_fn(
+                f"{destination_leg.label} is marked on-land; manual landing required from normal space. "
+                "Resume haul after landing."
+            )
+            return _manual_landing_result(destination_leg), next_phase
+        ctx.progress_fn(
+            f"{destination_leg.label} is marked on-land; waiting for SupercruiseExit before handing off."
+        )
+        drop_event = _wait_for_on_land_handoff(
+            ctx.watcher,
+            destination_leg=destination_leg,
+            pending_events=pending_events,
+            deadline=ctx.time_fn() + ctx.dock_timeout_s,
+            time_fn=ctx.time_fn,
+        )
+        if drop_event is None:
+            return (
+                RoutineResult(
+                    action="manual_landing",
+                    dispatch=ActionDispatchResult(
+                        action="manual_landing",
+                        status="error",
+                        reason=f"timed out waiting for SupercruiseExit near {destination_leg.station}",
+                    ),
+                ),
+                next_phase,
+            )
+        ctx.progress_fn(
+            f"Reached normal space near on-land {destination_leg.label}; manual landing required. "
+            "Resume haul after landing."
+        )
+        return _manual_landing_result(destination_leg), next_phase
 
     result = dock(
         ctx.controls,
@@ -783,11 +876,14 @@ def haul_loop_two_way(
     station_2: str,
     station_2_buying: str,
     station_2_system: str = "",
+    station_1_on_land: bool = False,
+    station_2_on_land: bool = False,
     iterations: int = 0,
     start_phase: Phase | None = None,
     step_delay_s: float = 1.0,
     max_hold_s: float = 10.0,
     market_buy_hold_seconds_per_ton: float = 0.01,
+    market_sell_min_hold_s: float = 1.0,
     dock_timeout_s: float = 600.0,
     request_timeout_s: float = 20.0,
     undock_timeout_s: float = 30.0,
@@ -831,6 +927,7 @@ def haul_loop_two_way(
             index=1,
             station=station_1,
             system=station_1_system,
+            on_land=station_1_on_land,
             buy_commodity=station_1_buying,
             sell_commodity=station_2_buying,
         ),
@@ -838,12 +935,14 @@ def haul_loop_two_way(
             index=2,
             station=station_2,
             system=station_2_system,
+            on_land=station_2_on_land,
             buy_commodity=station_2_buying,
             sell_commodity=station_1_buying,
         ),
         step_delay_s=step_delay_s,
         max_hold_s=max_hold_s,
         market_buy_hold_seconds_per_ton=market_buy_hold_seconds_per_ton,
+        market_sell_min_hold_s=market_sell_min_hold_s,
         dock_timeout_s=dock_timeout_s,
         request_timeout_s=request_timeout_s,
         undock_timeout_s=undock_timeout_s,
@@ -893,6 +992,8 @@ def haul_loop_two_way(
             result, next_phase = _PHASE_RUNNERS[phase](ctx)
             if result is not None:
                 last_result = result
+                if _is_manual_landing_result(result):
+                    return result
                 if result.dispatch.status != "ok":
                     return result
             if (

@@ -60,6 +60,7 @@
       "properties": {
         "system": { "type": "string" },
         "station": { "type": "string" },
+        "on_land": { "type": "boolean" },
         "distance_to_arrival": { "type": ["integer", "null"] },
         "market_id": { "type": ["integer", "null"] },
         "market_updated_at": { "type": ["integer", "null"] },

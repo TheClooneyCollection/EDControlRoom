@@ -26,6 +26,7 @@ class CargoTransfer:
 class RouteEndpoint:
     system: str
     station: str
+    on_land: bool = False
     distance_to_arrival_ls: int | None = None
     market_id: int | None = None
     market_updated_at: int | None = None
@@ -275,6 +276,7 @@ def _endpoint_from_json(data: Any, *, label: str) -> RouteEndpoint:
     return RouteEndpoint(
         system=system,
         station=station,
+        on_land=bool(data.get("on_land", False)),
         distance_to_arrival_ls=_int_or_none(data.get("distance_to_arrival")),
         market_id=_int_or_none(data.get("market_id")),
         market_updated_at=_int_or_none(data.get("market_updated_at")),
@@ -289,6 +291,7 @@ def _endpoint_to_json(endpoint: RouteEndpoint) -> dict[str, Any]:
     return {
         "system": endpoint.system,
         "station": endpoint.station,
+        "on_land": endpoint.on_land,
         "distance_to_arrival": endpoint.distance_to_arrival_ls,
         "market_id": endpoint.market_id,
         "market_updated_at": endpoint.market_updated_at,

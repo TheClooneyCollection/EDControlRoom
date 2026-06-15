@@ -55,6 +55,7 @@ class ControlsConfig:
     market_nav_delay_seconds: float
     market_trade_max_attempts: int
     market_buy_hold_seconds_per_ton: float
+    market_sell_min_hold_seconds: float
     market_critical_level_multiplier: float
     haul_post_sell_settle_seconds: float
     haul_two_way_auto_hyperspace_engage: bool
@@ -386,6 +387,8 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError(
             "Config value `controls.market_buy_hold_seconds_per_ton` must be greater than 0."
         )
+    if config.controls.market_sell_min_hold_seconds < 0:
+        raise ConfigError("Config value `controls.market_sell_min_hold_seconds` must be non-negative.")
     if config.controls.market_critical_level_multiplier <= 0:
         raise ConfigError("Config value `controls.market_critical_level_multiplier` must be greater than 0.")
     if config.controls.haul_post_sell_settle_seconds < 0:
@@ -563,6 +566,12 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
                 "market_buy_hold_seconds_per_ton",
                 0.01,
                 aliases=("market.buy_hold_seconds_per_ton",),
+            ),
+            market_sell_min_hold_seconds=_float(
+                controls_flat,
+                "market_sell_min_hold_seconds",
+                1.0,
+                aliases=("market.sell_min_hold_seconds",),
             ),
             market_critical_level_multiplier=_float(
                 controls_flat,
