@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it when work lands on `main` or when preparing a release, not on every feature branch._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `12`
-- Latest generated iteration number: `145`
+- Generated iteration count: `13`
+- Latest generated iteration number: `146`
 
 ## Iteration 134
 
@@ -345,3 +345,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-test a station-1-only and station-2-only haul loop in-game to confirm menu timing, cargo detection, and resume semantics match the simulated path.
+
+## Iteration 146
+
+- When: `2026-06-15 15:29`
+- Area: `haul`
+- Title: `prefill-haul-prompt-values`
+- Source: [2026-06-15-15-29_____haul_____prefill-haul-prompt-values.md](iteration-logs/2026-06-15-15-29_____haul_____prefill-haul-prompt-values.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `prefill-haul-prompt-values`
+- Started: `2026-06-15 15:29`
+
+## Summary
+
+- Changed haul prompt resume/edit to prefill the command input with the saved answers, and made blank text submission clear a field instead of restoring the previous saved text behind the operator's back.
+
+## Changes
+
+- Updated `edap.control_room.prompts` so haul prompt steps write the current answer into `#cmd.value`, keep the cursor at the end, and only use placeholders for guidance.
+- Removed submit-time text fallback for haul station/cargo fields, so deleting a prefilled value now leaves that field empty; required fields still reject blank submission where the flow needs them.
+- Changed seeded haul defaults merging so replay/edit can intentionally override a saved default with an empty string.
+- Added Control Room tests covering prompt prefill and clearing a prefilled station-2 buy commodity.
+
+## Follow-ups
+
+- Live-test replay/edit of a saved haul entry in the real Textual UI to confirm the prefilled command box feels right and does not introduce focus/cursor quirks.
