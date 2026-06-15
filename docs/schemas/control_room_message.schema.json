@@ -1,0 +1,661 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://edcontrolroom.local/schemas/control_room_message.schema.json",
+  "title": "EDControlRoom Control Room Message",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "version", "message_type", "message_id", "timestamp", "payload"],
+  "properties": {
+    "schema": {
+      "const": "edcontrolroom.control_room_message"
+    },
+    "version": {
+      "const": 1
+    },
+    "message_type": {
+      "enum": [
+        "command.authenticate",
+        "command.request_snapshot",
+        "command.run_routine",
+        "command.cancel_routine",
+        "command.set_market_filter",
+        "command.clear_market_filter",
+        "command.dismiss_alert",
+        "state.snapshot",
+        "event.connection_ready",
+        "event.active_operator_changed",
+        "event.operator_message",
+        "event.activity_log_appended",
+        "event.routine_started",
+        "event.routine_progress",
+        "event.routine_failed",
+        "event.routine_completed",
+        "event.routine_cancelled",
+        "event.server_warning",
+        "response.authentication_result",
+        "response.capabilities",
+        "response.success",
+        "response.error"
+      ]
+    },
+    "message_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "correlation_message_id": {
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "command.authenticate" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/command_authenticate_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "command.request_snapshot" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/command_request_snapshot_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "command.run_routine" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/command_run_routine_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "command.cancel_routine" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/command_cancel_routine_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "command.set_market_filter" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/command_set_market_filter_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "command.clear_market_filter" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/command_clear_market_filter_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "command.dismiss_alert" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/command_dismiss_alert_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "state.snapshot" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/state_snapshot_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "event.connection_ready" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/event_connection_ready_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "event.active_operator_changed" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/event_active_operator_changed_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "event.operator_message" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/event_operator_message_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "event.activity_log_appended" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/event_activity_log_appended_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "event.routine_started" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/event_routine_started_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "event.routine_progress" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/event_routine_progress_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "event.routine_failed" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/event_routine_failed_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "event.routine_completed" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/event_routine_completed_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "event.routine_cancelled" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/event_routine_cancelled_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "event.server_warning" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/event_server_warning_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "response.authentication_result" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/response_authentication_result_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "response.capabilities" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/response_capabilities_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "response.success" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/response_success_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "response.error" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/response_error_payload" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "string_list": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "client_role": {
+      "enum": ["active_operator", "observer"]
+    },
+    "activity_log_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entry_id", "timestamp", "message_text"],
+      "properties": {
+        "entry_id": { "type": "string", "minLength": 1 },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "message_text": { "type": "string", "minLength": 1 },
+        "severity": { "type": ["string", "null"] }
+      }
+    },
+    "alert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alert_id", "severity", "message_text"],
+      "properties": {
+        "alert_id": { "type": "string", "minLength": 1 },
+        "severity": { "type": "string", "minLength": 1 },
+        "message_text": { "type": "string", "minLength": 1 },
+        "recommended_action": { "type": ["string", "null"] }
+      }
+    },
+    "command_authenticate_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authentication_token", "client_name", "client_version"],
+      "properties": {
+        "authentication_token": { "type": "string", "minLength": 1 },
+        "client_name": { "type": "string", "minLength": 1 },
+        "client_version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "command_request_snapshot_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "include_activity_log": { "type": "boolean" },
+        "include_market_state": { "type": "boolean" }
+      }
+    },
+    "command_run_routine_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["routine_name", "arguments"],
+      "properties": {
+        "routine_name": { "type": "string", "minLength": 1 },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "command_cancel_routine_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["routine_id"],
+      "properties": {
+        "routine_id": { "type": "string", "minLength": 1 },
+        "reason": { "type": ["string", "null"] }
+      }
+    },
+    "command_set_market_filter_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["filter_text"],
+      "properties": {
+        "filter_text": { "type": "string" }
+      }
+    },
+    "command_clear_market_filter_payload": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "command_dismiss_alert_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alert_id"],
+      "properties": {
+        "alert_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "state_snapshot_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["server_status", "activity_log", "alerts"],
+      "properties": {
+        "session": {
+          "type": ["object", "null"],
+          "additionalProperties": true
+        },
+        "commander": {
+          "type": ["object", "null"],
+          "additionalProperties": true
+        },
+        "location": {
+          "type": ["object", "null"],
+          "additionalProperties": true
+        },
+        "ship": {
+          "type": ["object", "null"],
+          "additionalProperties": true
+        },
+        "cargo": {
+          "type": ["object", "null"],
+          "additionalProperties": true
+        },
+        "market": {
+          "type": ["object", "null"],
+          "additionalProperties": true
+        },
+        "current_routine": {
+          "type": ["object", "null"],
+          "additionalProperties": true
+        },
+        "activity_log": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/activity_log_entry" }
+        },
+        "alerts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/alert" }
+        },
+        "server_status": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["server_name", "server_version"],
+          "properties": {
+            "server_name": { "type": "string", "minLength": 1 },
+            "server_version": { "type": "string", "minLength": 1 },
+            "capability_names": { "$ref": "#/$defs/string_list" },
+            "operator_mode": { "type": ["string", "null"] }
+          }
+        },
+        "connected_clients": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["session_id", "client_name", "client_role"],
+            "properties": {
+              "session_id": { "type": "string", "minLength": 1 },
+              "client_name": { "type": "string", "minLength": 1 },
+              "client_role": { "$ref": "#/$defs/client_role" }
+            }
+          }
+        },
+        "active_operator": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["session_id", "client_name"],
+          "properties": {
+            "session_id": { "type": "string", "minLength": 1 },
+            "client_name": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "event_connection_ready_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session_id", "server_name", "server_version", "client_role", "capability_names"],
+      "properties": {
+        "session_id": { "type": "string", "minLength": 1 },
+        "server_name": { "type": "string", "minLength": 1 },
+        "server_version": { "type": "string", "minLength": 1 },
+        "client_role": { "$ref": "#/$defs/client_role" },
+        "capability_names": { "$ref": "#/$defs/string_list" }
+      }
+    },
+    "event_active_operator_changed_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["active_operator_session_id", "active_operator_client_name"],
+      "properties": {
+        "active_operator_session_id": { "type": "string", "minLength": 1 },
+        "active_operator_client_name": { "type": "string", "minLength": 1 },
+        "reason": { "type": ["string", "null"] }
+      }
+    },
+    "event_operator_message_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["severity", "message_text"],
+      "properties": {
+        "severity": { "type": "string", "minLength": 1 },
+        "message_text": { "type": "string", "minLength": 1 },
+        "recommended_action": { "type": ["string", "null"] }
+      }
+    },
+    "event_activity_log_appended_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entry"],
+      "properties": {
+        "entry": { "$ref": "#/$defs/activity_log_entry" }
+      }
+    },
+    "event_routine_started_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["routine_id", "routine_name", "arguments"],
+      "properties": {
+        "routine_id": { "type": "string", "minLength": 1 },
+        "routine_name": { "type": "string", "minLength": 1 },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "event_routine_progress_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["routine_id", "progress_message"],
+      "properties": {
+        "routine_id": { "type": "string", "minLength": 1 },
+        "progress_message": { "type": "string", "minLength": 1 },
+        "progress_detail": { "type": ["string", "null"] }
+      }
+    },
+    "event_routine_failed_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["routine_id", "failure_code", "failure_message"],
+      "properties": {
+        "routine_id": { "type": "string", "minLength": 1 },
+        "failure_code": { "type": "string", "minLength": 1 },
+        "failure_message": { "type": "string", "minLength": 1 },
+        "recommended_action": { "type": ["string", "null"] }
+      }
+    },
+    "event_routine_completed_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["routine_id", "completion_message"],
+      "properties": {
+        "routine_id": { "type": "string", "minLength": 1 },
+        "completion_message": { "type": "string", "minLength": 1 },
+        "result": {
+          "type": ["object", "null"],
+          "additionalProperties": true
+        }
+      }
+    },
+    "event_routine_cancelled_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["routine_id"],
+      "properties": {
+        "routine_id": { "type": "string", "minLength": 1 },
+        "cancellation_reason": { "type": ["string", "null"] }
+      }
+    },
+    "event_server_warning_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["warning_code", "warning_message"],
+      "properties": {
+        "warning_code": { "type": "string", "minLength": 1 },
+        "warning_message": { "type": "string", "minLength": 1 },
+        "recommended_action": { "type": ["string", "null"] }
+      }
+    },
+    "response_authentication_result_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authenticated",
+        "server_name",
+        "server_version",
+        "session_id",
+        "client_role",
+        "capability_names"
+      ],
+      "properties": {
+        "authenticated": { "type": "boolean" },
+        "server_name": { "type": "string", "minLength": 1 },
+        "server_version": { "type": "string", "minLength": 1 },
+        "session_id": { "type": "string", "minLength": 1 },
+        "client_role": { "$ref": "#/$defs/client_role" },
+        "capability_names": { "$ref": "#/$defs/string_list" },
+        "operator_mode": { "type": ["string", "null"] }
+      }
+    },
+    "response_capabilities_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capability_names",
+        "supported_client_roles",
+        "supported_message_types",
+        "minimum_client_version",
+        "server_version"
+      ],
+      "properties": {
+        "capability_names": { "$ref": "#/$defs/string_list" },
+        "supported_client_roles": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/client_role" }
+        },
+        "supported_message_types": { "$ref": "#/$defs/string_list" },
+        "minimum_client_version": { "type": "string", "minLength": 1 },
+        "server_version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "response_success_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accepted"],
+      "properties": {
+        "accepted": { "type": "boolean" },
+        "message_text": { "type": ["string", "null"] },
+        "result": {
+          "type": ["object", "null"],
+          "additionalProperties": true
+        }
+      }
+    },
+    "response_error_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["error_code", "error_message", "retryable"],
+      "properties": {
+        "error_code": { "type": "string", "minLength": 1 },
+        "error_message": { "type": "string", "minLength": 1 },
+        "recommended_action": { "type": ["string", "null"] },
+        "retryable": { "type": "boolean" }
+      }
+    }
+  }
+}
