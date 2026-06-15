@@ -38,7 +38,7 @@ Use [docs/iteration-logs/](docs/iteration-logs/) for concise per-iteration notes
 - `<area>` is a short kebab-case slug center-padded with underscores to width `12` so `control-room` fits exactly. Example: `2026-06-11-13-45_____docs_____iteration-log-migration.md`.
 - Always create iteration logs with `uv run python3 tools/iteration_logs.py new "<area>" "<title>"`; do not handcraft filenames.
 - Do not hand-edit an iteration number anywhere; derive it from `docs/iteration-logs/` with `uv run python3 tools/iteration_logs.py next-number` or the generated archive.
-- `docs/iteration-archive.md` is generated from `docs/iteration-logs/`. Refresh it manually only when needed for local verification or release prep.
+- `docs/iteration-archive.md` is maintained current from `docs/iteration-logs/`; refresh it whenever iteration logs change before committing, pushing, or opening a PR.
 - Run `uv run python3 tools/iteration_logs.py validate` before committing, pushing, or opening a PR so invalid iteration-log filenames are caught before archive generation or review.
 - Treat `docs/status-archive.md` as legacy cold storage for displaced older status/session content from the pre-iteration-log and pre-area-status workflows. Do not open or read it during normal work unless the user explicitly asks for archive/history detail or you are blocked and need older context that is not available in `docs/status/` or `docs/iteration-logs/`.
 
@@ -101,6 +101,7 @@ When work is delegated to agents:
 - spawn agents only for narrow, disjoint slices that can be integrated independently
 - prefer concrete implementation or verification slices over broad analysis
 - require the agent to verify its own work locally when practical
+- require the agent to commit its completed slice on its own branch before the parent agent pushes or opens a PR that depends on that work
 - require the agent to report changed files, what works, what remains unresolved, and key assumptions
 - when two or more slices are genuinely independent and could run concurrently (different files, different concerns, no shared decisions), call that out and ask the user before spawning parallel agents — once approved, dispatch them together rather than serially
 
@@ -108,6 +109,7 @@ After an agent finishes:
 
 - capture the result in the affected `docs/status/<area>.md` files if it changes project understanding, status, or next steps
 - capture concise operational detail in a new file under `docs/iteration-logs/` when it is useful to retain but does not belong in `docs/status/<area>.md`
+- refresh `docs/iteration-archive.md` after adding or editing iteration logs and before any push or PR that includes them
 - update any deeper supporting docs only when the change needs more detail than the relevant `docs/status/<area>.md` file should carry
 - integrate and commit the work atomically in logically grouped commits
 - remove the agent worktree after its changes are integrated or intentionally discarded so stale checkouts do not accumulate
