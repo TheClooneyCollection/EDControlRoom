@@ -20,7 +20,7 @@
 - [status/README.md](status/README.md): maintained status entrypoint and area map
 - [status/](status/): split current-state handoff files by durable area
 - [iteration-logs/](iteration-logs/): per-iteration maintained notes, one file per substantive work session
-- [iteration-archive.md](iteration-archive.md): generated archive of iteration logs, normally refreshed on the promotion branch or during release prep
+- [iteration-archive.md](iteration-archive.md): generated archive of iteration logs, normally refreshed during release prep or local verification
 - [status-archive.md](status-archive.md): legacy archived validation and older pre-migration handoff notes
 
 ## Deep Reference

@@ -11,5 +11,6 @@ dist
 *.pyc
 artifacts/
 backup/
+worktrees/
 config.toml
 .control_room_state.json

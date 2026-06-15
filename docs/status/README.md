@@ -2,7 +2,7 @@
 
 Read this file first, then open the area files that match the work you are touching.
 
-- `ci-release.md`: CI policy, release automation, promotion PR automation
+- `ci-release.md`: CI policy, release automation, tag/stability workflow
 - `control-room.md`: Control Room UX, messages, logging, operator-facing surface
 - `docs-process.md`: handoff workflow, iteration docs, status maintenance rules
 - `haul.md`: two-way haul, multi-leg haul, station-flow caveats

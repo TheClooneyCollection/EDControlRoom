@@ -38,7 +38,7 @@ Use [docs/iteration-logs/](docs/iteration-logs/) for concise per-iteration notes
 - `<area>` is a short kebab-case slug center-padded with underscores to width `12` so `control-room` fits exactly. Example: `2026-06-11-13-45_____docs_____iteration-log-migration.md`.
 - Always create iteration logs with `uv run python3 tools/iteration_logs.py new "<area>" "<title>"`; do not handcraft filenames.
 - Do not hand-edit an iteration number anywhere; derive it from `docs/iteration-logs/` with `uv run python3 tools/iteration_logs.py next-number` or the generated archive.
-- `docs/iteration-archive.md` is generated from `docs/iteration-logs/`. Prefer the dedicated promotion workflow branch to refresh it for `dev -> main` PRs, and refresh it manually only when needed for local verification or release prep.
+- `docs/iteration-archive.md` is generated from `docs/iteration-logs/`. Refresh it manually only when needed for local verification or release prep.
 - Run `uv run python3 tools/iteration_logs.py validate` before committing, pushing, or opening a PR so invalid iteration-log filenames are caught before archive generation or review.
 - Treat `docs/status-archive.md` as legacy cold storage for displaced older status/session content from the pre-iteration-log and pre-area-status workflows. Do not open or read it during normal work unless the user explicitly asks for archive/history detail or you are blocked and need older context that is not available in `docs/status/` or `docs/iteration-logs/`.
 
@@ -69,6 +69,7 @@ Use [docs/iteration-logs/](docs/iteration-logs/) for concise per-iteration notes
 - Treat macOS as the primary target until the diagnostic path is stable.
 - Preserve existing OpenCV/navigation behavior unless a change is required for portability.
 - Make incremental changes that are easy to validate.
+- Treat `main` as the active rolling-update branch. Do not assume or document a long-lived `dev` branch workflow; use tags to mark stable features and releases.
 - Never use `git reset --hard` as a first option. Always consider safer alternatives first, and if a hard reset truly seems necessary, consult the user before doing it.
 - Prefer strong non-optional types when production/runtime callers always provide a value. Do not widen production APIs to `Optional[...]` just because tests want to omit an argument.
 - When tests need silent progress/announcement-style hooks, pass an explicit no-op helper or lambda from the test instead of relying on `None` in the runtime signature.
@@ -132,7 +133,6 @@ Examples:
 - PR titles should describe the net effect of the PR, not enumerate every commit inside it.
 - If a PR mixes unrelated work, split it instead of stacking multiple type prefixes into one title.
 - For normal feature/fix/refactor/docs PRs, use the matching Conventional Commit type in the PR title.
-- For branch-promotion PRs from `dev` to `main`, default to `chore: promote dev to main`.
 - Reserve `release: ...` titles for versioned release PRs only when the branch is promoting a specific release.
 
 ### Mixed Changesets
