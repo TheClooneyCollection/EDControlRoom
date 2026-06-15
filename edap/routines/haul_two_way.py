@@ -144,6 +144,8 @@ def _detect_transit_resume_state(events: list[dict], destination_leg: StationLeg
 
 
 def _inventory_has_commodity(inventory: list[dict], commodity: str) -> bool:
+    if not commodity:
+        return False
     commodity_lower = commodity.lower()
     return any(
         item.get("Count", 0) > 0
@@ -156,6 +158,8 @@ def _inventory_has_commodity(inventory: list[dict], commodity: str) -> bool:
 
 
 def _inventory_commodity_count(inventory: list[dict], commodity: str) -> int:
+    if not commodity:
+        return 0
     commodity_lower = commodity.lower()
     total = 0
     for item in inventory:
@@ -186,6 +190,8 @@ def _inventory_has_full_commodity_load(
     commodity: str,
     cargo_capacity: int | None,
 ) -> bool | None:
+    if not commodity:
+        return False
     if cargo_capacity is None or cargo_capacity <= 0:
         return None
     commodity_count = _inventory_commodity_count(inventory, commodity)
@@ -366,11 +372,15 @@ def _detect_start_phase(
                 return Phase.AT_STATION_1_SELL
             if has_full_station_1_cargo:
                 return Phase.UNDOCK_STATION_1
+            if not station_1.buy_commodity:
+                return Phase.UNDOCK_STATION_1
             return Phase.AT_STATION_1_BUY
         if current_station_lower == station_2_lower:
             if has_station_1_cargo:
                 return Phase.AT_STATION_2_SELL
             if has_full_station_2_cargo:
+                return Phase.UNDOCK_STATION_2
+            if not station_2.buy_commodity:
                 return Phase.UNDOCK_STATION_2
             return Phase.AT_STATION_2_BUY
         raise RuntimeError(
@@ -408,6 +418,19 @@ def _run_market_sell(
     leg: StationLeg,
     next_phase: Phase,
 ) -> tuple[RoutineResult, Phase]:
+    if not leg.sell_commodity:
+        ctx.progress_fn(f"No sell commodity configured for {leg.label} - skipping sell.")
+        return (
+            RoutineResult(
+                action="market_sell",
+                dispatch=ActionDispatchResult(
+                    action="market_sell",
+                    status="ok",
+                    reason="no sell commodity configured",
+                ),
+            ),
+            next_phase,
+        )
     if not _sellable_cargo(_read_cargo_json(ctx.journal_dir)):
         ctx.progress_fn(f"Cargo hold empty - skipping {leg.label} sell.")
         return (
@@ -458,6 +481,19 @@ def _run_market_buy(
     leg: StationLeg,
     next_phase: Phase,
 ) -> tuple[RoutineResult, Phase]:
+    if not leg.buy_commodity:
+        ctx.progress_fn(f"No buy commodity configured for {leg.label} - skipping buy.")
+        return (
+            RoutineResult(
+                action="market_buy",
+                dispatch=ActionDispatchResult(
+                    action="market_buy",
+                    status="ok",
+                    reason="no buy commodity configured",
+                ),
+            ),
+            next_phase,
+        )
     ctx.progress_fn(f"Buying {leg.buy_commodity} at {leg.label} (MAX)...")
     ctx.announce_fn(AnnouncementId.BUYING_CARGO, commodity_name=leg.buy_commodity)
     result = market_buy(
@@ -779,11 +815,11 @@ def haul_loop_two_way(
         raise ValueError("iterations must be non-negative (0 = infinite)")
     if not station_1 or not station_2:
         raise RuntimeError("station_1 and station_2 are required")
-    if not station_1_buying or not station_2_buying:
-        raise RuntimeError("station_1_buying and station_2_buying are required")
+    if not station_1_buying and not station_2_buying:
+        raise RuntimeError("at least one of station_1_buying or station_2_buying is required")
     if station_1 == station_2:
         raise RuntimeError("station_1 and station_2 must differ")
-    if station_1_buying == station_2_buying:
+    if station_1_buying and station_2_buying and station_1_buying == station_2_buying:
         raise RuntimeError("station_1_buying and station_2_buying must differ")
 
     ctx = _HaulCtx(

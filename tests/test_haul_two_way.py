@@ -134,6 +134,35 @@ class TwoWayHaulLoopTests(unittest.TestCase):
 
         self.assertEqual(phase, Phase.AT_STATION_1_BUY)
 
+    def test_detect_start_phase_docked_at_station_2_without_buy_commodity_undocks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_journal(
+                journal_dir,
+                {
+                    "event": "Docked",
+                    "StationName": _STATION_2,
+                    "StarSystem": _SYSTEM_2,
+                    "CargoCapacity": 64,
+                },
+            )
+            _write_cargo(journal_dir, [])
+
+            phase = _detect_start_phase(
+                journal_dir,
+                station_1=_station_1_leg(),
+                station_2=StationLeg(
+                    index=2,
+                    station=_STATION_2,
+                    system=_SYSTEM_2,
+                    buy_commodity="",
+                    sell_commodity=_CARGO_1,
+                ),
+                progress_fn=noop_progress,
+            )
+
+        self.assertEqual(phase, Phase.UNDOCK_STATION_2)
+
     def test_one_iteration_happy_path(self) -> None:
         controls = FakeShipControls()
         market_calls: list[tuple[str, str]] = []
@@ -177,12 +206,15 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                         dispatch=ActionDispatchResult(action="market_sell", status="ok"),
                     )
                 )
-                market_buy_mock.side_effect = lambda controls, watcher, **kwargs: (
-                    market_calls.append(("buy", kwargs["target"])) or RoutineResult(
+                def fake_buy(controls, watcher, **kwargs):
+                    market_calls.append(("buy", kwargs["target"]))
+                    _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 64, "Stolen": 0}])
+                    return RoutineResult(
                         action="market_buy",
                         dispatch=ActionDispatchResult(action="market_buy", status="ok"),
                     )
-                )
+
+                market_buy_mock.side_effect = fake_buy
                 result = haul_loop_two_way(
                     controls,
                     watcher,
@@ -219,6 +251,84 @@ class TwoWayHaulLoopTests(unittest.TestCase):
         self.assertEqual(
             [call["action"] for call in controls.calls if call["action"] in {"SetSpeed100", "UseBoostJuice"}].count("SetSpeed100"),
             2,
+        )
+
+    def test_one_iteration_skips_empty_station_2_buy_leg(self) -> None:
+        controls = FakeShipControls()
+        market_calls: list[tuple[str, str]] = []
+        watcher = FakeWatcher([
+            [],
+            [{"event": "Undocked", "StationName": _STATION_1}],
+            [{"event": "Music", "MusicTrack": "NoTrack"}],
+            [{"event": "SupercruiseExit", "BodyType": "Station"}],
+            [],
+            [{"event": "DockingGranted", "LandingPad": 1, "StationName": _STATION_2}],
+            [{"event": "Docked", "StationName": _STATION_2}],
+            [],
+            [{"event": "Undocked", "StationName": _STATION_2}],
+            [{"event": "Music", "MusicTrack": "NoTrack"}],
+            [{"event": "SupercruiseExit", "BodyType": "Station"}],
+            [],
+            [{"event": "DockingGranted", "LandingPad": 1, "StationName": _STATION_1}],
+            [{"event": "Docked", "StationName": _STATION_1}],
+        ])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_market(
+                journal_dir,
+                _STATION_1,
+                [{"Category": "Metals", "Name": "aluminium", "Name_Localised": _CARGO_1, "DemandBracket": 1, "Stock": 1000}],
+            )
+            _write_cargo(journal_dir, [])
+            with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
+                "edap.routines.haul_two_way.market_buy"
+            ) as market_buy_mock:
+                market_sell_mock.side_effect = lambda controls, watcher, **kwargs: (
+                    market_calls.append(("sell", kwargs["target"])) or RoutineResult(
+                        action="market_sell",
+                        dispatch=ActionDispatchResult(action="market_sell", status="ok"),
+                    )
+                )
+                def fake_buy(controls, watcher, **kwargs):
+                    market_calls.append(("buy", kwargs["target"]))
+                    _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 64, "Stolen": 0}])
+                    return RoutineResult(
+                        action="market_buy",
+                        dispatch=ActionDispatchResult(action="market_buy", status="ok"),
+                    )
+
+                market_buy_mock.side_effect = fake_buy
+                result = haul_loop_two_way(
+                    controls,
+                    watcher,
+                    journal_dir=journal_dir,
+                    station_1=_STATION_1,
+                    station_1_buying=_CARGO_1,
+                    station_1_system=_SYSTEM_1,
+                    station_2=_STATION_2,
+                    station_2_buying="",
+                    station_2_system=_SYSTEM_2,
+                    iterations=1,
+                    step_delay_s=0.0,
+                    settle_s=0.0,
+                    supercruise_exit_settle_s=0.0,
+                    boost_settle_s=0.0,
+                    dock_timeout_s=30.0,
+                    request_timeout_s=10.0,
+                    undock_timeout_s=10.0,
+                    trade_timeout_s=10.0,
+                    time_fn=_ticking_clock(),
+                    sleeper=lambda _: None,
+                )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(
+            market_calls,
+            [
+                ("buy", _CARGO_1),
+                ("sell", _CARGO_1),
+            ],
         )
 
     def test_stop_requested_halts_at_station_1_sale_boundary_before_buy(self) -> None:

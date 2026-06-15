@@ -58,7 +58,12 @@ def dispatch_haul_loop(
     if not station_1_system and app._ship.system:
         station_1_system = app._ship.system
         app._log(f"[dim]Station 1 system defaulting to current system: [cyan]{escape(station_1_system)}[/][/]")
-    if not station_1_buying or not station_2_buying or not station_1 or not station_2 or not station_2_system:
+    if (
+        (not station_1_buying and not station_2_buying)
+        or not station_1
+        or not station_2
+        or not station_2_system
+    ):
         app._log(f"[red]{escape(error_text.render(app._config, 'haul_params_required'))}[/]")
         return
 
@@ -100,8 +105,16 @@ def dispatch_haul_loop(
     ))
 
     label_parts = [
-        f"station 1 [cyan]{escape(station_1)}[/]: buy [cyan]{escape(station_1_buying)}[/]",
-        f"station 2 [cyan]{escape(station_2)}[/]: buy [cyan]{escape(station_2_buying)}[/]",
+        (
+            f"station 1 [cyan]{escape(station_1)}[/]: buy [cyan]{escape(station_1_buying)}[/]"
+            if station_1_buying
+            else f"station 1 [cyan]{escape(station_1)}[/]: [dim]no buy[/]"
+        ),
+        (
+            f"station 2 [cyan]{escape(station_2)}[/]: buy [cyan]{escape(station_2_buying)}[/]"
+            if station_2_buying
+            else f"station 2 [cyan]{escape(station_2)}[/]: [dim]no buy[/]"
+        ),
     ]
     if station_1_system:
         label_parts.append(f"station 1 sys: [cyan]{escape(station_1_system)}[/]")

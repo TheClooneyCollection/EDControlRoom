@@ -905,6 +905,42 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.assertEqual(captured["kwargs"]["station_1_system"], "Sol")
         self.assertIn("Station 1 defaulting to current station", "\n".join(self.app.logged))
 
+    def test_haul_dispatch_allows_empty_station_2_buying(self) -> None:
+        captured: dict[str, object] = {}
+
+        self.app._ship.status = "in_station"
+        self.app._ship.station = "Pawelczyk Dock"
+        self.app._ship.system = "Sol"
+        self.app._haul_params = {
+            "station_1_buying": "Aluminium",
+            "station_1": "Pawelczyk Dock",
+            "station_1_system": "Sol",
+            "station_2_buying": "",
+            "station_2": "Trevithick Dock",
+            "station_2_system": "Achenar",
+            "galaxy_map_settle": "",
+            "dock_timeout": "",
+        }
+        self.app._controls = object()
+        self.app._make_progress = lambda: (lambda _: None)
+        self.app._make_controls = lambda progress: object()
+        self.app._make_sleeper = lambda: (lambda _: None)
+        self.app._make_watcher = lambda: object()
+        self.app._run_in_thread = lambda fn: fn()
+
+        def fake_haul_loop(controls, watcher, **kwargs):
+            captured["kwargs"] = kwargs
+            return RoutineResult(
+                action="haul_loop",
+                dispatch=ActionDispatchResult(action="haul_loop", status="ok"),
+            )
+
+        with patch("edap.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
+            self.app._dispatch_haul_loop()
+
+        self.assertEqual(captured["kwargs"]["station_2_buying"], "")
+        self.assertIn("station 2 [cyan]Trevithick Dock[/]: [dim]no buy[/]", "\n".join(self.app.logged))
+
     def test_multi_leg_haul_dispatch_loads_route_and_starts_routine(self) -> None:
         captured: dict[str, object] = {}
         definition = type(
