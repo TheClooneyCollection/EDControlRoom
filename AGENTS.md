@@ -151,7 +151,11 @@ Examples:
 ## Release Style
 
 - Tag stable releases as semantic versions like `v1.0.0`.
+- Prepare releases manually; do not rely on release PR automation.
+- Use a release-prep commit message in the existing style: `chore: prepare vX.Y.Z release`.
 - When preparing a release tag, update `pyproject.toml` so `[project].version` matches the release version without the leading `v`.
 - If a release prep changes `[project].version`, run `uv sync` so `uv.lock` is refreshed to the same version metadata and commit that lockfile update as part of the release-prep changeset.
+- Before tagging a release, run `uv run python3 -m unittest discover -s tests`.
+- Push the release-prep commit and the semantic version tag, then publish the GitHub release manually.
 - Use GitHub release titles in the form `EDControlRoom vX.Y.Z - <short release label>`.
 - Release notes should stay high level: summarize the major operator-facing capabilities, especially `control_room.py`, available routines, and any other significant platform/runtime milestones.
