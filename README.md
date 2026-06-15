@@ -157,7 +157,7 @@ uv run python3 -m unittest discover -s tests
 
 Development now ships as rolling updates on `main` rather than through a long-lived `dev` branch. For a single-maintainer project, that keeps the workflow lighter and avoids the overhead of constantly promoting work between branches. The tradeoff is that `main` may sometimes include unfinished or unpolished changes between stability markers, so stable features and releases are communicated through tags plus clear notes about feature completeness and known issues.
 
-Releases are now PR-driven through `.github/workflows/release-please.yml`. If you want the repo's normal CI to run on bot-authored release PRs as well, add a `RELEASE_PLEASE_TOKEN` repository secret backed by a PAT or GitHub App token instead of relying only on the default `GITHUB_TOKEN`.
+Releases are cut manually. The release flow is: prepare the versioned release changeset on `main`, run the full test suite, create a semantic version tag like `v1.8.0`, push the tag, and then publish the GitHub release with concise operator-facing notes about the stable capabilities and known constraints in that version.
 
 For commits, use Conventional Commits.
 
