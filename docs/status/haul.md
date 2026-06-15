@@ -1,5 +1,6 @@
 # Haul Status
 ## Current
+- Haul prompt resume/edit now prefills the command input with the saved station names, systems, cargo legs, and timing values, and deleting a prefilled cargo/station field now leaves it truly blank instead of silently restoring saved text.
 - Two-way `haul` now accepts one-sided loops: station 1 or station 2 buy cargo may be blank as long as the other side is configured, and the routine skips the missing buy/sell leg cleanly during prompt flow, launch, and resume detection.
 - Two-way and multi-leg haul transit now announce the next station immediately after hyperspace arrival and before opening the nav panel, using a haul-specific TTS line instead of the generic `FSDJump` announcer.
 - Market sell routines now merge the hidden-cargo subset from `Cargo.json` back into the demand-sorted `Market.json` sell list so hidden commodities no longer misindex later sale rows.

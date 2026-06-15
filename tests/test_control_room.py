@@ -1026,6 +1026,67 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.assertEqual(defaults["station_1_system"], "Shinrarta Dezhra")
         self.assertEqual(defaults["galaxy_map_settle"], "5.0")
 
+    def test_saved_haul_defaults_seed_can_clear_saved_text(self) -> None:
+        self.app._saved_state.default_haul = {
+            "station_1_buying": "Aluminium",
+            "station_2_buying": "Bertrandite",
+        }
+
+        defaults = self.app._saved_haul_defaults({"station_2_buying": ""})
+
+        self.assertEqual(defaults["station_1_buying"], "Aluminium")
+        self.assertEqual(defaults["station_2_buying"], "")
+
+    def test_start_haul_prompt_prefills_existing_answers_into_input(self) -> None:
+        input_stub = _InputStub()
+        self.app.query_one = lambda *args, **kwargs: input_stub  # type: ignore[method-assign]
+        self.app._saved_state.default_haul = {
+            "station_1_buying": "Aluminium",
+            "station_1": "Pawelczyk Dock",
+        }
+
+        self.app._start_haul_prompt(
+            commodity="",
+            prompt_for_commodity=True,
+            raw_command="haul",
+        )
+
+        self.assertEqual(self.app._haul_prompt_step, "station_1_buying")
+        self.assertEqual(input_stub.value, "Aluminium")
+        self.assertEqual(input_stub.cursor_position, len("Aluminium"))
+
+    def test_haul_prompt_blank_input_clears_prefilled_station_2_buying(self) -> None:
+        input_stub = _InputStub()
+        self.app.query_one = lambda *args, **kwargs: input_stub  # type: ignore[method-assign]
+
+        self.app._start_haul_prompt(
+            commodity="",
+            prompt_for_commodity=True,
+            seed={
+                "station_1_buying": "Aluminium",
+                "station_1": "Pawelczyk Dock",
+                "station_1_system": "Sol",
+                "station_2_buying": "Bertrandite",
+                "station_2": "Trevithick Dock",
+                "station_2_system": "Achenar",
+            },
+            raw_command="haul",
+        )
+
+        self.assertEqual(input_stub.value, "Aluminium")
+        self.app._handle_haul_prompt("Aluminium")
+        self.assertEqual(input_stub.value, "Pawelczyk Dock")
+        self.app._handle_haul_prompt("Pawelczyk Dock")
+        self.assertEqual(input_stub.value, "Sol")
+        self.app._handle_haul_prompt("Sol")
+        self.assertEqual(input_stub.value, "Bertrandite")
+
+        self.app._handle_haul_prompt("")
+
+        self.assertEqual(self.app._haul_params["station_2_buying"], "")
+        self.assertEqual(self.app._haul_prompt_step, "station_2")
+        self.assertEqual(input_stub.value, "Trevithick Dock")
+
     def test_filtered_resume_entries_uses_prefix_match(self) -> None:
         self.app._saved_state.history = [
             CommandHistoryEntry(raw="dock", command="dock", timestamp="1"),
