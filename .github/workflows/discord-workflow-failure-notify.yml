@@ -5,6 +5,7 @@ on:
     workflows:
       # Keep this list in sync with the repo workflows that should trigger Discord alerts.
       - Tests
+      - Sync Iteration Archive
     types:
       - completed
 
@@ -53,7 +54,7 @@ jobs:
             'actor = os.environ[\"ACTOR\"]' \
             'run_id = os.environ[\"RUN_ID\"]' \
             'jobs = json.loads(os.environ[\"JOBS_JSON\"]).get(\"jobs\", [])' \
-            'workflow_files = {\"Tests\": \".github/workflows/tests.yml\", \"Discord Workflow Failure Notify\": \".github/workflows/discord-workflow-failure-notify.yml\"}' \
+            'workflow_files = {\"Tests\": \".github/workflows/tests.yml\", \"Sync Iteration Archive\": \".github/workflows/sync-iteration-archive.yml\", \"Discord Workflow Failure Notify\": \".github/workflows/discord-workflow-failure-notify.yml\"}' \
             'failed_job = next((job for job in jobs if job.get(\"conclusion\") == \"failure\"), None)' \
             'job_name = failed_job.get(\"name\", \"Unknown\") if failed_job else \"Unknown\"' \
             'job_url = failed_job.get(\"html_url\") or (f\"https://github.com/{repo}/actions/runs/{run_id}/job/{failed_job['\''id'\'']}\" if failed_job else workflow_url)' \
