@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it when work lands on `main` or when preparing a release, not on every feature branch._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `13`
-- Latest generated iteration number: `146`
+- Generated iteration count: `14`
+- Latest generated iteration number: `147`
 
 ## Iteration 134
 
@@ -373,3 +373,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-test replay/edit of a saved haul entry in the real Textual UI to confirm the prefilled command box feels right and does not introduce focus/cursor quirks.
+
+## Iteration 147
+
+- When: `2026-06-15 16:00`
+- Area: `ci-release`
+- Title: `remove-auto-iteration-archive-sync`
+- Source: [2026-06-15-16-00__ci-release__remove-auto-iteration-archive-sync.md](iteration-logs/2026-06-15-16-00__ci-release__remove-auto-iteration-archive-sync.md)
+
+# Iteration Log
+
+- Area: `ci-release`
+- Title: `remove-auto-iteration-archive-sync`
+- Started: `2026-06-15 16:00`
+
+## Summary
+
+- Removed the GitHub Actions workflow that auto-rendered and committed `docs/iteration-archive.md` back onto same-repo PR branches.
+- Kept the `Tests` workflow archive-drift guard in place so archive refresh remains enforced, but now only through local/manual updates.
+
+## Changes
+
+- Deleted `.github/workflows/sync-iteration-archive.yml`.
+- Removed the deleted workflow from `.github/workflows/discord-workflow-failure-notify.yml`.
+- Updated `docs/status/ci-release.md` and `docs/status/docs-process.md` to reflect manual archive refresh instead of PR-branch auto-sync.
+
+## Follow-ups
+
+- If iteration logs change in a PR, refresh `docs/iteration-archive.md` locally before push so the `Tests` workflow passes.
