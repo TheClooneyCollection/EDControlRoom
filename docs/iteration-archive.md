@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it when work lands on `main` or when preparing a release, not on every feature branch._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `7`
-- Latest generated iteration number: `140`
+- Generated iteration count: `11`
+- Latest generated iteration number: `144`
 
 ## Iteration 134
 
@@ -193,3 +193,127 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Consider wiring `uv run python3 tools/iteration_logs.py validate` into any future docs or PR-readiness automation so the rule is enforced mechanically.
+
+## Iteration 141
+
+- When: `2026-06-12 11:10`
+- Area: `ci`
+- Title: `pr13-workflow-root-cause-and-promotion-branch`
+- Source: [2026-06-12-11-10______ci______pr13-workflow-root-cause-and-promotion-branch.md](iteration-logs/2026-06-12-11-10______ci______pr13-workflow-root-cause-and-promotion-branch.md)
+
+# Iteration Log
+
+- Area: `ci`
+- Title: `pr13-workflow-root-cause-and-promotion-branch`
+- Started: `2026-06-12 11:10`
+
+## Summary
+
+- Cherry-picked PR `#13`'s lone promotion-branch-only commit (`chore: update iteration archive`) onto a fresh `dev` worktree branch.
+- Confirmed that the missing PR workflows were caused by the promotion PR being created or updated by Actions with `GITHUB_TOKEN`, which suppresses follow-on `pull_request` workflow triggers.
+- Confirmed the `dev` vs `main` docs conflict is the legacy `docs/STATUS.md` and `docs/session-log.md` delete/modify collision from the split-status migration.
+
+## Changes
+
+- Added the generated iteration-archive update commit to `pr13-on-dev`.
+- Updated `docs/status/ci-release.md` with the PR-13 workflow-trigger root cause and the token requirement for normal CI on bot-authored PRs.
+- Updated `docs/status/docs-process.md` with the current promotion-conflict explanation and the preferred resolution direction.
+
+## Follow-ups
+
+- Merge the status/iteration-log migration onto `main` so future promotion PRs stop conflicting on the deleted legacy handoff files.
+- If normal PR CI is desired on promotion and release PRs, create or reuse a PAT/App-backed `PROMOTION_PR_TOKEN` or `RELEASE_PLEASE_TOKEN` instead of relying on `GITHUB_TOKEN`.
+
+## Iteration 142
+
+- When: `2026-06-12 11:17`
+- Area: `ci`
+- Title: `promotion-dispatches-tests-with-github-token`
+- Source: [2026-06-12-11-17______ci______promotion-dispatches-tests-with-github-token.md](iteration-logs/2026-06-12-11-17______ci______promotion-dispatches-tests-with-github-token.md)
+
+# Iteration Log
+
+- Area: `ci`
+- Title: `promotion-dispatches-tests-with-github-token`
+- Started: `2026-06-12 11:17`
+
+## Summary
+
+- Updated promotion verification to stay on `GITHUB_TOKEN` by dispatching the `Tests` workflow explicitly on the promotion branch after the PR is created or refreshed.
+
+## Changes
+
+- Added `workflow_dispatch` support to `.github/workflows/tests.yml`.
+- Added `actions: write` permission and a follow-up `gh workflow run tests.yml --ref "$PROMOTION_BRANCH"` step to `.github/workflows/promote-dev-to-main.yml`.
+- Updated `docs/status/ci-release.md` to document the new dispatch-based verification path and the remaining caveat for other bot-authored PRs.
+
+## Follow-ups
+
+- Live-check one promotion run after merge to confirm the explicit dispatch produces the expected `Tests` run on `promote-dev-to-main--generated-iteration-archive`.
+- If `release-please` PRs also need automatic verification without separate credentials, add the same `workflow_dispatch` pattern there rather than relying on bot-authored `pull_request` events.
+
+## Iteration 143
+
+- When: `2026-06-13 16:29`
+- Area: `ci`
+- Title: `dev-branch-github-app-auth`
+- Source: [2026-06-13-16-29______ci______dev-branch-github-app-auth.md](iteration-logs/2026-06-13-16-29______ci______dev-branch-github-app-auth.md)
+
+# Iteration Log
+
+- Area: `ci`
+- Title: `dev-branch-github-app-auth`
+- Started: `2026-06-13 16:29`
+
+## Summary
+
+- Moved promotion auth on `dev` from token-fallback auth to a GitHub App installation token generated from repo secrets so future promotion-branch rebuilds retain the change.
+
+## Changes
+
+- Added `actions/create-github-app-token` to `.github/workflows/promote-dev-to-main.yml`.
+- Wired checkout, PR update, and workflow dispatch steps to use the generated app token via `BOT_APP_ID` and `BOT_APP_PRIVATE_KEY`.
+- Updated `docs/status/ci-release.md` so the handoff reflects the GitHub App dependency and the live validation target.
+
+## Follow-ups
+
+- Merge this change into `dev`, then let the promotion workflow rebuild PR `#13` from `dev` so the branch no longer loses the app-auth patch on the next run.
+- After merge, verify whether app-authenticated promotion updates produce PR-attached required checks or still only standalone branch-dispatched `Tests` runs.
+
+## Iteration 144
+
+- When: `2026-06-15 08:02`
+- Area: `docs`
+- Title: `main-only-release-policy`
+- Source: [2026-06-15-08-02_____docs_____main-only-release-policy.md](iteration-logs/2026-06-15-08-02_____docs_____main-only-release-policy.md)
+
+# Iteration Log
+
+- Area: `docs`
+- Title: `main-only-release-policy`
+- Started: `2026-06-15 08:02`
+
+## Summary
+
+- Updated public-facing and maintainer docs to describe rolling updates on `main` instead of a long-lived `dev` branch.
+- Documented the tradeoff explicitly: lower workflow overhead for a single maintainer, with tags and clear issue/feature-completeness notes used to signal stability.
+
+## Changes
+
+- Rewrote the `README.md` development section to explain the `main`-only workflow in public-facing language.
+- Updated `AGENTS.md` to treat `main` as the active rolling-update branch and removed the old promotion-PR naming guidance.
+- Removed stale `dev -> main` guidance from `.github/pull_request_template.md` and refreshed the related status index files.
+- Deleted the legacy `.github/workflows/promote-dev-to-main.yml` workflow and removed its remaining live maintainer-doc reference.
+- Added `worktrees/` to `.gitignore` so repo-local agent worktrees do not appear as untracked publish noise.
+- Added a PR guard in `.github/workflows/tests.yml` that validates iteration-log filenames, renders `docs/iteration-archive.md`, and fails if the generated archive was not committed.
+- Added `.github/workflows/sync-iteration-archive.yml` so same-repo PR activity regenerates and commits `docs/iteration-archive.md` automatically when iteration logs change.
+- Removed `Promote Dev to Main` from the Discord notifier trigger list and made Discord webhook failures print the response body instead of only a curl status code.
+- Updated the Discord notifier payload to show the first failed job and failed step first, link the workflow/repo/branch/commit/author details in markdown, and suppress Discord link previews.
+- Removed `release-please` automation and restored the manual release guidance: release-prep commit, full test run, semantic version tag, and manual GitHub release publishing.
+
+## Follow-ups
+
+- Historical iteration logs and generated archives still mention the removed promotion path; keep those references as chronology unless history cleanup is explicitly needed.
+- The current branch intentionally leaves `docs/iteration-archive.md` stale so the new PR guard can fail visibly before the archive is refreshed.
+- The first notifier run for the intentional PR failure proved that the trigger path still works; after correcting the webhook URL variant locally, the remaining validation is live-render confirmation for the richer Discord message format.
+- Historical docs also still mention `release-please` because they record the previous automation phase; current policy is the restored manual release flow.
