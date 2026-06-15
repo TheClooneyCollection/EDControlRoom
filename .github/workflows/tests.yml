@@ -8,6 +8,26 @@ on:
   workflow_dispatch:
 
 jobs:
+  iteration_archive:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync --extra dev
+      - name: Validate iteration log filenames
+        run: uv run python3 tools/iteration_logs.py validate
+      - name: Guard generated iteration archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run python3 tools/iteration_logs.py render-archive
+          git diff --exit-code -- docs/iteration-archive.md
+
   unittest:
     runs-on: ${{ matrix.os }}
     strategy:

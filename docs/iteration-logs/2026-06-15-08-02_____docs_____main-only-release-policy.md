@@ -16,8 +16,9 @@
 - Removed stale `dev -> main` guidance from `.github/pull_request_template.md` and refreshed the related status index files.
 - Deleted the legacy `.github/workflows/promote-dev-to-main.yml` workflow and removed its remaining live maintainer-doc reference.
 - Added `worktrees/` to `.gitignore` so repo-local agent worktrees do not appear as untracked publish noise.
+- Added a PR guard in `.github/workflows/tests.yml` that validates iteration-log filenames, renders `docs/iteration-archive.md`, and fails if the generated archive was not committed.
 
 ## Follow-ups
 
 - Historical iteration logs and generated archives still mention the removed promotion path; keep those references as chronology unless history cleanup is explicitly needed.
-- Validation should include iteration-log filename checks after the workflow deletion lands.
+- The current branch intentionally leaves `docs/iteration-archive.md` stale so the new PR guard can fail visibly before the archive is refreshed.

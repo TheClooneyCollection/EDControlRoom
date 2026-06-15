@@ -2,6 +2,7 @@
 ## Current
 - The repo now ships as rolling updates on `main`; do not assume a long-lived `dev` branch or promotion PR path in docs/process guidance.
 - Iteration logs should now be created with `uv run python3 tools/iteration_logs.py new "<area>" "<title>"` and validated with `uv run python3 tools/iteration_logs.py validate` before commits, pushes, and PRs so malformed filenames do not break archive generation.
+- PR validation now also renders `docs/iteration-archive.md` and fails if the generated file differs, so iteration-log changes cannot merge without the archive refresh.
 - Delegated-agent workflow now requires one branch and one git worktree per agent slice so concurrent work stays isolated from the main checkout.
 - Maintained current-state handoff now lives in `docs/status/*.md` instead of a single shared `docs/STATUS.md`.
 - Per-iteration notes live in `docs/iteration-logs/`, and `docs/iteration-archive.md` is generated rather than manually maintained.
@@ -10,6 +11,5 @@
 - Archive generation still depends on every iteration log matching the exact filename contract, so malformed manual renames remain a hard failure until validation is run.
 - Rolling updates on `main` reduce branch-management overhead, but the docs need clear known-issues and feature-completeness notes so tagged stable states remain easy to distinguish from in-progress work.
 ## Next
-- Fold `uv run python3 tools/iteration_logs.py validate` into any future automation that gates PR readiness or release-prep docs checks.
 - Keep historical iteration logs as-is for chronology, but keep current docs and automation free of stale `dev -> main` guidance.
 - Trim or merge area files aggressively if any start drifting toward branch-by-branch narrative instead of current truth.
