@@ -112,6 +112,8 @@ nav_delay_seconds = 0.1
 trade_max_attempts = 3
 # For `buy ... max`, hold UI_Right for `available cargo space * this factor`, capped by the routine max hold.
 buy_hold_seconds_per_ton = 0.01
+# For sell restores, never hold UI_Right for less than this even when the tonnage is small.
+sell_min_hold_seconds = 1.0
 # Treat station supply/demand below this cargo-capacity multiplier as critically low for warning/TTS.
 critical_level_multiplier = 10.0
 

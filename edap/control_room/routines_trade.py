@@ -187,6 +187,7 @@ def sell_item(app: TradeHost, target: str, amount: int | str, *, skip_delay: boo
     amt_label = str(amount) + ("t" if isinstance(amount, int) else "")
     max_attempts = app._config.controls.market_trade_max_attempts
     buy_hold_seconds_per_ton = app._config.controls.market_buy_hold_seconds_per_ton
+    sell_min_hold_seconds = app._config.controls.market_sell_min_hold_seconds
     critical_level_multiplier = app._config.controls.market_critical_level_multiplier
     app._start_delayed_routine(
         description=f"sell {target}",
@@ -201,6 +202,7 @@ def sell_item(app: TradeHost, target: str, amount: int | str, *, skip_delay: boo
             nav_delay_s=nav_delay,
             max_attempts=max_attempts,
             buy_hold_seconds_per_ton=buy_hold_seconds_per_ton,
+            sell_min_hold_s=sell_min_hold_seconds,
             time_fn=time_fn,
             sleeper=sleeper,
             progress_fn=progress,
@@ -234,6 +236,7 @@ def sell_all(app: TradeHost, *, skip_delay: bool = False) -> None:
         app._log(f"[yellow]{escape(error_text.render(app._config, 'sell_all_fallback'))}[/]")
     max_attempts = app._config.controls.market_trade_max_attempts
     buy_hold_seconds_per_ton = app._config.controls.market_buy_hold_seconds_per_ton
+    sell_min_hold_seconds = app._config.controls.market_sell_min_hold_seconds
     critical_level_multiplier = app._config.controls.market_critical_level_multiplier
 
     def run_all() -> None:
@@ -251,6 +254,7 @@ def sell_all(app: TradeHost, *, skip_delay: bool = False) -> None:
                     nav_delay_s=nav_delay,
                     max_attempts=max_attempts,
                     buy_hold_seconds_per_ton=buy_hold_seconds_per_ton,
+                    sell_min_hold_s=sell_min_hold_seconds,
                     time_fn=time_fn,
                     sleeper=sleeper,
                     progress_fn=progress,

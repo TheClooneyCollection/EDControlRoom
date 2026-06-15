@@ -7,7 +7,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 from edap.routines.callbacks import noop_announce, noop_progress
-from edap.routines.haul_two_way import Phase, StationLeg, _detect_start_phase, haul_loop_two_way as _haul_loop_two_way
+from edap.routines.haul_two_way import (
+    Phase,
+    StationLeg,
+    _detect_start_phase,
+    _wait_for_arrival_or_approach_event,
+    haul_loop_two_way as _haul_loop_two_way,
+)
 from edap.routines._base import ActionDispatchResult, RoutineResult
 from edap.tts import AnnouncementId
 from tests.fakes import FakeShipControls, FakeWatcher
@@ -797,6 +803,70 @@ class TwoWayHaulLoopTests(unittest.TestCase):
         self.assertEqual(result.dispatch.status, "error")
         self.assertIn(1.5, sleep_calls)
         self.assertNotIn(3.0, sleep_calls)
+
+    def test_arrival_wait_ignores_intermediate_jump_systems(self) -> None:
+        watcher = FakeWatcher([
+            [{"event": "FSDJump", "StarSystem": _SYSTEM_1}],
+            [{"event": "FSDJump", "StarSystem": _SYSTEM_2}],
+        ])
+
+        arrival_observed, pending_events = _wait_for_arrival_or_approach_event(
+            watcher,
+            destination_system=_SYSTEM_2,
+            deadline=1.0,
+            time_fn=_ticking_clock(),
+        )
+
+        self.assertTrue(arrival_observed)
+        self.assertEqual(pending_events, [])
+
+    def test_transit_hands_off_for_on_land_destination_after_supercruise_exit(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher([
+            [{"event": "FSDJump", "StarSystem": _SYSTEM_2}],
+            [{"event": "SupercruiseExit", "BodyType": "Planet", "StarSystem": _SYSTEM_2}],
+        ])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_market(
+                journal_dir,
+                _STATION_1,
+                [
+                    {"Category": "Metals", "Name": "aluminium", "Name_Localised": _CARGO_1, "DemandBracket": 1, "Stock": 1000},
+                    {"Category": "Minerals", "Name": "bertrandite", "Name_Localised": _CARGO_2, "DemandBracket": 1, "Stock": 1000},
+                ],
+            )
+            _write_cargo(journal_dir, [])
+            with patch("edap.routines.haul_two_way.dock") as dock_mock:
+                result = haul_loop_two_way(
+                    controls,
+                    watcher,
+                    journal_dir=journal_dir,
+                    station_1=_STATION_1,
+                    station_1_buying=_CARGO_1,
+                    station_1_system=_SYSTEM_1,
+                    station_2=_STATION_2,
+                    station_2_buying=_CARGO_2,
+                    station_2_system=_SYSTEM_2,
+                    station_2_on_land=True,
+                    iterations=1,
+                    start_phase=Phase.TRANSIT_TO_STATION_2,
+                    step_delay_s=0.0,
+                    settle_s=0.0,
+                    supercruise_exit_settle_s=0.0,
+                    boost_settle_s=0.0,
+                    dock_timeout_s=30.0,
+                    request_timeout_s=10.0,
+                    undock_timeout_s=10.0,
+                    trade_timeout_s=10.0,
+                    time_fn=_ticking_clock(),
+                    sleeper=lambda _: None,
+                )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(result.dispatch.reason, "manual landing required")
+        dock_mock.assert_not_called()
 
     def test_resume_in_destination_supercruise_opens_nav_without_waiting_for_new_jump(self) -> None:
         controls = FakeShipControls()

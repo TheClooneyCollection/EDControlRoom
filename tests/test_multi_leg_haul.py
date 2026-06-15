@@ -18,7 +18,11 @@ from edap.multi_leg_haul import (
 )
 from edap.routines import RoutineResult
 from edap.routines.callbacks import noop_announce, noop_progress
-from edap.routines.haul_multi_leg import Phase, multi_leg_haul as _multi_leg_haul
+from edap.routines.haul_multi_leg import (
+    Phase,
+    _wait_for_arrival_or_approach_event,
+    multi_leg_haul as _multi_leg_haul,
+)
 from edap.tts import AnnouncementId
 from tests.fakes import FakeShipControls, FakeWatcher
 
@@ -118,6 +122,24 @@ class MultiLegHaulDefinitionTests(unittest.TestCase):
         self.assertEqual(stops[1].inbound[0].commodity, "Water Purifiers")
         self.assertEqual(stops[1].outbound[0].commodity, "Aluminium")
 
+    def test_external_round_trip_preserves_on_land_endpoints(self) -> None:
+        definition = MultiLegHaulDefinition(
+            route_name="Surface run",
+            legs=(
+                RouteLeg(
+                    index=1,
+                    source=RouteEndpoint(system="Sol", station="Galileo", on_land=False),
+                    destination=RouteEndpoint(system="Achenar", station="Mahatma Settlement", on_land=True),
+                    cargo=(CargoTransfer(commodity="Tea", amount=10),),
+                ),
+            ),
+        )
+
+        payload = multi_leg_haul_definition_to_external_json(definition)
+        loaded = multi_leg_haul_definition_from_data(payload, source_label="fixture")
+
+        self.assertTrue(loaded.legs[0].destination.on_land)
+
 
 class MultiLegHaulRoutineTests(unittest.TestCase):
     def test_transit_announces_next_station_before_opening_nav_panel(self) -> None:
@@ -177,6 +199,76 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
             (AnnouncementId.ARRIVAL_NEXT_STATION, {"station_name": "Bolivar Horizons"}),
             announcements,
         )
+
+    def test_arrival_wait_ignores_intermediate_jump_systems(self) -> None:
+        watcher = FakeWatcher([
+            [{"event": "FSDJump", "StarSystem": "HIP 58412"}],
+            [{"event": "FSDJump", "StarSystem": "HIP 68076"}],
+        ])
+
+        arrival_observed, pending_events = _wait_for_arrival_or_approach_event(
+            watcher,
+            destination_system="HIP 68076",
+            deadline=1.0,
+            time_fn=_ticking_clock(),
+        )
+
+        self.assertTrue(arrival_observed)
+        self.assertEqual(pending_events, [])
+
+    def test_transit_hands_off_for_on_land_destination_after_supercruise_exit(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher([
+            [{"event": "FSDJump", "StarSystem": "HIP 68076"}],
+            [{"event": "SupercruiseExit", "BodyType": "Planet", "StarSystem": "HIP 68076"}],
+        ])
+        definition = MultiLegHaulDefinition(
+            route_name="Surface run",
+            legs=(
+                RouteLeg(
+                    index=1,
+                    source=RouteEndpoint(system="HIP 58412", station="Pawelczyk Dock"),
+                    destination=RouteEndpoint(system="HIP 68076", station="Mahatma Settlement", on_land=True),
+                    cargo=(CargoTransfer(commodity="Water Purifiers", amount=460),),
+                ),
+            ),
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            (journal_dir / "Journal.240101000000.01.log").write_text(
+                '{"event":"FSDJump","StarSystem":"HIP 68076"}\n',
+                encoding="utf-8",
+            )
+            (journal_dir / "Market.json").write_text(
+                '{"StationName":"Pawelczyk Dock","StarSystem":"HIP 58412","Items":[]}\n',
+                encoding="utf-8",
+            )
+            (journal_dir / "Cargo.json").write_text(
+                '{"Inventory":[{"Name":"water purifiers","Name_Localised":"Water Purifiers","Count":460,"Stolen":0}]}\n',
+                encoding="utf-8",
+            )
+            with patch("edap.routines.haul_multi_leg.dock") as dock_mock:
+                result = multi_leg_haul(
+                    controls,
+                    watcher,
+                    definition=definition,
+                    journal_dir=journal_dir,
+                    step_delay_s=0.0,
+                    settle_s=0.0,
+                    supercruise_exit_settle_s=0.0,
+                    boost_settle_s=0.0,
+                    dock_timeout_s=30.0,
+                    request_timeout_s=10.0,
+                    undock_timeout_s=10.0,
+                    trade_timeout_s=10.0,
+                    time_fn=_ticking_clock(),
+                    sleeper=lambda _: None,
+                )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(result.dispatch.reason, "manual landing required")
+        dock_mock.assert_not_called()
 
     def test_route_can_resume_midway_from_destination_station(self) -> None:
         controls = FakeShipControls()

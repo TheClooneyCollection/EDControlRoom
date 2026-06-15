@@ -473,6 +473,7 @@ def market_buy(
         market_path=market_path, target=target, amount=amount, side="buy",
         step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
         buy_hold_seconds_per_ton=buy_hold_seconds_per_ton,
+        sell_min_hold_s=0.0,
         trade_timeout_s=trade_timeout_s, skip_station_check=skip_station_check,
         max_attempts=max_attempts,
         time_fn=time_fn, sleeper=sleeper, progress_fn=progress_fn, announce_fn=announce_fn,
@@ -491,6 +492,7 @@ def market_sell(
     nav_delay_s: float = 0.1,
     max_hold_s: float = 10.0,
     buy_hold_seconds_per_ton: float = 0.01,
+    sell_min_hold_s: float = 1.0,
     trade_timeout_s: float = 30.0,
     skip_station_check: bool = False,
     max_attempts: int = 3,
@@ -505,6 +507,7 @@ def market_sell(
         market_path=market_path, target=target, amount=amount, side="sell",
         step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
         buy_hold_seconds_per_ton=buy_hold_seconds_per_ton,
+        sell_min_hold_s=sell_min_hold_s,
         trade_timeout_s=trade_timeout_s, skip_station_check=skip_station_check,
         max_attempts=max_attempts,
         time_fn=time_fn, sleeper=sleeper, progress_fn=progress_fn, announce_fn=announce_fn,
@@ -524,6 +527,7 @@ def _market_trade(
     nav_delay_s: float,
     max_hold_s: float,
     buy_hold_seconds_per_ton: float,
+    sell_min_hold_s: float,
     trade_timeout_s: float,
     skip_station_check: bool,
     max_attempts: int,
@@ -556,6 +560,7 @@ def _market_trade(
             event_type=event_type,
             step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
             buy_hold_seconds_per_ton=buy_hold_seconds_per_ton,
+            sell_min_hold_s=sell_min_hold_s,
             trade_timeout_s=trade_timeout_s, skip_station_check=skip_station_check,
             time_fn=time_fn, sleeper=sleeper, progress_fn=progress_fn, announce_fn=announce_fn,
             critical_level_multiplier=critical_level_multiplier,
@@ -595,6 +600,7 @@ def _market_trade_attempt(
     nav_delay_s: float,
     max_hold_s: float,
     buy_hold_seconds_per_ton: float,
+    sell_min_hold_s: float,
     trade_timeout_s: float,
     skip_station_check: bool,
     time_fn: Callable[[], float],
@@ -829,7 +835,7 @@ def _market_trade_attempt(
         sell_qty = int(amount) if amount != "MAX" else _read_sell_quantity(market_path.parent, target)
         hold_s = max_hold_s
         if sell_qty is not None:
-            hold_s = min(max_hold_s, sell_qty * buy_hold_seconds_per_ton)
+            hold_s = min(max_hold_s, max(sell_min_hold_s, sell_qty * buy_hold_seconds_per_ton))
         if sell_qty is None:
             progress_fn(
                 f"  UI_Right hold {hold_s:.2f}s (restore sell quantity; cargo count unavailable, using cap)"
@@ -837,7 +843,8 @@ def _market_trade_attempt(
         else:
             progress_fn(
                 f"  UI_Right hold {hold_s:.2f}s "
-                f"(restore sell quantity to {sell_qty}t at {buy_hold_seconds_per_ton:.4f}s/t)"
+                f"(restore sell quantity to {sell_qty}t with {sell_min_hold_s:.2f}s minimum at "
+                f"{buy_hold_seconds_per_ton:.4f}s/t)"
             )
         qty_dispatch = controls.ui_right(hold_s=hold_s)
         if qty_dispatch.status != "ok":

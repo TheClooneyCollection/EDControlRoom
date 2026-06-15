@@ -51,6 +51,7 @@ class _Ctx:
     step_delay_s: float
     max_hold_s: float
     market_buy_hold_seconds_per_ton: float
+    market_sell_min_hold_s: float
     dock_timeout_s: float
     request_timeout_s: float
     undock_timeout_s: float
@@ -72,6 +73,9 @@ class _Ctx:
     sleeper: Callable[[float], None]
     progress_fn: ProgressCallback
     announce_fn: AnnouncementCallback
+
+
+_MANUAL_LANDING_REASON = "manual landing required"
 
 
 def _inventory_count(inventory: list[dict], commodity: str) -> int:
@@ -110,7 +114,7 @@ def _detect_transit_resume_state(events: list[dict], destination: RouteEndpoint)
         if evt_name == "SupercruiseExit":
             body_type = str(event.get("BodyType", "")).lower()
             system_name = str(event.get("StarSystem", "")).lower()
-            if body_type != "station":
+            if not destination.on_land and body_type != "station":
                 return _TransitResumeState.NONE
             return _TransitResumeState.POST_DROP_NEAR_STATION if not destination_system or system_name == destination_system else _TransitResumeState.NONE
         if evt_name in {"SupercruiseEntry", "FSDJump"}:
@@ -124,18 +128,66 @@ def _detect_transit_resume_state(events: list[dict], destination: RouteEndpoint)
 def _wait_for_arrival_or_approach_event(
     watcher: SupportsPollEvents,
     *,
+    destination_system: str,
     deadline: float,
     time_fn: Callable[[], float],
 ) -> tuple[bool, list[dict[str, object]]]:
     approach_events = {"SupercruiseExit", "DockingRequested", "DockingGranted", "Docked"}
+    destination_system_lower = destination_system.lower()
     while time_fn() <= deadline:
         batch = watcher.poll()
         for index, event in enumerate(batch):
             if _is_in_supercruise_event(event):
+                system_name = str(event.get("StarSystem", "")).lower()
+                if destination_system_lower and system_name and system_name != destination_system_lower:
+                    continue
                 return True, batch[index + 1:]
             if event.get("event") in approach_events:
                 return False, batch[index:]
     return False, []
+
+
+def _wait_for_on_land_handoff(
+    watcher: SupportsPollEvents,
+    *,
+    destination: RouteEndpoint,
+    pending_events: list[dict[str, object]],
+    deadline: float,
+    time_fn: Callable[[], float],
+) -> dict[str, object] | None:
+    queued_events = list(pending_events)
+    destination_system_lower = destination.system.lower()
+    while time_fn() <= deadline:
+        batch = queued_events if queued_events else watcher.poll()
+        queued_events = []
+        for event in batch:
+            if event.get("event") != "SupercruiseExit":
+                continue
+            system_name = str(event.get("StarSystem", "")).lower()
+            if destination_system_lower and system_name and system_name != destination_system_lower:
+                continue
+            return event
+    return None
+
+
+def _manual_landing_result(stop: RouteStop) -> RoutineResult:
+    return RoutineResult(
+        action="manual_landing",
+        dispatch=ActionDispatchResult(
+            action="manual_landing",
+            status="ok",
+            reason=_MANUAL_LANDING_REASON,
+        ),
+        details={
+            "station": stop.endpoint.station,
+            "system": stop.endpoint.system,
+            "on_land": True,
+        },
+    )
+
+
+def _is_manual_landing_result(result: RoutineResult | None) -> bool:
+    return result is not None and result.dispatch.reason == _MANUAL_LANDING_REASON
 
 
 def _read_ship_position(journal_dir: Path) -> tuple[str, str, str]:
@@ -241,6 +293,7 @@ def _run_sell(ctx: _Ctx, stop: RouteStop) -> RoutineResult:
             step_delay_s=ctx.step_delay_s,
             max_hold_s=ctx.max_hold_s,
             buy_hold_seconds_per_ton=ctx.market_buy_hold_seconds_per_ton,
+            sell_min_hold_s=ctx.market_sell_min_hold_s,
             trade_timeout_s=ctx.trade_timeout_s,
             time_fn=ctx.time_fn,
             sleeper=ctx.sleeper,
@@ -379,6 +432,7 @@ def _run_transit(ctx: _Ctx, next_stop: RouteStop) -> RoutineResult:
     if resume_state == _TransitResumeState.NONE:
         arrival_observed, pending_events = _wait_for_arrival_or_approach_event(
             ctx.watcher,
+            destination_system=next_stop.endpoint.system,
             deadline=ctx.time_fn() + ctx.dock_timeout_s,
             time_fn=ctx.time_fn,
         )
@@ -388,7 +442,42 @@ def _run_transit(ctx: _Ctx, next_stop: RouteStop) -> RoutineResult:
     elif resume_state == _TransitResumeState.ARRIVED_IN_DESTINATION_SYSTEM:
         _open_navigation_panel_after_arrival(ctx, station_name=next_stop.endpoint.station)
     elif resume_state == _TransitResumeState.POST_DROP_NEAR_STATION:
-        ctx.progress_fn(f"Already in normal space near {next_stop.label} - skipping drop wait.")
+        if next_stop.endpoint.on_land:
+            ctx.progress_fn(f"Already in normal space near on-land {next_stop.label} - handing off for manual landing.")
+        else:
+            ctx.progress_fn(f"Already in normal space near {next_stop.label} - skipping drop wait.")
+
+    if next_stop.endpoint.on_land:
+        if resume_state == _TransitResumeState.POST_DROP_NEAR_STATION:
+            ctx.progress_fn(
+                f"{next_stop.label} is marked on-land; manual landing required from normal space. "
+                "Resume multi-leg haul after landing."
+            )
+            return _manual_landing_result(next_stop)
+        ctx.progress_fn(
+            f"{next_stop.label} is marked on-land; waiting for SupercruiseExit before handing off."
+        )
+        drop_event = _wait_for_on_land_handoff(
+            ctx.watcher,
+            destination=next_stop.endpoint,
+            pending_events=pending_events,
+            deadline=ctx.time_fn() + ctx.dock_timeout_s,
+            time_fn=ctx.time_fn,
+        )
+        if drop_event is None:
+            return RoutineResult(
+                action="manual_landing",
+                dispatch=ActionDispatchResult(
+                    action="manual_landing",
+                    status="error",
+                    reason=f"timed out waiting for SupercruiseExit near {next_stop.endpoint.station}",
+                ),
+            )
+        ctx.progress_fn(
+            f"Reached normal space near on-land {next_stop.label}; manual landing required. "
+            "Resume multi-leg haul after landing."
+        )
+        return _manual_landing_result(next_stop)
 
     return dock(
         ctx.controls,
@@ -421,6 +510,7 @@ def multi_leg_haul(
     step_delay_s: float = 1.0,
     max_hold_s: float = 10.0,
     market_buy_hold_seconds_per_ton: float = 0.01,
+    market_sell_min_hold_s: float = 1.0,
     dock_timeout_s: float = 600.0,
     request_timeout_s: float = 20.0,
     undock_timeout_s: float = 30.0,
@@ -457,6 +547,7 @@ def multi_leg_haul(
         step_delay_s=step_delay_s,
         max_hold_s=max_hold_s,
         market_buy_hold_seconds_per_ton=market_buy_hold_seconds_per_ton,
+        market_sell_min_hold_s=market_sell_min_hold_s,
         dock_timeout_s=dock_timeout_s,
         request_timeout_s=request_timeout_s,
         undock_timeout_s=undock_timeout_s,
@@ -525,6 +616,8 @@ def multi_leg_haul(
             if next_stop is None:
                 return last_result
             last_result = _run_transit(ctx, next_stop)
+            if _is_manual_landing_result(last_result):
+                return last_result
             if last_result.dispatch.status != "ok":
                 return last_result
             stop_index += 1

@@ -108,6 +108,17 @@ def _prefill_value(
     return app._haul_prompt_defaults.get(key, "")
 
 
+def _parse_yes_no(value: str, *, default: bool) -> bool | None:
+    raw = value.strip().lower()
+    if not raw:
+        return default
+    if raw in {"y", "yes", "true", "1", "land", "surface"}:
+        return True
+    if raw in {"n", "no", "false", "0", "station", "orbital"}:
+        return False
+    return None
+
+
 def start_haul_prompt(
     app: PromptHost,
     *,
@@ -121,9 +132,11 @@ def start_haul_prompt(
         "station_1_buying": commodity.strip(),
         "station_1": "",
         "station_1_system": "",
+        "station_1_on_land": "",
         "station_2_buying": "",
         "station_2": "",
         "station_2_system": "",
+        "station_2_on_land": "",
         "galaxy_map_settle": "",
         "dock_timeout": "",
     }
@@ -274,6 +287,31 @@ def handle_haul_prompt(
             app._log(f"  Station 1 system: [cyan]{escape(resolved)}[/]")
         else:
             app._log("  Station 1 system: [dim](current system)[/]")
+        app._haul_prompt_step = "station_1_on_land"
+        default_station_1_on_land = _parse_yes_no(
+            app._haul_prompt_defaults.get("station_1_on_land", ""),
+            default=False,
+        )
+        default_label = "yes" if default_station_1_on_land else "no"
+        app._log(f"[dim]Station 1 on land? (Enter = {default_label}; yes for settlement/manual landing)[/]")
+        _set_prompt_input(
+            app,
+            placeholder=f"station 1 on land? (Enter = {default_label})...",
+            value=_prefill_value(app, "station_1_on_land"),
+        )
+        return
+
+    if app._haul_prompt_step == "station_1_on_land":
+        default_station_1_on_land = _parse_yes_no(
+            app._haul_prompt_defaults.get("station_1_on_land", ""),
+            default=False,
+        )
+        parsed = _parse_yes_no(value, default=bool(default_station_1_on_land))
+        if parsed is None:
+            app._log(f"[red]{escape(error_text.render(app._config, 'confirm_yes_no'))}[/]")
+            return
+        app._haul_params["station_1_on_land"] = "true" if parsed else "false"
+        app._log(f"  Station 1 on land: [cyan]{'yes' if parsed else 'no'}[/]")
         app._haul_prompt_step = "station_2_buying"
         default_station_2_buying = app._haul_prompt_defaults.get("station_2_buying", "")
         if default_station_2_buying:
@@ -350,6 +388,31 @@ def handle_haul_prompt(
             return
         app._haul_params["station_2_system"] = resolved
         app._log(f"  Station 2 system: [cyan]{escape(resolved)}[/]")
+        app._haul_prompt_step = "station_2_on_land"
+        default_station_2_on_land = _parse_yes_no(
+            app._haul_prompt_defaults.get("station_2_on_land", ""),
+            default=False,
+        )
+        default_label = "yes" if default_station_2_on_land else "no"
+        app._log(f"[dim]Station 2 on land? (Enter = {default_label}; yes for settlement/manual landing)[/]")
+        _set_prompt_input(
+            app,
+            placeholder=f"station 2 on land? (Enter = {default_label})...",
+            value=_prefill_value(app, "station_2_on_land"),
+        )
+        return
+
+    if app._haul_prompt_step == "station_2_on_land":
+        default_station_2_on_land = _parse_yes_no(
+            app._haul_prompt_defaults.get("station_2_on_land", ""),
+            default=False,
+        )
+        parsed = _parse_yes_no(value, default=bool(default_station_2_on_land))
+        if parsed is None:
+            app._log(f"[red]{escape(error_text.render(app._config, 'confirm_yes_no'))}[/]")
+            return
+        app._haul_params["station_2_on_land"] = "true" if parsed else "false"
+        app._log(f"  Station 2 on land: [cyan]{'yes' if parsed else 'no'}[/]")
         default_settle = float(
             app._haul_prompt_defaults.get(
                 "galaxy_map_settle",
