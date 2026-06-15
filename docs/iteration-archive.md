@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it when work lands on `main` or when preparing a release, not on every feature branch._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `11`
-- Latest generated iteration number: `144`
+- Generated iteration count: `12`
+- Latest generated iteration number: `145`
 
 ## Iteration 134
 
@@ -317,3 +317,32 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - The current branch intentionally leaves `docs/iteration-archive.md` stale so the new PR guard can fail visibly before the archive is refreshed.
 - The first notifier run for the intentional PR failure proved that the trigger path still works; after correcting the webhook URL variant locally, the remaining validation is live-render confirmation for the richer Discord message format.
 - Historical docs also still mention `release-please` because they record the previous automation phase; current policy is the restored manual release flow.
+
+## Iteration 145
+
+- When: `2026-06-15 14:42`
+- Area: `control-room`
+- Title: `client-server-protocol-draft`
+- Source: [2026-06-15-14-42_control-room_client-server-protocol-draft.md](iteration-logs/2026-06-15-14-42_control-room_client-server-protocol-draft.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `client-server-protocol-draft`
+- Started: `2026-06-15 14:42`
+
+## Summary
+
+- Drafted the first Control Room client/server protocol around HTTP plus WebSocket for LAN use, with browser-compatible transport, full-word wire property names, and an explicit one-operator-plus-observers session model.
+
+## Changes
+
+- Added `docs/design/0002-control-room-client-server-protocol.md` with transport choice, topology, CLI direction, message vocabulary, payload contracts, and LAN/auth constraints.
+- Added `docs/schemas/control_room_message.schema.json` for the versioned JSON envelope and initial command, event, state, and response payload families, including `client_role` and active-operator change events.
+- Updated control-room handoff status so the next session can resume from the protocol direction instead of rediscovering it.
+
+## Follow-ups
+
+- Split the draft schema into implementation-facing Python types once `serve` and `connect` work begins.
+- Define the concrete `state.snapshot` shape from current `ControlRoomApp` state instead of the current intentionally broad placeholder objects.
+- Decide whether the active operator may be explicitly transferred or only replaced by disconnect/reconnect in the first implementation.
