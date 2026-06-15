@@ -22,7 +22,6 @@ Examples:
 - Generated iteration numbering starts at `134`
 - Derive the next number with `uv run python3 tools/iteration_logs.py next-number`
 - Validate the directory with `uv run python3 tools/iteration_logs.py validate` before committing, pushing, or opening a PR
-- Promotion PR automation should normally refresh `docs/iteration-archive.md` on `promote-dev-to-main--generated-iteration-archive`
 - Regenerate `docs/iteration-archive.md` manually with `uv run python3 tools/iteration_logs.py render-archive` only when you need a local refresh or release-prep validation
 
 ## Scope
