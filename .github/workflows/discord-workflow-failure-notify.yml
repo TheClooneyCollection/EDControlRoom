@@ -6,7 +6,6 @@ on:
       # Keep this list in sync with the repo workflows that should trigger Discord alerts.
       - Tests
       - Release Please
-      - Promote Dev to Main
     types:
       - completed
 
@@ -24,7 +23,9 @@ jobs:
     steps:
       - name: Post failure notification to Discord
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
           WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
           WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
           BRANCH_NAME: ${{ github.event.workflow_run.head_branch }}
@@ -38,8 +39,41 @@ jobs:
             echo "DISCORD_WEBHOOK_URL is not configured for this run; skipping notification."
             exit 0
           fi
-          content="$(python3 -c "import json, os; print(json.dumps({'content': '🚨 GitHub Actions workflow failed\\nRepository: ' + os.environ['REPOSITORY'] + '\\nWorkflow: ' + os.environ['WORKFLOW_NAME'] + '\\nBranch: ' + os.environ['BRANCH_NAME'] + '\\nCommit: ' + os.environ['COMMIT_SHA'][:7] + '\\nActor: ' + os.environ['ACTOR'] + '\\nRun: ' + os.environ['WORKFLOW_URL']}))")"
-          curl --fail --show-error --silent \
+          jobs_json="$(curl --fail --show-error --silent \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100")"
+          content="$(JOBS_JSON="$jobs_json" python3 -c "$(printf '%s\n' \
+            'import json' \
+            'import os' \
+            'repo = os.environ[\"REPOSITORY\"]' \
+            'workflow_name = os.environ[\"WORKFLOW_NAME\"]' \
+            'workflow_url = os.environ[\"WORKFLOW_URL\"]' \
+            'branch_name = os.environ[\"BRANCH_NAME\"]' \
+            'commit_sha = os.environ[\"COMMIT_SHA\"]' \
+            'actor = os.environ[\"ACTOR\"]' \
+            'run_id = os.environ[\"RUN_ID\"]' \
+            'jobs = json.loads(os.environ[\"JOBS_JSON\"]).get(\"jobs\", [])' \
+            'workflow_files = {\"Tests\": \".github/workflows/tests.yml\", \"Release Please\": \".github/workflows/release-please.yml\", \"Discord Workflow Failure Notify\": \".github/workflows/discord-workflow-failure-notify.yml\"}' \
+            'failed_job = next((job for job in jobs if job.get(\"conclusion\") == \"failure\"), None)' \
+            'job_name = failed_job.get(\"name\", \"Unknown\") if failed_job else \"Unknown\"' \
+            'job_url = failed_job.get(\"html_url\") or (f\"https://github.com/{repo}/actions/runs/{run_id}/job/{failed_job['\''id'\'']}\" if failed_job else workflow_url)' \
+            'failed_step = next(((step) for step in failed_job.get(\"steps\", []) if step.get(\"conclusion\") == \"failure\"), None) if failed_job else None' \
+            'step_name = failed_step.get(\"name\", \"Unknown\") if failed_step else \"Unknown\"' \
+            'workflow_file = workflow_files.get(workflow_name)' \
+            'workflow_link = f\"https://github.com/{repo}/blob/main/{workflow_file}\" if workflow_file else workflow_url' \
+            'payload = {\"content\": \"\\n\".join([\"🚨 **GitHub Actions workflow failed**\", \"\", f\"**Job:** [{job_name}]({job_url})\", f\"**Step:** [{step_name}]({job_url})\", \"\", f\"**Repository:** [{repo}](https://github.com/{repo})\", f\"**Workflow:** [{workflow_name}]({workflow_link})\", f\"**Branch:** [`{branch_name}`](https://github.com/{repo}/tree/{branch_name})\", f\"**Commit:** [`{commit_sha[:7]}`](https://github.com/{repo}/commit/{commit_sha})\", f\"**Author:** [{actor}](https://github.com/{actor})\", f\"**Run:** {workflow_url}\"]), \"flags\": 4}' \
+            'print(json.dumps(payload))' \
+          )")"
+          response_body="$(mktemp)"
+          http_code="$(curl --show-error --silent \
+            --output "$response_body" \
+            --write-out '%{http_code}' \
             -H 'Content-Type: application/json' \
             -d "$content" \
-            "$DISCORD_WEBHOOK_URL"
+            "$DISCORD_WEBHOOK_URL")"
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            echo "Discord webhook request failed with HTTP $http_code" >&2
+            cat "$response_body" >&2
+            exit 1
+          fi
