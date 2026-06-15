@@ -1,10 +1,10 @@
 # Iteration Archive
 
-_This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it when work lands on `main` or when preparing a release, not on every feature branch._
+_This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `14`
-- Latest generated iteration number: `147`
+- Generated iteration count: `16`
+- Latest generated iteration number: `149`
 
 ## Iteration 134
 
@@ -401,3 +401,60 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - If iteration logs change in a PR, refresh `docs/iteration-archive.md` locally before push so the `Tests` workflow passes.
+
+## Iteration 148
+
+- When: `2026-06-15 18:15`
+- Area: `haul`
+- Title: `surface-landing-and-transit-fixes`
+- Source: [2026-06-15-18-15_____haul_____surface-landing-and-transit-fixes.md](iteration-logs/2026-06-15-18-15_____haul_____surface-landing-and-transit-fixes.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `surface-landing-and-transit-fixes`
+- Started: `2026-06-15 18:15`
+
+## Summary
+
+- Fixed two haul regressions: intermediate jumps in multi-jump routes no longer count as destination arrival, and explicitly marked surface destinations now hand off for manual landing instead of trying to request station docking.
+- Added a sell-side minimum hold floor so small-quantity commodity sells use a reliable `UI_Right` dwell even when tonnage-based timing would fall below 1 second.
+
+## Changes
+
+- Updated `edap/routines/haul_two_way.py` and `edap/routines/haul_multi_leg.py` to match `FSDJump` arrivals against the configured destination system, preserve the next-station nav-panel announcement, and stop cleanly with `manual landing required` for `on_land` destinations after `SupercruiseExit`.
+- Extended two-way haul prompt/dispatch state to persist `station_1_on_land` / `station_2_on_land`, and extended the external multi-leg route model/schema/template with endpoint-level `on_land`.
+- Added `controls.market.sell_min_hold_seconds` config plumbing and threaded it through Control Room sell/haul entry points into `edap/routines/market.py`.
+- Expanded tests across config, Control Room haul prompt/dispatch, two-way haul, multi-leg haul, and market routines; full suite passed at `391 tests in 0.178s`.
+
+## Follow-ups
+
+- Live-check an actual settlement loop to decide whether the next iteration should automate any post-landing settlement UI or keep the current explicit handoff/resume model.
+- Validate a real multi-jump haul route in-game to confirm the final-system-only nav-panel open timing feels correct with journal latency under CrossOver.
+
+## Iteration 149
+
+- When: `2026-06-15 18:22`
+- Area: `docs`
+- Title: `update-agent-and-archive-policy`
+- Source: [2026-06-15-18-22_____docs_____update-agent-and-archive-policy.md](iteration-logs/2026-06-15-18-22_____docs_____update-agent-and-archive-policy.md)
+
+# Iteration Log
+
+- Area: `docs`
+- Title: `update-agent-and-archive-policy`
+- Started: `2026-06-15 18:22`
+
+## Summary
+
+- Updated repo policy to treat `docs/iteration-archive.md` as a required refreshed artifact whenever iteration logs change before commit/push/PR, and tightened delegated-agent publish rules so slices must be committed before parent push/PR.
+
+## Changes
+
+- Corrected the stale `AGENTS.md` guidance that still described iteration archive refresh as optional/manual-only.
+- Added explicit delegated-agent requirements in `AGENTS.md` for commit-before-publish and archive refresh before any push or PR that includes iteration-log changes.
+- Updated `docs/status/docs-process.md` so the maintained handoff matches the new docs/archive and agent-publish workflow.
+
+## Follow-ups
+
+- Keep the workflow docs aligned with CI behavior whenever archive generation or delegated-agent publish rules change again.

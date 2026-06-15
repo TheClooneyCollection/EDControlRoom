@@ -167,8 +167,8 @@ def render_iteration_archive(
         "",
         (
             "_This file is generated from `docs/iteration-logs/` by "
-            "`uv run python3 tools/iteration_logs.py render-archive`. Refresh it when "
-            "work lands on `main` or when preparing a release, not on every feature branch._"
+            "`uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever "
+            "iteration logs change before commit, push, or PR._"
         ),
         "",
         f"- Legacy manual session baseline: `{baseline}`",
