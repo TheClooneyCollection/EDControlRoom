@@ -23,6 +23,7 @@
         "command.dismiss_alert",
         "state.snapshot",
         "event.connection_ready",
+        "event.announcement_emitted",
         "event.active_operator_changed",
         "event.operator_message",
         "event.activity_log_appended",
@@ -160,6 +161,18 @@
       "then": {
         "properties": {
           "payload": { "$ref": "#/$defs/event_connection_ready_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "event.announcement_emitted" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/event_announcement_emitted_payload" }
         }
       }
     },
@@ -339,6 +352,20 @@
         "severity": { "type": ["string", "null"] }
       }
     },
+    "command_history_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw_command", "command_name", "arguments", "timestamp"],
+      "properties": {
+        "raw_command": { "type": "string", "minLength": 1 },
+        "command_name": { "type": "string", "minLength": 1 },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "timestamp": { "type": "string" }
+      }
+    },
     "alert": {
       "type": "object",
       "additionalProperties": false,
@@ -409,79 +436,305 @@
         "alert_id": { "type": "string", "minLength": 1 }
       }
     },
+    "session_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session_id", "client_role"],
+      "properties": {
+        "session_id": { "type": "string", "minLength": 1 },
+        "client_role": { "$ref": "#/$defs/client_role" }
+      }
+    },
+    "connected_client": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session_id", "client_name", "client_role"],
+      "properties": {
+        "session_id": { "type": "string", "minLength": 1 },
+        "client_name": { "type": "string", "minLength": 1 },
+        "client_role": { "$ref": "#/$defs/client_role" }
+      }
+    },
+    "active_operator": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["session_id", "client_name"],
+      "properties": {
+        "session_id": { "type": "string", "minLength": 1 },
+        "client_name": { "type": "string", "minLength": 1 }
+      }
+    },
+    "ship_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cargo_count",
+        "cargo_inventory"
+      ],
+      "properties": {
+        "commander_name": { "type": ["string", "null"] },
+        "ship_type": { "type": ["string", "null"] },
+        "system_name": { "type": ["string", "null"] },
+        "station_name": { "type": ["string", "null"] },
+        "status": { "type": ["string", "null"] },
+        "fuel_level": { "type": ["number", "null"] },
+        "fuel_capacity": { "type": ["number", "null"] },
+        "credits": { "type": ["integer", "null"] },
+        "cargo_count": { "type": "integer", "minimum": 0 },
+        "cargo_capacity": { "type": ["integer", "null"], "minimum": 0 },
+        "cargo_inventory": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "target_name": { "type": ["string", "null"] },
+        "destination_system": { "type": ["string", "null"] },
+        "destination_body": { "type": ["string", "null"] },
+        "destination_name": { "type": ["string", "null"] }
+      }
+    },
+    "market_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["station_name", "system_name", "market_timestamp", "market_filter_text", "locked", "items"],
+      "properties": {
+        "station_name": { "type": "string" },
+        "system_name": { "type": "string" },
+        "market_timestamp": { "type": "string" },
+        "market_filter_text": { "type": ["string", "null"] },
+        "locked": { "type": "boolean" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "haul_session_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "station_1_buying",
+        "station_2_buying",
+        "station_1",
+        "station_2",
+        "active",
+        "clean_run_active",
+        "waiting_for_station_1_departure",
+        "resumed_mid_run",
+        "docked_back_at_station_1",
+        "current_run_profit",
+        "completed_runs",
+        "accumulated_profit",
+        "total_run_elapsed_seconds"
+      ],
+      "properties": {
+        "station_1_buying": { "type": "string" },
+        "station_2_buying": { "type": "string" },
+        "station_1": { "type": "string" },
+        "station_2": { "type": "string" },
+        "active": { "type": "boolean" },
+        "clean_run_active": { "type": "boolean" },
+        "waiting_for_station_1_departure": { "type": "boolean" },
+        "resumed_mid_run": { "type": "boolean" },
+        "docked_back_at_station_1": { "type": "boolean" },
+        "current_run_started_at": { "type": ["number", "null"] },
+        "current_run_elapsed_seconds": { "type": ["number", "null"] },
+        "current_run_profit": { "type": "integer" },
+        "completed_runs": { "type": "integer", "minimum": 0 },
+        "accumulated_profit": { "type": "integer" },
+        "last_run_profit": { "type": ["integer", "null"] },
+        "last_run_elapsed_seconds": { "type": ["number", "null"] },
+        "total_run_elapsed_seconds": { "type": "number", "minimum": 0 }
+      }
+    },
+    "ui_state_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "routine_active",
+        "haul_stop_requested",
+        "verbose_controls",
+        "instant_mode",
+        "activity_auto_follow_paused",
+        "replay_browser_open",
+        "shutdown_requested",
+        "shutdown_finalized"
+      ],
+      "properties": {
+        "routine_active": { "type": "boolean" },
+        "active_routine_name": { "type": ["string", "null"] },
+        "haul_stop_requested": { "type": "boolean" },
+        "verbose_controls": { "type": "boolean" },
+        "instant_mode": { "type": "boolean" },
+        "activity_auto_follow_paused": { "type": "boolean" },
+        "replay_browser_open": { "type": "boolean" },
+        "shutdown_requested": { "type": "boolean" },
+        "shutdown_finalized": { "type": "boolean" }
+      }
+    },
+    "command_history_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["default_haul", "history_entries", "history_limit", "draft_command", "replay_filter_text"],
+      "properties": {
+        "default_haul": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "history_entries": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/command_history_entry" }
+        },
+        "history_limit": { "type": "integer", "minimum": 1 },
+        "draft_command": { "type": "string" },
+        "replay_filter_text": { "type": "string" }
+      }
+    },
+    "prompt_state_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "haul_parameters",
+        "haul_prompt_defaults",
+        "haul_prompt_step",
+        "haul_confirm_buy_station",
+        "haul_prompt_raw_command",
+        "haul_prompt_skip_delay",
+        "destination_prompt_destination",
+        "destination_prompt_settle_default",
+        "destination_prompt_raw_command",
+        "destination_prompt_skip_delay"
+      ],
+      "properties": {
+        "haul_parameters": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "haul_prompt_defaults": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "haul_prompt_step": { "type": "string" },
+        "haul_confirm_buy_station": { "type": "string" },
+        "haul_prompt_raw_command": { "type": "string" },
+        "haul_prompt_skip_delay": { "type": "boolean" },
+        "destination_prompt_destination": { "type": "string" },
+        "destination_prompt_settle_default": { "type": ["number", "null"] },
+        "destination_prompt_raw_command": { "type": "string" },
+        "destination_prompt_skip_delay": { "type": "boolean" }
+      }
+    },
+    "replay_entry_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "detail", "history_entry"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "detail": { "type": "string", "minLength": 1 },
+        "history_entry": { "$ref": "#/$defs/command_history_entry" }
+      }
+    },
+    "replay_browser_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["open", "filter_text", "visible_entries"],
+      "properties": {
+        "open": { "type": "boolean" },
+        "filter_text": { "type": "string" },
+        "visible_entries": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/replay_entry_snapshot" }
+        },
+        "selected_history_entry": {
+          "anyOf": [
+            { "$ref": "#/$defs/command_history_entry" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "server_status_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "server_name",
+        "server_version",
+        "runtime_platform",
+        "journal_source_status",
+        "bindings_source_status",
+        "bindings_loaded"
+      ],
+      "properties": {
+        "server_name": { "type": "string", "minLength": 1 },
+        "server_version": { "type": "string", "minLength": 1 },
+        "runtime_platform": { "type": "string", "minLength": 1 },
+        "journal_source_status": { "type": "string", "minLength": 1 },
+        "bindings_source_status": { "type": "string", "minLength": 1 },
+        "bindings_loaded": { "type": "boolean" },
+        "capability_names": { "$ref": "#/$defs/string_list" },
+        "operator_mode": { "type": ["string", "null"] }
+      }
+    },
     "state_snapshot_payload": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["server_status", "activity_log", "alerts"],
+      "required": [
+        "session",
+        "connected_clients",
+        "active_operator",
+        "ship",
+        "market",
+        "haul_session",
+        "ui_state",
+        "command_history",
+        "prompt_state",
+        "replay_browser",
+        "activity_log",
+        "server_status"
+      ],
       "properties": {
         "session": {
-          "type": ["object", "null"],
-          "additionalProperties": true
-        },
-        "commander": {
-          "type": ["object", "null"],
-          "additionalProperties": true
-        },
-        "location": {
-          "type": ["object", "null"],
-          "additionalProperties": true
+          "$ref": "#/$defs/session_snapshot"
         },
         "ship": {
-          "type": ["object", "null"],
-          "additionalProperties": true
-        },
-        "cargo": {
-          "type": ["object", "null"],
-          "additionalProperties": true
+          "$ref": "#/$defs/ship_snapshot"
         },
         "market": {
-          "type": ["object", "null"],
-          "additionalProperties": true
+          "$ref": "#/$defs/market_snapshot"
         },
-        "current_routine": {
-          "type": ["object", "null"],
-          "additionalProperties": true
+        "haul_session": {
+          "$ref": "#/$defs/haul_session_snapshot"
+        },
+        "ui_state": {
+          "$ref": "#/$defs/ui_state_snapshot"
+        },
+        "command_history": {
+          "$ref": "#/$defs/command_history_snapshot"
+        },
+        "prompt_state": {
+          "$ref": "#/$defs/prompt_state_snapshot"
+        },
+        "replay_browser": {
+          "$ref": "#/$defs/replay_browser_snapshot"
         },
         "activity_log": {
           "type": "array",
           "items": { "$ref": "#/$defs/activity_log_entry" }
         },
-        "alerts": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/alert" }
-        },
         "server_status": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["server_name", "server_version"],
-          "properties": {
-            "server_name": { "type": "string", "minLength": 1 },
-            "server_version": { "type": "string", "minLength": 1 },
-            "capability_names": { "$ref": "#/$defs/string_list" },
-            "operator_mode": { "type": ["string", "null"] }
-          }
+          "$ref": "#/$defs/server_status_snapshot"
         },
         "connected_clients": {
           "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["session_id", "client_name", "client_role"],
-            "properties": {
-              "session_id": { "type": "string", "minLength": 1 },
-              "client_name": { "type": "string", "minLength": 1 },
-              "client_role": { "$ref": "#/$defs/client_role" }
-            }
-          }
+          "items": { "$ref": "#/$defs/connected_client" }
         },
         "active_operator": {
-          "type": ["object", "null"],
-          "additionalProperties": false,
-          "required": ["session_id", "client_name"],
-          "properties": {
-            "session_id": { "type": "string", "minLength": 1 },
-            "client_name": { "type": "string", "minLength": 1 }
-          }
+          "$ref": "#/$defs/active_operator"
         }
       }
     },
@@ -495,6 +748,19 @@
         "server_version": { "type": "string", "minLength": 1 },
         "client_role": { "$ref": "#/$defs/client_role" },
         "capability_names": { "$ref": "#/$defs/string_list" }
+      }
+    },
+    "event_announcement_emitted_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["announcement_id", "message_text", "message_values"],
+      "properties": {
+        "announcement_id": { "type": "string", "minLength": 1 },
+        "message_text": { "type": "string", "minLength": 1 },
+        "message_values": {
+          "type": "object",
+          "additionalProperties": true
+        }
       }
     },
     "event_active_operator_changed_payload": {
