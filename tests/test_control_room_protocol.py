@@ -10,6 +10,7 @@ from edap.config import (
     CaptureRegionConfig,
     ControlRoomConfig,
     ControlsConfig,
+    MarketBuyHoldSegmentConfig,
     PathsConfig,
     RuntimeConfig,
     ScreenConfig,
@@ -46,7 +47,14 @@ def _make_config(journal_dir: Path) -> AppConfig:
             mass_lock_boost_delay_seconds=5.0,
             market_nav_delay_seconds=0.1,
             market_trade_max_attempts=3,
-            market_buy_hold_seconds_per_ton=0.01,
+            market_buy_max_hold_seconds=10.0,
+            market_buy_hold_segments=(
+                MarketBuyHoldSegmentConfig(start=0, function="flat", hold_seconds=1.0),
+                MarketBuyHoldSegmentConfig(start=100, function="linear", seconds_per_ton=0.01),
+                MarketBuyHoldSegmentConfig(start=301, function="log", base_seconds=-4.25, multiplier=1.1829),
+            ),
+            market_sell_quantity_restore_taps=5,
+            market_sell_quantity_restore_tap_delay_seconds=0.05,
             market_critical_level_multiplier=10.0,
             haul_post_sell_settle_seconds=2.0,
             haul_two_way_auto_hyperspace_engage=True,
@@ -95,6 +103,8 @@ def _make_context(journal_dir: Path) -> RuntimeContext:
         input_controller=None,
         screen_capture=None,
         binding_lookup=None,
+        config_path=journal_dir / "config.toml",
+        used_example_config_fallback=False,
     )
 
 
