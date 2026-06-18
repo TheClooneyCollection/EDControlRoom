@@ -28,6 +28,7 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
         self._queue_size = queue_size
         self._sessions: dict[str, ObserverSession] = {}
         self._latest_snapshot: ControlRoomSnapshot | None = None
+        self._active_operator_session_id: str | None = None
 
     def register_observer(self, client_name: str) -> ObserverSession:
         session = ObserverSession(
@@ -50,19 +51,25 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
             ConnectedClientSnapshot(
                 session_id=session.session_id,
                 client_name=session.client_name,
-                client_role="observer",
+                client_role=self._resolved_session_role(session.session_id),
             )
             for session in self._sessions.values()
         ]
+
+    def set_active_operator_session(self, session_id: str | None) -> None:
+        self._active_operator_session_id = session_id
+        self._broadcast_current_snapshot()
 
     def merge_snapshot(
         self,
         base_snapshot: ControlRoomSnapshot,
         *,
+        session_id: str | None = None,
         include_local_operator: bool = True,
     ) -> ControlRoomSnapshot:
         connected_clients = list(self.connected_clients())
-        if include_local_operator:
+        active_operator = base_snapshot.active_operator
+        if self._active_operator_session_id is None and include_local_operator:
             connected_clients.insert(
                 0,
                 ConnectedClientSnapshot(
@@ -73,10 +80,24 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
                     client_role="active_operator",
                 ),
             )
+        elif self._active_operator_session_id is not None:
+            active_session = self._sessions.get(self._active_operator_session_id)
+            if active_session is not None:
+                active_operator = ActiveOperatorSnapshot(
+                    session_id=active_session.session_id,
+                    client_name=active_session.client_name,
+                )
+
+        session_role = base_snapshot.session.client_role
+        if session_id is not None:
+            session_role = self._resolved_session_role(session_id)
         return ControlRoomSnapshot(
-            session=base_snapshot.session,
+            session=type(base_snapshot.session)(
+                session_id=session_id or base_snapshot.session.session_id,
+                client_role=session_role,
+            ),
             connected_clients=connected_clients,
-            active_operator=base_snapshot.active_operator,
+            active_operator=active_operator,
             ship=base_snapshot.ship,
             market=base_snapshot.market,
             haul_session=base_snapshot.haul_session,
@@ -117,12 +138,14 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
 
     def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
         self._latest_snapshot = snapshot
-        self._broadcast(
-            {
-                "message_type": "state.snapshot",
-                "payload": asdict(self.merge_snapshot(snapshot)),
-            }
-        )
+        for session in list(self._sessions.values()):
+            self._queue_message(
+                session,
+                {
+                    "message_type": "state.snapshot",
+                    "payload": asdict(self.merge_snapshot(snapshot, session_id=session.session_id)),
+                },
+            )
 
     def _broadcast_current_snapshot(self) -> None:
         if self._latest_snapshot is None:
@@ -131,9 +154,17 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
 
     def _broadcast(self, message: dict[str, Any]) -> None:
         for session in list(self._sessions.values()):
-            if session.queue.full():
-                try:
-                    session.queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    pass
-            session.queue.put_nowait(message)
+            self._queue_message(session, message)
+
+    def _queue_message(self, session: ObserverSession, message: dict[str, Any]) -> None:
+        if session.queue.full():
+            try:
+                session.queue.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+        session.queue.put_nowait(message)
+
+    def _resolved_session_role(self, session_id: str) -> str:
+        if self._active_operator_session_id == session_id:
+            return "active_operator"
+        return "observer"

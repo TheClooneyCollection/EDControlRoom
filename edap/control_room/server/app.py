@@ -152,6 +152,7 @@ async def _receive_session_messages(
         message = await websocket.receive_json()
         response = _handle_session_message(
             message,
+            session_id=observer.session_id,
             client_role=observer.client_role,
             snapshot_provider=snapshot_provider,
             command_handler=command_handler,
@@ -165,6 +166,7 @@ async def _receive_session_messages(
 def _handle_session_message(
     message: dict[str, object],
     *,
+    session_id: str,
     client_role: str,
     snapshot_provider: Callable[[], object],
     command_handler: Callable[[str, bool | None], None] | None,
@@ -179,7 +181,7 @@ def _handle_session_message(
     if message_type == "command.request_snapshot":
         return protocol_message(
             "state.snapshot",
-            asdict(broker.merge_snapshot(snapshot_provider())),
+            asdict(broker.merge_snapshot(snapshot_provider(), session_id=session_id)),
             correlation_message_id=correlation_message_id,
         )
 
