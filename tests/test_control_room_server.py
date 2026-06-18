@@ -238,7 +238,10 @@ class ControlRoomServerTests(unittest.TestCase):
                 headers={"Authorization": "Bearer secret-token"},
             )
             self.assertEqual(capabilities.status_code, 200)
-            self.assertEqual(capabilities.json()["supported_client_roles"], ["observer"])
+            self.assertEqual(
+                capabilities.json()["supported_client_roles"],
+                ["active_operator", "observer"],
+            )
             self.assertEqual(
                 capabilities.json()["authentication_query_parameter_name"],
                 "access_token",
@@ -256,12 +259,13 @@ class ControlRoomServerTests(unittest.TestCase):
             ) as websocket:
                 ready = websocket.receive_json()
                 self.assertEqual(ready["message_type"], "event.connection_ready")
-                self.assertEqual(ready["payload"]["client_role"], "observer")
+                self.assertEqual(ready["payload"]["client_role"], "active_operator")
 
                 state = websocket.receive_json()
                 self.assertEqual(state["message_type"], "state.snapshot")
+                self.assertEqual(state["payload"]["session"]["client_role"], "active_operator")
                 self.assertEqual(
-                    state["payload"]["connected_clients"][1]["client_name"],
+                    state["payload"]["connected_clients"][0]["client_name"],
                     "bridge-ipad",
                 )
 
@@ -284,8 +288,9 @@ class ControlRoomServerTests(unittest.TestCase):
 
         message = observer.queue.get_nowait()
         self.assertEqual(message["message_type"], "state.snapshot")
+        self.assertEqual(message["payload"]["session"]["client_role"], "active_operator")
         self.assertEqual(
-            message["payload"]["connected_clients"][1]["client_name"],
+            message["payload"]["connected_clients"][0]["client_name"],
             "bridge-ipad",
         )
 
@@ -311,7 +316,8 @@ class ControlRoomServerTests(unittest.TestCase):
 
         self.assertEqual(response["message_type"], "state.snapshot")
         self.assertEqual(response["correlation_message_id"], "message-42")
-        self.assertEqual(response["payload"]["connected_clients"][1]["client_name"], "bridge-ipad")
+        self.assertEqual(response["payload"]["session"]["client_role"], "active_operator")
+        self.assertEqual(response["payload"]["connected_clients"][0]["client_name"], "bridge-ipad")
 
     def test_observer_submit_input_command_is_rejected(self) -> None:
         broker = InMemoryObserverSessionBroker()
@@ -361,10 +367,36 @@ class ControlRoomServerTests(unittest.TestCase):
 
         broker.publish_snapshot(_base_snapshot())
 
-        message = observer.queue.get_nowait()
-        self.assertEqual(message["message_type"], "state.snapshot")
-        self.assertEqual(message["payload"]["session"]["client_role"], "active_operator")
-        self.assertEqual(message["payload"]["active_operator"]["client_name"], "bridge-ipad")
+        first = observer.queue.get_nowait()
+        second = observer.queue.get_nowait()
+        self.assertEqual(first["message_type"], "event.active_operator_changed")
+        self.assertEqual(first["payload"]["active_operator_client_name"], "bridge-ipad")
+        self.assertEqual(second["message_type"], "state.snapshot")
+        self.assertEqual(second["payload"]["session"]["client_role"], "active_operator")
+        self.assertEqual(second["payload"]["active_operator"]["client_name"], "bridge-ipad")
+
+    def test_request_active_operator_claim_reassigns_session(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        first = broker.register_observer("bridge-ipad")
+        second = broker.register_observer("bridge-mac")
+
+        response = _handle_session_message(
+            {
+                "message_type": "command.request_active_operator",
+                "message_id": "message-101",
+                "payload": {},
+            },
+            session_id=second.session_id,
+            client_role=broker.current_session_role(second.session_id),
+            snapshot_provider=_base_snapshot,
+            command_handler=None,
+            broker=broker,
+        )
+
+        self.assertEqual(first.client_name, "bridge-ipad")
+        self.assertEqual(response["message_type"], "response.success")
+        self.assertEqual(response["correlation_message_id"], "message-101")
+        self.assertEqual(broker.current_session_role(second.session_id), "active_operator")
 
     def test_observer_endpoints_reject_missing_token(self) -> None:
         broker = InMemoryObserverSessionBroker()

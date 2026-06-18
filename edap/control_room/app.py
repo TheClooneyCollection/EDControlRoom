@@ -1399,6 +1399,11 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--token", help="shared access token for serve/connect observer mode")
     parser.add_argument("--client-name", help="observer client name for connect mode")
+    parser.add_argument(
+        "--claim-operator",
+        action="store_true",
+        help="request active-operator role after connecting",
+    )
     args = parser.parse_args()
 
     if args.mode == "serve":
@@ -1425,6 +1430,7 @@ def main() -> None:
             target=args.target,
             access_token=args.token,
             client_name=args.client_name,
+            claim_operator=args.claim_operator,
         )
         return
 

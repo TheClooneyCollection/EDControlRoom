@@ -229,6 +229,12 @@ class RemoteObserverBackend(ControlRoomBackend):
             },
         )
 
+    def request_active_operator(self) -> None:
+        self._send_command(
+            "command.request_active_operator",
+            {},
+        )
+
     def _emit_local_message(self, text: str) -> None:
         self._emit(ActivityLogAppendedEvent(entry=build_activity_log_entry(text)))
 
