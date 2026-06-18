@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `34`
-- Latest generated iteration number: `167`
+- Generated iteration count: `35`
+- Latest generated iteration number: `168`
 
 ## Iteration 134
 
@@ -979,3 +979,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - If operator UX needs more status-file visibility later, add `Flags2` parsing for documented fields such as `Supercruise Assist Active`, but do not expect it to answer autodock/autolaunch.
+
+## Iteration 168
+
+- When: `2026-06-18 23:30`
+- Area: `control-room`
+- Title: `restore-prompt-enter-defaults`
+- Source: [2026-06-18-23-30_control-room_restore-prompt-enter-defaults.md](iteration-logs/2026-06-18-23-30_control-room_restore-prompt-enter-defaults.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `restore-prompt-enter-defaults`
+- Started: `2026-06-18 23:30`
+
+## Summary
+
+- Restored prompt-default Enter handling for Control Room prompts by catching blank Enter at the key-event layer and routing it through backend prompt submission.
+- Verified the fix for both embedded and connected active-operator flows by keeping blank `raw_input` valid over the session transport and covering both paths with focused tests.
+
+## Changes
+
+- Updated `ControlRoomApp.on_key()` to submit empty prompt input on `Enter` during destination/haul prompt flows instead of relying on widget-level submitted events.
+- Kept `on_input_submitted()` prompt-aware so non-empty and already-submitted prompt values still route through the backend without normal command-mode stripping.
+- Added protocol/UI regression coverage for blank Enter during destination prompts and server-side coverage for active-operator command submission handling.
+
+## Follow-ups
+
+- Live-test connected active-operator prompt flows against a running `serve` instance, especially multi-step haul prompts and other prompt-heavy commands.
