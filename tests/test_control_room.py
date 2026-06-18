@@ -278,6 +278,9 @@ class _FakeTTS:
     def set_commander_name(self, name: str | None) -> None:
         self.commander_name = name
 
+    def render_announcement(self, message_id: AnnouncementId, **values: object) -> str | None:
+        return None
+
     def close(self) -> None:
         return None
 
@@ -1874,6 +1877,13 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.app._log_startup_modes()
 
         self.assertIn("Instant mode on — control with: instant", "\n".join(self.app.logged))
+
+    def test_announce_startup_greeting_emits_tts_announcement(self) -> None:
+        self.app._tts = _FakeTTS()
+
+        self.app._announce_startup_greeting()
+
+        self.assertIn((AnnouncementId.STARTUP_GREETING, {}), self.app._tts.calls)
 
     def test_log_current_version_reports_current_version(self) -> None:
         self.app._current_version = "1.7.1"

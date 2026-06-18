@@ -5,6 +5,7 @@ title = "commander"
 disabled_messages = []
 
 [tts.phrases]
+startup_greeting = "Hello {title}."
 destination_set = "Setting destination to {system_name}."
 station_cleared = "Station cleared. Frame shift drive online, {title}. Ready to jump."
 haul_aborted = "Haul aborted."
