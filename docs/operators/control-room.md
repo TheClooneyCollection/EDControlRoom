@@ -114,6 +114,7 @@ Interrupt behavior during `haul` is special:
 
 - `home` reuses the saved `control_room.home_system` value and then runs the normal `dest` flow, including the galaxy-map settle prompt.
 - `home set <system>` updates that setting in the active config file so the next `home` command is one word.
+- Bare `home set` uses the current ship system when Control Room already knows it from live journal/status state.
 - If Control Room started from the default `config.example.toml` fallback because repo-root `config.toml` did not exist yet, `home set` creates a minimal repo-root `config.toml` instead of editing the shipped example file.
 
 ## Keybinds

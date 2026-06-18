@@ -70,7 +70,7 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
         name="home",
         usage="home | home set <system>",
         summary="Route to your saved home system, or update that saved home system in config.",
-        detail="Plain `home` behaves like `dest <home system>` using `control_room.home_system` from config. `home set <system>` writes that setting into the active config file; when control room started from the default example fallback, it creates repo-root `config.toml` instead of editing `config.example.toml`.",
+        detail="Plain `home` behaves like `dest <home system>` using `control_room.home_system` from config. `home set <system>` writes that setting into the active config file, and bare `home set` falls back to the current ship system when control room already knows it. When control room started from the default example fallback, the setter creates repo-root `config.toml` instead of editing `config.example.toml`.",
     ),
     CommandHelp(
         name="market",

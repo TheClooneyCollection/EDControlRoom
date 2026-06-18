@@ -68,8 +68,8 @@ def dispatch(app: CommandHost, raw: str, *, skip_delay_override: bool | None = N
     elif verb == "home":
         if not raw_rest:
             cmd_home(app, raw=raw, skip_delay=skip_delay)
-        elif raw_rest.lower().startswith("set "):
-            system_name = raw_rest[4:].strip()
+        elif raw_rest.lower() == "set" or raw_rest.lower().startswith("set "):
+            system_name = raw_rest[3:].strip()
             cmd_home_set(app, system_name, raw=raw)
         else:
             app._record_history_entry(
@@ -124,9 +124,11 @@ def cmd_home(app: CommandHost, *, raw: str, skip_delay: bool) -> None:
 
 def cmd_home_set(app: CommandHost, system_name: str, *, raw: str) -> None:
     if not system_name:
-        app._record_history_entry(CommandHistoryEntry(raw=raw, command="home", timestamp=now_iso()))
-        app._log(f"[red]{escape(error_text.render(app._config, 'home_usage'))}[/]")
-        return
+        system_name = (app._ship.system or "").strip()
+        if not system_name:
+            app._record_history_entry(CommandHistoryEntry(raw=raw, command="home", timestamp=now_iso()))
+            app._log(f"[red]{escape(error_text.render(app._config, 'home_set_system_unknown'))}[/]")
+            return
 
     target_path = (
         app._config_path.with_name(DEFAULT_CONFIG_PATH.name)

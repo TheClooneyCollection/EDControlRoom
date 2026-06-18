@@ -1744,6 +1744,45 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertEqual(entry.command, "home")
         self.assertEqual(entry.params, {"mode": "set", "system": "Shinrarta Dezhra"})
 
+    def test_home_set_without_argument_uses_current_system(self) -> None:
+        config_path = Path(self.tmpdir.name) / "config.toml"
+        config_path.write_text(
+            """
+[paths]
+
+[controls]
+
+[screen]
+
+[runtime]
+""".strip() + "\n",
+            encoding="utf-8",
+        )
+        self.app._config_path = config_path
+        self.app._ship.system = "Sol"
+
+        self.app._dispatch_command("home set")
+
+        self.assertEqual(self.app._config.control_room.home_system, "Sol")
+        saved = config_path.read_text(encoding="utf-8")
+        self.assertIn('home_system = "Sol"', saved)
+        entry = self._last_history()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.command, "home")
+        self.assertEqual(entry.params, {"mode": "set", "system": "Sol"})
+
+    def test_home_set_without_argument_requires_known_current_system(self) -> None:
+        self.app._ship.system = None
+
+        self.app._dispatch_command("home set")
+
+        output = "\n".join(self.app.logged)
+        self.assertIn("Cannot infer a home system yet", output)
+        entry = self._last_history()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.command, "home")
+        self.assertEqual(entry.raw, "home set")
+
     def test_home_set_creates_repo_config_when_running_from_example_fallback(self) -> None:
         original_cwd = Path.cwd()
         with tempfile.TemporaryDirectory() as temp_dir:

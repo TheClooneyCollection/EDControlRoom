@@ -5,6 +5,7 @@ messages:
     dest_usage: "Usage: dest <system name>"
     home_usage: "Usage: home | home set <system name>"
     home_not_set: "Home system is not set. Use: home set <system name>"
+    home_set_system_unknown: "Cannot infer a home system yet. Wait until the current system is known, or use: home set <system name>"
     market_filter_usage: "Usage: market filter <item name>"
     unknown_help_topic: "Unknown help topic: {topic}"
     buy_usage: "Usage: buy <item> [amount|max]"

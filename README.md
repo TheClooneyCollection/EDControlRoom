@@ -34,7 +34,7 @@ See [docs/status/README.md](docs/status/README.md) for the maintained status ent
 Once you have control room up and running:
 - use `haul` to haul from A <-> B as the main end-to-end workflow
 - edit `haul.toml` and run `haul load` if you want one text-editable saved haul route instead of stepping through the prompt each time
-- run `home set <system>` once if you want a one-word reusable route command later via `home`
+- run `home set <system>` once if you want a one-word reusable route command later via `home`; if Control Room already knows your current system, bare `home set` also works
 - for setup details, platform-specific notes, and more commands, continue to [docs/getting-started/quickstart.md](docs/getting-started/quickstart.md)
 - use [docs/operators/control-room.md](docs/operators/control-room.md) for day-to-day operation
 - use [docs/operators/bindings-files.md](docs/operators/bindings-files.md) for `.binds` backup / restore / preset apply
