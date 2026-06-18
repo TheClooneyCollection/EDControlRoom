@@ -39,9 +39,8 @@ class ObserverControlRoomApp(ControlRoomApp):
         self._backend_event_unsubscribe = self._backend.subscribe_events(self._handle_backend_event)
         self._observer_backend.start()
         self._apply_remote_snapshot(replace_activity=True)
-        command_input = self.query_one("#cmd", Input)
-        command_input.disabled = True
-        command_input.placeholder = "observer mode - read only"
+        self._observer_backend.request_snapshot()
+        self._refresh_remote_command_input()
 
     def on_unmount(self) -> None:
         super().on_unmount()
@@ -75,12 +74,23 @@ class ObserverControlRoomApp(ControlRoomApp):
         self._refresh_haul_stats()
         self._refresh_market()
         self._update_resume_detail()
+        self._refresh_remote_command_input()
 
     def _play_local_announcement(self, event: AnnouncementEvent) -> None:
         parsed_id = parse_announcement_id(event.announcement_id)
         if parsed_id is None:
             return
         self._tts.announce(parsed_id, **event.message_values)
+
+    def _refresh_remote_command_input(self) -> None:
+        command_input = self.query_one("#cmd", Input)
+        is_active_operator = self._view_snapshot.session.client_role == "active_operator"
+        command_input.disabled = not is_active_operator
+        command_input.placeholder = (
+            self._default_command_placeholder
+            if is_active_operator
+            else "observer mode - read only"
+        )
 
 
 def connect_observer_mode(

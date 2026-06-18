@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import asdict
 from typing import Callable
 
@@ -92,15 +93,29 @@ def build_observer_server_app(
                         "session_id": observer.session_id,
                         "server_name": merged_snapshot.server_status.server_name,
                         "server_version": merged_snapshot.server_status.server_version,
-                        "client_role": "observer",
+                        "client_role": observer.client_role,
                         "capability_names": merged_snapshot.server_status.capability_names,
                     },
                 )
             )
             broker.publish_snapshot(snapshot_provider())
-            while True:
-                message = await observer.queue.get()
-                await websocket.send_json(protocol_message(message["message_type"], message["payload"]))
+            sender = asyncio.create_task(_send_session_messages(websocket, observer))
+            receiver = asyncio.create_task(
+                _receive_session_messages(
+                    websocket,
+                    observer=observer,
+                    snapshot_provider=snapshot_provider,
+                    broker=broker,
+                )
+            )
+            done, pending = await asyncio.wait(
+                {sender, receiver},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for task in pending:
+                task.cancel()
+            for task in done:
+                task.result()
         except WebSocketDisconnect:
             pass
         finally:
@@ -114,4 +129,97 @@ def build_observer_server_app(
             Route("/snapshot", snapshot),
             WebSocketRoute("/session", session),
         ]
+    )
+
+
+async def _send_session_messages(websocket: WebSocket, observer) -> None:
+    while True:
+        message = await observer.queue.get()
+        await websocket.send_json(protocol_message(message["message_type"], message["payload"]))
+
+
+async def _receive_session_messages(
+    websocket: WebSocket,
+    *,
+    observer,
+    snapshot_provider: Callable[[], object],
+    broker: InMemoryObserverSessionBroker,
+) -> None:
+    while True:
+        message = await websocket.receive_json()
+        response = _handle_session_message(
+            message,
+            client_role=observer.client_role,
+            snapshot_provider=snapshot_provider,
+            broker=broker,
+        )
+        if response is None:
+            continue
+        await websocket.send_json(response)
+
+
+def _handle_session_message(
+    message: dict[str, object],
+    *,
+    client_role: str,
+    snapshot_provider: Callable[[], object],
+    broker: InMemoryObserverSessionBroker,
+) -> dict[str, object] | None:
+    message_type = str(message.get("message_type", ""))
+    message_id = message.get("message_id")
+    correlation_message_id = str(message_id) if message_id is not None else None
+    payload_value = message.get("payload", {})
+    payload = payload_value if isinstance(payload_value, dict) else {}
+
+    if message_type == "command.request_snapshot":
+        return protocol_message(
+            "state.snapshot",
+            asdict(broker.merge_snapshot(snapshot_provider())),
+            correlation_message_id=correlation_message_id,
+        )
+
+    if message_type == "command.submit_input":
+        if client_role != "active_operator":
+            return protocol_message(
+                "response.error",
+                {
+                    "error_code": "observer_read_only",
+                    "error_message": "Observer clients cannot issue operator commands.",
+                    "recommended_action": "Use an active operator session to run commands.",
+                    "retryable": False,
+                },
+                correlation_message_id=correlation_message_id,
+            )
+        raw_input = payload.get("raw_input")
+        if not isinstance(raw_input, str) or not raw_input.strip():
+            return protocol_message(
+                "response.error",
+                {
+                    "error_code": "invalid_command",
+                    "error_message": "Command input must include raw_input text.",
+                    "recommended_action": "Send a non-empty raw_input string.",
+                    "retryable": True,
+                },
+                correlation_message_id=correlation_message_id,
+            )
+        return protocol_message(
+            "response.error",
+            {
+                "error_code": "active_operator_transport_unavailable",
+                "error_message": "Remote active-operator command execution is not available yet.",
+                "recommended_action": "Keep using embedded local mode for operator commands until promotion lands.",
+                "retryable": False,
+            },
+            correlation_message_id=correlation_message_id,
+        )
+
+    return protocol_message(
+        "response.error",
+        {
+            "error_code": "unsupported_message_type",
+            "error_message": f"Unsupported message type: {message_type}",
+            "recommended_action": "Use a supported command or upgrade the client.",
+            "retryable": False,
+        },
+        correlation_message_id=correlation_message_id,
     )

@@ -19,6 +19,7 @@ from edap.control_room.protocol.snapshot import (
 class ObserverSession:
     session_id: str
     client_name: str
+    client_role: str
     queue: asyncio.Queue[dict[str, Any]]
 
 
@@ -32,6 +33,7 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
         session = ObserverSession(
             session_id=f"observer-{uuid4().hex[:12]}",
             client_name=client_name,
+            client_role="observer",
             queue=asyncio.Queue(maxsize=self._queue_size),
         )
         self._sessions[session.session_id] = session

@@ -39,7 +39,7 @@ from edap.control_room.protocol.snapshot import (
     ShipSnapshot,
     UiStateSnapshot,
 )
-from edap.control_room.server.app import build_observer_server_app
+from edap.control_room.server.app import _handle_session_message, build_observer_server_app
 from edap.control_room.server.auth import SharedAccessTokenAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
 from edap.control_room.server.host import HeadlessControlRoomHost
@@ -279,6 +279,46 @@ class ControlRoomServerTests(unittest.TestCase):
             message["payload"]["connected_clients"][1]["client_name"],
             "bridge-ipad",
         )
+
+    def test_request_snapshot_command_returns_correlated_snapshot(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        broker.register_observer("bridge-ipad")
+
+        response = _handle_session_message(
+            {
+                "message_type": "command.request_snapshot",
+                "message_id": "message-42",
+                "payload": {
+                    "include_activity_log": True,
+                    "include_market_state": True,
+                },
+            },
+            client_role="observer",
+            snapshot_provider=_base_snapshot,
+            broker=broker,
+        )
+
+        self.assertEqual(response["message_type"], "state.snapshot")
+        self.assertEqual(response["correlation_message_id"], "message-42")
+        self.assertEqual(response["payload"]["connected_clients"][1]["client_name"], "bridge-ipad")
+
+    def test_observer_submit_input_command_is_rejected(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+
+        response = _handle_session_message(
+            {
+                "message_type": "command.submit_input",
+                "message_id": "message-99",
+                "payload": {"raw_input": "dock"},
+            },
+            client_role="observer",
+            snapshot_provider=_base_snapshot,
+            broker=broker,
+        )
+
+        self.assertEqual(response["message_type"], "response.error")
+        self.assertEqual(response["correlation_message_id"], "message-99")
+        self.assertEqual(response["payload"]["error_code"], "observer_read_only")
 
     def test_observer_endpoints_reject_missing_token(self) -> None:
         broker = InMemoryObserverSessionBroker()
