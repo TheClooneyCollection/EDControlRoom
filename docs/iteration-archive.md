@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `25`
-- Latest generated iteration number: `158`
+- Generated iteration count: `26`
+- Latest generated iteration number: `159`
 
 ## Iteration 134
 
@@ -718,3 +718,29 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 -
+
+## Iteration 159
+
+- When: `2026-06-18 12:25`
+- Area: `docs`
+- Title: `prepare-v1-11-0-release`
+- Source: [2026-06-18-12-25_____docs_____prepare-v1-11-0-release.md](iteration-logs/2026-06-18-12-25_____docs_____prepare-v1-11-0-release.md)
+
+# Iteration Log
+
+- Area: `docs`
+- Title: `prepare-v1-11-0-release`
+- Started: `2026-06-18 12:25`
+
+## Summary
+
+- Prepared `main` for the `v1.11.0` release so the current milestone can be cut before the pending larger merge lands.
+
+## Changes
+
+- Bumped `[project].version` in `pyproject.toml` from `1.10.0` to `1.11.0` for the release-prep commit.
+- Updated `docs/status/ci-release.md` to record that `main` now points at the `v1.11.0` release-prep state.
+
+## Follow-ups
+
+- Run `uv sync`, validate the full unittest suite, refresh `docs/iteration-archive.md`, commit the release-prep change, and tag `v1.11.0`.

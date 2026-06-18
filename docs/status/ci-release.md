@@ -1,5 +1,6 @@
 # CI and Release Status
 ## Current
+- `main` is now prepared for `v1.11.0` so the pre-merge stable cut can be tagged before the next large change lands.
 - Stable tags have been backfilled across the post-`v1.7.3` milestones as `v1.8.0`, `v1.9.0`, and `v1.10.0`; only the latest milestone on `main` carries a fresh release-prep version bump.
 - `main` is now the rolling-update branch, and stable features or releases are identified with tags instead of `dev -> main` promotion.
 - The legacy `.github/workflows/promote-dev-to-main.yml` automation has been removed; release/process automation now centers on `main`, semantic version tags, and manual GitHub release publishing.
