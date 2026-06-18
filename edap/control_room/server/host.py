@@ -98,6 +98,9 @@ class HeadlessControlRoomHost(ControlRoomApp):
         if skip_delay is True and not raw_input.startswith("!"):
             resolved = f"!{raw_input}"
         self._backend.submit_input(resolved)
+        sink = self._protocol_event_sink
+        if sink is not None:
+            sink.publish_snapshot(self.snapshot())
 
     def _start_watcher_loop(self) -> None:
         if self._watcher_thread is not None:
