@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `33`
-- Latest generated iteration number: `166`
+- Generated iteration count: `34`
+- Latest generated iteration number: `167`
 
 ## Iteration 134
 
@@ -927,6 +927,33 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - The next slice is the actual promotion policy and trigger path for assigning a connected session as `active_operator`, followed by broader validation of routine-heavy remote commands in the headless host.
 
 ## Iteration 166
+
+- When: `2026-06-18 22:49`
+- Area: `control-room`
+- Title: `active-operator-promotion`
+- Source: [2026-06-18-22-49_control-room_active-operator-promotion.md](iteration-logs/2026-06-18-22-49_control-room_active-operator-promotion.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `active-operator-promotion`
+- Started: `2026-06-18 22:49`
+
+## Summary
+
+- Implemented the first active-operator promotion policy: the first authenticated client becomes the operator automatically, later authenticated clients can claim the role explicitly, and role-aware snapshots now track that assignment end to end.
+
+## Changes
+
+- Updated the observer-session broker to auto-promote the first authenticated client, allow explicit operator claims, and fail over to the next connected client when the current operator disconnects.
+- Extended the session protocol with `command.request_active_operator`, updated `connection_ready` and snapshot payloads to reflect the broker-assigned role, and exposed `--claim-operator` on `control_room connect`.
+- Added regression coverage for auto-promotion, explicit claim, and role-aware snapshot payloads, then re-ran compile checks and the full unittest suite.
+
+## Follow-ups
+
+- The main remaining work is live validation and broader routine/prompt coverage through the headless host now that role assignment, command transport, and simple command execution are all in place.
+
+## Iteration 167
 
 - When: `2026-06-18 23:25`
 - Area: `runtime`
