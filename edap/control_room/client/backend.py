@@ -4,6 +4,7 @@ import asyncio
 import json
 import threading
 from collections.abc import Callable
+from queue import Queue
 from typing import Any
 from urllib.parse import quote
 
@@ -19,6 +20,7 @@ from edap.control_room.protocol import (
     SnapshotUpdatedEvent,
     build_activity_log_entry,
     event_from_message,
+    protocol_timestamp_now,
     snapshot_from_message,
 )
 from edap.control_room_state import CommandHistoryEntry
@@ -45,6 +47,8 @@ class RemoteObserverBackend(ControlRoomBackend):
         self._stop_event = threading.Event()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._websocket: Any | None = None
+        self._outgoing_messages: Queue[dict[str, object]] = Queue()
+        self._message_counter = 0
 
     def start(self) -> None:
         if self._thread is not None:
@@ -54,6 +58,7 @@ class RemoteObserverBackend(ControlRoomBackend):
 
     def close(self) -> None:
         self._stop_event.set()
+        self._outgoing_messages.put({})
         loop = self._loop
         websocket = self._websocket
         if loop is not None and websocket is not None:
@@ -95,7 +100,13 @@ class RemoteObserverBackend(ControlRoomBackend):
         self.dispatch_command(raw)
 
     def dispatch_command(self, raw: str, *, skip_delay: bool | None = None) -> None:
-        self._emit_local_message("Observer session is read-only.")
+        self._send_command(
+            "command.submit_input",
+            {
+                "raw_input": raw,
+                "skip_delay": skip_delay,
+            },
+        )
 
     def dispatch_destination(
         self,
@@ -157,17 +168,16 @@ class RemoteObserverBackend(ControlRoomBackend):
         try:
             async with websockets.connect(session_url) as websocket:
                 self._websocket = websocket
-                async for raw_message in websocket:
-                    if self._stop_event.is_set():
-                        break
-                    message = json.loads(raw_message)
-                    parsed_event = event_from_message(message)
-                    if parsed_event is None:
-                        continue
-                    if isinstance(parsed_event, SnapshotUpdatedEvent):
-                        self.publish_snapshot(parsed_event.snapshot)
-                        continue
-                    self._emit(parsed_event)
+                sender = asyncio.create_task(self._send_loop(websocket))
+                receiver = asyncio.create_task(self._receive_loop(websocket))
+                done, pending = await asyncio.wait(
+                    {sender, receiver},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                for task in pending:
+                    task.cancel()
+                for task in done:
+                    task.result()
         except Exception as exc:
             self._emit_local_message(
                 f"Observer connection lost: {exc!s}"
@@ -176,8 +186,64 @@ class RemoteObserverBackend(ControlRoomBackend):
             self._websocket = None
             self._loop = None
 
+    async def _send_loop(self, websocket) -> None:
+        while not self._stop_event.is_set():
+            message = await asyncio.to_thread(self._outgoing_messages.get)
+            if not message:
+                continue
+            await websocket.send(json.dumps(message))
+
+    async def _receive_loop(self, websocket) -> None:
+        async for raw_message in websocket:
+            if self._stop_event.is_set():
+                break
+            message = json.loads(raw_message)
+            parsed_event = event_from_message(message)
+            if parsed_event is not None:
+                if isinstance(parsed_event, SnapshotUpdatedEvent):
+                    self.publish_snapshot(parsed_event.snapshot)
+                    continue
+                self._emit(parsed_event)
+                continue
+            self._handle_response_message(message)
+
+    def _handle_response_message(self, message: dict[str, object]) -> None:
+        message_type = str(message.get("message_type", ""))
+        payload_value = message.get("payload", {})
+        payload = payload_value if isinstance(payload_value, dict) else {}
+        if message_type == "response.error":
+            error_message = str(payload.get("error_message", "Remote command failed."))
+            self._emit_local_message(error_message)
+            return
+        if message_type == "response.success":
+            message_text = str(payload.get("message_text", "")).strip()
+            if message_text:
+                self._emit_local_message(message_text)
+
+    def request_snapshot(self) -> None:
+        self._send_command(
+            "command.request_snapshot",
+            {
+                "include_activity_log": True,
+                "include_market_state": True,
+            },
+        )
+
     def _emit_local_message(self, text: str) -> None:
         self._emit(ActivityLogAppendedEvent(entry=build_activity_log_entry(text)))
+
+    def _send_command(self, message_type: str, payload: dict[str, object]) -> None:
+        self._message_counter += 1
+        self._outgoing_messages.put(
+            {
+                "schema": "edcontrolroom.control_room_message",
+                "version": 1,
+                "message_type": message_type,
+                "message_id": f"client-message-{self._message_counter:06d}",
+                "timestamp": protocol_timestamp_now(),
+                "payload": payload,
+            }
+        )
 
     def _emit(self, event: object) -> None:
         for handler in list(self._event_handlers):

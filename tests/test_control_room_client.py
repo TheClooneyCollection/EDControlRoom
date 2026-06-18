@@ -134,7 +134,7 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertIsInstance(event, SnapshotUpdatedEvent)
         self.assertEqual(event.snapshot.ship.system_name, "Sol")
 
-    def test_remote_backend_updates_cached_snapshot_and_emits_read_only_message(self) -> None:
+    def test_remote_backend_updates_cached_snapshot(self) -> None:
         target = ObserverServerTarget(
             host="bridge.local",
             port=8765,
@@ -167,12 +167,61 @@ class ControlRoomClientTests(unittest.TestCase):
         )
 
         backend.publish_snapshot(updated_snapshot)
-        backend.dispatch_command("dock")
 
         self.assertEqual(backend.current_snapshot().ship.system_name, "Achenar")
         self.assertIsInstance(received[0], SnapshotUpdatedEvent)
-        self.assertIsInstance(received[1], ActivityLogAppendedEvent)
-        self.assertEqual(received[1].entry.message_text, "Observer session is read-only.")
+
+    def test_remote_backend_surfaces_response_error_messages(self) -> None:
+        target = ObserverServerTarget(
+            host="bridge.local",
+            port=8765,
+            http_base_url="http://bridge.local:8765",
+            websocket_url="ws://bridge.local:8765/session",
+        )
+        backend = RemoteObserverBackend(
+            server_target=target,
+            access_token="secret-token",
+            client_name="observer-ipad",
+            initial_snapshot=_snapshot(),
+        )
+        received: list[object] = []
+        backend.subscribe_events(received.append)
+
+        backend._handle_response_message(
+            {
+                "message_type": "response.error",
+                "payload": {"error_message": "Observer clients cannot issue operator commands."},
+            }
+        )
+
+        self.assertIsInstance(received[0], ActivityLogAppendedEvent)
+        self.assertEqual(
+            received[0].entry.message_text,
+            "Observer clients cannot issue operator commands.",
+        )
+
+    def test_remote_backend_enqueues_snapshot_request_and_submit_input(self) -> None:
+        target = ObserverServerTarget(
+            host="bridge.local",
+            port=8765,
+            http_base_url="http://bridge.local:8765",
+            websocket_url="ws://bridge.local:8765/session",
+        )
+        backend = RemoteObserverBackend(
+            server_target=target,
+            access_token="secret-token",
+            client_name="observer-ipad",
+            initial_snapshot=_snapshot(),
+        )
+
+        backend.request_snapshot()
+        backend.dispatch_command("dock")
+
+        first = backend._outgoing_messages.get_nowait()
+        second = backend._outgoing_messages.get_nowait()
+        self.assertEqual(first["message_type"], "command.request_snapshot")
+        self.assertEqual(second["message_type"], "command.submit_input")
+        self.assertEqual(second["payload"]["raw_input"], "dock")
 
 
 if __name__ == "__main__":
