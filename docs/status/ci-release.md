@@ -1,5 +1,6 @@
 # CI and Release Status
 ## Current
+- Stable tags have been backfilled across the post-`v1.7.3` milestones as `v1.8.0`, `v1.9.0`, and `v1.10.0`; only the latest milestone on `main` carries a fresh release-prep version bump.
 - `main` is now the rolling-update branch, and stable features or releases are identified with tags instead of `dev -> main` promotion.
 - The legacy `.github/workflows/promote-dev-to-main.yml` automation has been removed; release/process automation now centers on `main`, semantic version tags, and manual GitHub release publishing.
 - The auto-commit `.github/workflows/sync-iteration-archive.yml` workflow has been removed; iteration archive refresh is manual, while CI still guards drift.
@@ -10,6 +11,7 @@
 - Tests run on `pull_request` and on `push` only for `main`.
 - Release prep is manual: prepare the release commit, run the full suite, tag `vX.Y.Z`, and publish the GitHub release directly.
 ## Caveats
+- Retroactive milestone tags after `v1.7.3` were placed directly on existing commits to avoid rewriting `main`, so historical release-prep commits do not exist for those backfilled cuts.
 - Historical iteration logs and generated archives still mention the old promotion path because they are retained as chronology, not current policy.
 ## Next
 - Live-check the next failing Actions run to confirm the job/step lookup and markdown link rendering match the local proof-of-concept.

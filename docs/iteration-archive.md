@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `21`
-- Latest generated iteration number: `154`
+- Generated iteration count: `22`
+- Latest generated iteration number: `155`
 
 ## Iteration 134
 
@@ -599,3 +599,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-check the new `home` shortcut and `home set` config write path against a real CrossOver-backed operator setup.
+
+## Iteration 155
+
+- When: `2026-06-18 11:12`
+- Area: `docs`
+- Title: `retroactive-release-backfill`
+- Source: [2026-06-18-11-12_____docs_____retroactive-release-backfill.md](iteration-logs/2026-06-18-11-12_____docs_____retroactive-release-backfill.md)
+
+# Iteration Log
+
+- Area: `docs`
+- Title: `retroactive-release-backfill`
+- Started: `2026-06-18 11:12`
+
+## Summary
+
+- Backfilled stable release milestones after `v1.7.3` into three coherent cuts: `v1.8.0`, `v1.9.0`, and `v1.10.0`.
+
+## Changes
+
+- Tagged `f0e99ce` as `v1.8.0` for the standalone multi-leg haul and control-room/operator improvements tranche.
+- Tagged `36411f1` as `v1.9.0` for the haul-loop, arrival/sell timing, and release-process hardening tranche.
+- Prepared `main` for `v1.10.0` by bumping `[project].version` to match the configurable timing/routing milestone at `HEAD`.
+- Updated `docs/status/ci-release.md` to record the retroactive-tagging exception and the current stable tag state.
+
+## Follow-ups
+
+- Run `uv sync`, validate the full unittest suite, refresh `docs/iteration-archive.md`, and publish the GitHub releases for the backfilled tags.
