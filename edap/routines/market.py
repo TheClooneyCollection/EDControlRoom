@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from math import log1p
 from pathlib import Path
 from time import monotonic, sleep
 from typing import Callable
@@ -271,6 +272,27 @@ def _read_sell_quantity(journal_dir: Path, target: str) -> int | None:
     return None
 
 
+def _buy_hold_duration_for_quantity(
+    quantity: int,
+    *,
+    max_hold_s: float,
+    buy_hold_timing_function: str,
+    buy_hold_seconds_per_ton: float,
+    buy_hold_log_base_seconds: float,
+    buy_hold_log_multiplier: float,
+) -> tuple[float, str]:
+    if buy_hold_timing_function == "log":
+        hold_s = buy_hold_log_base_seconds + (log1p(quantity) * buy_hold_log_multiplier)
+        detail = (
+            f"log curve ({buy_hold_log_base_seconds:.2f}s + log1p(tons) * "
+            f"{buy_hold_log_multiplier:.4f}s)"
+        )
+    else:
+        hold_s = quantity * buy_hold_seconds_per_ton
+        detail = f"linear {buy_hold_seconds_per_ton:.4f}s/t"
+    return min(max_hold_s, hold_s), detail
+
+
 def _find_market_item(items: list[dict], target: str, side: str) -> dict | None:
     target_lower = target.lower()
     for item in items:
@@ -458,7 +480,10 @@ def market_buy(
     step_delay_s: float = 1.0,
     nav_delay_s: float = 0.1,
     max_hold_s: float = 10.0,
+    buy_hold_timing_function: str = "linear",
     buy_hold_seconds_per_ton: float = 0.01,
+    buy_hold_log_base_seconds: float = 0.0,
+    buy_hold_log_multiplier: float = 0.35,
     trade_timeout_s: float = 30.0,
     skip_station_check: bool = False,
     max_attempts: int = 3,
@@ -472,8 +497,12 @@ def market_buy(
         controls, watcher,
         market_path=market_path, target=target, amount=amount, side="buy",
         step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
+        buy_hold_timing_function=buy_hold_timing_function,
         buy_hold_seconds_per_ton=buy_hold_seconds_per_ton,
-        sell_min_hold_s=0.0,
+        buy_hold_log_base_seconds=buy_hold_log_base_seconds,
+        buy_hold_log_multiplier=buy_hold_log_multiplier,
+        sell_quantity_restore_taps=0,
+        sell_quantity_restore_tap_delay_s=0.0,
         trade_timeout_s=trade_timeout_s, skip_station_check=skip_station_check,
         max_attempts=max_attempts,
         time_fn=time_fn, sleeper=sleeper, progress_fn=progress_fn, announce_fn=announce_fn,
@@ -491,8 +520,12 @@ def market_sell(
     step_delay_s: float = 1.0,
     nav_delay_s: float = 0.1,
     max_hold_s: float = 10.0,
+    buy_hold_timing_function: str = "linear",
     buy_hold_seconds_per_ton: float = 0.01,
-    sell_min_hold_s: float = 1.0,
+    buy_hold_log_base_seconds: float = 0.0,
+    buy_hold_log_multiplier: float = 0.35,
+    sell_quantity_restore_taps: int = 5,
+    sell_quantity_restore_tap_delay_s: float = 0.05,
     trade_timeout_s: float = 30.0,
     skip_station_check: bool = False,
     max_attempts: int = 3,
@@ -506,8 +539,12 @@ def market_sell(
         controls, watcher,
         market_path=market_path, target=target, amount=amount, side="sell",
         step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
+        buy_hold_timing_function=buy_hold_timing_function,
         buy_hold_seconds_per_ton=buy_hold_seconds_per_ton,
-        sell_min_hold_s=sell_min_hold_s,
+        buy_hold_log_base_seconds=buy_hold_log_base_seconds,
+        buy_hold_log_multiplier=buy_hold_log_multiplier,
+        sell_quantity_restore_taps=sell_quantity_restore_taps,
+        sell_quantity_restore_tap_delay_s=sell_quantity_restore_tap_delay_s,
         trade_timeout_s=trade_timeout_s, skip_station_check=skip_station_check,
         max_attempts=max_attempts,
         time_fn=time_fn, sleeper=sleeper, progress_fn=progress_fn, announce_fn=announce_fn,
@@ -526,8 +563,12 @@ def _market_trade(
     step_delay_s: float,
     nav_delay_s: float,
     max_hold_s: float,
+    buy_hold_timing_function: str,
     buy_hold_seconds_per_ton: float,
-    sell_min_hold_s: float,
+    buy_hold_log_base_seconds: float,
+    buy_hold_log_multiplier: float,
+    sell_quantity_restore_taps: int,
+    sell_quantity_restore_tap_delay_s: float,
     trade_timeout_s: float,
     skip_station_check: bool,
     max_attempts: int,
@@ -559,8 +600,12 @@ def _market_trade(
             market_path=market_path, target=target, amount=amount, side=side,
             event_type=event_type,
             step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
+            buy_hold_timing_function=buy_hold_timing_function,
             buy_hold_seconds_per_ton=buy_hold_seconds_per_ton,
-            sell_min_hold_s=sell_min_hold_s,
+            buy_hold_log_base_seconds=buy_hold_log_base_seconds,
+            buy_hold_log_multiplier=buy_hold_log_multiplier,
+            sell_quantity_restore_taps=sell_quantity_restore_taps,
+            sell_quantity_restore_tap_delay_s=sell_quantity_restore_tap_delay_s,
             trade_timeout_s=trade_timeout_s, skip_station_check=skip_station_check,
             time_fn=time_fn, sleeper=sleeper, progress_fn=progress_fn, announce_fn=announce_fn,
             critical_level_multiplier=critical_level_multiplier,
@@ -599,8 +644,12 @@ def _market_trade_attempt(
     step_delay_s: float,
     nav_delay_s: float,
     max_hold_s: float,
+    buy_hold_timing_function: str,
     buy_hold_seconds_per_ton: float,
-    sell_min_hold_s: float,
+    buy_hold_log_base_seconds: float,
+    buy_hold_log_multiplier: float,
+    sell_quantity_restore_taps: int,
+    sell_quantity_restore_tap_delay_s: float,
     trade_timeout_s: float,
     skip_station_check: bool,
     time_fn: Callable[[], float],
@@ -805,7 +854,14 @@ def _market_trade_attempt(
             hold_s = max_hold_s
             buy_limit, buy_limit_reason = _read_buy_quantity_limit(market_path.parent, item)
             if buy_limit is not None:
-                hold_s = min(max_hold_s, buy_limit * buy_hold_seconds_per_ton)
+                hold_s, hold_detail = _buy_hold_duration_for_quantity(
+                    buy_limit,
+                    max_hold_s=max_hold_s,
+                    buy_hold_timing_function=buy_hold_timing_function,
+                    buy_hold_seconds_per_ton=buy_hold_seconds_per_ton,
+                    buy_hold_log_base_seconds=buy_hold_log_base_seconds,
+                    buy_hold_log_multiplier=buy_hold_log_multiplier,
+                )
             if buy_limit is None:
                 progress_fn(
                     f"  UI_Right hold {hold_s:.2f}s "
@@ -814,7 +870,7 @@ def _market_trade_attempt(
             else:
                 progress_fn(
                     f"  UI_Right hold {hold_s:.2f}s "
-                    f"(fill to max {buy_limit_reason} at {buy_hold_seconds_per_ton:.4f}s/t)"
+                    f"(fill to max {buy_limit_reason} with {hold_detail})"
                 )
             qty_dispatch = controls.ui_right(hold_s=hold_s)
             if qty_dispatch.status != "ok":
@@ -832,23 +888,38 @@ def _market_trade_attempt(
             if qty_dispatch is None:
                 return _market_error(event_type, "amount must be at least 1")
     else:
-        sell_qty = int(amount) if amount != "MAX" else _read_sell_quantity(market_path.parent, target)
-        hold_s = max_hold_s
-        if sell_qty is not None:
-            hold_s = min(max_hold_s, max(sell_min_hold_s, sell_qty * buy_hold_seconds_per_ton))
-        if sell_qty is None:
+        if amount == "MAX":
             progress_fn(
-                f"  UI_Right hold {hold_s:.2f}s (restore sell quantity; cargo count unavailable, using cap)"
+                f"  UI_Right x{sell_quantity_restore_taps} "
+                f"(restore sell quantity to max with rapid taps, {sell_quantity_restore_tap_delay_s:.2f}s spacing)"
             )
+            qty_dispatch = ActionDispatchResult(action="UI_Right", status="ok")
+            for tap_index in range(sell_quantity_restore_taps):
+                qty_dispatch = controls.ui_right()
+                if qty_dispatch.status != "ok":
+                    return RoutineResult(
+                        action="UI_Right",
+                        dispatch=qty_dispatch,
+                        details={"phase": "set_quantity"},
+                    )
+                if sell_quantity_restore_tap_delay_s > 0 and tap_index < sell_quantity_restore_taps - 1:
+                    sleeper(sell_quantity_restore_tap_delay_s)
         else:
-            progress_fn(
-                f"  UI_Right hold {hold_s:.2f}s "
-                f"(restore sell quantity to {sell_qty}t with {sell_min_hold_s:.2f}s minimum at "
-                f"{buy_hold_seconds_per_ton:.4f}s/t)"
-            )
-        qty_dispatch = controls.ui_right(hold_s=hold_s)
-        if qty_dispatch.status != "ok":
-            return RoutineResult(action="UI_Right", dispatch=qty_dispatch, details={"phase": "set_quantity"})
+            qty = int(amount)
+            progress_fn(f"  UI_Right x{qty} (set quantity to {qty})")
+            qty_dispatch = None
+            for _ in range(qty):
+                qty_dispatch = controls.ui_right()
+                if qty_dispatch.status != "ok":
+                    return RoutineResult(
+                        action="UI_Right",
+                        dispatch=qty_dispatch,
+                        details={"phase": "set_quantity"},
+                    )
+                if step_delay_s > 0:
+                    sleeper(step_delay_s)
+            if qty_dispatch is None:
+                return _market_error(event_type, "amount must be at least 1")
     if step_delay_s > 0:
         sleeper(step_delay_s)
 

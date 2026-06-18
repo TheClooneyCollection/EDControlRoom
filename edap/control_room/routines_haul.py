@@ -164,6 +164,7 @@ def dispatch_haul_loop(
             station_2_system=station_2_system,
             station_2_on_land=station_2_on_land,
             step_delay_s=step_delay,
+            max_hold_s=app._config.controls.market_buy_max_hold_seconds,
             dock_timeout_s=dock_timeout,
             undock_timeout_s=undock_timeout,
             undock_no_track_timeout_s=undock_no_track_timeout,
@@ -176,8 +177,14 @@ def dispatch_haul_loop(
                 app._config.controls.haul_two_way_open_nav_panel_after_hyperspace_arrival
             ),
             nav_panel_open_delay_s=app._config.controls.haul_two_way_nav_panel_open_delay_seconds,
+            market_buy_hold_timing_function=app._config.controls.market_buy_hold_timing_function,
             market_buy_hold_seconds_per_ton=app._config.controls.market_buy_hold_seconds_per_ton,
-            market_sell_min_hold_s=app._config.controls.market_sell_min_hold_seconds,
+            market_buy_hold_log_base_seconds=app._config.controls.market_buy_hold_log_base_seconds,
+            market_buy_hold_log_multiplier=app._config.controls.market_buy_hold_log_multiplier,
+            market_sell_quantity_restore_taps=app._config.controls.market_sell_quantity_restore_taps,
+            market_sell_quantity_restore_tap_delay_s=(
+                app._config.controls.market_sell_quantity_restore_tap_delay_seconds
+            ),
             market_critical_level_multiplier=app._config.controls.market_critical_level_multiplier,
             time_fn=time_fn,
             sleeper=sleeper,
@@ -257,6 +264,7 @@ def dispatch_multi_leg_haul(
             definition=definition,
             journal_dir=app._journal_dir,
             step_delay_s=app._config.controls.step_delay_seconds,
+            max_hold_s=app._config.controls.market_buy_max_hold_seconds,
             dock_timeout_s=app._config.controls.haul_dock_timeout_seconds,
             undock_timeout_s=app._config.controls.undock_timeout_seconds,
             undock_no_track_timeout_s=app._config.controls.undock_no_track_timeout_seconds,
@@ -270,8 +278,14 @@ def dispatch_multi_leg_haul(
                 app._config.controls.haul_two_way_open_nav_panel_after_hyperspace_arrival
             ),
             nav_panel_open_delay_s=app._config.controls.haul_two_way_nav_panel_open_delay_seconds,
+            market_buy_hold_timing_function=app._config.controls.market_buy_hold_timing_function,
             market_buy_hold_seconds_per_ton=app._config.controls.market_buy_hold_seconds_per_ton,
-            market_sell_min_hold_s=app._config.controls.market_sell_min_hold_seconds,
+            market_buy_hold_log_base_seconds=app._config.controls.market_buy_hold_log_base_seconds,
+            market_buy_hold_log_multiplier=app._config.controls.market_buy_hold_log_multiplier,
+            market_sell_quantity_restore_taps=app._config.controls.market_sell_quantity_restore_taps,
+            market_sell_quantity_restore_tap_delay_s=(
+                app._config.controls.market_sell_quantity_restore_tap_delay_seconds
+            ),
             market_critical_level_multiplier=app._config.controls.market_critical_level_multiplier,
             time_fn=time_fn,
             sleeper=sleeper,

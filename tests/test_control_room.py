@@ -57,8 +57,13 @@ def _make_config(journal_dir: Path, *, activity_log_max_lines: int = 2000) -> Ap
             mass_lock_boost_delay_seconds=5.0,
             market_nav_delay_seconds=0.1,
             market_trade_max_attempts=3,
+            market_buy_max_hold_seconds=10.0,
+            market_buy_hold_timing_function="linear",
             market_buy_hold_seconds_per_ton=0.01,
-            market_sell_min_hold_seconds=1.0,
+            market_buy_hold_log_base_seconds=0.0,
+            market_buy_hold_log_multiplier=0.35,
+            market_sell_quantity_restore_taps=5,
+            market_sell_quantity_restore_tap_delay_seconds=0.05,
             market_critical_level_multiplier=10.0,
             haul_post_sell_settle_seconds=2.0,
             haul_two_way_auto_hyperspace_engage=True,
@@ -860,7 +865,9 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.assertIn("kwargs", captured)
         self.assertEqual(captured["kwargs"]["undock_timeout_s"], 30.0)
         self.assertEqual(captured["kwargs"]["undock_no_track_timeout_s"], 600.0)
-        self.assertEqual(captured["kwargs"]["market_sell_min_hold_s"], 1.0)
+        self.assertEqual(captured["kwargs"]["max_hold_s"], 10.0)
+        self.assertEqual(captured["kwargs"]["market_buy_hold_timing_function"], "linear")
+        self.assertEqual(captured["kwargs"]["market_sell_quantity_restore_taps"], 5)
         self.assertFalse(captured["kwargs"]["stop_requested_fn"]())
         self.app._haul_stop_requested = True
         self.assertTrue(captured["kwargs"]["stop_requested_fn"]())

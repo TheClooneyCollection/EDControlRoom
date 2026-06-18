@@ -110,10 +110,18 @@ boost_delay_seconds = 5.0
 nav_delay_seconds = 0.1
 # Maximum buy/sell attempts before aborting when the matching MarketBuy/MarketSell journal event is not observed.
 trade_max_attempts = 3
-# For `buy ... max`, hold UI_Right for `available cargo space * this factor`, capped by the routine max hold.
+# Hard cap for any buy `MAX` hold duration, regardless of timing function.
+buy_max_hold_seconds = 10.0
+# Buy hold timing mode for `buy ... max`: `linear` uses cargo tons directly; `log` tapers off growth for larger holds.
+buy_hold_timing_function = "linear"
+# For `buy ... max` in `linear` mode, hold UI_Right for `available cargo space * this factor`, capped by the routine max hold.
 buy_hold_seconds_per_ton = 0.01
-# For sell restores, never hold UI_Right for less than this even when the tonnage is small.
-sell_min_hold_seconds = 1.0
+# For `buy ... max` in `log` mode, use `base + log1p(tons) * multiplier`, still capped by the routine max hold.
+buy_hold_log_base_seconds = 0.0
+buy_hold_log_multiplier = 0.35
+# For sell `MAX`, restore the quantity with rapid right taps instead of a long hold.
+sell_quantity_restore_taps = 5
+sell_quantity_restore_tap_delay_seconds = 0.05
 # Treat station supply/demand below this cargo-capacity multiplier as critically low for warning/TTS.
 critical_level_multiplier = 10.0
 

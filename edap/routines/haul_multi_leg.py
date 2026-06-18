@@ -50,8 +50,12 @@ class _Ctx:
     market_path: Path
     step_delay_s: float
     max_hold_s: float
+    market_buy_hold_timing_function: str
     market_buy_hold_seconds_per_ton: float
-    market_sell_min_hold_s: float
+    market_buy_hold_log_base_seconds: float
+    market_buy_hold_log_multiplier: float
+    market_sell_quantity_restore_taps: int
+    market_sell_quantity_restore_tap_delay_s: float
     dock_timeout_s: float
     request_timeout_s: float
     undock_timeout_s: float
@@ -292,8 +296,12 @@ def _run_sell(ctx: _Ctx, stop: RouteStop) -> RoutineResult:
             amount=str(min(available, cargo.amount)),
             step_delay_s=ctx.step_delay_s,
             max_hold_s=ctx.max_hold_s,
+            buy_hold_timing_function=ctx.market_buy_hold_timing_function,
             buy_hold_seconds_per_ton=ctx.market_buy_hold_seconds_per_ton,
-            sell_min_hold_s=ctx.market_sell_min_hold_s,
+            buy_hold_log_base_seconds=ctx.market_buy_hold_log_base_seconds,
+            buy_hold_log_multiplier=ctx.market_buy_hold_log_multiplier,
+            sell_quantity_restore_taps=ctx.market_sell_quantity_restore_taps,
+            sell_quantity_restore_tap_delay_s=ctx.market_sell_quantity_restore_tap_delay_s,
             trade_timeout_s=ctx.trade_timeout_s,
             time_fn=ctx.time_fn,
             sleeper=ctx.sleeper,
@@ -327,6 +335,10 @@ def _run_buy(ctx: _Ctx, stop: RouteStop) -> RoutineResult:
             amount=str(remaining),
             step_delay_s=ctx.step_delay_s,
             max_hold_s=ctx.max_hold_s,
+            buy_hold_timing_function=ctx.market_buy_hold_timing_function,
+            buy_hold_seconds_per_ton=ctx.market_buy_hold_seconds_per_ton,
+            buy_hold_log_base_seconds=ctx.market_buy_hold_log_base_seconds,
+            buy_hold_log_multiplier=ctx.market_buy_hold_log_multiplier,
             trade_timeout_s=ctx.trade_timeout_s,
             time_fn=ctx.time_fn,
             sleeper=ctx.sleeper,
@@ -509,8 +521,12 @@ def multi_leg_haul(
     journal_dir: Path,
     step_delay_s: float = 1.0,
     max_hold_s: float = 10.0,
+    market_buy_hold_timing_function: str = "linear",
     market_buy_hold_seconds_per_ton: float = 0.01,
-    market_sell_min_hold_s: float = 1.0,
+    market_buy_hold_log_base_seconds: float = 0.0,
+    market_buy_hold_log_multiplier: float = 0.35,
+    market_sell_quantity_restore_taps: int = 5,
+    market_sell_quantity_restore_tap_delay_s: float = 0.05,
     dock_timeout_s: float = 600.0,
     request_timeout_s: float = 20.0,
     undock_timeout_s: float = 30.0,
@@ -546,8 +562,12 @@ def multi_leg_haul(
         market_path=journal_dir / "Market.json",
         step_delay_s=step_delay_s,
         max_hold_s=max_hold_s,
+        market_buy_hold_timing_function=market_buy_hold_timing_function,
         market_buy_hold_seconds_per_ton=market_buy_hold_seconds_per_ton,
-        market_sell_min_hold_s=market_sell_min_hold_s,
+        market_buy_hold_log_base_seconds=market_buy_hold_log_base_seconds,
+        market_buy_hold_log_multiplier=market_buy_hold_log_multiplier,
+        market_sell_quantity_restore_taps=market_sell_quantity_restore_taps,
+        market_sell_quantity_restore_tap_delay_s=market_sell_quantity_restore_tap_delay_s,
         dock_timeout_s=dock_timeout_s,
         request_timeout_s=request_timeout_s,
         undock_timeout_s=undock_timeout_s,

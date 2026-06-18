@@ -1,8 +1,8 @@
 # Haul Status
 ## Current
+- Market buy/sell quantity restore is now configurable: buy `MAX` has a configurable hold cap plus linear/log timing modes, and sell `MAX` now restores quantity with configurable rapid `UI_Right` taps instead of a long hold.
 - Two-way haul prompt/dispatch now records per-destination `on land` flags; orbital stops still auto-dock, while on-land stops hand off after destination-system `SupercruiseExit` so the operator can finish the planetary approach and resume after landing.
 - Two-way and multi-leg transit now ignore intermediate `FSDJump` arrivals in multi-jump routes and only open the nav panel once the jump event matches the configured destination system.
-- Market sell quantity restore now enforces a configurable minimum `UI_Right` hold floor so small sells no longer under-hold when the tonnage-derived duration is too short.
 - Haul prompt resume/edit now prefills the command input with the saved station names, systems, cargo legs, and timing values, and deleting a prefilled cargo/station field now leaves it truly blank instead of silently restoring saved text.
 - Two-way `haul` now accepts one-sided loops: station 1 or station 2 buy cargo may be blank as long as the other side is configured, and the routine skips the missing buy/sell leg cleanly during prompt flow, launch, and resume detection.
 - Two-way and multi-leg haul transit now announce the next station immediately after hyperspace arrival and before opening the nav panel, using a haul-specific TTS line instead of the generic `FSDJump` announcer.

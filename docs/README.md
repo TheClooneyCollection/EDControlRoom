@@ -8,6 +8,7 @@
 
 ## Operator Guides
 
+- [operators/market-timing.md](operators/market-timing.md): market buy-hold tuning and sell max rapid-tap settings
 - [operators/manual-journal-routine-testing.md](operators/manual-journal-routine-testing.md): low-level manual validation outside Control Room
 
 ## Diagnostics

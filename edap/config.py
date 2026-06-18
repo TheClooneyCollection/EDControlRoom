@@ -17,6 +17,7 @@ DEFAULT_MESSAGES_CONFIG_PATH = Path(__file__).resolve().parent.parent / "default
 VALID_PLATFORMS = {"linux", "macos", "windows"}
 VALID_CAPTURE_MODES = {"fullscreen", "region"}
 VALID_TTS_TITLE_MODES = {"commander", "custom", "commander_name"}
+VALID_MARKET_BUY_HOLD_TIMING_FUNCTIONS = {"linear", "log"}
 
 
 def default_runtime_platform() -> str:
@@ -54,8 +55,13 @@ class ControlsConfig:
     mass_lock_boost_delay_seconds: float
     market_nav_delay_seconds: float
     market_trade_max_attempts: int
+    market_buy_max_hold_seconds: float
+    market_buy_hold_timing_function: str
     market_buy_hold_seconds_per_ton: float
-    market_sell_min_hold_seconds: float
+    market_buy_hold_log_base_seconds: float
+    market_buy_hold_log_multiplier: float
+    market_sell_quantity_restore_taps: int
+    market_sell_quantity_restore_tap_delay_seconds: float
     market_critical_level_multiplier: float
     haul_post_sell_settle_seconds: float
     haul_two_way_auto_hyperspace_engage: bool
@@ -383,12 +389,27 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `controls.market_nav_delay_seconds` must be non-negative.")
     if config.controls.market_trade_max_attempts < 1:
         raise ConfigError("Config value `controls.market_trade_max_attempts` must be at least 1.")
+    if config.controls.market_buy_max_hold_seconds <= 0:
+        raise ConfigError("Config value `controls.market_buy_max_hold_seconds` must be greater than 0.")
+    if config.controls.market_buy_hold_timing_function not in VALID_MARKET_BUY_HOLD_TIMING_FUNCTIONS:
+        supported = ", ".join(sorted(VALID_MARKET_BUY_HOLD_TIMING_FUNCTIONS))
+        raise ConfigError(
+            f"Config value `controls.market_buy_hold_timing_function` must be one of: {supported}."
+        )
     if config.controls.market_buy_hold_seconds_per_ton <= 0:
         raise ConfigError(
             "Config value `controls.market_buy_hold_seconds_per_ton` must be greater than 0."
         )
-    if config.controls.market_sell_min_hold_seconds < 0:
-        raise ConfigError("Config value `controls.market_sell_min_hold_seconds` must be non-negative.")
+    if config.controls.market_buy_hold_log_base_seconds < 0:
+        raise ConfigError("Config value `controls.market_buy_hold_log_base_seconds` must be non-negative.")
+    if config.controls.market_buy_hold_log_multiplier <= 0:
+        raise ConfigError("Config value `controls.market_buy_hold_log_multiplier` must be greater than 0.")
+    if config.controls.market_sell_quantity_restore_taps < 1:
+        raise ConfigError("Config value `controls.market_sell_quantity_restore_taps` must be at least 1.")
+    if config.controls.market_sell_quantity_restore_tap_delay_seconds < 0:
+        raise ConfigError(
+            "Config value `controls.market_sell_quantity_restore_tap_delay_seconds` must be non-negative."
+        )
     if config.controls.market_critical_level_multiplier <= 0:
         raise ConfigError("Config value `controls.market_critical_level_multiplier` must be greater than 0.")
     if config.controls.haul_post_sell_settle_seconds < 0:
@@ -561,17 +582,47 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
                 3,
                 aliases=("market.trade_max_attempts",),
             ),
+            market_buy_max_hold_seconds=_float(
+                controls_flat,
+                "market_buy_max_hold_seconds",
+                10.0,
+                aliases=("market.buy_max_hold_seconds",),
+            ),
+            market_buy_hold_timing_function=_string(
+                controls_flat,
+                "market_buy_hold_timing_function",
+                "linear",
+                aliases=("market.buy_hold_timing_function",),
+            ),
             market_buy_hold_seconds_per_ton=_float(
                 controls_flat,
                 "market_buy_hold_seconds_per_ton",
                 0.01,
                 aliases=("market.buy_hold_seconds_per_ton",),
             ),
-            market_sell_min_hold_seconds=_float(
+            market_buy_hold_log_base_seconds=_float(
                 controls_flat,
-                "market_sell_min_hold_seconds",
-                1.0,
-                aliases=("market.sell_min_hold_seconds",),
+                "market_buy_hold_log_base_seconds",
+                0.0,
+                aliases=("market.buy_hold_log_base_seconds",),
+            ),
+            market_buy_hold_log_multiplier=_float(
+                controls_flat,
+                "market_buy_hold_log_multiplier",
+                0.35,
+                aliases=("market.buy_hold_log_multiplier",),
+            ),
+            market_sell_quantity_restore_taps=_integer(
+                controls_flat,
+                "market_sell_quantity_restore_taps",
+                5,
+                aliases=("market.sell_quantity_restore_taps",),
+            ),
+            market_sell_quantity_restore_tap_delay_seconds=_float(
+                controls_flat,
+                "market_sell_quantity_restore_tap_delay_seconds",
+                0.05,
+                aliases=("market.sell_quantity_restore_tap_delay_seconds",),
             ),
             market_critical_level_multiplier=_float(
                 controls_flat,
