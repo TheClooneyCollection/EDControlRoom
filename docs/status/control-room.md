@@ -6,6 +6,7 @@
 - Observer transport now has shared-token auth plus an app-backed `control_room connect <host>:<port>` path: authenticated `GET /capabilities`/`GET /snapshot`, `WS /session`, live `state.snapshot` updates, streamed activity/announcement events, and client-local TTS replay from streamed announcement identifiers.
 - The session transport is now bidirectional: clients can send versioned command envelopes, `command.request_snapshot` already round-trips over WebSocket, and observer-only sessions now get explicit correlated `response.error` replies for operator commands instead of silent ignores.
 - The server app now also has a real active-operator execution seam behind the session transport: `command.submit_input` can call into the headless host when a session role is `active_operator`, and simple non-routine commands already mutate server state through that path.
+- Session snapshots are now personalized per connected client instead of broadcast with one shared `session.client_role`, which removes a protocol blocker for future active-operator promotion and role-aware remote UIs.
 - Draft protocol direction for splitting Control Room into LAN client/server mode is now documented around HTTP + WebSocket, with `serve`/`connect`, JSON envelopes, browser-friendly transport, a single active operator plus observer-clients model, client-local TTS announcement events separated from durable activity-log events, and a concrete `state.snapshot` mapping back to current Control Room models captured in `docs/design/0002-control-room-client-server-protocol.md` plus `docs/schemas/control_room_message.schema.json`.
 - The first implementation slice now exists under `edap/control_room/protocol/`, with typed snapshot/event models, a `snapshot_from_app()` serializer, and protocol-native activity-log / announcement caches covered by focused tests.
 - Observer-mode server now runs through `ControlRoomEventSink`, an in-memory session broker, a headless runtime host, and Starlette HTTP/WebSocket endpoints behind shared-token auth, and it now rebroadcasts merged `state.snapshot` updates as server state changes so observers do not stay on a stale initial snapshot.
@@ -18,5 +19,5 @@
 - Real-world validation is still needed for stale-market, wrong-station, and wrong-commodity recovery wording.
 ## Next
 - Grow the snapshot/event state out of direct app-owned lists and into a real server-owned session/state layer behind `serve`.
-- Wire active-operator promotion into the session broker and promote the current headless-host execution seam from simple commands to the full operator flow.
+- Wire an explicit active-operator promotion policy into the session broker now that per-session snapshots and active-session execution are in place.
 - Live-validate the new failure wording and the market back-out path against real Control Room error cases.

@@ -291,7 +291,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_request_snapshot_command_returns_correlated_snapshot(self) -> None:
         broker = InMemoryObserverSessionBroker()
-        broker.register_observer("bridge-ipad")
+        observer = broker.register_observer("bridge-ipad")
 
         response = _handle_session_message(
             {
@@ -302,6 +302,7 @@ class ControlRoomServerTests(unittest.TestCase):
                     "include_market_state": True,
                 },
             },
+            session_id=observer.session_id,
             client_role="observer",
             snapshot_provider=_base_snapshot,
             command_handler=None,
@@ -321,6 +322,7 @@ class ControlRoomServerTests(unittest.TestCase):
                 "message_id": "message-99",
                 "payload": {"raw_input": "dock"},
             },
+            session_id="observer-unknown",
             client_role="observer",
             snapshot_provider=_base_snapshot,
             command_handler=None,
@@ -341,6 +343,7 @@ class ControlRoomServerTests(unittest.TestCase):
                 "message_id": "message-100",
                 "payload": {"raw_input": "market filter gold", "skip_delay": True},
             },
+            session_id="observer-100",
             client_role="active_operator",
             snapshot_provider=_base_snapshot,
             command_handler=lambda raw_input, skip_delay: received.append((raw_input, skip_delay)),
@@ -350,6 +353,18 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(received, [("market filter gold", True)])
         self.assertEqual(response["message_type"], "response.success")
         self.assertEqual(response["correlation_message_id"], "message-100")
+
+    def test_broker_personalizes_snapshot_for_active_operator_session(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        observer = broker.register_observer("bridge-ipad")
+        broker.set_active_operator_session(observer.session_id)
+
+        broker.publish_snapshot(_base_snapshot())
+
+        message = observer.queue.get_nowait()
+        self.assertEqual(message["message_type"], "state.snapshot")
+        self.assertEqual(message["payload"]["session"]["client_role"], "active_operator")
+        self.assertEqual(message["payload"]["active_operator"]["client_name"], "bridge-ipad")
 
     def test_observer_endpoints_reject_missing_token(self) -> None:
         broker = InMemoryObserverSessionBroker()
