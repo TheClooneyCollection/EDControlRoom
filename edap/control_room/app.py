@@ -48,11 +48,13 @@ from rich.markup import escape
 from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
+from textual.app import ScreenStackError
 from textual.containers import Horizontal, Vertical
 from textual.events import MouseScrollDown, MouseScrollUp
 from textual.widgets import Footer, Header, Input, OptionList, RichLog, Static
 
 from edap.config import AppConfig
+from edap.control_room.backend import ControlRoomBackend, LocalControlRoomBackend
 from edap.control_room import (
     bootstrap as _bootstrap,
     commands as _commands,
@@ -84,6 +86,13 @@ from edap.control_room.models import (
     RuntimeUIState,
     ShipState,
 )
+from edap.control_room.protocol.adapters import (
+    build_activity_log_entry,
+    build_announcement_event,
+)
+from edap.control_room.protocol.events import AnnouncementEvent
+from edap.control_room.protocol.sink import ControlRoomEventSink
+from edap.control_room.protocol.snapshot import ActivityLogEntry
 
 # Modules eligible for in-place hot reload via the `reload` command.
 # Order matters: leaf modules first, then modules that import from them.
@@ -135,6 +144,7 @@ _ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS = 10.0
 _JOURNAL_ARTIFACT_LOG_PATH = Path("artifacts/control-room.log")
 _JOURNAL_ARTIFACT_LOG_BUFFER_SIZE = 8192
 _JOURNAL_ARTIFACT_LOG_FLUSH_EVERY = 20
+_PROTOCOL_ANNOUNCEMENT_CACHE_LIMIT = 200
 
 _RoutineCancelled = _workers.RoutineCancelled
 _CancellationProxy = _workers.CancellationProxy
@@ -361,12 +371,14 @@ class ControlRoomApp(App[None]):
         *,
         activity_log_max_lines: int | None = None,
         version_source: VersionSource | None = None,
+        backend: ControlRoomBackend | None = None,
     ) -> None:
         super().__init__()
         self._ctx = ctx
         self._config: AppConfig = ctx.config
         self._config_path: Path = ctx.config_path
         self._config_loaded_from_example_fallback = ctx.used_example_config_fallback
+        self._default_command_placeholder = _DEFAULT_COMMAND_PLACEHOLDER
         self._journal_dir: Path = ctx.journal.effective_path  # type: ignore[assignment]
         self._market_path = self._journal_dir / "Market.json"
         self._ship = ShipState()
@@ -387,6 +399,9 @@ class ControlRoomApp(App[None]):
         self._journal_artifact_log_path = _JOURNAL_ARTIFACT_LOG_PATH
         self._journal_artifact_log_handle: IO[str] | None = None
         self._journal_artifact_log_pending_writes = 0
+        self._protocol_activity_log: list[ActivityLogEntry] = []
+        self._protocol_announcements: list[AnnouncementEvent] = []
+        self._protocol_external_event_sink: ControlRoomEventSink | None = None
         self._saved_state = ControlRoomState()
         self._replay_state = ReplayBrowserState()
         self._watcher_worker: Any | None = None
@@ -400,12 +415,26 @@ class ControlRoomApp(App[None]):
             default_placeholder=_DEFAULT_COMMAND_PLACEHOLDER,
             reloadable_modules=_RELOADABLE_MODULES,
         )
+        self._backend: ControlRoomBackend = backend or LocalControlRoomBackend(self)
+        self._view_snapshot = self._backend.current_snapshot()
 
     def __getattr__(self, name: str) -> Any:
         target = _facade.FACADE_METHOD_MAP.get(name)
         if target is None:
             raise AttributeError(name)
         return getattr(self._facade, target)
+
+    @property
+    def backend(self) -> ControlRoomBackend:
+        return self._backend
+
+    @property
+    def _protocol_event_sink(self) -> ControlRoomEventSink | None:
+        return self._protocol_external_event_sink
+
+    @_protocol_event_sink.setter
+    def _protocol_event_sink(self, sink: ControlRoomEventSink | None) -> None:
+        self._protocol_external_event_sink = sink
 
     @property
     def _haul_params(self) -> dict[str, str]:
@@ -640,6 +669,7 @@ class ControlRoomApp(App[None]):
         self._log_bindings_status()
         self._load_saved_state()
         self._log_startup_modes()
+        self._announce_startup_greeting()
         self._start_update_check()
         self._bootstrap_ship_state()
         self._load_market_json()
@@ -712,6 +742,9 @@ class ControlRoomApp(App[None]):
         state = "on" if self._instant_mode else "off"
         self._log(f"[dim]Instant mode {state} — control with: instant[/]")
 
+    def _announce_startup_greeting(self) -> None:
+        self._announce_tts(AnnouncementId.STARTUP_GREETING)
+
     def _start_update_check(self) -> None:
         if not self._config.control_room.check_for_updates:
             self._log_current_version(is_latest=None)
@@ -748,27 +781,93 @@ class ControlRoomApp(App[None]):
     # ── Rendering ──────────────────────────────────────────────────────────────
 
     def _refresh_status(self) -> None:
+        self._sync_view_snapshot()
         self.query_one("#status", Static).update(
-            Text.from_markup(_rendering.status_markup(self._ship))
+            Text.from_markup(_rendering.status_markup(self._view_ship_state()))
         )
 
     def _refresh_haul_stats(self) -> None:
+        self._sync_view_snapshot()
         widget = self.query_one("#haul", Static)
         widget.update(Text.from_markup(
             _rendering.haul_stats_markup(
-                self._haul_stats,
-                current_balance=self._ship.credits,
+                self._view_haul_stats(),
+                current_balance=self._view_snapshot.ship.credits,
                 now_fn=self._time_fn,
             )
         ))
 
     def _refresh_market(self) -> None:
+        self._sync_view_snapshot()
         self.query_one("#market", Static).update(
-            Text.from_markup(_rendering.market_markup(self._market, self._market_filter))
+            Text.from_markup(
+                _rendering.market_markup(
+                    self._view_market_data(),
+                    self._view_snapshot.market.market_filter_text,
+                )
+            )
         )
 
     def _activity_auto_follow_paused(self) -> bool:
-        return self.query_one("#activity", ActivityLog).auto_follow_paused
+        try:
+            return self.query_one("#activity", ActivityLog).auto_follow_paused
+        except ScreenStackError:
+            return False
+
+    def _sync_view_snapshot(self) -> None:
+        self._view_snapshot = self._backend.current_snapshot()
+
+    def _view_ship_state(self) -> ShipState:
+        ship = self._view_snapshot.ship
+        return ShipState(
+            commander=ship.commander_name,
+            ship_type=ship.ship_type,
+            system=ship.system_name,
+            station=ship.station_name,
+            status=ship.status,
+            fuel_level=ship.fuel_level,
+            fuel_capacity=ship.fuel_capacity,
+            credits=ship.credits,
+            cargo_count=ship.cargo_count,
+            cargo_capacity=ship.cargo_capacity,
+            cargo_inventory=list(ship.cargo_inventory),
+            target=ship.target_name,
+            destination_system=ship.destination_system,
+            destination_body=ship.destination_body,
+            destination_name=ship.destination_name,
+        )
+
+    def _view_haul_stats(self) -> HaulStats:
+        haul = self._view_snapshot.haul_session
+        return HaulStats(
+            station_1_buying=haul.station_1_buying,
+            station_2_buying=haul.station_2_buying,
+            station_1=haul.station_1,
+            station_2=haul.station_2,
+            active=haul.active,
+            clean_run_active=haul.clean_run_active,
+            waiting_for_station_1_departure=haul.waiting_for_station_1_departure,
+            resumed_mid_run=haul.resumed_mid_run,
+            docked_back_at_station_1=haul.docked_back_at_station_1,
+            current_run_started_at=haul.current_run_started_at,
+            current_run_elapsed_s=haul.current_run_elapsed_seconds,
+            current_run_profit=haul.current_run_profit,
+            completed_runs=haul.completed_runs,
+            accumulated_profit=haul.accumulated_profit,
+            last_run_profit=haul.last_run_profit,
+            last_run_elapsed_s=haul.last_run_elapsed_seconds,
+            total_run_elapsed_s=haul.total_run_elapsed_seconds,
+        )
+
+    def _view_market_data(self) -> MarketData:
+        market = self._view_snapshot.market
+        return MarketData(
+            station=market.station_name,
+            system=market.system_name,
+            timestamp=market.market_timestamp,
+            items=list(market.items),
+            locked=market.locked,
+        )
 
     def _refresh_activity_title(self) -> None:
         title = "ACTIVITY"
@@ -779,6 +878,11 @@ class ControlRoomApp(App[None]):
     def _log(self, msg: str) -> None:
         activity = self.query_one("#activity", ActivityLog)
         activity.write(_build_log_text(msg))
+        entry = build_activity_log_entry(msg)
+        self._protocol_activity_log.append(entry)
+        if len(self._protocol_activity_log) > self._activity_log_max_lines:
+            self._protocol_activity_log = self._protocol_activity_log[-self._activity_log_max_lines :]
+        self._backend.publish_activity_log(entry)
         self._refresh_activity_title()
 
     def _start_haul_stats(
@@ -807,6 +911,22 @@ class ControlRoomApp(App[None]):
         _haul_tracking.handle_haul_event(self, ev, station_before=station_before)
 
     def _announce_tts(self, message_id: AnnouncementId, /, **values: object) -> None:
+        render_announcement = getattr(self._tts, "render_announcement", None)
+        rendered = (
+            render_announcement(message_id, **values)
+            if callable(render_announcement)
+            else None
+        )
+        if rendered is not None:
+            announcement = build_announcement_event(
+                announcement_id=message_id.value,
+                message_text=rendered,
+                message_values=dict(values),
+            )
+            self._protocol_announcements.append(announcement)
+            if len(self._protocol_announcements) > _PROTOCOL_ANNOUNCEMENT_CACHE_LIMIT:
+                self._protocol_announcements = self._protocol_announcements[-_PROTOCOL_ANNOUNCEMENT_CACHE_LIMIT :]
+            self._backend.publish_announcement(announcement)
         self._tts.announce(message_id, **values)
 
     def _announce_tts_for_event(self, ev: dict[str, Any], *, station_before: str | None) -> None:
@@ -858,6 +978,42 @@ class ControlRoomApp(App[None]):
     def _selected_resume_entry(self) -> CommandHistoryEntry | None:
         return _replay.selected_resume_entry(self)
 
+    def _show_resume_picker(self) -> None:
+        self._backend.open_replay_browser()
+
+    def _refresh_resume_picker(self) -> None:
+        self._backend.refresh_replay_browser()
+
+    def _close_resume_picker(self) -> None:
+        self._backend.close_replay_browser()
+
+    def _resume_execute_selected(self) -> None:
+        entry = self._selected_resume_entry()
+        if entry is None:
+            return
+        self._close_resume_picker()
+        self._backend.replay_history_entry(entry, edit=False)
+
+    def _resume_execute_selected_immediate(self) -> None:
+        entry = self._selected_resume_entry()
+        if entry is None:
+            return
+        self._close_resume_picker()
+        self._backend.replay_history_entry(entry, edit=False, skip_delay=True)
+
+    def _resume_edit_selected(self) -> None:
+        entry = self._selected_resume_entry()
+        if entry is None:
+            return
+        self._close_resume_picker()
+        self._backend.replay_history_entry(entry, edit=True)
+
+    def _resume_toggle_default_selected(self) -> None:
+        entry = self._selected_resume_entry()
+        if entry is None:
+            return
+        self._backend.toggle_replay_default_haul(entry)
+
     def _update_resume_detail(self) -> None:
         _replay.update_resume_detail(self)
 
@@ -868,7 +1024,7 @@ class ControlRoomApp(App[None]):
         edit: bool,
         skip_delay: bool = False,
     ) -> None:
-        _replay.replay_history_entry(self, entry, edit=edit, skip_delay=skip_delay)
+        self._backend.replay_history_entry(entry, edit=edit, skip_delay=skip_delay)
 
     # ── Market JSON ────────────────────────────────────────────────────────────
 
@@ -1059,12 +1215,10 @@ class ControlRoomApp(App[None]):
             elif event.key == "backspace":
                 event.prevent_default()
                 if self._resume_filter:
-                    self._resume_filter = self._resume_filter[:-1]
-                    self._refresh_resume_picker()
+                    self._backend.set_replay_filter(self._resume_filter[:-1])
             elif event.character and event.character.isprintable() and len(event.character) == 1:
                 event.prevent_default()
-                self._resume_filter += event.character
-                self._refresh_resume_picker()
+                self._backend.set_replay_filter(self._resume_filter + event.character)
             return
         if self._haul_prompt_step or self._haul_confirm_buy_station or self._dest_prompt_destination:
             return  # don't interfere with multi-step haul prompts
@@ -1095,40 +1249,45 @@ class ControlRoomApp(App[None]):
         raw = event.value.strip()
         event.input.value = ""
 
-        if self._haul_prompt_step:
-            self._handle_haul_prompt(raw)
-            return
-        if self._haul_confirm_buy_station:
-            self._handle_haul_confirm_prompt(raw)
-            return
-        if self._dest_prompt_destination:
-            destination = self._dest_prompt_destination
-            parsed = self._parse_optional_nonnegative_float(
-                raw,
-                default=self._dest_prompt_settle_default or self._config.controls.galaxy_map_settle_seconds,
-                label="Galaxy-map settle seconds",
-            )
-            if parsed is None:
-                return
-            self._dest_prompt_destination = ""
-            self._dest_prompt_settle_default = None
-            raw_command = self._dest_prompt_raw_command
-            skip_delay = self._dest_prompt_skip_delay
-            self._dest_prompt_raw_command = ""
-            self._dest_prompt_skip_delay = False
-            self.query_one("#cmd", Input).placeholder = _DEFAULT_COMMAND_PLACEHOLDER
-            self._dispatch_dest(
-                destination,
-                parsed,
-                skip_delay=skip_delay,
-                raw_command=raw_command,
-            )
-            return
-
         if not raw:
             return
 
-        self._dispatch_command(raw)
+        self._backend.submit_input(raw)
+
+    def _dispatch_command(self, raw: str, *, skip_delay: bool | None = None) -> None:
+        self._backend.dispatch_command(raw, skip_delay=skip_delay)
+
+    def _dispatch_dest(
+        self,
+        destination: str,
+        galaxy_map_settle: float,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self._backend.dispatch_destination(
+            destination,
+            galaxy_map_settle,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+
+    def _dispatch_haul_loop(
+        self,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self._backend.dispatch_haul_loop(
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+
+    def _handle_haul_prompt(self, value: str) -> None:
+        self._backend.handle_haul_prompt(value)
+
+    def _handle_haul_confirm_prompt(self, value: str) -> None:
+        self._backend.handle_haul_confirm_prompt(value)
 
     def _parse_optional_nonnegative_float(self, raw: str, *, default: float, label: str) -> float | None:
         return _prompts.parse_optional_nonnegative_float(
@@ -1153,9 +1312,42 @@ class ControlRoomApp(App[None]):
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="ED AutoPilot Control Room — live TUI")
+    parser.add_argument("mode", nargs="?", choices=["serve", "connect"])
+    parser.add_argument("target", nargs="?", help="server host[:port] for connect mode")
     parser.add_argument("--config", default="config.toml")
     parser.add_argument("--market", metavar="FILTER", help="initial market filter (e.g. --market aluminium)")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--token", help="shared access token for serve/connect observer mode")
+    parser.add_argument("--client-name", help="observer client name for connect mode")
     args = parser.parse_args()
+
+    if args.mode == "serve":
+        from edap.control_room.server.serve import serve_observer_mode
+
+        if not args.token:
+            parser.error("serve requires --token")
+        serve_observer_mode(
+            config_path=args.config,
+            host=args.host,
+            port=args.port,
+            access_token=args.token,
+        )
+        return
+    if args.mode == "connect":
+        from edap.control_room.client import connect_observer_mode
+
+        if not args.target:
+            parser.error("connect requires a target like 192.168.1.50:8765")
+        if not args.token:
+            parser.error("connect requires --token")
+        connect_observer_mode(
+            config_path=args.config,
+            target=args.target,
+            access_token=args.token,
+            client_name=args.client_name,
+        )
+        return
 
     loaded = load_config_with_fallback(args.config)
     ctx = build_runtime_context(

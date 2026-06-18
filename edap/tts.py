@@ -13,6 +13,7 @@ from edap.config import TTSConfig
 
 
 class AnnouncementId(str, Enum):
+    STARTUP_GREETING = "startup_greeting"
     DESTINATION_SET = "destination_set"
     STATION_CLEARED = "station_cleared"
     HAUL_ABORTED = "haul_aborted"
@@ -208,18 +209,24 @@ class TTSAnnouncer:
         text = str(name).strip() if name is not None else ""
         self._commander_name = text or None
 
-    def announce(self, message_id: AnnouncementId, /, **values: object) -> None:
-        if self._speaker is None or message_id in self._disabled:
-            return
+    def render_announcement(self, message_id: AnnouncementId, /, **values: object) -> str | None:
         template = self._phrases.get(message_id)
         if not template:
-            return
+            return None
         normalized_values = {
             key: normalize_tts_value(key, value)
             for key, value in values.items()
         }
         rendered = template.format(title=self._resolve_title(), **normalized_values).strip()
         if not rendered or rendered == self._last_text:
+            return None
+        return rendered
+
+    def announce(self, message_id: AnnouncementId, /, **values: object) -> None:
+        if self._speaker is None or message_id in self._disabled:
+            return
+        rendered = self.render_announcement(message_id, **values)
+        if rendered is None:
             return
         self._last_text = rendered
         self._speaker.enqueue(rendered, collapse_key=message_id)
