@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import lru_cache
+import json
 from pathlib import Path
 import sys
 import tomllib
@@ -114,6 +115,7 @@ class ControlRoomConfig:
     command_delay_seconds: float
     status_refresh_seconds: float = 2.0
     check_for_updates: bool = True
+    home_system: str = ""
 
 
 @dataclass(frozen=True)
@@ -514,6 +516,79 @@ def validate_config(config: AppConfig) -> AppConfig:
     return config
 
 
+def save_home_system(path: Path | str, system_name: str) -> Path:
+    config_path = Path(path)
+    home_system = system_name.strip()
+    if not home_system:
+        raise ConfigError("Home system cannot be empty.")
+
+    if not config_path.exists():
+        config_path.write_text(_minimal_config_text(home_system), encoding="utf-8")
+        return config_path
+
+    existing = config_path.read_text(encoding="utf-8")
+    updated = _upsert_toml_string(existing, section="control_room", key="home_system", value=home_system)
+    config_path.write_text(updated, encoding="utf-8")
+    return config_path
+
+
+def _minimal_config_text(home_system: str) -> str:
+    return "\n".join((
+        "[paths]",
+        "",
+        "[controls]",
+        "",
+        "[screen]",
+        "",
+        "[runtime]",
+        "",
+        "[control_room]",
+        f"home_system = {_toml_basic_string(home_system)}",
+        "",
+    ))
+
+
+def _upsert_toml_string(content: str, *, section: str, key: str, value: str) -> str:
+    lines = content.splitlines(keepends=True)
+    section_header = f"[{section}]"
+    key_prefix = f"{key} = "
+    section_start: int | None = None
+    section_end = len(lines)
+
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if not (stripped.startswith("[") and stripped.endswith("]")):
+            continue
+        if stripped == section_header:
+            section_start = index
+            continue
+        if section_start is not None:
+            section_end = index
+            break
+
+    rendered = f"{key_prefix}{_toml_basic_string(value)}\n"
+
+    if section_start is None:
+        suffix = "" if not content or content.endswith("\n") else "\n"
+        spacer = "\n" if content.strip() else ""
+        return f"{content}{suffix}{spacer}[{section}]\n{rendered}"
+
+    for index in range(section_start + 1, section_end):
+        if lines[index].lstrip().startswith(f"{key} ="):
+            lines[index] = rendered
+            return "".join(lines)
+
+    insert_at = section_end
+    while insert_at > section_start + 1 and not lines[insert_at - 1].strip():
+        insert_at -= 1
+    lines.insert(insert_at, rendered)
+    return "".join(lines)
+
+
+def _toml_basic_string(value: str) -> str:
+    return json.dumps(value)
+
+
 def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     config_path = Path(path)
     if not config_path.exists():
@@ -712,6 +787,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             command_delay_seconds=_float(control_room, "command_delay_seconds", 5.0),
             status_refresh_seconds=_float(control_room, "status_refresh_seconds", 2.0),
             check_for_updates=_boolean(control_room, "check_for_updates", True),
+            home_system=_string(control_room, "home_system", ""),
         ),
         tts=TTSConfig(
             enabled=_boolean(tts, "enabled", _boolean(default_tts, "enabled", True)),

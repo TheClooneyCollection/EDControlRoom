@@ -39,6 +39,8 @@ EDControlRoom works by sending keyboard input to Elite Dangerous. After you fire
 - `multi_leg_haul <route.json | spansh-url>`
 - `dest <system>`
 - `set_dest <system>`
+- `home`
+- `home set <system>`
 
 ## Haul
 
@@ -107,6 +109,12 @@ Interrupt behavior during `haul` is special:
 - `commands`
 - `help [command]`
 - `q`, `quit`, `exit`
+
+## Home Routing
+
+- `home` reuses the saved `control_room.home_system` value and then runs the normal `dest` flow, including the galaxy-map settle prompt.
+- `home set <system>` updates that setting in the active config file so the next `home` command is one word.
+- If Control Room started from the default `config.example.toml` fallback because repo-root `config.toml` did not exist yet, `home set` creates a minimal repo-root `config.toml` instead of editing the shipped example file.
 
 ## Keybinds
 

@@ -19,6 +19,8 @@ Routine commands (type in the input bar):
     multi_leg_haul <route.json|spansh-url>   run a standalone multi-leg haul route
     dest <system>      open galaxy map and plot a route to the named system
     set_dest <system>  alias for dest
+    home               route to the configured home system
+    home set <system>  save the home system into config and use it later with `home`
 
 Market commands:
     market filter <name>   filter market panel by commodity name (e.g. market filter aluminium)
@@ -128,7 +130,7 @@ _STARTUP_BINDING_WARNING_IGNORED_ACTIONS = frozenset({
     "YawRightButton",
 })
 
-_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul load | multi_leg_haul <route> | dest <system> | market ... | reload | q"
+_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul load | multi_leg_haul <route> | dest <system> | home | market ... | reload | q"
 _ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS = 10.0
 _JOURNAL_ARTIFACT_LOG_PATH = Path("artifacts/control-room.log")
 _JOURNAL_ARTIFACT_LOG_BUFFER_SIZE = 8192
@@ -363,6 +365,8 @@ class ControlRoomApp(App[None]):
         super().__init__()
         self._ctx = ctx
         self._config: AppConfig = ctx.config
+        self._config_path: Path = ctx.config_path
+        self._config_loaded_from_example_fallback = ctx.used_example_config_fallback
         self._journal_dir: Path = ctx.journal.effective_path  # type: ignore[assignment]
         self._market_path = self._journal_dir / "Market.json"
         self._ship = ShipState()
@@ -1154,7 +1158,12 @@ def main() -> None:
     args = parser.parse_args()
 
     loaded = load_config_with_fallback(args.config)
-    ctx = build_runtime_context(loaded.config, actions=_ALL_ROUTINE_ACTIONS)
+    ctx = build_runtime_context(
+        loaded.config,
+        config_path=loaded.config_path,
+        used_example_config_fallback=loaded.used_example_config_fallback,
+        actions=_ALL_ROUTINE_ACTIONS,
+    )
     journal_dir = ctx.journal.effective_path
 
     if journal_dir is None:

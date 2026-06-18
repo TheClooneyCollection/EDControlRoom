@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from edap.capture import build_capture_layout
-from edap.config import ConfigError, default_runtime_platform, load_config
+from edap.config import ConfigError, default_runtime_platform, load_config, save_home_system
 
 
 def _write_config(path: Path, content: str) -> None:
@@ -70,6 +70,7 @@ class LoadConfigTests(unittest.TestCase):
             self.assertEqual(config.control_room.command_delay_seconds, 5.0)
             self.assertEqual(config.control_room.status_refresh_seconds, 2.0)
             self.assertTrue(config.control_room.check_for_updates)
+            self.assertEqual(config.control_room.home_system, "")
             self.assertTrue(config.tts.enabled)
             self.assertEqual(config.tts.title_mode, "commander")
             self.assertEqual(config.tts.title, "commander")
@@ -150,6 +151,65 @@ dest_usage = "Usage: dest <system or station name>"
                 config.messages.templates["invalid_amount"],
                 "Invalid amount. Use a positive integer or MAX.",
             )
+
+    def test_loads_control_room_home_system_override(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            _write_config(
+                config_path,
+                """
+[paths]
+
+[controls]
+
+[screen]
+
+[runtime]
+
+[control_room]
+home_system = "Achenar"
+""".strip(),
+            )
+
+            config = load_config(config_path)
+
+            self.assertEqual(config.control_room.home_system, "Achenar")
+
+    def test_save_home_system_updates_existing_control_room_section(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            _write_config(
+                config_path,
+                """
+[paths]
+
+[controls]
+
+[screen]
+
+[runtime]
+
+[control_room]
+command_delay_seconds = 5.0
+""".strip() + "\n",
+            )
+
+            save_home_system(config_path, "Shinrarta Dezhra")
+
+            saved = config_path.read_text(encoding="utf-8")
+            self.assertIn('home_system = "Shinrarta Dezhra"', saved)
+            self.assertIn("command_delay_seconds = 5.0", saved)
+            self.assertEqual(load_config(config_path).control_room.home_system, "Shinrarta Dezhra")
+
+    def test_save_home_system_creates_minimal_valid_config_when_missing(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+
+            save_home_system(config_path, "Sol")
+
+            self.assertTrue(config_path.exists())
+            config = load_config(config_path)
+            self.assertEqual(config.control_room.home_system, "Sol")
 
     def test_legacy_flat_error_message_override_still_loads(self) -> None:
         with TemporaryDirectory() as temp_dir:

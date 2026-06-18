@@ -58,6 +58,8 @@ class RuntimeContext:
     input_controller: InputController | None
     screen_capture: ScreenCapture | None
     binding_lookup: BindingLookup | None = None
+    config_path: Path = DEFAULT_CONFIG_PATH
+    used_example_config_fallback: bool = False
 
 
 def build_game_paths(platform_name: str) -> GamePaths | None:
@@ -101,6 +103,8 @@ def load_config_with_fallback(path: Path | str = DEFAULT_CONFIG_PATH) -> LoadedC
 def build_runtime_context(
     config: AppConfig,
     *,
+    config_path: Path | str = DEFAULT_CONFIG_PATH,
+    used_example_config_fallback: bool = False,
     actions: Iterable[str] | None = None,
     include_screen_capture: bool = False,
 ) -> RuntimeContext:
@@ -115,6 +119,8 @@ def build_runtime_context(
 
     return RuntimeContext(
         config=config,
+        config_path=Path(config_path),
+        used_example_config_fallback=used_example_config_fallback,
         game_paths=game_paths,
         journal=journal,
         bindings=bindings,

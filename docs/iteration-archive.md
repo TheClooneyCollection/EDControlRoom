@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `20`
-- Latest generated iteration number: `153`
+- Generated iteration count: `21`
+- Latest generated iteration number: `154`
 
 ## Iteration 134
 
@@ -570,3 +570,32 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - If live use shows confusion around one-sided haul profiles or surface stops, tighten the `haul.toml` example notes with a short “common edits” section.
+
+## Iteration 154
+
+- When: `2026-06-18 10:58`
+- Area: `control-room`
+- Title: `home-command-config`
+- Source: [2026-06-18-10-58_control-room_home-command-config.md](iteration-logs/2026-06-18-10-58_control-room_home-command-config.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `home-command-config`
+- Started: `2026-06-18 10:58`
+
+## Summary
+
+- Added a reusable `home` command that routes to `control_room.home_system`, plus `home set <system>` to persist that destination into config from Control Room itself.
+
+## Changes
+
+- Extended `ControlRoomConfig` with `home_system`, added config load coverage, and implemented a narrow TOML upsert helper that updates or creates a valid repo-root `config.toml` when the app was running from the default example-config fallback.
+- Routed `home` through the existing `dest` flow so the normal galaxy-map settle prompt, history logging, and navigation behavior stay shared.
+- Updated command help, placeholder text, `config.example.toml`, quickstart/operator docs, and README so the new route shortcut is discoverable.
+- Added command/config tests for `home`, `home set`, existing-config updates, and fallback-config creation.
+- Verified with `uv run python3 -m unittest discover -s tests` (`411` tests, `0.172s`).
+
+## Follow-ups
+
+- Live-check the new `home` shortcut and `home set` config write path against a real CrossOver-backed operator setup.

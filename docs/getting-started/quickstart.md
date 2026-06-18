@@ -87,6 +87,8 @@ For day-to-day usage, haul behavior, replay/history, and interrupt semantics, se
 
 If you want a reusable two-station haul setup in a text file, edit repo-root `haul.toml` and use `haul load` in Control Room. See the example in [../operators/control-room.md](../operators/control-room.md).
 
+If you want a reusable destination, run `home set <system>` once in Control Room. That writes `control_room.home_system` into config so later you can route with plain `home`.
+
 ## If Something Is Not Working
 
 Use these checks only when you need to troubleshoot input, journal detection, or game integration.

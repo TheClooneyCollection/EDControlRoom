@@ -67,6 +67,12 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
         aliases=("set_dest",),
     ),
     CommandHelp(
+        name="home",
+        usage="home | home set <system>",
+        summary="Route to your saved home system, or update that saved home system in config.",
+        detail="Plain `home` behaves like `dest <home system>` using `control_room.home_system` from config. `home set <system>` writes that setting into the active config file; when control room started from the default example fallback, it creates repo-root `config.toml` instead of editing `config.example.toml`.",
+    ),
+    CommandHelp(
         name="market",
         usage="market | market clear | market filter <name> | market lock | market unlock",
         summary="Control the market panel filter and lock state.",

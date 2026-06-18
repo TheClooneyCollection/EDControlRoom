@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -100,6 +102,8 @@ def _make_context(
     journal_dir: Path,
     *,
     activity_log_max_lines: int = 2000,
+    config_path: Path | None = None,
+    used_example_config_fallback: bool = False,
 ) -> RuntimeContext:
     resolved = ResolvedPath(
         configured={"path": str(journal_dir), "status": "ok", "reason": "test journal dir"},
@@ -117,6 +121,8 @@ def _make_context(
         input_controller=None,
         screen_capture=None,
         binding_lookup=None,
+        config_path=config_path or journal_dir / "config.toml",
+        used_example_config_fallback=used_example_config_fallback,
     )
 
 
@@ -341,6 +347,13 @@ class ControlRoomCommandTests(unittest.TestCase):
         output = "\n".join(self.app.logged)
         self.assertIn("haul load", output)
         self.assertIn("haul.toml", output)
+
+    def test_help_home_mentions_config_update_flow(self) -> None:
+        self.app._dispatch_command("help home")
+
+        output = "\n".join(self.app.logged)
+        self.assertIn("home set <system>", output)
+        self.assertIn("config.toml", output)
 
     def test_quit_command_exits_immediately_without_active_routine(self) -> None:
         self.app._dispatch_command("quit")
@@ -1674,6 +1687,93 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertIsNotNone(entry)
         self.assertEqual(entry.command, "help")
 
+    def test_home_without_saved_system_reports_error(self) -> None:
+        self.app._dispatch_command("home")
+
+        output = "\n".join(self.app.logged)
+        self.assertIn("Home system is not set", output)
+        entry = self._last_history()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.command, "home")
+        self.assertEqual(entry.raw, "home")
+
+    def test_home_routes_to_saved_system(self) -> None:
+        self.app._config = replace(
+            self.app._config,
+            control_room=replace(
+                self.app._config.control_room,
+                home_system="Achenar",
+            ),
+        )
+        captured: dict[str, object] = {}
+
+        def fake_cmd_dest(app, destination, *, skip_delay=False, raw_command=None):
+            captured["destination"] = destination
+            captured["skip_delay"] = skip_delay
+            captured["raw_command"] = raw_command
+
+        with patch("edap.control_room.routines_nav.cmd_dest", new=fake_cmd_dest):
+            self.app._dispatch_command("home")
+
+        self.assertEqual(captured["destination"], "Achenar")
+        self.assertEqual(captured["raw_command"], "home")
+
+    def test_home_set_updates_config_file_and_runtime_config(self) -> None:
+        config_path = Path(self.tmpdir.name) / "config.toml"
+        config_path.write_text(
+            """
+[paths]
+
+[controls]
+
+[screen]
+
+[runtime]
+""".strip() + "\n",
+            encoding="utf-8",
+        )
+        self.app._config_path = config_path
+
+        self.app._dispatch_command("home set Shinrarta Dezhra")
+
+        self.assertEqual(self.app._config.control_room.home_system, "Shinrarta Dezhra")
+        saved = config_path.read_text(encoding="utf-8")
+        self.assertIn('home_system = "Shinrarta Dezhra"', saved)
+        entry = self._last_history()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.command, "home")
+        self.assertEqual(entry.params, {"mode": "set", "system": "Shinrarta Dezhra"})
+
+    def test_home_set_creates_repo_config_when_running_from_example_fallback(self) -> None:
+        original_cwd = Path.cwd()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            config_path = temp_root / "config.example.toml"
+            config_path.write_text(
+                """
+[paths]
+
+[controls]
+
+[screen]
+
+[runtime]
+""".strip() + "\n",
+                encoding="utf-8",
+            )
+            self.app._config_path = config_path
+            self.app._config_loaded_from_example_fallback = True
+
+            try:
+                os.chdir(temp_root)
+                self.app._dispatch_command("home set Sol")
+            finally:
+                os.chdir(original_cwd)
+
+            created = temp_root / "config.toml"
+            self.assertTrue(created.exists())
+            self.assertIn('home_system = "Sol"', created.read_text(encoding="utf-8"))
+
     def test_history_alias_opens_replay_picker(self) -> None:
         self.app._saved_state.history = [
             CommandHistoryEntry(raw="dock", command="dock", timestamp="1"),
@@ -1816,6 +1916,8 @@ class ControlRoomDispatchTests(unittest.TestCase):
             input_controller=None,
             screen_capture=None,
             binding_lookup=build_binding_lookup(bindings={}, actions=[]),
+            config_path=self.app._ctx.config_path,
+            used_example_config_fallback=self.app._ctx.used_example_config_fallback,
         )
 
         self.app._log_bindings_status()
@@ -1845,6 +1947,8 @@ class ControlRoomDispatchTests(unittest.TestCase):
             input_controller=None,
             screen_capture=None,
             binding_lookup=lookup,
+            config_path=self.app._ctx.config_path,
+            used_example_config_fallback=self.app._ctx.used_example_config_fallback,
         )
 
         self.app._log_bindings_status()
@@ -1884,6 +1988,8 @@ class ControlRoomDispatchTests(unittest.TestCase):
             input_controller=None,
             screen_capture=None,
             binding_lookup=lookup,
+            config_path=self.app._ctx.config_path,
+            used_example_config_fallback=self.app._ctx.used_example_config_fallback,
         )
 
         self.app._log_bindings_status()
@@ -1919,6 +2025,8 @@ class ControlRoomDispatchTests(unittest.TestCase):
             input_controller=None,
             screen_capture=None,
             binding_lookup=lookup,
+            config_path=self.app._ctx.config_path,
+            used_example_config_fallback=self.app._ctx.used_example_config_fallback,
         )
 
         self.app._log_bindings_status()

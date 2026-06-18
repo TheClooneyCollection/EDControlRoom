@@ -1,8 +1,11 @@
 """Command dispatch and the simple, no-routine commands."""
 from __future__ import annotations
 
+from dataclasses import replace
+
 from rich.markup import escape
 
+from edap.config import DEFAULT_CONFIG_PATH, save_home_system
 from edap.control_room import error_text
 from edap.control_room.help import CONTROL_ROOM_COMMAND_INDEX, CONTROL_ROOM_COMMANDS
 from edap.control_room.history import now_iso
@@ -62,6 +65,22 @@ def dispatch(app: CommandHost, raw: str, *, skip_delay_override: bool | None = N
             app._log(f"[red]{escape(error_text.render(app._config, 'dest_usage'))}[/]")
         else:
             app._cmd_dest(raw_rest, skip_delay=skip_delay, raw_command=raw)
+    elif verb == "home":
+        if not raw_rest:
+            cmd_home(app, raw=raw, skip_delay=skip_delay)
+        elif raw_rest.lower().startswith("set "):
+            system_name = raw_rest[4:].strip()
+            cmd_home_set(app, system_name, raw=raw)
+        else:
+            app._record_history_entry(
+                CommandHistoryEntry(
+                    raw=raw,
+                    command="home",
+                    params={"value": raw_rest},
+                    timestamp=now_iso(),
+                )
+            )
+            app._log(f"[red]{escape(error_text.render(app._config, 'home_usage'))}[/]")
     elif verb == "market":
         app._record_history_entry(CommandHistoryEntry(raw=raw, command="market", params={"value": raw_rest}, timestamp=now_iso()))
         cmd_market(app, raw_rest)
@@ -92,6 +111,45 @@ def dispatch(app: CommandHost, raw: str, *, skip_delay_override: bool | None = N
             )
         )
         app._log(f"[dim]Unknown command: {escape(raw)}[/]")
+
+
+def cmd_home(app: CommandHost, *, raw: str, skip_delay: bool) -> None:
+    home_system = app._config.control_room.home_system.strip()
+    if not home_system:
+        app._record_history_entry(CommandHistoryEntry(raw=raw, command="home", timestamp=now_iso()))
+        app._log(f"[red]{escape(error_text.render(app._config, 'home_not_set'))}[/]")
+        return
+    app._cmd_dest(home_system, skip_delay=skip_delay, raw_command=raw)
+
+
+def cmd_home_set(app: CommandHost, system_name: str, *, raw: str) -> None:
+    if not system_name:
+        app._record_history_entry(CommandHistoryEntry(raw=raw, command="home", timestamp=now_iso()))
+        app._log(f"[red]{escape(error_text.render(app._config, 'home_usage'))}[/]")
+        return
+
+    target_path = (
+        app._config_path.with_name(DEFAULT_CONFIG_PATH.name)
+        if app._config_loaded_from_example_fallback
+        else app._config_path
+    )
+    saved_path = save_home_system(target_path, system_name)
+    app._config = replace(
+        app._config,
+        control_room=replace(app._config.control_room, home_system=system_name),
+    )
+    app._record_history_entry(
+        CommandHistoryEntry(
+            raw=raw,
+            command="home",
+            params={"mode": "set", "system": system_name},
+            timestamp=now_iso(),
+        )
+    )
+    app._log(
+        f"[green]Home system saved:[/] [bold]{escape(system_name)}[/] "
+        f"[dim]({escape(str(saved_path))})[/]"
+    )
 
 
 def cmd_commands(app: CommandHost) -> None:

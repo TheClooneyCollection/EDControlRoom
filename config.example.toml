@@ -20,6 +20,8 @@ command_delay_seconds = 5.0
 status_refresh_seconds = 2.0
 # Check the latest GitHub release on startup and log a gentle notice when an update exists.
 check_for_updates = true
+# Optional reusable destination for the `home` command and `home set <system>` updates.
+home_system = ""
 
 [tts]
 enabled = true
