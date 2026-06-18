@@ -1,5 +1,6 @@
 # Docs Process Status
 ## Current
+- `AGENTS.md` now treats `0.3s` as the full-suite runtime budget for `uv run python3 -m unittest discover -s tests`; only slower runs need the follow-up timing report.
 - `AGENTS.md` now requires `docs/iteration-archive.md` refresh whenever iteration logs change before commit/push/PR, and delegated-agent slices must be committed on their own branch before a parent push or PR depends on them.
 - The repo now ships as rolling updates on `main`; do not assume a long-lived `dev` branch or promotion PR path in docs/process guidance.
 - Iteration logs should now be created with `uv run python3 tools/iteration_logs.py new "<area>" "<title>"` and validated with `uv run python3 tools/iteration_logs.py validate` before commits, pushes, and PRs so malformed filenames do not break archive generation.
