@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `26`
-- Latest generated iteration number: `159`
+- Generated iteration count: `30`
+- Latest generated iteration number: `163`
 
 ## Iteration 134
 
@@ -320,6 +320,38 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 ## Iteration 145
 
+- When: `2026-06-15 14:42`
+- Area: `control-room`
+- Title: `client-server-protocol-draft`
+- Source: [2026-06-15-14-42_control-room_client-server-protocol-draft.md](iteration-logs/2026-06-15-14-42_control-room_client-server-protocol-draft.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `client-server-protocol-draft`
+- Started: `2026-06-15 14:42`
+
+## Summary
+
+- Drafted the first Control Room client/server protocol around HTTP plus WebSocket for LAN use, with browser-compatible transport, full-word wire property names, and an explicit one-operator-plus-observers session model.
+
+## Changes
+
+- Added `docs/design/0002-control-room-client-server-protocol.md` with transport choice, topology, CLI direction, message vocabulary, payload contracts, and LAN/auth constraints.
+- Added `docs/schemas/control_room_message.schema.json` for the versioned JSON envelope and initial command, event, state, and response payload families, including `client_role`, active-operator change events, announcement streaming, and a concrete `state.snapshot` shape mapped to current Control Room models.
+- Added `docs/plans/0007-control-room-client-server-refactor.md` plus the first `edap/control_room/protocol/` Python types and `snapshot_from_app()` serializer with focused tests.
+- Wired `ControlRoomApp._log()` and `ControlRoomApp._announce_tts()` into protocol-native activity-log and announcement caches so the future server path can stream existing operator outputs without changing UI behavior.
+- Added a thin `ControlRoomEventSink` shim, an in-memory observer session broker, a headless runtime host, a Starlette observer server surface, and `control_room serve` wired to observer mode with tested HTTP/WebSocket endpoints.
+- Updated control-room handoff status so the next session can resume from the protocol direction instead of rediscovering it.
+
+## Follow-ups
+
+- Extend the first serializer so replay selection and announcement history come from a real server-side state cache instead of direct app-owned lists.
+- Add authentication and a concrete `connect` client path on top of the observer server surface.
+- Decide whether the active operator may be explicitly transferred or only replaced by disconnect/reconnect in the first implementation.
+
+## Iteration 146
+
 - When: `2026-06-15 14:52`
 - Area: `haul`
 - Title: `optional-single-sided-haul`
@@ -346,7 +378,7 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Live-test a station-1-only and station-2-only haul loop in-game to confirm menu timing, cargo detection, and resume semantics match the simulated path.
 
-## Iteration 146
+## Iteration 147
 
 - When: `2026-06-15 15:29`
 - Area: `haul`
@@ -374,7 +406,7 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Live-test replay/edit of a saved haul entry in the real Textual UI to confirm the prefilled command box feels right and does not introduce focus/cursor quirks.
 
-## Iteration 147
+## Iteration 148
 
 - When: `2026-06-15 16:00`
 - Area: `ci-release`
@@ -402,7 +434,39 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - If iteration logs change in a PR, refresh `docs/iteration-archive.md` locally before push so the `Tests` workflow passes.
 
-## Iteration 148
+## Iteration 149
+
+- When: `2026-06-15 18:14`
+- Area: `control-room`
+- Title: `observer-auth-and-connect`
+- Source: [2026-06-15-18-14_control-room_observer-auth-and-connect.md](iteration-logs/2026-06-15-18-14_control-room_observer-auth-and-connect.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `observer-auth-and-connect`
+- Started: `2026-06-15 18:14`
+
+## Summary
+
+- Added shared-token authentication to the observer HTTP/WebSocket surface and a first observer-only `control_room connect` client that fetches authenticated snapshots, subscribes to the live session stream, prints activity/announcement events, and replays TTS locally from streamed announcement identifiers.
+
+## Changes
+
+- Added `ObserverServerAuth` plus `SharedAccessTokenAuth` in `edap/control_room/server/auth.py`.
+- Protected `GET /capabilities`, `GET /snapshot`, and `WS /session`; left `GET /health` open for liveness probes.
+- Extended `control_room serve` to require `--token`.
+- Added `edap/control_room/client/connect.py` and CLI wiring for `control_room connect <host>:<port> --token ...`.
+- Added client-target parsing tests and auth-aware server tests.
+- Updated the protocol design note and control-room handoff status to reflect the concrete auth/connect behavior.
+
+## Follow-ups
+
+- Replace the thin observer CLI with the real Textual UI once the local-backend/remote-backend seam exists.
+- Move session/client state ownership out of app-local caches and into a server-owned session/state layer.
+- Add active-operator command routing and role enforcement after observer mode proves stable.
+
+## Iteration 150
 
 - When: `2026-06-15 18:15`
 - Area: `haul`
@@ -432,7 +496,39 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - Live-check an actual settlement loop to decide whether the next iteration should automate any post-landing settlement UI or keep the current explicit handoff/resume model.
 - Validate a real multi-jump haul route in-game to confirm the final-system-only nav-panel open timing feels correct with journal latency under CrossOver.
 
-## Iteration 149
+## Iteration 151
+
+- When: `2026-06-15 18:20`
+- Area: `control-room`
+- Title: `local-backend-seam`
+- Source: [2026-06-15-18-20_control-room_local-backend-seam.md](iteration-logs/2026-06-15-18-20_control-room_local-backend-seam.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `local-backend-seam`
+- Started: `2026-06-15 18:20`
+
+## Summary
+
+- Added the first always-present local backend seam for embedded Control Room mode, moved snapshot/event subscription into `LocalControlRoomBackend`, switched the main status/haul/market panels to render from backend snapshots, and routed core operator input back through backend intent methods while keeping the old external event sink hook as a compatibility passthrough for observer transport.
+
+## Changes
+
+- Added `edap/control_room/backend.py` with `ControlRoomBackend` and `LocalControlRoomBackend`.
+- `ControlRoomApp` now always owns a local backend and routes activity-log / announcement publication through it.
+- The status, haul, and market panels now refresh from backend snapshots rather than directly rendering the live `_ship`, `_haul_stats`, and `_market` fields.
+- Command submission, prompt confirmation, destination dispatch, and haul-loop launch now route through backend intent methods instead of direct app-private dispatch calls from the UI layer.
+- Preserved `_protocol_event_sink` as a setter/getter shim backed by `_protocol_external_event_sink` so the headless observer server path keeps working unchanged.
+- Added focused tests covering local backend event subscription, external sink passthrough, snapshot-driven panel rendering, and backend-routed command dispatch.
+- Updated the control-room handoff and refactor plan to reflect the new backend seam.
+
+## Follow-ups
+
+- Move replay/history flows and the remaining UI actions onto the backend seam so local and remote clients can share the same dispatch surface.
+- Replace the thin observer CLI with the real Textual UI once the remote backend exists.
+
+## Iteration 152
 
 - When: `2026-06-15 18:22`
 - Area: `docs`
@@ -459,7 +555,7 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Keep the workflow docs aligned with CI behavior whenever archive generation or delegated-agent publish rules change again.
 
-## Iteration 150
+## Iteration 153
 
 - When: `2026-06-18 06:54`
 - Area: `haul`
@@ -488,7 +584,35 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Live-validate the log hold mode against larger cargo holds to tune operator-facing defaults before switching away from linear.
 
-## Iteration 151
+## Iteration 154
+
+- When: `2026-06-18 06:54`
+- Area: `control-room`
+- Title: `replay-backend-intents`
+- Source: [2026-06-18-06-54_control-room_replay-backend-intents.md](iteration-logs/2026-06-18-06-54_control-room_replay-backend-intents.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `replay-backend-intents`
+- Started: `2026-06-18 06:54`
+
+## Summary
+
+- Moved replay-browser actions onto the backend seam so the Textual app no longer drives replay execution/edit/default-haul actions through replay-specific app-private helpers.
+
+## Changes
+
+- Extended `ControlRoomBackend` / `LocalControlRoomBackend` with replay-browser intents: open, close, refresh, filter update, replay selected history entry, and toggle default haul from a history entry.
+- Added explicit replay wrapper methods on `ControlRoomApp` so `action_open_history()` and replay-mode key handling now go through the backend instead of `__getattr__`-resolved facade methods.
+- Added focused protocol tests proving history-open and selected replay execution route through the backend seam.
+
+## Follow-ups
+
+- Move command-history/session ownership out of app-local state so replay/history snapshots can come from a server-owned session.
+- Replace the thin observer `connect` client with a real `RemoteControlRoomBackend` that can drive the existing Textual UI.
+
+## Iteration 155
 
 - When: `2026-06-18 07:28`
 - Area: `haul`
@@ -516,7 +640,7 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Live-validate the default `301t+` log segment against real large-capacity buys to see whether the post-300 drop from the linear segment should be softened.
 
-## Iteration 152
+## Iteration 156
 
 - When: `2026-06-18 07:36`
 - Area: `haul`
@@ -544,7 +668,7 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Live-validate the `haul load` flow in Control Room against a real edited `haul.toml` profile to confirm the operator-facing log wording and launch ergonomics.
 
-## Iteration 153
+## Iteration 157
 
 - When: `2026-06-18 10:49`
 - Area: `docs`
@@ -571,7 +695,7 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - If live use shows confusion around one-sided haul profiles or surface stops, tighten the `haul.toml` example notes with a short “common edits” section.
 
-## Iteration 154
+## Iteration 158
 
 - When: `2026-06-18 10:58`
 - Area: `control-room`
@@ -600,7 +724,7 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Live-check the new `home` shortcut and `home set` config write path against a real CrossOver-backed operator setup.
 
-## Iteration 155
+## Iteration 159
 
 - When: `2026-06-18 11:12`
 - Area: `docs`
@@ -628,7 +752,7 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Run `uv sync`, validate the full unittest suite, refresh `docs/iteration-archive.md`, and publish the GitHub releases for the backfilled tags.
 
-## Iteration 156
+## Iteration 160
 
 - When: `2026-06-18 11:19`
 - Area: `control-room`
@@ -656,7 +780,7 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Live-check that `home set` picks the expected system after bootstrap on a real session, especially when Control Room inferred location from `Status.json` or market state rather than a fresh jump/location journal event.
 
-## Iteration 157
+## Iteration 161
 
 - When: `2026-06-18 11:34`
 - Area: `docs`
@@ -683,7 +807,7 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - If the suite starts trending toward `0.3s`, revisit consolidation or targeted test-speed cleanup before raising the threshold again.
 
-## Iteration 158
+## Iteration 162
 
 - When: `2026-06-18 12:22`
 - Area: `haul`
@@ -719,7 +843,7 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 -
 
-## Iteration 159
+## Iteration 163
 
 - When: `2026-06-18 12:25`
 - Area: `docs`
