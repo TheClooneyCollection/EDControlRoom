@@ -43,11 +43,46 @@ EDControlRoom works by sending keyboard input to Elite Dangerous. After you fire
 ## Haul
 
 - `haul [commodity]` runs the active two-way haul loop used by `run_routine.py --routine haul_loop`
+- `haul load [path]` loads repo-root `haul.toml` by default, or a custom TOML path if you provide one
 - haul is aimed at commanders who want the station-side repetition handled for them: after a drop near station it requests docking, runs station services, buys or sells cargo, refuels, repairs, routes the next leg, launches, clears mass lock, and primes the FSD
 - haul does not auto-align for the next jump; after station clearance it uses TTS to call the commander by title or name and announce that the ship is ready to jump as the handoff cue
 - haul resumes from current journal and sidecar state rather than assuming a fresh start
 - one default haul setup can be saved and reused across restarts
 - `replay` / `Ctrl-R` is the quickest way to relaunch recent haul commands or rerun a saved pattern without retyping it
+
+### `haul.toml` Example
+
+If you want one text-editable haul profile instead of walking through the interactive prompt each time, edit repo-root `haul.toml` and run:
+
+```sh
+haul load
+```
+
+Example:
+
+```toml
+[haul]
+galaxy_map_settle = 2.0
+dock_timeout = 600.0
+
+[haul.station_1]
+buying = "Aluminium"
+name = "Pawelczyk Dock"
+system = "Sol"
+on_land = false
+
+[haul.station_2]
+buying = "Bertrandite"
+name = "Trevithick Dock"
+system = "Achenar"
+on_land = false
+```
+
+Notes:
+
+- `buying` is optional on either side, but at least one station must have a buy cargo configured.
+- `on_land = true` tells haul to hand off after destination-system `SupercruiseExit` so you can finish a surface approach and resume after landing.
+- `haul load some-other-file.toml` works if you want multiple named route files.
 
 ## Multi-Leg Haul
 

@@ -85,6 +85,8 @@ python control_room.py
 
 For day-to-day usage, haul behavior, replay/history, and interrupt semantics, see [../operators/control-room.md](../operators/control-room.md).
 
+If you want a reusable two-station haul setup in a text file, edit repo-root `haul.toml` and use `haul load` in Control Room. See the example in [../operators/control-room.md](../operators/control-room.md).
+
 ## If Something Is Not Working
 
 Use these checks only when you need to troubleshoot input, journal detection, or game integration.
