@@ -97,7 +97,7 @@ def build_observer_server_app(
                     },
                 )
             )
-            await websocket.send_json(protocol_message("state.snapshot", asdict(merged_snapshot)))
+            broker.publish_snapshot(snapshot_provider())
             while True:
                 message = await observer.queue.get()
                 await websocket.send_json(protocol_message(message["message_type"], message["payload"]))
@@ -105,6 +105,7 @@ def build_observer_server_app(
             pass
         finally:
             broker.unregister(observer.session_id)
+            broker.publish_snapshot(snapshot_provider())
 
     return Starlette(
         routes=[

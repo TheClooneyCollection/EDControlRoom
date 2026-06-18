@@ -417,6 +417,7 @@ class ControlRoomApp(App[None]):
         )
         self._backend: ControlRoomBackend = backend or LocalControlRoomBackend(self)
         self._view_snapshot = self._backend.current_snapshot()
+        self._backend_event_unsubscribe: Callable[[], None] | None = None
 
     def __getattr__(self, name: str) -> Any:
         target = _facade.FACADE_METHOD_MAP.get(name)
@@ -655,6 +656,10 @@ class ControlRoomApp(App[None]):
         yield Footer()
 
     def on_mount(self) -> None:
+        self._configure_screen_widgets()
+        self._mount_local_runtime()
+
+    def _configure_screen_widgets(self) -> None:
         self.title = "ED Control Room"
         self.query_one("#status", Static).border_title = "SHIP STATUS"
         self.query_one("#activity", ActivityLog).configure_auto_follow(
@@ -665,6 +670,8 @@ class ControlRoomApp(App[None]):
         self.query_one("#resume-browser", Vertical).border_title = "REPLAY HISTORY"
         self.query_one("#haul", Static).border_title = "HAUL"
         self.query_one("#market", Static).border_title = "MARKET"
+
+    def _mount_local_runtime(self) -> None:
         self._build_controls()
         self._log_bindings_status()
         self._load_saved_state()
@@ -680,6 +687,11 @@ class ControlRoomApp(App[None]):
         self.set_interval(0.1, self._drain_pending_sigint)
         self.set_focus(self.query_one("#cmd", Input))
         self._update_resume_detail()
+
+    def on_unmount(self) -> None:
+        if self._backend_event_unsubscribe is not None:
+            self._backend_event_unsubscribe()
+            self._backend_event_unsubscribe = None
 
     # ── Setup ──────────────────────────────────────────────────────────────────
 
@@ -816,6 +828,66 @@ class ControlRoomApp(App[None]):
 
     def _sync_view_snapshot(self) -> None:
         self._view_snapshot = self._backend.current_snapshot()
+        self._apply_view_snapshot_state()
+
+    def _apply_view_snapshot_state(self) -> None:
+        snapshot = self._view_snapshot
+        self._runtime_state.routine_active = snapshot.ui_state.routine_active
+        self._runtime_state.active_routine_name = snapshot.ui_state.active_routine_name
+        self._runtime_state.haul_stop_requested = snapshot.ui_state.haul_stop_requested
+        self._runtime_state.verbose_controls = snapshot.ui_state.verbose_controls
+        self._runtime_state.instant_mode = snapshot.ui_state.instant_mode
+        self._runtime_state.shutdown_requested = snapshot.ui_state.shutdown_requested
+        self._runtime_state.shutdown_finalized = snapshot.ui_state.shutdown_finalized
+        self._saved_state.default_haul = dict(snapshot.command_history.default_haul)
+        self._saved_state.history = [
+            CommandHistoryEntry(
+                raw=entry.raw_command,
+                command=entry.command_name,
+                params={str(key): str(value) for key, value in entry.arguments.items()},
+                timestamp=entry.timestamp,
+            )
+            for entry in snapshot.command_history.history_entries
+        ]
+        self._history_draft = snapshot.command_history.draft_command
+        self._resume_filter = snapshot.command_history.replay_filter_text
+        self._prompt_state.haul_params = dict(snapshot.prompt_state.haul_parameters)
+        self._prompt_state.haul_prompt_defaults = dict(snapshot.prompt_state.haul_prompt_defaults)
+        self._prompt_state.haul_prompt_step = snapshot.prompt_state.haul_prompt_step
+        self._prompt_state.haul_confirm_buy_station = snapshot.prompt_state.haul_confirm_buy_station
+        self._prompt_state.haul_prompt_raw_command = snapshot.prompt_state.haul_prompt_raw_command
+        self._prompt_state.haul_prompt_skip_delay = snapshot.prompt_state.haul_prompt_skip_delay
+        self._prompt_state.dest_prompt_destination = snapshot.prompt_state.destination_prompt_destination
+        self._prompt_state.dest_prompt_settle_default = snapshot.prompt_state.destination_prompt_settle_default
+        self._prompt_state.dest_prompt_raw_command = snapshot.prompt_state.destination_prompt_raw_command
+        self._prompt_state.dest_prompt_skip_delay = snapshot.prompt_state.destination_prompt_skip_delay
+        self._replay_state.open = snapshot.replay_browser.open
+        self._replay_state.filter_text = snapshot.replay_browser.filter_text
+        self._resume_entries = [
+            ReplaySelection(
+                entry=CommandHistoryEntry(
+                    raw=entry.history_entry.raw_command,
+                    command=entry.history_entry.command_name,
+                    params={str(key): str(value) for key, value in entry.history_entry.arguments.items()},
+                    timestamp=entry.history_entry.timestamp,
+                ),
+                label=entry.label,
+                detail=entry.detail,
+            )
+            for entry in snapshot.replay_browser.visible_entries
+        ]
+
+    def _replace_activity_log(self, entries: list[ActivityLogEntry]) -> None:
+        activity = self.query_one("#activity", ActivityLog)
+        clear = getattr(activity, "clear", None)
+        if callable(clear):
+            clear()
+        elif hasattr(activity, "writes"):
+            activity.writes = []
+        for entry in entries:
+            activity.write(_build_log_text(entry.message_text))
+        self._protocol_activity_log = list(entries)
+        self._refresh_activity_title()
 
     def _view_ship_state(self) -> ShipState:
         ship = self._view_snapshot.ship
@@ -963,6 +1035,12 @@ class ControlRoomApp(App[None]):
                 revenue_short=format_credits_short(int(ev["TotalSale"])),
             )
 
+    def _publish_protocol_snapshot(self) -> None:
+        sink = self._protocol_external_event_sink
+        if sink is None:
+            return
+        sink.publish_snapshot(self._backend.current_snapshot())
+
     def _default_haul_matches(self, entry: CommandHistoryEntry) -> bool:
         return _replay.default_haul_matches(self, entry)
 
@@ -1038,16 +1116,17 @@ class ControlRoomApp(App[None]):
         self._tts.set_commander_name(self._ship.commander)
         self._sync_status_snapshot()
 
+        if event == "Docked":
+            self._load_market_json()
+
         msg = self._activity_line(ev)
         if msg:
             self._log(msg)
 
-        if event == "Docked":
-            self._load_market_json()
-
         self._refresh_status()
         self._handle_haul_event(ev, station_before=station_before)
         self._announce_tts_for_event(ev, station_before=station_before)
+        self._publish_protocol_snapshot()
 
     def _activity_line(self, ev: dict[str, Any]) -> str | None:
         return _rendering.activity_line(ev)

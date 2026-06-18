@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any
 from uuid import uuid4
 
@@ -26,6 +26,7 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
     def __init__(self, *, queue_size: int = 200) -> None:
         self._queue_size = queue_size
         self._sessions: dict[str, ObserverSession] = {}
+        self._latest_snapshot: ControlRoomSnapshot | None = None
 
     def register_observer(self, client_name: str) -> ObserverSession:
         session = ObserverSession(
@@ -34,10 +35,13 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
             queue=asyncio.Queue(maxsize=self._queue_size),
         )
         self._sessions[session.session_id] = session
+        self._broadcast_current_snapshot()
         return session
 
     def unregister(self, session_id: str) -> None:
-        self._sessions.pop(session_id, None)
+        removed = self._sessions.pop(session_id, None)
+        if removed is not None:
+            self._broadcast_current_snapshot()
 
     def connected_clients(self) -> list[ConnectedClientSnapshot]:
         return [
@@ -108,6 +112,20 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
                 },
             }
         )
+
+    def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
+        self._latest_snapshot = snapshot
+        self._broadcast(
+            {
+                "message_type": "state.snapshot",
+                "payload": asdict(self.merge_snapshot(snapshot)),
+            }
+        )
+
+    def _broadcast_current_snapshot(self) -> None:
+        if self._latest_snapshot is None:
+            return
+        self.publish_snapshot(self._latest_snapshot)
 
     def _broadcast(self, message: dict[str, Any]) -> None:
         for session in list(self._sessions.values()):

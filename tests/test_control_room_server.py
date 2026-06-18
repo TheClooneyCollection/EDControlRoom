@@ -267,6 +267,19 @@ class ControlRoomServerTests(unittest.TestCase):
                 self.assertEqual(announcement["message_type"], "event.announcement_emitted")
                 self.assertEqual(announcement["payload"]["announcement_id"], "startup_greeting")
 
+    def test_broker_broadcasts_live_snapshot_updates(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        observer = broker.register_observer("bridge-ipad")
+
+        broker.publish_snapshot(_base_snapshot())
+
+        message = observer.queue.get_nowait()
+        self.assertEqual(message["message_type"], "state.snapshot")
+        self.assertEqual(
+            message["payload"]["connected_clients"][1]["client_name"],
+            "bridge-ipad",
+        )
+
     def test_observer_endpoints_reject_missing_token(self) -> None:
         broker = InMemoryObserverSessionBroker()
         app = build_observer_server_app(

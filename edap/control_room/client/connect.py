@@ -1,51 +1,86 @@
 from __future__ import annotations
 
-import asyncio
-from dataclasses import dataclass
-import json
 import socket
-import sys
-from typing import Any
-from urllib.parse import quote, urlsplit
 
-import httpx
-import websockets
+from textual.widgets import Input
 
-from edap.runtime import load_config_with_fallback
-from edap.tts import TTSAnnouncer, parse_announcement_id
-
-
-DEFAULT_OBSERVER_PORT = 8765
-
-
-@dataclass(frozen=True)
-class ObserverServerTarget:
-    host: str
-    port: int
-    http_base_url: str
-    websocket_url: str
+from edap.control_room.app import ActivityLog, ControlRoomApp, _ALL_ROUTINE_ACTIONS, _build_log_text
+from edap.control_room.backend import ControlRoomBackendEvent
+from edap.control_room.client.backend import RemoteObserverBackend, fetch_remote_observer_snapshot
+from edap.control_room.client.target import ObserverServerTarget, parse_observer_server_target
+from edap.control_room.protocol import (
+    ActivityLogAppendedEvent,
+    AnnouncementEvent,
+    SnapshotUpdatedEvent,
+)
+from edap.runtime import build_runtime_context, load_config_with_fallback
+from edap.tts import parse_announcement_id
 
 
-def parse_observer_server_target(raw_target: str) -> ObserverServerTarget:
-    stripped = raw_target.strip()
-    if not stripped:
-        raise ValueError("Connect target cannot be empty.")
-    if "://" not in stripped:
-        split = urlsplit(f"http://{stripped}")
-    else:
-        split = urlsplit(stripped)
-    if split.hostname is None:
-        raise ValueError(f"Connect target is missing a host: {raw_target!r}")
-    http_scheme = "https" if split.scheme == "https" else "http"
-    websocket_scheme = "wss" if http_scheme == "https" else "ws"
-    port = split.port or (443 if http_scheme == "https" else DEFAULT_OBSERVER_PORT)
-    host = split.hostname
-    return ObserverServerTarget(
-        host=host,
-        port=port,
-        http_base_url=f"{http_scheme}://{host}:{port}",
-        websocket_url=f"{websocket_scheme}://{host}:{port}/session",
-    )
+class ObserverControlRoomApp(ControlRoomApp):
+    def __init__(
+        self,
+        ctx,
+        *,
+        backend: RemoteObserverBackend,
+        server_target: ObserverServerTarget,
+        client_name: str,
+    ) -> None:
+        super().__init__(ctx, backend=backend)
+        self._observer_backend = backend
+        self._server_target = server_target
+        self._client_name = client_name
+
+    def on_mount(self) -> None:
+        self._configure_screen_widgets()
+        self.title = (
+            f"ED Control Room Observer - {self._server_target.host}:{self._server_target.port}"
+        )
+        self._backend_event_unsubscribe = self._backend.subscribe_events(self._handle_backend_event)
+        self._observer_backend.start()
+        self._apply_remote_snapshot(replace_activity=True)
+        command_input = self.query_one("#cmd", Input)
+        command_input.disabled = True
+        command_input.placeholder = "observer mode - read only"
+
+    def on_unmount(self) -> None:
+        super().on_unmount()
+        self._observer_backend.close()
+
+    def _handle_backend_event(self, event: ControlRoomBackendEvent) -> None:
+        self.call_from_thread(self._apply_backend_event, event)
+
+    def _apply_backend_event(self, event: ControlRoomBackendEvent) -> None:
+        if isinstance(event, SnapshotUpdatedEvent):
+            self._view_snapshot = event.snapshot
+            self._apply_remote_snapshot(replace_activity=True)
+            return
+        if isinstance(event, ActivityLogAppendedEvent):
+            self._protocol_activity_log.append(event.entry)
+            if len(self._protocol_activity_log) > self._activity_log_max_lines:
+                self._protocol_activity_log = self._protocol_activity_log[-self._activity_log_max_lines :]
+            activity = self.query_one("#activity", ActivityLog)
+            activity.write(_build_log_text(event.entry.message_text))
+            self._refresh_activity_title()
+            return
+        if isinstance(event, AnnouncementEvent):
+            self._play_local_announcement(event)
+
+    def _apply_remote_snapshot(self, *, replace_activity: bool) -> None:
+        self._sync_view_snapshot()
+        self._tts.set_commander_name(self._view_snapshot.ship.commander_name)
+        if replace_activity:
+            self._replace_activity_log(self._view_snapshot.activity_log)
+        self._refresh_status()
+        self._refresh_haul_stats()
+        self._refresh_market()
+        self._update_resume_detail()
+
+    def _play_local_announcement(self, event: AnnouncementEvent) -> None:
+        parsed_id = parse_announcement_id(event.announcement_id)
+        if parsed_id is None:
+            return
+        self._tts.announce(parsed_id, **event.message_values)
 
 
 def connect_observer_mode(
@@ -58,134 +93,26 @@ def connect_observer_mode(
     loaded = load_config_with_fallback(config_path)
     server_target = parse_observer_server_target(target)
     resolved_client_name = (client_name or socket.gethostname()).strip() or "observer-client"
-    auth_headers = {"Authorization": f"Bearer {access_token}"}
-
-    with httpx.Client(timeout=10.0) as client:
-        capabilities_response = client.get(
-            f"{server_target.http_base_url}/capabilities",
-            headers=auth_headers,
-        )
-        _raise_for_auth_or_http_error(capabilities_response, server_target)
-        capabilities = capabilities_response.json()
-
-        snapshot_response = client.get(
-            f"{server_target.http_base_url}/snapshot",
-            headers=auth_headers,
-        )
-        _raise_for_auth_or_http_error(snapshot_response, server_target)
-        snapshot = snapshot_response.json()
-
-    announcer = TTSAnnouncer(
-        loaded.config.tts,
-        platform_name=loaded.config.runtime.platform,
+    _, snapshot = fetch_remote_observer_snapshot(
+        server_target=server_target,
+        access_token=access_token,
     )
-    try:
-        announcer.set_commander_name(snapshot["ship"]["commander_name"])
-        _print_snapshot_summary(server_target, resolved_client_name, capabilities, snapshot)
-        asyncio.run(
-            _stream_observer_session(
-                websocket_url=server_target.websocket_url,
-                access_token=access_token,
-                client_name=resolved_client_name,
-                announcer=announcer,
-            )
-        )
-    except KeyboardInterrupt:
-        print("Disconnected from observer session.", file=sys.stderr)
-    finally:
-        announcer.close()
-
-
-def _raise_for_auth_or_http_error(
-    response: httpx.Response,
-    server_target: ObserverServerTarget,
-) -> None:
-    if response.status_code == 401:
-        raise SystemExit(
-            f"Authentication failed for {server_target.host}:{server_target.port}. "
-            "Check the shared access token."
-        )
-    response.raise_for_status()
-
-
-def _print_snapshot_summary(
-    server_target: ObserverServerTarget,
-    client_name: str,
-    capabilities: dict[str, Any],
-    snapshot: dict[str, Any],
-) -> None:
-    ship = snapshot["ship"]
-    server_status = snapshot["server_status"]
-    connected_count = len(snapshot["connected_clients"])
-    location = _render_location(ship)
-    print(
-        f"Connected observer {client_name} to {server_target.host}:{server_target.port} "
-        f"({server_status['server_name']} {server_status['server_version']})."
+    ctx = build_runtime_context(
+        loaded.config,
+        config_path=loaded.config_path,
+        used_example_config_fallback=loaded.used_example_config_fallback,
+        actions=_ALL_ROUTINE_ACTIONS,
     )
-    print(
-        f"Commander: {ship['commander_name'] or 'unknown'} | "
-        f"Location: {location} | "
-        f"Connected clients: {connected_count}"
+    backend = RemoteObserverBackend(
+        server_target=server_target,
+        access_token=access_token,
+        client_name=resolved_client_name,
+        initial_snapshot=snapshot,
     )
-    print(
-        "Capabilities: " + ", ".join(capabilities.get("capability_names", []))
+    app = ObserverControlRoomApp(
+        ctx,
+        backend=backend,
+        server_target=server_target,
+        client_name=resolved_client_name,
     )
-
-
-async def _stream_observer_session(
-    *,
-    websocket_url: str,
-    access_token: str,
-    client_name: str,
-    announcer: TTSAnnouncer,
-) -> None:
-    session_url = (
-        f"{websocket_url}?client_name={quote(client_name)}"
-        f"&access_token={quote(access_token)}"
-    )
-    async with websockets.connect(session_url) as websocket:
-        async for raw_message in websocket:
-            message = json.loads(raw_message)
-            _handle_session_message(message, announcer=announcer)
-
-
-def _handle_session_message(
-    message: dict[str, Any],
-    *,
-    announcer: TTSAnnouncer,
-) -> None:
-    message_type = message.get("message_type")
-    payload = message.get("payload", {})
-    if message_type == "event.connection_ready":
-        print(
-            f"Observer session ready: {payload['session_id']} "
-            f"({payload['server_name']} {payload['server_version']})"
-        )
-        return
-    if message_type == "state.snapshot":
-        ship = payload["ship"]
-        print(f"Snapshot synced: {_render_location(ship)}")
-        return
-    if message_type == "event.activity_log_appended":
-        entry = payload["entry"]
-        print(f"[activity] {entry['message_text']}")
-        return
-    if message_type == "event.announcement_emitted":
-        print(f"[announcement] {payload['message_text']}")
-        _play_local_announcement(announcer, payload)
-
-
-def _play_local_announcement(announcer: TTSAnnouncer, payload: dict[str, Any]) -> None:
-    parsed_id = parse_announcement_id(payload["announcement_id"])
-    if parsed_id is None:
-        return
-    values = payload.get("message_values", {})
-    announcer.announce(parsed_id, **values)
-
-
-def _render_location(ship: dict[str, Any]) -> str:
-    system_name = ship.get("system_name")
-    station_name = ship.get("station_name")
-    if system_name and station_name:
-        return f"{system_name} / {station_name}"
-    return system_name or station_name or "unknown"
+    app.run()
