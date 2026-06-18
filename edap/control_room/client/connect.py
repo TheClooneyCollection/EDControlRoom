@@ -99,6 +99,7 @@ def connect_observer_mode(
     target: str,
     access_token: str,
     client_name: str | None = None,
+    claim_operator: bool = False,
 ) -> None:
     loaded = load_config_with_fallback(config_path)
     server_target = parse_observer_server_target(target)
@@ -125,4 +126,6 @@ def connect_observer_mode(
         server_target=server_target,
         client_name=resolved_client_name,
     )
+    if claim_operator:
+        backend.request_active_operator()
     app.run()

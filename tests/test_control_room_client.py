@@ -223,6 +223,25 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(second["message_type"], "command.submit_input")
         self.assertEqual(second["payload"]["raw_input"], "dock")
 
+    def test_remote_backend_enqueues_active_operator_claim(self) -> None:
+        target = ObserverServerTarget(
+            host="bridge.local",
+            port=8765,
+            http_base_url="http://bridge.local:8765",
+            websocket_url="ws://bridge.local:8765/session",
+        )
+        backend = RemoteObserverBackend(
+            server_target=target,
+            access_token="secret-token",
+            client_name="observer-ipad",
+            initial_snapshot=_snapshot(),
+        )
+
+        backend.request_active_operator()
+
+        message = backend._outgoing_messages.get_nowait()
+        self.assertEqual(message["message_type"], "command.request_active_operator")
+
 
 if __name__ == "__main__":
     unittest.main()

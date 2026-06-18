@@ -38,12 +38,23 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
             queue=asyncio.Queue(maxsize=self._queue_size),
         )
         self._sessions[session.session_id] = session
+        if self._active_operator_session_id is None:
+            self._active_operator_session_id = session.session_id
         self._broadcast_current_snapshot()
         return session
 
     def unregister(self, session_id: str) -> None:
         removed = self._sessions.pop(session_id, None)
         if removed is not None:
+            if self._active_operator_session_id == session_id:
+                replacement = next(iter(self._sessions.values()), None)
+                self._active_operator_session_id = (
+                    replacement.session_id if replacement is not None else None
+                )
+                self._broadcast_active_operator_changed(
+                    replacement,
+                    reason="active_operator_disconnected",
+                )
             self._broadcast_current_snapshot()
 
     def connected_clients(self) -> list[ConnectedClientSnapshot]:
@@ -57,8 +68,15 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
         ]
 
     def set_active_operator_session(self, session_id: str | None) -> None:
+        if session_id is not None and session_id not in self._sessions:
+            raise KeyError(session_id)
         self._active_operator_session_id = session_id
+        session = self._sessions.get(session_id) if session_id is not None else None
+        self._broadcast_active_operator_changed(session, reason="operator_claimed")
         self._broadcast_current_snapshot()
+
+    def current_session_role(self, session_id: str) -> str:
+        return self._resolved_session_role(session_id)
 
     def merge_snapshot(
         self,
@@ -155,6 +173,23 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
     def _broadcast(self, message: dict[str, Any]) -> None:
         for session in list(self._sessions.values()):
             self._queue_message(session, message)
+
+    def _broadcast_active_operator_changed(
+        self,
+        session: ObserverSession | None,
+        *,
+        reason: str,
+    ) -> None:
+        self._broadcast(
+            {
+                "message_type": "event.active_operator_changed",
+                "payload": {
+                    "active_operator_session_id": session.session_id if session is not None else None,
+                    "active_operator_client_name": session.client_name if session is not None else None,
+                    "reason": reason,
+                },
+            }
+        )
 
     def _queue_message(self, session: ObserverSession, message: dict[str, Any]) -> None:
         if session.queue.full():

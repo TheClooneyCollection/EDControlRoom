@@ -56,12 +56,15 @@ def build_observer_server_app(
         return JSONResponse(
             {
                 "capability_names": snapshot.server_status.capability_names,
-                "supported_client_roles": ["observer"],
+                "supported_client_roles": ["active_operator", "observer"],
                 "supported_message_types": [
                     "state.snapshot",
                     "event.connection_ready",
+                    "event.active_operator_changed",
                     "event.activity_log_appended",
                     "event.announcement_emitted",
+                    "response.success",
+                    "response.error",
                 ],
                 "minimum_client_version": "1",
                 "server_version": snapshot.server_status.server_version,
@@ -94,7 +97,7 @@ def build_observer_server_app(
                         "session_id": observer.session_id,
                         "server_name": merged_snapshot.server_status.server_name,
                         "server_version": merged_snapshot.server_status.server_version,
-                        "client_role": observer.client_role,
+                        "client_role": broker.current_session_role(observer.session_id),
                         "capability_names": merged_snapshot.server_status.capability_names,
                     },
                 )
@@ -153,7 +156,7 @@ async def _receive_session_messages(
         response = _handle_session_message(
             message,
             session_id=observer.session_id,
-            client_role=observer.client_role,
+            client_role=broker.current_session_role(observer.session_id),
             snapshot_provider=snapshot_provider,
             command_handler=command_handler,
             broker=broker,
@@ -182,6 +185,18 @@ def _handle_session_message(
         return protocol_message(
             "state.snapshot",
             asdict(broker.merge_snapshot(snapshot_provider(), session_id=session_id)),
+            correlation_message_id=correlation_message_id,
+        )
+
+    if message_type == "command.request_active_operator":
+        broker.set_active_operator_session(session_id)
+        return protocol_message(
+            "response.success",
+            {
+                "accepted": True,
+                "message_text": "Active operator role assigned.",
+                "result": {"client_role": "active_operator"},
+            },
             correlation_message_id=correlation_message_id,
         )
 
