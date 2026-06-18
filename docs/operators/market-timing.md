@@ -17,30 +17,30 @@ Default example:
 
 ```toml
 [controls.market]
-buy_max_hold_seconds = 10.0
+buy_max_hold_seconds = 20.0
 
 [[controls.market.buy_hold_segments]]
 start = 0
 function = "flat"
-hold_seconds = 1.0
+hold_seconds = 3.0
 
 [[controls.market.buy_hold_segments]]
 start = 100
-function = "linear"
-seconds_per_ton = 0.01
+function = "flat"
+hold_seconds = 5.0
 
 [[controls.market.buy_hold_segments]]
 start = 301
 function = "log"
-base_seconds = -4.25
-multiplier = 1.1829
+base_seconds = -12.5627
+multiplier = 3.0756
 ```
 
 The default shape is:
 
-- `0-99t`: flat `1.0s`
-- `100-300t`: linear at `0.01s/t`
-- `301t+`: log taper
+- `0-99t`: flat `3.0s`
+- `100-300t`: flat `5.0s`
+- `301t+`: log growth from about `5.0s` at `301t` to about `8.0s` at `800t`
 
 Segment selection is inclusive on `start`, using the last segment whose `start` is less than or equal to the cargo tons.
 
@@ -102,8 +102,8 @@ Why that matters:
 
 With the tuned default log parameters:
 
-- `301t` is about `2.5s`
-- `700t` is about `3.5s`
+- `301t` is `5.0s`
+- `800t` is `8.0s`
 
 The log formula is clamped at `0` before the global max cap is applied, so a negative `base_seconds` is safe.
 

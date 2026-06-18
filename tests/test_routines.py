@@ -1028,9 +1028,9 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(result.dispatch.status, "ok")
         hold_calls = [call for call in controls.calls if call["action"] == "UI_Right" and call["hold_s"]]
         self.assertEqual(len(hold_calls), 1)
-        self.assertAlmostEqual(float(hold_calls[0]["hold_s"]), 3.01, places=2)
+        self.assertAlmostEqual(float(hold_calls[0]["hold_s"]), 6.30, places=2)
         self.assertIn(
-            "  UI_Right hold 3.01s (fill to max from min(460t free, 1000t supply) with 301t+ log curve (-4.25s + log1p(tons) * 1.1829s))",
+            "  UI_Right hold 6.30s (fill to max from min(460t free, 1000t supply) with 301t+ log curve (-12.56s + log1p(tons) * 3.0756s))",
             progress,
         )
 
@@ -1099,9 +1099,9 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(result.dispatch.status, "ok")
         hold_calls = [call for call in controls.calls if call["action"] == "UI_Right" and call["hold_s"]]
         self.assertEqual(len(hold_calls), 1)
-        self.assertAlmostEqual(float(hold_calls[0]["hold_s"]), 1.2)
+        self.assertAlmostEqual(float(hold_calls[0]["hold_s"]), 5.0)
         self.assertIn(
-            "  UI_Right hold 1.20s (fill to max from min(500t free, 120t supply) with 100t+ linear 0.0100s/t)",
+            "  UI_Right hold 5.00s (fill to max from min(500t free, 120t supply) with 100t+ flat 5.00s)",
             progress,
         )
 
@@ -1143,7 +1143,7 @@ class RoutinesTests(unittest.TestCase):
                 amount="MAX",
                 step_delay_s=0.0,
                 nav_delay_s=0.0,
-                max_hold_s=10.0,
+                max_hold_s=20.0,
                 trade_timeout_s=30.0,
                 skip_station_check=True,
                 time_fn=lambda: 0.0,
@@ -1154,9 +1154,9 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(result.dispatch.status, "ok")
         hold_calls = [call for call in controls.calls if call["action"] == "UI_Right" and call["hold_s"]]
         self.assertEqual(len(hold_calls), 1)
-        self.assertAlmostEqual(float(hold_calls[0]["hold_s"]), 3.92, places=2)
+        self.assertAlmostEqual(float(hold_calls[0]["hold_s"]), 8.69, places=2)
         self.assertIn(
-            "  UI_Right hold 3.92s (fill to max from 1000t supply with 301t+ log curve (-4.25s + log1p(tons) * 1.1829s))",
+            "  UI_Right hold 8.69s (fill to max from 1000t supply with 301t+ log curve (-12.56s + log1p(tons) * 3.0756s))",
             progress,
         )
 
@@ -1269,9 +1269,9 @@ class RoutinesTests(unittest.TestCase):
             )
 
         self.assertEqual(result.dispatch.status, "ok")
-        self.assertIn({"action": "UI_Right", "repeat": 1, "hold_s": 1.0}, controls.calls)
+        self.assertIn({"action": "UI_Right", "repeat": 1, "hold_s": 3.0}, controls.calls)
         self.assertIn(
-            "  UI_Right hold 1.00s (fill to max from min(50t free, 1000t supply) with 0t+ flat 1.00s)",
+            "  UI_Right hold 3.00s (fill to max from min(50t free, 1000t supply) with 0t+ flat 3.00s)",
             progress,
         )
 

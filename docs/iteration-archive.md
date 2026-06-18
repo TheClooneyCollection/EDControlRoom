@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `24`
-- Latest generated iteration number: `157`
+- Generated iteration count: `25`
+- Latest generated iteration number: `158`
 
 ## Iteration 134
 
@@ -682,3 +682,39 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - If the suite starts trending toward `0.3s`, revisit consolidation or targeted test-speed cleanup before raising the threshold again.
+
+## Iteration 158
+
+- When: `2026-06-18 12:22`
+- Area: `haul`
+- Title: `retune-default-market-buy-hold-curve`
+- Source: [2026-06-18-12-22_____haul_____retune-default-market-buy-hold-curve.md](iteration-logs/2026-06-18-12-22_____haul_____retune-default-market-buy-hold-curve.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `retune-default-market-buy-hold-curve`
+- Started: `2026-06-18 12:22`
+
+## Summary
+
+- Retuned the shipped market buy `MAX` defaults around longer stable holds for small and mid-size cargo loads.
+- Raised the default buy-hold cap to `20.0s` and re-fit the `301t+` log segment to start at `5.0s` around `301t` and reach about `8.0s` at `800t`.
+
+## Changes
+
+- Updated the default config loader, routine fallback defaults, example config, and operator market-timing doc to use the new hold curve.
+- Updated routine and config tests to assert the new shipped defaults and progress output.
+
+## Follow-ups
+
+- Live-validate the new `301t+` curve in Odyssey/CrossOver to confirm the longer default dwell no longer undershoots large buys.
+-
+
+## Changes
+
+-
+
+## Follow-ups
+
+-

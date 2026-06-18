@@ -113,7 +113,7 @@ nav_delay_seconds = 0.1
 # Maximum buy/sell attempts before aborting when the matching MarketBuy/MarketSell journal event is not observed.
 trade_max_attempts = 3
 # Hard cap for any buy `MAX` hold duration, regardless of which segment matches.
-buy_max_hold_seconds = 10.0
+buy_max_hold_seconds = 20.0
 # For sell `MAX`, restore the quantity with rapid right taps instead of a long hold.
 sell_quantity_restore_taps = 5
 sell_quantity_restore_tap_delay_seconds = 0.05
@@ -124,18 +124,18 @@ critical_level_multiplier = 10.0
 # Segment starts are inclusive and evaluated in ascending `start` order.
 start = 0
 function = "flat"
-hold_seconds = 1.0
+hold_seconds = 3.0
 
 [[controls.market.buy_hold_segments]]
 start = 100
-function = "linear"
-seconds_per_ton = 0.01
+function = "flat"
+hold_seconds = 5.0
 
 [[controls.market.buy_hold_segments]]
 start = 301
 function = "log"
-base_seconds = -4.25
-multiplier = 1.1829
+base_seconds = -12.5627
+multiplier = 3.0756
 
 [screen]
 resolution_width = 1920

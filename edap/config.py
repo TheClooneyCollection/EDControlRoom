@@ -354,9 +354,9 @@ def _market_buy_hold_segments(raw: dict[str, object], key: str) -> tuple[MarketB
     value = raw.get(key)
     if value is None:
         return (
-            MarketBuyHoldSegmentConfig(start=0, function="flat", hold_seconds=1.0),
-            MarketBuyHoldSegmentConfig(start=100, function="linear", seconds_per_ton=0.01),
-            MarketBuyHoldSegmentConfig(start=301, function="log", base_seconds=-4.25, multiplier=1.1829),
+            MarketBuyHoldSegmentConfig(start=0, function="flat", hold_seconds=3.0),
+            MarketBuyHoldSegmentConfig(start=100, function="flat", hold_seconds=5.0),
+            MarketBuyHoldSegmentConfig(start=301, function="log", base_seconds=-12.5627, multiplier=3.0756),
         )
     if not isinstance(value, list):
         raise ConfigError(f"Config section `{key}` must be an array of tables.")
@@ -715,7 +715,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             market_buy_max_hold_seconds=_float(
                 controls_flat,
                 "market_buy_max_hold_seconds",
-                10.0,
+                20.0,
                 aliases=("market.buy_max_hold_seconds",),
             ),
             market_buy_hold_segments=_market_buy_hold_segments(controls_market, "buy_hold_segments"),

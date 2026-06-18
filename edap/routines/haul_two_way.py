@@ -887,9 +887,9 @@ def haul_loop_two_way(
     step_delay_s: float = 1.0,
     max_hold_s: float = 10.0,
     market_buy_hold_segments: tuple[MarketBuyHoldSegmentConfig, ...] = (
-        MarketBuyHoldSegmentConfig(start=0, function="flat", hold_seconds=1.0),
-        MarketBuyHoldSegmentConfig(start=100, function="linear", seconds_per_ton=0.01),
-        MarketBuyHoldSegmentConfig(start=301, function="log", base_seconds=-4.25, multiplier=1.1829),
+        MarketBuyHoldSegmentConfig(start=0, function="flat", hold_seconds=3.0),
+        MarketBuyHoldSegmentConfig(start=100, function="flat", hold_seconds=5.0),
+        MarketBuyHoldSegmentConfig(start=301, function="log", base_seconds=-12.5627, multiplier=3.0756),
     ),
     market_sell_quantity_restore_taps: int = 5,
     market_sell_quantity_restore_tap_delay_s: float = 0.05,
