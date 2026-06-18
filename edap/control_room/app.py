@@ -1300,6 +1300,12 @@ class ControlRoomApp(App[None]):
                 self._backend.set_replay_filter(self._resume_filter + event.character)
             return
         if self._haul_prompt_step or self._haul_confirm_buy_station or self._dest_prompt_destination:
+            if event.key == "enter":
+                event.prevent_default()
+                cmd_input = self.query_one("#cmd", Input)
+                raw = cmd_input.value
+                cmd_input.value = ""
+                self._backend.submit_input(raw)
             return  # don't interfere with multi-step haul prompts
         if event.key not in ("up", "down"):
             return
@@ -1325,9 +1331,14 @@ class ControlRoomApp(App[None]):
                 cmd_input.cursor_position = len(cmd_input.value)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        raw = event.value.strip()
+        raw = event.value
         event.input.value = ""
 
+        if self._haul_prompt_step or self._haul_confirm_buy_station or self._dest_prompt_destination:
+            self._backend.submit_input(raw)
+            return
+
+        raw = raw.strip()
         if not raw:
             return
 

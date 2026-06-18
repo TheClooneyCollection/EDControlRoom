@@ -143,9 +143,26 @@ class _StaticWidgetStub:
         self.updated = content
 
 
+class _InputStub:
+    def __init__(self) -> None:
+        self.placeholder = ""
+        self.value = ""
+        self.cursor_position = 0
+
+
 class _OptionListStub:
     def __init__(self) -> None:
         self.highlighted = 0
+
+
+class _KeyEventStub:
+    def __init__(self, key: str, *, character: str | None = None) -> None:
+        self.key = key
+        self.character = character
+        self.prevented = False
+
+    def prevent_default(self) -> None:
+        self.prevented = True
 
 
 class _RenderHarnessApp(_ProtocolHarnessApp):
@@ -249,9 +266,13 @@ class _IntentRecorderBackend(_SnapshotBackend):
     def __init__(self, snapshot: ControlRoomSnapshot) -> None:
         super().__init__(snapshot)
         self.dispatched_commands: list[tuple[str, bool | None]] = []
+        self.submitted_inputs: list[str] = []
         self.opened_replay_browser = 0
         self.closed_replay_browser = 0
         self.replayed_entries: list[tuple[str, bool, bool]] = []
+
+    def submit_input(self, raw: str) -> None:
+        self.submitted_inputs.append(raw)
 
     def dispatch_command(self, raw: str, *, skip_delay: bool | None = None) -> None:
         self.dispatched_commands.append((raw, skip_delay))
@@ -510,6 +531,45 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
 
         self.assertEqual(backend.closed_replay_browser, 1)
         self.assertEqual(backend.replayed_entries, [("jump", False, False)])
+
+    def test_blank_input_submission_reaches_backend_during_destination_prompt(self) -> None:
+        snapshot = snapshot_from_app(self.app)
+        backend = _IntentRecorderBackend(snapshot)
+        app = _RenderHarnessApp(
+            _make_context(Path(self.tmpdir.name)),
+            backend=backend,
+        )
+        input_stub = _InputStub()
+        app.query_one = lambda selector, widget_type=None: input_stub if selector == "#cmd" else _RenderHarnessApp.query_one(app, selector, widget_type)  # type: ignore[method-assign]
+        app._dest_prompt_destination = "Sol"
+
+        class _SubmittedEvent:
+            def __init__(self, input_widget) -> None:
+                self.value = ""
+                self.input = input_widget
+
+        app.on_input_submitted(_SubmittedEvent(input_stub))
+
+        self.assertEqual(backend.submitted_inputs, [""])
+        self.assertEqual(input_stub.value, "")
+
+    def test_blank_enter_key_submits_prompt_default_value_path(self) -> None:
+        snapshot = snapshot_from_app(self.app)
+        backend = _IntentRecorderBackend(snapshot)
+        app = _RenderHarnessApp(
+            _make_context(Path(self.tmpdir.name)),
+            backend=backend,
+        )
+        input_stub = _InputStub()
+        app.query_one = lambda selector, widget_type=None: input_stub if selector == "#cmd" else _RenderHarnessApp.query_one(app, selector, widget_type)  # type: ignore[method-assign]
+        app._dest_prompt_destination = "Sol"
+        event = _KeyEventStub("enter")
+
+        app.on_key(event)
+
+        self.assertTrue(event.prevented)
+        self.assertEqual(backend.submitted_inputs, [""])
+        self.assertEqual(input_stub.value, "")
 
 
 if __name__ == "__main__":
