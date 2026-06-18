@@ -37,6 +37,7 @@ from edap.routines import RoutineResult
 from edap.runtime import ResolvedPath, RuntimeContext
 from edap.tts import AnnouncementId
 from edap.control_room.workers import PendingRoutineCancelled, RoutineCancelled, run_routine_thread
+from edap.haul_config import DEFAULT_HAUL_CONFIG_PATH
 from edap.version import GitHubRelease
 
 
@@ -333,6 +334,13 @@ class ControlRoomCommandTests(unittest.TestCase):
         output = "\n".join(self.app.logged)
         self.assertIn("Command: help mystery", output)
         self.assertIn("Unknown help topic: mystery", output)
+
+    def test_help_haul_mentions_load_profile(self) -> None:
+        self.app._dispatch_command("help haul")
+
+        output = "\n".join(self.app.logged)
+        self.assertIn("haul load", output)
+        self.assertIn("haul.toml", output)
 
     def test_quit_command_exits_immediately_without_active_routine(self) -> None:
         self.app._dispatch_command("quit")
@@ -954,6 +962,101 @@ class ControlRoomBindingsTests(unittest.TestCase):
 
         self.assertEqual(captured["kwargs"]["station_2_buying"], "")
         self.assertIn("station 2 [cyan]Trevithick Dock[/]: [dim]no buy[/]", "\n".join(self.app.logged))
+
+    def test_haul_load_dispatches_from_config_file(self) -> None:
+        captured: dict[str, object] = {}
+        config_path = Path(self.tmpdir.name) / "haul-profile.toml"
+        config_path.write_text(
+            """
+[haul]
+galaxy_map_settle = 4.5
+dock_timeout = 900.0
+
+[haul.station_1]
+buying = "Aluminium"
+name = "Pawelczyk Dock"
+system = "Sol"
+
+[haul.station_2]
+buying = "Bertrandite"
+name = "Trevithick Dock"
+system = "Achenar"
+on_land = true
+""".strip(),
+            encoding="utf-8",
+        )
+
+        self.app._ship.status = "in_supercruise"
+        self.app._controls = object()
+        self.app._make_progress = lambda: (lambda _: None)
+        self.app._make_controls = lambda progress: object()
+        self.app._make_sleeper = lambda: (lambda _: None)
+        self.app._make_watcher = lambda: object()
+        self.app._run_in_thread = lambda fn: fn()
+
+        def fake_haul_loop(controls, watcher, **kwargs):
+            captured["kwargs"] = kwargs
+            return RoutineResult(
+                action="haul_loop",
+                dispatch=ActionDispatchResult(action="haul_loop", status="ok"),
+            )
+
+        with patch("edap.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
+            self.app._cmd_haul(f"load {config_path}", raw_command=f"haul load {config_path}")
+
+        self.assertEqual(captured["kwargs"]["station_1_buying"], "Aluminium")
+        self.assertEqual(captured["kwargs"]["station_2_buying"], "Bertrandite")
+        self.assertEqual(captured["kwargs"]["galaxy_map_settle_s"], 4.5)
+        self.assertEqual(captured["kwargs"]["dock_timeout_s"], 900.0)
+        self.assertTrue(captured["kwargs"]["station_2_on_land"])
+        self.assertEqual(self.app._saved_state.history[-1].raw, f"haul load {config_path}")
+        self.assertIn("Loaded haul config", "\n".join(self.app.logged))
+
+    def test_haul_load_without_path_uses_default_haul_toml(self) -> None:
+        captured_paths: list[Path] = []
+
+        def fake_load(path=DEFAULT_HAUL_CONFIG_PATH):
+            captured_paths.append(Path(path))
+            return {
+                "station_1_buying": "Aluminium",
+                "station_1": "Pawelczyk Dock",
+                "station_1_system": "Sol",
+                "station_1_on_land": "false",
+                "station_2_buying": "Bertrandite",
+                "station_2": "Trevithick Dock",
+                "station_2_system": "Achenar",
+                "station_2_on_land": "false",
+                "galaxy_map_settle": "2.0",
+                "dock_timeout": "600.0",
+            }
+
+        self.app._controls = object()
+        self.app._make_progress = lambda: (lambda _: None)
+        self.app._make_controls = lambda progress: object()
+        self.app._make_sleeper = lambda: (lambda _: None)
+        self.app._make_watcher = lambda: object()
+        self.app._run_in_thread = lambda fn: fn()
+
+        def fake_haul_loop(controls, watcher, **kwargs):
+            return RoutineResult(
+                action="haul_loop",
+                dispatch=ActionDispatchResult(action="haul_loop", status="ok"),
+            )
+
+        with patch("edap.control_room.routines_haul.load_haul_config", new=fake_load), patch(
+            "edap.control_room.routines_haul.haul_loop_two_way",
+            new=fake_haul_loop,
+        ):
+            self.app._cmd_haul("load", raw_command="haul load")
+
+        self.assertEqual(captured_paths, [DEFAULT_HAUL_CONFIG_PATH])
+
+    def test_haul_load_reports_missing_file(self) -> None:
+        self.app._controls = object()
+        self.app._cmd_haul("load missing-haul.toml", raw_command="haul load missing-haul.toml")
+
+        output = "\n".join(self.app.logged)
+        self.assertIn("Haul config file not found", output)
 
     def test_haul_dispatch_passes_on_land_flags(self) -> None:
         captured: dict[str, object] = {}

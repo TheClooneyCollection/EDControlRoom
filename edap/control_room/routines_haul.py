@@ -1,12 +1,15 @@
 """Haul routine launchers."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from rich.markup import escape
 
 from edap.control_room import error_text
 from edap.control_room.history import now_iso
 from edap.control_room.interfaces import HaulHost
 from edap.control_room_state import CommandHistoryEntry
+from edap.haul_config import DEFAULT_HAUL_CONFIG_PATH, HaulConfigError, load_haul_config
 from edap.multi_leg_haul import load_multi_leg_haul_definition
 from edap.routines import haul_loop_two_way, multi_leg_haul
 
@@ -28,6 +31,21 @@ def cmd_haul(
     if not app._check_routine_ready():
         return
     station_1_buying = rest.strip()
+    parts = station_1_buying.split(None, 1)
+    if parts and parts[0].lower() == "load":
+        source = Path(parts[1].strip()) if len(parts) > 1 and parts[1].strip() else DEFAULT_HAUL_CONFIG_PATH
+        try:
+            app._haul_params = load_haul_config(source)
+        except (FileNotFoundError, HaulConfigError) as exc:
+            app._log(f"[red]{escape(str(exc))}[/]")
+            return
+        app._log(f"[dim]Loaded haul config: [cyan]{escape(str(source))}[/][/]")
+        dispatch_haul_loop(
+            app,
+            skip_delay=skip_delay,
+            raw_command=raw_command or f"{'!' if skip_delay else ''}haul load {source}".strip(),
+        )
+        return
     if not station_1_buying:
         app._start_haul_prompt(
             commodity="",

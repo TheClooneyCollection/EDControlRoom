@@ -1,5 +1,6 @@
 # Control Room Status
 ## Current
+- Control Room `haul` now supports `haul load [path]`, which reads repo-local `haul.toml` by default and launches the normal two-way haul routine without stepping through the interactive prompt.
 - Replay/edit of haul entries now opens the multi-step haul prompt with the existing answers prefilled directly into the command input, so operators can edit or clear fields instead of fighting placeholder-only defaults.
 - Control Room routine launchers now pass `app._time_fn` through jump/dock/undock/market/nav/haul helpers, and cached default message loads trimmed local full-suite runtime from `0.687s` to about `0.245s`.
 - Single-commodity `MarketSell` totals now announce sale revenue instead of profit; haul/session profit tracking is unchanged.

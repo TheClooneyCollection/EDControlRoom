@@ -1,5 +1,6 @@
 # Haul Status
 ## Current
+- Two-way `haul` can now load a text-editable TOML profile via `haul load [path]`; repo-root `haul.toml` is the default profile and maps directly onto the existing two-station haul parameters.
 - Market buy/sell quantity restore is now configurable: buy `MAX` uses ordered `buy_hold_segments` with per-range `flat`/`linear`/`log` functions plus a global hold cap, and sell `MAX` restores quantity with configurable rapid `UI_Right` taps instead of a long hold.
 - Two-way haul prompt/dispatch now records per-destination `on land` flags; orbital stops still auto-dock, while on-land stops hand off after destination-system `SupercruiseExit` so the operator can finish the planetary approach and resume after landing.
 - Two-way and multi-leg transit now ignore intermediate `FSDJump` arrivals in multi-jump routes and only open the nav panel once the jump event matches the configured destination system.

@@ -15,7 +15,7 @@ Routine commands (type in the input bar):
     buy <item> [N]     buy N units (default MAX) of commodity
     sell [item] [N]    sell commodity (default: market filter); amount default MAX
     jump               FSD jump sequence
-    haul [commodity]   start haul loop; prompts for commodity/stations if not provided
+    haul [commodity]   start haul loop; or use `haul load [path]` for haul.toml
     multi_leg_haul <route.json|spansh-url>   run a standalone multi-leg haul route
     dest <system>      open galaxy map and plot a route to the named system
     set_dest <system>  alias for dest
@@ -128,7 +128,7 @@ _STARTUP_BINDING_WARNING_IGNORED_ACTIONS = frozenset({
     "YawRightButton",
 })
 
-_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | multi_leg_haul <route> | dest <system> | market ... | reload | q"
+_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul load | multi_leg_haul <route> | dest <system> | market ... | reload | q"
 _ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS = 10.0
 _JOURNAL_ARTIFACT_LOG_PATH = Path("artifacts/control-room.log")
 _JOURNAL_ARTIFACT_LOG_BUFFER_SIZE = 8192

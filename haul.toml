@@ -1,0 +1,16 @@
+[haul]
+# Edit this file, then run `haul load` in Control Room.
+galaxy_map_settle = 2.0
+dock_timeout = 600.0
+
+[haul.station_1]
+buying = ""
+name = ""
+system = ""
+on_land = false
+
+[haul.station_2]
+buying = ""
+name = ""
+system = ""
+on_land = false
