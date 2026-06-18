@@ -25,6 +25,7 @@ from edap.config import (
     TTSConfig,
 )
 from edap.control_room.protocol.events import AnnouncementEvent
+from edap.control_room.protocol.sink import ControlRoomEventSink
 from edap.control_room.protocol.snapshot import (
     ActivityLogEntry,
     ActiveOperatorSnapshot,
@@ -200,6 +201,22 @@ def _base_snapshot() -> ControlRoomSnapshot:
     )
 
 
+class _SnapshotRecorder(ControlRoomEventSink):
+    def __init__(self) -> None:
+        self.activity_entries: list[ActivityLogEntry] = []
+        self.announcements: list[AnnouncementEvent] = []
+        self.snapshots: list[ControlRoomSnapshot] = []
+
+    def publish_activity_log(self, entry: ActivityLogEntry) -> None:
+        self.activity_entries.append(entry)
+
+    def publish_announcement(self, event: AnnouncementEvent) -> None:
+        self.announcements.append(event)
+
+    def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
+        self.snapshots.append(snapshot)
+
+
 class ControlRoomServerTests(unittest.TestCase):
     def test_headless_host_initializes_and_can_snapshot_before_mount(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -217,6 +234,20 @@ class ControlRoomServerTests(unittest.TestCase):
             host.handle_remote_input("market filter gold")
 
         self.assertEqual(host._market_filter, "Gold")
+
+    def test_headless_host_publishes_snapshot_after_remote_input(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
+            sink = _SnapshotRecorder()
+            host._protocol_event_sink = sink
+
+            host.handle_remote_input("market filter gold")
+
+        self.assertTrue(sink.snapshots)
+        self.assertEqual(
+            sink.snapshots[-1].market.market_filter_text,
+            "Gold",
+        )
 
     def test_http_endpoints_and_websocket_observer_stream(self) -> None:
         broker = InMemoryObserverSessionBroker()
