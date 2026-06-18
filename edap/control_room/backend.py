@@ -11,13 +11,16 @@ from edap.control_room.protocol import (
     AnnouncementEvent,
     ControlRoomEventSink,
     ControlRoomSnapshot,
+    SnapshotUpdatedEvent,
     snapshot_from_app,
 )
 from edap.control_room.protocol.snapshot import ActivityLogEntry
 from edap.control_room_state import CommandHistoryEntry
 
 
-ControlRoomBackendEvent: TypeAlias = ActivityLogAppendedEvent | AnnouncementEvent
+ControlRoomBackendEvent: TypeAlias = (
+    ActivityLogAppendedEvent | AnnouncementEvent | SnapshotUpdatedEvent
+)
 ControlRoomBackendEventHandler: TypeAlias = Callable[[ControlRoomBackendEvent], None]
 
 
@@ -282,6 +285,12 @@ class LocalControlRoomBackend(ControlRoomEventSink):
         external_sink = self._host._protocol_external_event_sink
         if external_sink is not None:
             external_sink.publish_announcement(event)
+
+    def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
+        self._emit(SnapshotUpdatedEvent(snapshot=snapshot))
+        external_sink = self._host._protocol_external_event_sink
+        if external_sink is not None:
+            external_sink.publish_snapshot(snapshot)
 
     def _emit(self, event: ControlRoomBackendEvent) -> None:
         for handler in list(self._event_handlers):

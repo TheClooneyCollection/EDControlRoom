@@ -45,6 +45,7 @@ def serve_observer_mode(
     runtime_host = HeadlessControlRoomHost(ctx)
     runtime_host._protocol_event_sink = broker
     runtime_host.start()
+    broker.publish_snapshot(runtime_host.snapshot())
     app = build_observer_server_app(
         snapshot_provider=runtime_host.snapshot,
         broker=broker,

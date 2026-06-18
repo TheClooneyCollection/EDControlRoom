@@ -1,0 +1,219 @@
+from __future__ import annotations
+
+import asyncio
+import json
+import threading
+from collections.abc import Callable
+from typing import Any
+from urllib.parse import quote
+
+import httpx
+import websockets
+
+from edap.control_room.backend import ControlRoomBackend, ControlRoomBackendEventHandler
+from edap.control_room.protocol import (
+    ActivityLogEntry,
+    ActivityLogAppendedEvent,
+    AnnouncementEvent,
+    ControlRoomSnapshot,
+    SnapshotUpdatedEvent,
+    build_activity_log_entry,
+    event_from_message,
+    snapshot_from_message,
+)
+from edap.control_room_state import CommandHistoryEntry
+
+from .target import ObserverServerTarget
+
+
+class RemoteObserverBackend(ControlRoomBackend):
+    def __init__(
+        self,
+        *,
+        server_target: ObserverServerTarget,
+        access_token: str,
+        client_name: str,
+        initial_snapshot: ControlRoomSnapshot,
+    ) -> None:
+        self._server_target = server_target
+        self._access_token = access_token
+        self._client_name = client_name
+        self._snapshot = initial_snapshot
+        self._event_handlers: list[ControlRoomBackendEventHandler] = []
+        self._lock = threading.Lock()
+        self._thread: threading.Thread | None = None
+        self._stop_event = threading.Event()
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._websocket: Any | None = None
+
+    def start(self) -> None:
+        if self._thread is not None:
+            return
+        self._thread = threading.Thread(target=self._run_stream_loop, daemon=True)
+        self._thread.start()
+
+    def close(self) -> None:
+        self._stop_event.set()
+        loop = self._loop
+        websocket = self._websocket
+        if loop is not None and websocket is not None:
+            loop.call_soon_threadsafe(asyncio.create_task, websocket.close())
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
+            self._thread = None
+
+    def current_snapshot(self) -> ControlRoomSnapshot:
+        with self._lock:
+            return self._snapshot
+
+    def subscribe_events(
+        self,
+        handler: ControlRoomBackendEventHandler,
+    ) -> Callable[[], None]:
+        self._event_handlers.append(handler)
+
+        def unsubscribe() -> None:
+            try:
+                self._event_handlers.remove(handler)
+            except ValueError:
+                return
+
+        return unsubscribe
+
+    def publish_activity_log(self, entry: ActivityLogEntry) -> None:
+        return None
+
+    def publish_announcement(self, event: AnnouncementEvent) -> None:
+        return None
+
+    def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
+        with self._lock:
+            self._snapshot = snapshot
+        self._emit(SnapshotUpdatedEvent(snapshot=snapshot))
+
+    def submit_input(self, raw: str) -> None:
+        self.dispatch_command(raw)
+
+    def dispatch_command(self, raw: str, *, skip_delay: bool | None = None) -> None:
+        self._emit_local_message("Observer session is read-only.")
+
+    def dispatch_destination(
+        self,
+        destination: str,
+        galaxy_map_settle: float,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self._emit_local_message("Observer session is read-only.")
+
+    def dispatch_haul_loop(
+        self,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self._emit_local_message("Observer session is read-only.")
+
+    def handle_haul_prompt(self, value: str) -> None:
+        self._emit_local_message("Observer session is read-only.")
+
+    def handle_haul_confirm_prompt(self, value: str) -> None:
+        self._emit_local_message("Observer session is read-only.")
+
+    def open_replay_browser(self) -> None:
+        self._emit_local_message("Remote replay control is not available yet.")
+
+    def close_replay_browser(self) -> None:
+        return None
+
+    def refresh_replay_browser(self) -> None:
+        return None
+
+    def set_replay_filter(self, filter_text: str) -> None:
+        self._emit_local_message("Remote replay control is not available yet.")
+
+    def replay_history_entry(
+        self,
+        entry: CommandHistoryEntry,
+        *,
+        edit: bool,
+        skip_delay: bool = False,
+    ) -> None:
+        self._emit_local_message("Remote replay control is not available yet.")
+
+    def toggle_replay_default_haul(self, entry: CommandHistoryEntry) -> None:
+        self._emit_local_message("Remote replay control is not available yet.")
+
+    def _run_stream_loop(self) -> None:
+        asyncio.run(self._stream_observer_session())
+
+    async def _stream_observer_session(self) -> None:
+        self._loop = asyncio.get_running_loop()
+        session_url = (
+            f"{self._server_target.websocket_url}?client_name={quote(self._client_name)}"
+            f"&access_token={quote(self._access_token)}"
+        )
+        try:
+            async with websockets.connect(session_url) as websocket:
+                self._websocket = websocket
+                async for raw_message in websocket:
+                    if self._stop_event.is_set():
+                        break
+                    message = json.loads(raw_message)
+                    parsed_event = event_from_message(message)
+                    if parsed_event is None:
+                        continue
+                    if isinstance(parsed_event, SnapshotUpdatedEvent):
+                        self.publish_snapshot(parsed_event.snapshot)
+                        continue
+                    self._emit(parsed_event)
+        except Exception as exc:
+            self._emit_local_message(
+                f"Observer connection lost: {exc!s}"
+            )
+        finally:
+            self._websocket = None
+            self._loop = None
+
+    def _emit_local_message(self, text: str) -> None:
+        self._emit(ActivityLogAppendedEvent(entry=build_activity_log_entry(text)))
+
+    def _emit(self, event: object) -> None:
+        for handler in list(self._event_handlers):
+            handler(event)  # type: ignore[arg-type]
+
+
+def fetch_remote_observer_snapshot(
+    *,
+    server_target: ObserverServerTarget,
+    access_token: str,
+) -> tuple[dict[str, Any], ControlRoomSnapshot]:
+    auth_headers = {"Authorization": f"Bearer {access_token}"}
+    with httpx.Client(timeout=10.0) as client:
+        capabilities_response = client.get(
+            f"{server_target.http_base_url}/capabilities",
+            headers=auth_headers,
+        )
+        _raise_for_auth_or_http_error(capabilities_response, server_target)
+        capabilities = capabilities_response.json()
+
+        snapshot_response = client.get(
+            f"{server_target.http_base_url}/snapshot",
+            headers=auth_headers,
+        )
+        _raise_for_auth_or_http_error(snapshot_response, server_target)
+        snapshot = snapshot_from_message(snapshot_response.json())
+    return capabilities, snapshot
+
+
+def _raise_for_auth_or_http_error(
+    response: httpx.Response,
+    server_target: ObserverServerTarget,
+) -> None:
+    if response.status_code == 401:
+        raise SystemExit(
+            f"Authentication failed for {server_target.host}:{server_target.port}. "
+            "Check the shared access token."
+        )
+    response.raise_for_status()
