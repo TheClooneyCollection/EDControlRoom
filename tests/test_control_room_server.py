@@ -210,10 +210,19 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(snapshot.session.session_id, "local-server")
         self.assertFalse(snapshot.ui_state.activity_auto_follow_paused)
 
+    def test_headless_host_accepts_simple_remote_input(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
+
+            host.handle_remote_input("market filter gold")
+
+        self.assertEqual(host._market_filter, "Gold")
+
     def test_http_endpoints_and_websocket_observer_stream(self) -> None:
         broker = InMemoryObserverSessionBroker()
         app = build_observer_server_app(
             snapshot_provider=_base_snapshot,
+            command_handler=None,
             broker=broker,
             auth=SharedAccessTokenAuth("secret-token"),
         )
@@ -295,6 +304,7 @@ class ControlRoomServerTests(unittest.TestCase):
             },
             client_role="observer",
             snapshot_provider=_base_snapshot,
+            command_handler=None,
             broker=broker,
         )
 
@@ -313,6 +323,7 @@ class ControlRoomServerTests(unittest.TestCase):
             },
             client_role="observer",
             snapshot_provider=_base_snapshot,
+            command_handler=None,
             broker=broker,
         )
 
@@ -320,10 +331,31 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(response["correlation_message_id"], "message-99")
         self.assertEqual(response["payload"]["error_code"], "observer_read_only")
 
+    def test_active_operator_submit_input_command_calls_handler(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        received: list[tuple[str, bool | None]] = []
+
+        response = _handle_session_message(
+            {
+                "message_type": "command.submit_input",
+                "message_id": "message-100",
+                "payload": {"raw_input": "market filter gold", "skip_delay": True},
+            },
+            client_role="active_operator",
+            snapshot_provider=_base_snapshot,
+            command_handler=lambda raw_input, skip_delay: received.append((raw_input, skip_delay)),
+            broker=broker,
+        )
+
+        self.assertEqual(received, [("market filter gold", True)])
+        self.assertEqual(response["message_type"], "response.success")
+        self.assertEqual(response["correlation_message_id"], "message-100")
+
     def test_observer_endpoints_reject_missing_token(self) -> None:
         broker = InMemoryObserverSessionBroker()
         app = build_observer_server_app(
             snapshot_provider=_base_snapshot,
+            command_handler=None,
             broker=broker,
             auth=SharedAccessTokenAuth("secret-token"),
         )

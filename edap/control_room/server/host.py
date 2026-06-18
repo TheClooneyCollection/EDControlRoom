@@ -27,9 +27,18 @@ class _ActivityWidgetStub:
         self.writes.append((content, kwargs))
 
 
+class _CommandInputWidgetStub:
+    def __init__(self) -> None:
+        self.placeholder = ""
+        self.value = ""
+        self.cursor_position = 0
+        self.disabled = False
+
+
 class HeadlessControlRoomHost(ControlRoomApp):
     def __init__(self, ctx: RuntimeContext, *, market_filter: str | None = None) -> None:
         self._activity_widget = _ActivityWidgetStub()
+        self._command_input_widget = _CommandInputWidgetStub()
         super().__init__(ctx, market_filter=market_filter)
         self._watcher_stop = threading.Event()
         self._watcher_thread: threading.Thread | None = None
@@ -37,7 +46,12 @@ class HeadlessControlRoomHost(ControlRoomApp):
     def query_one(self, selector: str, widget_type=None):  # type: ignore[override]
         if selector == "#activity":
             return self._activity_widget
+        if selector == "#cmd":
+            return self._command_input_widget
         raise LookupError(selector)
+
+    def set_focus(self, widget: object) -> None:  # type: ignore[override]
+        return None
 
     def _refresh_status(self) -> None:  # type: ignore[override]
         return None
@@ -78,6 +92,12 @@ class HeadlessControlRoomHost(ControlRoomApp):
             capability_names=["observer_http", "observer_websocket", "announcement_stream"],
             operator_mode="observer_only",
         )
+
+    def handle_remote_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None:
+        resolved = raw_input
+        if skip_delay is True and not raw_input.startswith("!"):
+            resolved = f"!{raw_input}"
+        self._backend.submit_input(resolved)
 
     def _start_watcher_loop(self) -> None:
         if self._watcher_thread is not None:

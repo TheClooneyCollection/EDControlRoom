@@ -18,6 +18,7 @@ from edap.control_room.server.messages import protocol_message
 def build_observer_server_app(
     *,
     snapshot_provider: Callable[[], object],
+    command_handler: Callable[[str, bool | None], None] | None,
     broker: InMemoryObserverSessionBroker,
     auth: ObserverServerAuth,
 ) -> Starlette:
@@ -105,6 +106,7 @@ def build_observer_server_app(
                     websocket,
                     observer=observer,
                     snapshot_provider=snapshot_provider,
+                    command_handler=command_handler,
                     broker=broker,
                 )
             )
@@ -143,6 +145,7 @@ async def _receive_session_messages(
     *,
     observer,
     snapshot_provider: Callable[[], object],
+    command_handler: Callable[[str, bool | None], None] | None,
     broker: InMemoryObserverSessionBroker,
 ) -> None:
     while True:
@@ -151,6 +154,7 @@ async def _receive_session_messages(
             message,
             client_role=observer.client_role,
             snapshot_provider=snapshot_provider,
+            command_handler=command_handler,
             broker=broker,
         )
         if response is None:
@@ -163,6 +167,7 @@ def _handle_session_message(
     *,
     client_role: str,
     snapshot_provider: Callable[[], object],
+    command_handler: Callable[[str, bool | None], None] | None,
     broker: InMemoryObserverSessionBroker,
 ) -> dict[str, object] | None:
     message_type = str(message.get("message_type", ""))
@@ -202,13 +207,38 @@ def _handle_session_message(
                 },
                 correlation_message_id=correlation_message_id,
             )
+        if command_handler is None:
+            return protocol_message(
+                "response.error",
+                {
+                    "error_code": "active_operator_transport_unavailable",
+                    "error_message": "Remote active-operator command execution is not available yet.",
+                    "recommended_action": "Keep using embedded local mode for operator commands until promotion lands.",
+                    "retryable": False,
+                },
+                correlation_message_id=correlation_message_id,
+            )
+        try:
+            skip_delay_value = payload.get("skip_delay")
+            skip_delay = skip_delay_value if isinstance(skip_delay_value, bool) else None
+            command_handler(raw_input, skip_delay)
+        except Exception as exc:
+            return protocol_message(
+                "response.error",
+                {
+                    "error_code": "command_execution_failed",
+                    "error_message": str(exc) or "Remote command execution failed.",
+                    "recommended_action": "Check the command and server activity log, then try again.",
+                    "retryable": True,
+                },
+                correlation_message_id=correlation_message_id,
+            )
         return protocol_message(
-            "response.error",
+            "response.success",
             {
-                "error_code": "active_operator_transport_unavailable",
-                "error_message": "Remote active-operator command execution is not available yet.",
-                "recommended_action": "Keep using embedded local mode for operator commands until promotion lands.",
-                "retryable": False,
+                "accepted": True,
+                "message_text": "Command accepted.",
+                "result": {"raw_input": raw_input},
             },
             correlation_message_id=correlation_message_id,
         )
