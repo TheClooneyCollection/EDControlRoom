@@ -14,6 +14,14 @@ Relevant settings:
 - `buy_hold_log_base_seconds`: fixed base added in log mode.
 - `buy_hold_log_multiplier`: log-mode multiplier.
 
+`log1p(tons)` means `ln(1 + tons)`, not `ln(tons)`.
+
+Why that matters:
+
+- `log(0)` is invalid, but `log1p(0)` is `0`.
+- It rises quickly for smaller cargo values, then tapers off for larger ones.
+- That taper is what makes it useful when a straight seconds-per-ton rule overshoots on big holds.
+
 Linear mode:
 
 ```toml
@@ -37,8 +45,8 @@ Log mode:
 [controls.market]
 buy_max_hold_seconds = 10.0
 buy_hold_timing_function = "log"
-buy_hold_log_base_seconds = 0.0
-buy_hold_log_multiplier = 0.35
+buy_hold_log_base_seconds = -4.25
+buy_hold_log_multiplier = 1.1829
 ```
 
 Formula:
@@ -47,7 +55,12 @@ Formula:
 hold_seconds = min(buy_max_hold_seconds, buy_hold_log_base_seconds + log1p(tons) * buy_hold_log_multiplier)
 ```
 
-With `300t`, `base = 0.0`, and `multiplier = 0.35`, the hold is about `2.0s`.
+With `base = -4.25` and `multiplier = 1.1829`, the hold is about:
+
+- `300t` -> `2.5s`
+- `700t` -> `3.5s`
+
+Those tuned values use a negative base intentionally. EDControlRoom clamps the computed hold at `0` before applying the max cap, so a negative base is safe.
 
 Use `linear` when you already trust a direct seconds-per-ton ratio. Use `log` when larger cargo amounts are overshooting and you want the curve to taper off.
 

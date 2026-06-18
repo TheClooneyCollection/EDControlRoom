@@ -48,8 +48,8 @@ class LoadConfigTests(unittest.TestCase):
             self.assertEqual(config.controls.market_buy_max_hold_seconds, 10.0)
             self.assertEqual(config.controls.market_buy_hold_timing_function, "linear")
             self.assertEqual(config.controls.market_buy_hold_seconds_per_ton, 0.01)
-            self.assertEqual(config.controls.market_buy_hold_log_base_seconds, 0.0)
-            self.assertEqual(config.controls.market_buy_hold_log_multiplier, 0.35)
+            self.assertEqual(config.controls.market_buy_hold_log_base_seconds, -4.25)
+            self.assertEqual(config.controls.market_buy_hold_log_multiplier, 1.1829)
             self.assertEqual(config.controls.market_sell_quantity_restore_taps, 5)
             self.assertEqual(config.controls.market_sell_quantity_restore_tap_delay_seconds, 0.05)
             self.assertEqual(config.controls.market_critical_level_multiplier, 10.0)
@@ -632,6 +632,27 @@ buy_max_hold_seconds = 0
 
             with self.assertRaisesRegex(ConfigError, "market_buy_max_hold_seconds"):
                 load_config(config_path)
+
+    def test_allows_negative_market_buy_hold_log_base_seconds(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            _write_config(
+                config_path,
+                """
+[paths]
+
+[controls.market]
+buy_hold_log_base_seconds = -3.5
+
+[screen]
+
+[runtime]
+""".strip(),
+            )
+
+            config = load_config(config_path)
+
+            self.assertEqual(config.controls.market_buy_hold_log_base_seconds, -3.5)
 
     def test_rejects_non_positive_market_buy_hold_log_multiplier(self) -> None:
         with TemporaryDirectory() as temp_dir:

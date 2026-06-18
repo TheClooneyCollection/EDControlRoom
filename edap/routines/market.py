@@ -290,7 +290,7 @@ def _buy_hold_duration_for_quantity(
     else:
         hold_s = quantity * buy_hold_seconds_per_ton
         detail = f"linear {buy_hold_seconds_per_ton:.4f}s/t"
-    return min(max_hold_s, hold_s), detail
+    return min(max_hold_s, max(0.0, hold_s)), detail
 
 
 def _find_market_item(items: list[dict], target: str, side: str) -> dict | None:
@@ -483,7 +483,7 @@ def market_buy(
     buy_hold_timing_function: str = "linear",
     buy_hold_seconds_per_ton: float = 0.01,
     buy_hold_log_base_seconds: float = 0.0,
-    buy_hold_log_multiplier: float = 0.35,
+    buy_hold_log_multiplier: float = 1.1829,
     trade_timeout_s: float = 30.0,
     skip_station_check: bool = False,
     max_attempts: int = 3,
@@ -523,7 +523,7 @@ def market_sell(
     buy_hold_timing_function: str = "linear",
     buy_hold_seconds_per_ton: float = 0.01,
     buy_hold_log_base_seconds: float = 0.0,
-    buy_hold_log_multiplier: float = 0.35,
+    buy_hold_log_multiplier: float = 1.1829,
     sell_quantity_restore_taps: int = 5,
     sell_quantity_restore_tap_delay_s: float = 0.05,
     trade_timeout_s: float = 30.0,

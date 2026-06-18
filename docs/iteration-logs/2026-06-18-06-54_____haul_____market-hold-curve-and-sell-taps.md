@@ -8,6 +8,7 @@
 
 - Replaced market sell `MAX` quantity restore with configurable rapid `UI_Right` taps.
 - Added configurable buy `MAX` hold timing modes plus a configurable hold cap so cargo-based hold duration can stay linear or taper with a log curve.
+- Documented `log1p` in operator-facing terms and tuned the log defaults to land around `2.5s` at `300t` and `3.5s` at `700t`.
 
 ## Changes
 

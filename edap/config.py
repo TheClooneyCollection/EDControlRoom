@@ -400,8 +400,6 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError(
             "Config value `controls.market_buy_hold_seconds_per_ton` must be greater than 0."
         )
-    if config.controls.market_buy_hold_log_base_seconds < 0:
-        raise ConfigError("Config value `controls.market_buy_hold_log_base_seconds` must be non-negative.")
     if config.controls.market_buy_hold_log_multiplier <= 0:
         raise ConfigError("Config value `controls.market_buy_hold_log_multiplier` must be greater than 0.")
     if config.controls.market_sell_quantity_restore_taps < 1:
@@ -603,13 +601,13 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             market_buy_hold_log_base_seconds=_float(
                 controls_flat,
                 "market_buy_hold_log_base_seconds",
-                0.0,
+                -4.25,
                 aliases=("market.buy_hold_log_base_seconds",),
             ),
             market_buy_hold_log_multiplier=_float(
                 controls_flat,
                 "market_buy_hold_log_multiplier",
-                0.35,
+                1.1829,
                 aliases=("market.buy_hold_log_multiplier",),
             ),
             market_sell_quantity_restore_taps=_integer(
