@@ -1,5 +1,6 @@
 # Runtime Status
 ## Current
+- `Status.json` parsing currently matches the documented ship `Flags` set; the reference docs do not define auto-docking or auto-launch bits there, so docking-computer state still has to be inferred from journal/music events rather than the status snapshot.
 - macOS with CrossOver is the primary validated runtime path.
 - Windows now has early real-world validation from CMDR VRYAE.
 - Journal tailing, bindings lookup, runtime construction, and shared platform seams are in place across supported targets.

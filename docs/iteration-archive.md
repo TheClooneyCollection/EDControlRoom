@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `30`
-- Latest generated iteration number: `163`
+- Generated iteration count: `31`
+- Latest generated iteration number: `164`
 
 ## Iteration 134
 
@@ -868,3 +868,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Run `uv sync`, validate the full unittest suite, refresh `docs/iteration-archive.md`, commit the release-prep change, and tag `v1.11.0`.
+
+## Iteration 164
+
+- When: `2026-06-18 23:25`
+- Area: `runtime`
+- Title: `status-file-autodock-flags-note`
+- Source: [2026-06-18-23-25___runtime____status-file-autodock-flags-note.md](iteration-logs/2026-06-18-23-25___runtime____status-file-autodock-flags-note.md)
+
+# Iteration Log
+
+- Area: `runtime`
+- Title: `status-file-autodock-flags-note`
+- Started: `2026-06-18 23:25`
+
+## Summary
+
+- Checked the Elite Journal `Status File` reference against the current `edap/status.py` parser to answer whether `Status.json` can reveal auto-docking or auto-launch state.
+
+## Changes
+
+- Confirmed the repo already matches the documented `Flags` table used by `Status.json`.
+- Confirmed the documented `Flags2` table adds on-foot, glide, FSD-hyperdrive, SCO, and supercruise-assist state, but no auto-docking or auto-launch bits.
+- Updated `docs/status/runtime.md` so the runtime handoff explicitly states that docking-computer state still comes from journal/music cues rather than `Status.json`.
+
+## Follow-ups
+
+- If operator UX needs more status-file visibility later, add `Flags2` parsing for documented fields such as `Supercruise Assist Active`, but do not expect it to answer autodock/autolaunch.
