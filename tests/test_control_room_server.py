@@ -343,6 +343,9 @@ class ControlRoomServerTests(unittest.TestCase):
         broker = InMemoryObserverSessionBroker()
         received: list[tuple[str, bool | None]] = []
 
+        def command_handler(raw_input: str, *, skip_delay: bool | None = None) -> None:
+            received.append((raw_input, skip_delay))
+
         response = _handle_session_message(
             {
                 "message_type": "command.submit_input",
@@ -352,13 +355,37 @@ class ControlRoomServerTests(unittest.TestCase):
             session_id="observer-100",
             client_role="active_operator",
             snapshot_provider=_base_snapshot,
-            command_handler=lambda raw_input, skip_delay: received.append((raw_input, skip_delay)),
+            command_handler=command_handler,
             broker=broker,
         )
 
         self.assertEqual(received, [("market filter gold", True)])
         self.assertEqual(response["message_type"], "response.success")
         self.assertEqual(response["correlation_message_id"], "message-100")
+
+    def test_active_operator_submit_input_allows_blank_prompt_submission(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        received: list[tuple[str, bool | None]] = []
+
+        def command_handler(raw_input: str, *, skip_delay: bool | None = None) -> None:
+            received.append((raw_input, skip_delay))
+
+        response = _handle_session_message(
+            {
+                "message_type": "command.submit_input",
+                "message_id": "message-blank",
+                "payload": {"raw_input": "", "skip_delay": None},
+            },
+            session_id="observer-blank",
+            client_role="active_operator",
+            snapshot_provider=_base_snapshot,
+            command_handler=command_handler,
+            broker=broker,
+        )
+
+        self.assertEqual(received, [("", None)])
+        self.assertEqual(response["message_type"], "response.success")
+        self.assertEqual(response["correlation_message_id"], "message-blank")
 
     def test_broker_personalizes_snapshot_for_active_operator_session(self) -> None:
         broker = InMemoryObserverSessionBroker()

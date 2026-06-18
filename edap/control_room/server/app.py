@@ -213,13 +213,13 @@ def _handle_session_message(
                 correlation_message_id=correlation_message_id,
             )
         raw_input = payload.get("raw_input")
-        if not isinstance(raw_input, str) or not raw_input.strip():
+        if not isinstance(raw_input, str):
             return protocol_message(
                 "response.error",
                 {
                     "error_code": "invalid_command",
                     "error_message": "Command input must include raw_input text.",
-                    "recommended_action": "Send a non-empty raw_input string.",
+                    "recommended_action": "Send a raw_input string.",
                     "retryable": True,
                 },
                 correlation_message_id=correlation_message_id,
@@ -238,7 +238,7 @@ def _handle_session_message(
         try:
             skip_delay_value = payload.get("skip_delay")
             skip_delay = skip_delay_value if isinstance(skip_delay_value, bool) else None
-            command_handler(raw_input, skip_delay)
+            command_handler(raw_input, skip_delay=skip_delay)
         except Exception as exc:
             return protocol_message(
                 "response.error",
