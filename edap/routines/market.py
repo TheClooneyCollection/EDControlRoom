@@ -7,6 +7,7 @@ from time import monotonic, sleep
 from typing import Callable
 
 from edap.actions import ActionDispatchResult
+from edap.config import MarketBuyHoldSegmentConfig
 from edap.routines._base import (
     RoutineResult,
     SupportsMarketControls,
@@ -276,20 +277,26 @@ def _buy_hold_duration_for_quantity(
     quantity: int,
     *,
     max_hold_s: float,
-    buy_hold_timing_function: str,
-    buy_hold_seconds_per_ton: float,
-    buy_hold_log_base_seconds: float,
-    buy_hold_log_multiplier: float,
+    buy_hold_segments: tuple[MarketBuyHoldSegmentConfig, ...],
 ) -> tuple[float, str]:
-    if buy_hold_timing_function == "log":
-        hold_s = buy_hold_log_base_seconds + (log1p(quantity) * buy_hold_log_multiplier)
+    segment = buy_hold_segments[0]
+    for candidate in buy_hold_segments:
+        if quantity < candidate.start:
+            break
+        segment = candidate
+
+    if segment.function == "flat":
+        hold_s = segment.hold_seconds
+        detail = f"{segment.start}t+ flat {segment.hold_seconds:.2f}s"
+    elif segment.function == "log":
+        hold_s = segment.base_seconds + (log1p(quantity) * segment.multiplier)
         detail = (
-            f"log curve ({buy_hold_log_base_seconds:.2f}s + log1p(tons) * "
-            f"{buy_hold_log_multiplier:.4f}s)"
+            f"{segment.start}t+ log curve ({segment.base_seconds:.2f}s + log1p(tons) * "
+            f"{segment.multiplier:.4f}s)"
         )
     else:
-        hold_s = quantity * buy_hold_seconds_per_ton
-        detail = f"linear {buy_hold_seconds_per_ton:.4f}s/t"
+        hold_s = quantity * segment.seconds_per_ton
+        detail = f"{segment.start}t+ linear {segment.seconds_per_ton:.4f}s/t"
     return min(max_hold_s, max(0.0, hold_s)), detail
 
 
@@ -480,10 +487,11 @@ def market_buy(
     step_delay_s: float = 1.0,
     nav_delay_s: float = 0.1,
     max_hold_s: float = 10.0,
-    buy_hold_timing_function: str = "linear",
-    buy_hold_seconds_per_ton: float = 0.01,
-    buy_hold_log_base_seconds: float = 0.0,
-    buy_hold_log_multiplier: float = 1.1829,
+    buy_hold_segments: tuple[MarketBuyHoldSegmentConfig, ...] = (
+        MarketBuyHoldSegmentConfig(start=0, function="flat", hold_seconds=1.0),
+        MarketBuyHoldSegmentConfig(start=100, function="linear", seconds_per_ton=0.01),
+        MarketBuyHoldSegmentConfig(start=301, function="log", base_seconds=-4.25, multiplier=1.1829),
+    ),
     trade_timeout_s: float = 30.0,
     skip_station_check: bool = False,
     max_attempts: int = 3,
@@ -497,10 +505,7 @@ def market_buy(
         controls, watcher,
         market_path=market_path, target=target, amount=amount, side="buy",
         step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
-        buy_hold_timing_function=buy_hold_timing_function,
-        buy_hold_seconds_per_ton=buy_hold_seconds_per_ton,
-        buy_hold_log_base_seconds=buy_hold_log_base_seconds,
-        buy_hold_log_multiplier=buy_hold_log_multiplier,
+        buy_hold_segments=buy_hold_segments,
         sell_quantity_restore_taps=0,
         sell_quantity_restore_tap_delay_s=0.0,
         trade_timeout_s=trade_timeout_s, skip_station_check=skip_station_check,
@@ -520,10 +525,11 @@ def market_sell(
     step_delay_s: float = 1.0,
     nav_delay_s: float = 0.1,
     max_hold_s: float = 10.0,
-    buy_hold_timing_function: str = "linear",
-    buy_hold_seconds_per_ton: float = 0.01,
-    buy_hold_log_base_seconds: float = 0.0,
-    buy_hold_log_multiplier: float = 1.1829,
+    buy_hold_segments: tuple[MarketBuyHoldSegmentConfig, ...] = (
+        MarketBuyHoldSegmentConfig(start=0, function="flat", hold_seconds=1.0),
+        MarketBuyHoldSegmentConfig(start=100, function="linear", seconds_per_ton=0.01),
+        MarketBuyHoldSegmentConfig(start=301, function="log", base_seconds=-4.25, multiplier=1.1829),
+    ),
     sell_quantity_restore_taps: int = 5,
     sell_quantity_restore_tap_delay_s: float = 0.05,
     trade_timeout_s: float = 30.0,
@@ -539,10 +545,7 @@ def market_sell(
         controls, watcher,
         market_path=market_path, target=target, amount=amount, side="sell",
         step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
-        buy_hold_timing_function=buy_hold_timing_function,
-        buy_hold_seconds_per_ton=buy_hold_seconds_per_ton,
-        buy_hold_log_base_seconds=buy_hold_log_base_seconds,
-        buy_hold_log_multiplier=buy_hold_log_multiplier,
+        buy_hold_segments=buy_hold_segments,
         sell_quantity_restore_taps=sell_quantity_restore_taps,
         sell_quantity_restore_tap_delay_s=sell_quantity_restore_tap_delay_s,
         trade_timeout_s=trade_timeout_s, skip_station_check=skip_station_check,
@@ -563,10 +566,7 @@ def _market_trade(
     step_delay_s: float,
     nav_delay_s: float,
     max_hold_s: float,
-    buy_hold_timing_function: str,
-    buy_hold_seconds_per_ton: float,
-    buy_hold_log_base_seconds: float,
-    buy_hold_log_multiplier: float,
+    buy_hold_segments: tuple[MarketBuyHoldSegmentConfig, ...],
     sell_quantity_restore_taps: int,
     sell_quantity_restore_tap_delay_s: float,
     trade_timeout_s: float,
@@ -600,10 +600,7 @@ def _market_trade(
             market_path=market_path, target=target, amount=amount, side=side,
             event_type=event_type,
             step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
-            buy_hold_timing_function=buy_hold_timing_function,
-            buy_hold_seconds_per_ton=buy_hold_seconds_per_ton,
-            buy_hold_log_base_seconds=buy_hold_log_base_seconds,
-            buy_hold_log_multiplier=buy_hold_log_multiplier,
+            buy_hold_segments=buy_hold_segments,
             sell_quantity_restore_taps=sell_quantity_restore_taps,
             sell_quantity_restore_tap_delay_s=sell_quantity_restore_tap_delay_s,
             trade_timeout_s=trade_timeout_s, skip_station_check=skip_station_check,
@@ -644,10 +641,7 @@ def _market_trade_attempt(
     step_delay_s: float,
     nav_delay_s: float,
     max_hold_s: float,
-    buy_hold_timing_function: str,
-    buy_hold_seconds_per_ton: float,
-    buy_hold_log_base_seconds: float,
-    buy_hold_log_multiplier: float,
+    buy_hold_segments: tuple[MarketBuyHoldSegmentConfig, ...],
     sell_quantity_restore_taps: int,
     sell_quantity_restore_tap_delay_s: float,
     trade_timeout_s: float,
@@ -857,10 +851,7 @@ def _market_trade_attempt(
                 hold_s, hold_detail = _buy_hold_duration_for_quantity(
                     buy_limit,
                     max_hold_s=max_hold_s,
-                    buy_hold_timing_function=buy_hold_timing_function,
-                    buy_hold_seconds_per_ton=buy_hold_seconds_per_ton,
-                    buy_hold_log_base_seconds=buy_hold_log_base_seconds,
-                    buy_hold_log_multiplier=buy_hold_log_multiplier,
+                    buy_hold_segments=buy_hold_segments,
                 )
             if buy_limit is None:
                 progress_fn(

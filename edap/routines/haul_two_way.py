@@ -8,6 +8,7 @@ from time import monotonic, sleep
 from typing import Callable
 
 from edap.actions import ActionDispatchResult
+from edap.config import MarketBuyHoldSegmentConfig
 from edap.routines._base import (
     RoutineResult,
     SupportsHaulControls,
@@ -236,10 +237,7 @@ class _HaulCtx:
     station_2: StationLeg
     step_delay_s: float
     max_hold_s: float
-    market_buy_hold_timing_function: str
-    market_buy_hold_seconds_per_ton: float
-    market_buy_hold_log_base_seconds: float
-    market_buy_hold_log_multiplier: float
+    market_buy_hold_segments: tuple[MarketBuyHoldSegmentConfig, ...]
     market_sell_quantity_restore_taps: int
     market_sell_quantity_restore_tap_delay_s: float
     dock_timeout_s: float
@@ -511,10 +509,7 @@ def _run_market_sell(
         amount="MAX",
         step_delay_s=ctx.step_delay_s,
         max_hold_s=ctx.max_hold_s,
-        buy_hold_timing_function=ctx.market_buy_hold_timing_function,
-        buy_hold_seconds_per_ton=ctx.market_buy_hold_seconds_per_ton,
-        buy_hold_log_base_seconds=ctx.market_buy_hold_log_base_seconds,
-        buy_hold_log_multiplier=ctx.market_buy_hold_log_multiplier,
+        buy_hold_segments=ctx.market_buy_hold_segments,
         sell_quantity_restore_taps=ctx.market_sell_quantity_restore_taps,
         sell_quantity_restore_tap_delay_s=ctx.market_sell_quantity_restore_tap_delay_s,
         trade_timeout_s=ctx.trade_timeout_s,
@@ -566,10 +561,7 @@ def _run_market_buy(
         amount="MAX",
         step_delay_s=ctx.step_delay_s,
         max_hold_s=ctx.max_hold_s,
-        buy_hold_timing_function=ctx.market_buy_hold_timing_function,
-        buy_hold_seconds_per_ton=ctx.market_buy_hold_seconds_per_ton,
-        buy_hold_log_base_seconds=ctx.market_buy_hold_log_base_seconds,
-        buy_hold_log_multiplier=ctx.market_buy_hold_log_multiplier,
+        buy_hold_segments=ctx.market_buy_hold_segments,
         trade_timeout_s=ctx.trade_timeout_s,
         time_fn=ctx.time_fn,
         sleeper=ctx.sleeper,
@@ -894,10 +886,11 @@ def haul_loop_two_way(
     start_phase: Phase | None = None,
     step_delay_s: float = 1.0,
     max_hold_s: float = 10.0,
-    market_buy_hold_timing_function: str = "linear",
-    market_buy_hold_seconds_per_ton: float = 0.01,
-    market_buy_hold_log_base_seconds: float = 0.0,
-    market_buy_hold_log_multiplier: float = 0.35,
+    market_buy_hold_segments: tuple[MarketBuyHoldSegmentConfig, ...] = (
+        MarketBuyHoldSegmentConfig(start=0, function="flat", hold_seconds=1.0),
+        MarketBuyHoldSegmentConfig(start=100, function="linear", seconds_per_ton=0.01),
+        MarketBuyHoldSegmentConfig(start=301, function="log", base_seconds=-4.25, multiplier=1.1829),
+    ),
     market_sell_quantity_restore_taps: int = 5,
     market_sell_quantity_restore_tap_delay_s: float = 0.05,
     dock_timeout_s: float = 600.0,
@@ -957,10 +950,7 @@ def haul_loop_two_way(
         ),
         step_delay_s=step_delay_s,
         max_hold_s=max_hold_s,
-        market_buy_hold_timing_function=market_buy_hold_timing_function,
-        market_buy_hold_seconds_per_ton=market_buy_hold_seconds_per_ton,
-        market_buy_hold_log_base_seconds=market_buy_hold_log_base_seconds,
-        market_buy_hold_log_multiplier=market_buy_hold_log_multiplier,
+        market_buy_hold_segments=market_buy_hold_segments,
         market_sell_quantity_restore_taps=market_sell_quantity_restore_taps,
         market_sell_quantity_restore_tap_delay_s=market_sell_quantity_restore_tap_delay_s,
         dock_timeout_s=dock_timeout_s,

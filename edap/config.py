@@ -17,7 +17,7 @@ DEFAULT_MESSAGES_CONFIG_PATH = Path(__file__).resolve().parent.parent / "default
 VALID_PLATFORMS = {"linux", "macos", "windows"}
 VALID_CAPTURE_MODES = {"fullscreen", "region"}
 VALID_TTS_TITLE_MODES = {"commander", "custom", "commander_name"}
-VALID_MARKET_BUY_HOLD_TIMING_FUNCTIONS = {"linear", "log"}
+VALID_MARKET_BUY_HOLD_SEGMENT_FUNCTIONS = {"flat", "linear", "log"}
 
 
 def default_runtime_platform() -> str:
@@ -40,6 +40,16 @@ class PathsConfig:
 
 
 @dataclass(frozen=True)
+class MarketBuyHoldSegmentConfig:
+    start: int
+    function: str
+    hold_seconds: float = 0.0
+    seconds_per_ton: float = 0.01
+    base_seconds: float = 0.0
+    multiplier: float = 1.0
+
+
+@dataclass(frozen=True)
 class ControlsConfig:
     start_hotkey: str
     stop_hotkey: str
@@ -56,10 +66,7 @@ class ControlsConfig:
     market_nav_delay_seconds: float
     market_trade_max_attempts: int
     market_buy_max_hold_seconds: float
-    market_buy_hold_timing_function: str
-    market_buy_hold_seconds_per_ton: float
-    market_buy_hold_log_base_seconds: float
-    market_buy_hold_log_multiplier: float
+    market_buy_hold_segments: tuple[MarketBuyHoldSegmentConfig, ...]
     market_sell_quantity_restore_taps: int
     market_sell_quantity_restore_tap_delay_seconds: float
     market_critical_level_multiplier: float
@@ -341,6 +348,36 @@ def _capture_region(
     )
 
 
+def _market_buy_hold_segments(raw: dict[str, object], key: str) -> tuple[MarketBuyHoldSegmentConfig, ...]:
+    value = raw.get(key)
+    if value is None:
+        return (
+            MarketBuyHoldSegmentConfig(start=0, function="flat", hold_seconds=1.0),
+            MarketBuyHoldSegmentConfig(start=100, function="linear", seconds_per_ton=0.01),
+            MarketBuyHoldSegmentConfig(start=301, function="log", base_seconds=-4.25, multiplier=1.1829),
+        )
+    if not isinstance(value, list):
+        raise ConfigError(f"Config section `{key}` must be an array of tables.")
+
+    segments: list[MarketBuyHoldSegmentConfig] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            raise ConfigError(f"Config section `{key}[{index}]` must be a table.")
+        start = _integer(item, "start", 0)
+        function = _string(item, "function", "")
+        segments.append(
+            MarketBuyHoldSegmentConfig(
+                start=start,
+                function=function,
+                hold_seconds=_float(item, "hold_seconds", 0.0),
+                seconds_per_ton=_float(item, "seconds_per_ton", 0.01),
+                base_seconds=_float(item, "base_seconds", 0.0),
+                multiplier=_float(item, "multiplier", 1.0),
+            )
+        )
+    return tuple(segments)
+
+
 def _validate_capture_region(region: CaptureRegionConfig, *, key: str) -> None:
     for name, value in (
         ("left", region.left),
@@ -391,17 +428,36 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `controls.market_trade_max_attempts` must be at least 1.")
     if config.controls.market_buy_max_hold_seconds <= 0:
         raise ConfigError("Config value `controls.market_buy_max_hold_seconds` must be greater than 0.")
-    if config.controls.market_buy_hold_timing_function not in VALID_MARKET_BUY_HOLD_TIMING_FUNCTIONS:
-        supported = ", ".join(sorted(VALID_MARKET_BUY_HOLD_TIMING_FUNCTIONS))
-        raise ConfigError(
-            f"Config value `controls.market_buy_hold_timing_function` must be one of: {supported}."
-        )
-    if config.controls.market_buy_hold_seconds_per_ton <= 0:
-        raise ConfigError(
-            "Config value `controls.market_buy_hold_seconds_per_ton` must be greater than 0."
-        )
-    if config.controls.market_buy_hold_log_multiplier <= 0:
-        raise ConfigError("Config value `controls.market_buy_hold_log_multiplier` must be greater than 0.")
+    if not config.controls.market_buy_hold_segments:
+        raise ConfigError("Config section `controls.market.buy_hold_segments` must contain at least one segment.")
+    if config.controls.market_buy_hold_segments[0].start != 0:
+        raise ConfigError("Config section `controls.market.buy_hold_segments` must start at 0 tons.")
+    last_start = -1
+    for index, segment in enumerate(config.controls.market_buy_hold_segments):
+        if segment.start < 0:
+            raise ConfigError(f"Config value `controls.market.buy_hold_segments[{index}].start` must be non-negative.")
+        if segment.start <= last_start:
+            raise ConfigError(
+                "Config section `controls.market.buy_hold_segments` must be in strictly increasing `start` order."
+            )
+        last_start = segment.start
+        if segment.function not in VALID_MARKET_BUY_HOLD_SEGMENT_FUNCTIONS:
+            supported = ", ".join(sorted(VALID_MARKET_BUY_HOLD_SEGMENT_FUNCTIONS))
+            raise ConfigError(
+                f"Config value `controls.market.buy_hold_segments[{index}].function` must be one of: {supported}."
+            )
+        if segment.function == "flat" and segment.hold_seconds < 0:
+            raise ConfigError(
+                f"Config value `controls.market.buy_hold_segments[{index}].hold_seconds` must be non-negative."
+            )
+        if segment.function == "linear" and segment.seconds_per_ton <= 0:
+            raise ConfigError(
+                f"Config value `controls.market.buy_hold_segments[{index}].seconds_per_ton` must be greater than 0."
+            )
+        if segment.function == "log" and segment.multiplier <= 0:
+            raise ConfigError(
+                f"Config value `controls.market.buy_hold_segments[{index}].multiplier` must be greater than 0."
+            )
     if config.controls.market_sell_quantity_restore_taps < 1:
         raise ConfigError("Config value `controls.market_sell_quantity_restore_taps` must be at least 1.")
     if config.controls.market_sell_quantity_restore_tap_delay_seconds < 0:
@@ -470,6 +526,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
 
     paths = _require_table(raw, "paths")
     controls = _require_table(raw, "controls")
+    controls_market = _optional_table(controls, "market")
     controls_flat = _flatten_table(controls)
     screen = _require_table(raw, "screen")
     screen_capture = _optional_table(screen, "capture")
@@ -586,30 +643,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
                 10.0,
                 aliases=("market.buy_max_hold_seconds",),
             ),
-            market_buy_hold_timing_function=_string(
-                controls_flat,
-                "market_buy_hold_timing_function",
-                "linear",
-                aliases=("market.buy_hold_timing_function",),
-            ),
-            market_buy_hold_seconds_per_ton=_float(
-                controls_flat,
-                "market_buy_hold_seconds_per_ton",
-                0.01,
-                aliases=("market.buy_hold_seconds_per_ton",),
-            ),
-            market_buy_hold_log_base_seconds=_float(
-                controls_flat,
-                "market_buy_hold_log_base_seconds",
-                -4.25,
-                aliases=("market.buy_hold_log_base_seconds",),
-            ),
-            market_buy_hold_log_multiplier=_float(
-                controls_flat,
-                "market_buy_hold_log_multiplier",
-                1.1829,
-                aliases=("market.buy_hold_log_multiplier",),
-            ),
+            market_buy_hold_segments=_market_buy_hold_segments(controls_market, "buy_hold_segments"),
             market_sell_quantity_restore_taps=_integer(
                 controls_flat,
                 "market_sell_quantity_restore_taps",

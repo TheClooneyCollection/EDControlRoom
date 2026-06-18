@@ -7,6 +7,7 @@ from pathlib import Path
 
 from edap.actions import ActionDispatchResult
 from edap.binding_lookup import NormalizedBinding
+from edap.config import MarketBuyHoldSegmentConfig
 from edap.routines import (
     RoutineResult,
     auto_zero_throttle_on_arrival as _auto_zero_throttle_on_arrival,
@@ -1018,7 +1019,6 @@ class RoutinesTests(unittest.TestCase):
                 amount="MAX",
                 step_delay_s=0.0,
                 nav_delay_s=0.0,
-                buy_hold_seconds_per_ton=0.01,
                 trade_timeout_s=30.0,
                 time_fn=lambda: 0.0,
                 sleeper=lambda _: None,
@@ -1028,9 +1028,9 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(result.dispatch.status, "ok")
         hold_calls = [call for call in controls.calls if call["action"] == "UI_Right" and call["hold_s"]]
         self.assertEqual(len(hold_calls), 1)
-        self.assertAlmostEqual(float(hold_calls[0]["hold_s"]), 4.6)
+        self.assertAlmostEqual(float(hold_calls[0]["hold_s"]), 3.01, places=2)
         self.assertIn(
-            "  UI_Right hold 4.60s (fill to max from min(460t free, 1000t supply) with linear 0.0100s/t)",
+            "  UI_Right hold 3.01s (fill to max from min(460t free, 1000t supply) with 301t+ log curve (-4.25s + log1p(tons) * 1.1829s))",
             progress,
         )
 
@@ -1090,7 +1090,6 @@ class RoutinesTests(unittest.TestCase):
                 amount="MAX",
                 step_delay_s=0.0,
                 nav_delay_s=0.0,
-                buy_hold_seconds_per_ton=0.01,
                 trade_timeout_s=30.0,
                 time_fn=lambda: 0.0,
                 sleeper=lambda _: None,
@@ -1102,11 +1101,11 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(len(hold_calls), 1)
         self.assertAlmostEqual(float(hold_calls[0]["hold_s"]), 1.2)
         self.assertIn(
-            "  UI_Right hold 1.20s (fill to max from min(500t free, 120t supply) with linear 0.0100s/t)",
+            "  UI_Right hold 1.20s (fill to max from min(500t free, 120t supply) with 100t+ linear 0.0100s/t)",
             progress,
         )
 
-    def test_market_buy_max_falls_back_to_cap_when_available_cargo_space_is_unknown(self) -> None:
+    def test_market_buy_max_uses_segmented_hold_when_available_cargo_space_is_unknown(self) -> None:
         controls = FakeShipControls()
         watcher = FakeWatcher(
             [[{"event": "MarketBuy", "Type": "aluminium", "Type_Localised": "Aluminium", "Count": 46, "TotalCost": 1234}]]
@@ -1145,7 +1144,6 @@ class RoutinesTests(unittest.TestCase):
                 step_delay_s=0.0,
                 nav_delay_s=0.0,
                 max_hold_s=10.0,
-                buy_hold_seconds_per_ton=0.01,
                 trade_timeout_s=30.0,
                 skip_station_check=True,
                 time_fn=lambda: 0.0,
@@ -1154,13 +1152,15 @@ class RoutinesTests(unittest.TestCase):
             )
 
         self.assertEqual(result.dispatch.status, "ok")
-        self.assertIn({"action": "UI_Right", "repeat": 1, "hold_s": 10.0}, controls.calls)
+        hold_calls = [call for call in controls.calls if call["action"] == "UI_Right" and call["hold_s"]]
+        self.assertEqual(len(hold_calls), 1)
+        self.assertAlmostEqual(float(hold_calls[0]["hold_s"]), 3.92, places=2)
         self.assertIn(
-            "  UI_Right hold 10.00s (fill to max from 1000t supply with linear 0.0100s/t)",
+            "  UI_Right hold 3.92s (fill to max from 1000t supply with 301t+ log curve (-4.25s + log1p(tons) * 1.1829s))",
             progress,
         )
 
-    def test_market_buy_max_supports_log_hold_curve(self) -> None:
+    def test_market_buy_max_supports_custom_segmented_hold_curve(self) -> None:
         controls = FakeShipControls()
         watcher = FakeWatcher(
             [[{"event": "MarketBuy", "Type": "aluminium", "Type_Localised": "Aluminium", "Count": 300, "TotalCost": 1234}]]
@@ -1202,8 +1202,11 @@ class RoutinesTests(unittest.TestCase):
                 amount="MAX",
                 step_delay_s=0.0,
                 nav_delay_s=0.0,
-                buy_hold_timing_function="log",
-                buy_hold_log_multiplier=0.4,
+                buy_hold_segments=(
+                    MarketBuyHoldSegmentConfig(start=0, function="flat", hold_seconds=0.5),
+                    MarketBuyHoldSegmentConfig(start=100, function="linear", seconds_per_ton=0.02),
+                    MarketBuyHoldSegmentConfig(start=250, function="log", base_seconds=-1.5, multiplier=0.8),
+                ),
                 trade_timeout_s=30.0,
                 skip_station_check=True,
                 time_fn=lambda: 0.0,
@@ -1214,9 +1217,61 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(result.dispatch.status, "ok")
         hold_calls = [call for call in controls.calls if call["action"] == "UI_Right" and call["hold_s"]]
         self.assertEqual(len(hold_calls), 1)
-        self.assertAlmostEqual(float(hold_calls[0]["hold_s"]), 2.28, places=2)
+        self.assertAlmostEqual(float(hold_calls[0]["hold_s"]), 3.07, places=2)
         self.assertIn(
-            "  UI_Right hold 2.28s (fill to max from min(300t free, 1000t supply) with log curve (0.00s + log1p(tons) * 0.4000s))",
+            "  UI_Right hold 3.07s (fill to max from min(300t free, 1000t supply) with 250t+ log curve (-1.50s + log1p(tons) * 0.8000s))",
+            progress,
+        )
+
+    def test_market_buy_max_uses_flat_segment_for_small_quantities(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher(
+            [[{"event": "MarketBuy", "Type": "aluminium", "Type_Localised": "Aluminium", "Count": 50, "TotalCost": 1234}]]
+        )
+        progress: list[str] = []
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            (journal_dir / "Journal.240101000000.01.log").write_text(
+                json.dumps({"timestamp": "2024-01-01T00:00:01Z", "event": "Loadout", "CargoCapacity": 128}) + "\n",
+                encoding="utf-8",
+            )
+            (journal_dir / "Cargo.json").write_text(
+                json.dumps({"Inventory": [{"Name": "gold", "Count": 78}]}),
+                encoding="utf-8",
+            )
+            market_path = journal_dir / "Market.json"
+            market_path.write_text(
+                json.dumps(
+                    {
+                        "StationName": "Pawelczyk Dock",
+                        "Items": [
+                            {"Category": "Metals", "Name": "aluminium", "Stock": 1000},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = market_buy(
+                controls,
+                watcher,
+                market_path=market_path,
+                target="aluminium",
+                amount="MAX",
+                step_delay_s=0.0,
+                nav_delay_s=0.0,
+                trade_timeout_s=30.0,
+                skip_station_check=True,
+                time_fn=lambda: 0.0,
+                sleeper=lambda _: None,
+                progress_fn=progress.append,
+            )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertIn({"action": "UI_Right", "repeat": 1, "hold_s": 1.0}, controls.calls)
+        self.assertIn(
+            "  UI_Right hold 1.00s (fill to max from min(50t free, 1000t supply) with 0t+ flat 1.00s)",
             progress,
         )
 

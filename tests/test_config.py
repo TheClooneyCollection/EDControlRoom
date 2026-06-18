@@ -46,10 +46,14 @@ class LoadConfigTests(unittest.TestCase):
             self.assertEqual(config.controls.undock_timeout_seconds, 30.0)
             self.assertEqual(config.controls.undock_no_track_timeout_seconds, 600.0)
             self.assertEqual(config.controls.market_buy_max_hold_seconds, 10.0)
-            self.assertEqual(config.controls.market_buy_hold_timing_function, "linear")
-            self.assertEqual(config.controls.market_buy_hold_seconds_per_ton, 0.01)
-            self.assertEqual(config.controls.market_buy_hold_log_base_seconds, -4.25)
-            self.assertEqual(config.controls.market_buy_hold_log_multiplier, 1.1829)
+            self.assertEqual(len(config.controls.market_buy_hold_segments), 3)
+            self.assertEqual(config.controls.market_buy_hold_segments[0].start, 0)
+            self.assertEqual(config.controls.market_buy_hold_segments[0].function, "flat")
+            self.assertEqual(config.controls.market_buy_hold_segments[0].hold_seconds, 1.0)
+            self.assertEqual(config.controls.market_buy_hold_segments[1].start, 100)
+            self.assertEqual(config.controls.market_buy_hold_segments[1].function, "linear")
+            self.assertEqual(config.controls.market_buy_hold_segments[2].start, 301)
+            self.assertEqual(config.controls.market_buy_hold_segments[2].function, "log")
             self.assertEqual(config.controls.market_sell_quantity_restore_taps, 5)
             self.assertEqual(config.controls.market_sell_quantity_restore_tap_delay_seconds, 0.05)
             self.assertEqual(config.controls.market_critical_level_multiplier, 10.0)
@@ -246,7 +250,7 @@ nav_panel_open_delay_seconds = 4.0
             self.assertEqual(config.controls.market_nav_delay_seconds, 0.2)
             self.assertEqual(config.controls.market_trade_max_attempts, 5)
             self.assertEqual(config.controls.market_buy_max_hold_seconds, 10.0)
-            self.assertEqual(config.controls.market_buy_hold_timing_function, "linear")
+            self.assertEqual(config.controls.market_buy_hold_segments[0].function, "flat")
             self.assertEqual(config.controls.market_sell_quantity_restore_taps, 5)
             self.assertFalse(config.controls.haul_two_way_auto_hyperspace_engage)
             self.assertEqual(config.controls.haul_two_way_nav_panel_open_delay_seconds, 4.0)
@@ -573,7 +577,7 @@ market_critical_level_multiplier = 0
             with self.assertRaisesRegex(ConfigError, "market_critical_level_multiplier"):
                 load_config(config_path)
 
-    def test_rejects_non_positive_market_buy_hold_seconds_per_ton(self) -> None:
+    def test_rejects_market_buy_hold_segments_that_do_not_start_at_zero(self) -> None:
         with TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "config.toml"
             _write_config(
@@ -581,8 +585,10 @@ market_critical_level_multiplier = 0
                 """
 [paths]
 
-[controls]
-market_buy_hold_seconds_per_ton = 0
+[[controls.market.buy_hold_segments]]
+start = 50
+function = "flat"
+hold_seconds = 1.0
 
 [screen]
 
@@ -590,10 +596,10 @@ market_buy_hold_seconds_per_ton = 0
 """.strip(),
             )
 
-            with self.assertRaisesRegex(ConfigError, "market_buy_hold_seconds_per_ton"):
+            with self.assertRaisesRegex(ConfigError, "must start at 0"):
                 load_config(config_path)
 
-    def test_rejects_invalid_market_buy_hold_timing_function(self) -> None:
+    def test_rejects_invalid_market_buy_hold_segment_function(self) -> None:
         with TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "config.toml"
             _write_config(
@@ -601,8 +607,9 @@ market_buy_hold_seconds_per_ton = 0
                 """
 [paths]
 
-[controls.market]
-buy_hold_timing_function = "curveball"
+[[controls.market.buy_hold_segments]]
+start = 0
+function = "curveball"
 
 [screen]
 
@@ -610,7 +617,7 @@ buy_hold_timing_function = "curveball"
 """.strip(),
             )
 
-            with self.assertRaisesRegex(ConfigError, "market_buy_hold_timing_function"):
+            with self.assertRaisesRegex(ConfigError, "buy_hold_segments\\[0\\]\\.function"):
                 load_config(config_path)
 
     def test_rejects_non_positive_market_buy_max_hold_seconds(self) -> None:
@@ -633,7 +640,7 @@ buy_max_hold_seconds = 0
             with self.assertRaisesRegex(ConfigError, "market_buy_max_hold_seconds"):
                 load_config(config_path)
 
-    def test_allows_negative_market_buy_hold_log_base_seconds(self) -> None:
+    def test_loads_custom_market_buy_hold_segments(self) -> None:
         with TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "config.toml"
             _write_config(
@@ -641,8 +648,21 @@ buy_max_hold_seconds = 0
                 """
 [paths]
 
-[controls.market]
-buy_hold_log_base_seconds = -3.5
+[[controls.market.buy_hold_segments]]
+start = 0
+function = "flat"
+hold_seconds = 0.75
+
+[[controls.market.buy_hold_segments]]
+start = 25
+function = "linear"
+seconds_per_ton = 0.02
+
+[[controls.market.buy_hold_segments]]
+start = 250
+function = "log"
+base_seconds = -1.5
+multiplier = 0.8
 
 [screen]
 
@@ -652,9 +672,12 @@ buy_hold_log_base_seconds = -3.5
 
             config = load_config(config_path)
 
-            self.assertEqual(config.controls.market_buy_hold_log_base_seconds, -3.5)
+            self.assertEqual(len(config.controls.market_buy_hold_segments), 3)
+            self.assertEqual(config.controls.market_buy_hold_segments[0].hold_seconds, 0.75)
+            self.assertEqual(config.controls.market_buy_hold_segments[1].seconds_per_ton, 0.02)
+            self.assertEqual(config.controls.market_buy_hold_segments[2].base_seconds, -1.5)
 
-    def test_rejects_non_positive_market_buy_hold_log_multiplier(self) -> None:
+    def test_rejects_non_positive_market_buy_hold_segment_log_multiplier(self) -> None:
         with TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "config.toml"
             _write_config(
@@ -662,8 +685,10 @@ buy_hold_log_base_seconds = -3.5
                 """
 [paths]
 
-[controls.market]
-buy_hold_log_multiplier = 0
+[[controls.market.buy_hold_segments]]
+start = 0
+function = "log"
+multiplier = 0
 
 [screen]
 
@@ -671,7 +696,7 @@ buy_hold_log_multiplier = 0
 """.strip(),
             )
 
-            with self.assertRaisesRegex(ConfigError, "market_buy_hold_log_multiplier"):
+            with self.assertRaisesRegex(ConfigError, "buy_hold_segments\\[0\\]\\.multiplier"):
                 load_config(config_path)
 
     def test_rejects_non_positive_market_sell_quantity_restore_taps(self) -> None:

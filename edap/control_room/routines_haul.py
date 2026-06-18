@@ -177,10 +177,7 @@ def dispatch_haul_loop(
                 app._config.controls.haul_two_way_open_nav_panel_after_hyperspace_arrival
             ),
             nav_panel_open_delay_s=app._config.controls.haul_two_way_nav_panel_open_delay_seconds,
-            market_buy_hold_timing_function=app._config.controls.market_buy_hold_timing_function,
-            market_buy_hold_seconds_per_ton=app._config.controls.market_buy_hold_seconds_per_ton,
-            market_buy_hold_log_base_seconds=app._config.controls.market_buy_hold_log_base_seconds,
-            market_buy_hold_log_multiplier=app._config.controls.market_buy_hold_log_multiplier,
+            market_buy_hold_segments=app._config.controls.market_buy_hold_segments,
             market_sell_quantity_restore_taps=app._config.controls.market_sell_quantity_restore_taps,
             market_sell_quantity_restore_tap_delay_s=(
                 app._config.controls.market_sell_quantity_restore_tap_delay_seconds
@@ -278,10 +275,7 @@ def dispatch_multi_leg_haul(
                 app._config.controls.haul_two_way_open_nav_panel_after_hyperspace_arrival
             ),
             nav_panel_open_delay_s=app._config.controls.haul_two_way_nav_panel_open_delay_seconds,
-            market_buy_hold_timing_function=app._config.controls.market_buy_hold_timing_function,
-            market_buy_hold_seconds_per_ton=app._config.controls.market_buy_hold_seconds_per_ton,
-            market_buy_hold_log_base_seconds=app._config.controls.market_buy_hold_log_base_seconds,
-            market_buy_hold_log_multiplier=app._config.controls.market_buy_hold_log_multiplier,
+            market_buy_hold_segments=app._config.controls.market_buy_hold_segments,
             market_sell_quantity_restore_taps=app._config.controls.market_sell_quantity_restore_taps,
             market_sell_quantity_restore_tap_delay_s=(
                 app._config.controls.market_sell_quantity_restore_tap_delay_seconds

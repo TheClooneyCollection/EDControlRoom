@@ -110,21 +110,30 @@ boost_delay_seconds = 5.0
 nav_delay_seconds = 0.1
 # Maximum buy/sell attempts before aborting when the matching MarketBuy/MarketSell journal event is not observed.
 trade_max_attempts = 3
-# Hard cap for any buy `MAX` hold duration, regardless of timing function.
+# Hard cap for any buy `MAX` hold duration, regardless of which segment matches.
 buy_max_hold_seconds = 10.0
-# Buy hold timing mode for `buy ... max`: `linear` uses cargo tons directly; `log` tapers off growth for larger holds.
-buy_hold_timing_function = "linear"
-# For `buy ... max` in `linear` mode, hold UI_Right for `available cargo space * this factor`, capped by the routine max hold.
-buy_hold_seconds_per_ton = 0.01
-# For `buy ... max` in `log` mode, use `base + log1p(tons) * multiplier`, still capped by the routine max hold.
-# These tuned values land around 2.5s at 300t and 3.5s at 700t.
-buy_hold_log_base_seconds = -4.25
-buy_hold_log_multiplier = 1.1829
 # For sell `MAX`, restore the quantity with rapid right taps instead of a long hold.
 sell_quantity_restore_taps = 5
 sell_quantity_restore_tap_delay_seconds = 0.05
 # Treat station supply/demand below this cargo-capacity multiplier as critically low for warning/TTS.
 critical_level_multiplier = 10.0
+
+[[controls.market.buy_hold_segments]]
+# Segment starts are inclusive and evaluated in ascending `start` order.
+start = 0
+function = "flat"
+hold_seconds = 1.0
+
+[[controls.market.buy_hold_segments]]
+start = 100
+function = "linear"
+seconds_per_ton = 0.01
+
+[[controls.market.buy_hold_segments]]
+start = 301
+function = "log"
+base_seconds = -4.25
+multiplier = 1.1829
 
 [screen]
 resolution_width = 1920
