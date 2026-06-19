@@ -2942,6 +2942,94 @@ class ControlRoomFailureMessageTests(unittest.TestCase):
 
 
 class ControlRoomPromptStateTests(unittest.TestCase):
+    def test_advance_haul_prompt_progresses_from_station_1_buying_to_station_1(self) -> None:
+        prompt_state = PromptState(
+            haul_params={"station_1_buying": ""},
+            haul_prompt_defaults={"station_1": "Jameson Memorial"},
+            haul_prompt_step="station_1_buying",
+        )
+
+        transition = control_room_prompts.advance_haul_prompt(
+            prompt_state,
+            "Gold",
+            current_station="Jameson Memorial",
+            current_system="Sol",
+            configured_galaxy_map_settle_default=2.0,
+            configured_dock_timeout_default=600.0,
+            default_placeholder="cmd...",
+            render_error=lambda key, **kwargs: key,
+            parse_optional_nonnegative_float=lambda raw, default, label: default,
+        )
+
+        self.assertEqual(prompt_state.haul_prompt_step, "station_1")
+        self.assertEqual(prompt_state.haul_params["station_1_buying"], "Gold")
+        self.assertEqual(
+            transition.log_lines,
+            (
+                "  Station 1 buying: [cyan]Gold[/]",
+                "[dim]Station 1 name? (Enter = Jameson Memorial)[/]",
+            ),
+        )
+        assert transition.ui_state is not None
+        self.assertEqual(transition.ui_state.placeholder, "station 1 (Enter = Jameson Memorial)...")
+        self.assertEqual(transition.ui_state.value, "Jameson Memorial")
+
+    def test_advance_haul_prompt_rejects_missing_station_2_name(self) -> None:
+        prompt_state = PromptState(
+            haul_params={},
+            haul_prompt_defaults={},
+            haul_prompt_step="station_2",
+        )
+
+        transition = control_room_prompts.advance_haul_prompt(
+            prompt_state,
+            "",
+            current_station="Jameson Memorial",
+            current_system="Sol",
+            configured_galaxy_map_settle_default=2.0,
+            configured_dock_timeout_default=600.0,
+            default_placeholder="cmd...",
+            render_error=lambda key, **kwargs: key,
+            parse_optional_nonnegative_float=lambda raw, default, label: default,
+        )
+
+        self.assertEqual(prompt_state.haul_prompt_step, "station_2")
+        self.assertEqual(
+            transition.log_lines,
+            ("[red]station_2_name_required[/]",),
+        )
+        self.assertIsNone(transition.ui_state)
+
+    def test_advance_haul_prompt_finishes_and_requests_dispatch(self) -> None:
+        prompt_state = PromptState(
+            haul_params={"dock_timeout": ""},
+            haul_prompt_defaults={"dock_timeout": "600.0"},
+            haul_prompt_step="dock_timeout",
+            haul_prompt_raw_command="haul gold",
+            haul_prompt_skip_delay=True,
+        )
+
+        transition = control_room_prompts.advance_haul_prompt(
+            prompt_state,
+            "",
+            current_station="Jameson Memorial",
+            current_system="Sol",
+            configured_galaxy_map_settle_default=2.0,
+            configured_dock_timeout_default=600.0,
+            default_placeholder="cmd...",
+            render_error=lambda key, **kwargs: key,
+            parse_optional_nonnegative_float=lambda raw, default, label: default,
+        )
+
+        self.assertEqual(prompt_state.haul_prompt_step, "")
+        self.assertEqual(prompt_state.haul_prompt_defaults, {})
+        self.assertEqual(prompt_state.haul_params["dock_timeout"], "600.0")
+        self.assertTrue(transition.launch_haul_loop)
+        self.assertTrue(transition.skip_delay)
+        self.assertEqual(transition.raw_command, "haul gold")
+        assert transition.ui_state is not None
+        self.assertEqual(transition.ui_state.placeholder, "cmd...")
+
     def test_begin_haul_prompt_uses_explicit_prompt_state(self) -> None:
         prompt_state = PromptState()
 
