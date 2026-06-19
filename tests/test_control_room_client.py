@@ -9,8 +9,12 @@ from edap.control_room.client.backend import (
 )
 from edap.control_room.client.target import ObserverServerTarget, parse_observer_server_target
 from edap.control_room.protocol import (
+    ACCESS_TOKEN_QUERY_PARAMETER,
     ActivityLogAppendedEvent,
+    AUTHENTICATION_SCHEME_BEARER_TOKEN,
+    REQUIRED_AUTHENTICATION_TRANSPORTS,
     SnapshotUpdatedEvent,
+    build_remote_observer_capabilities_payload,
     event_from_message,
 )
 from edap.control_room.protocol.snapshot import (
@@ -446,38 +450,7 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(message["message_type"], "command.cancel_active_routine")
 
     def test_validate_remote_capabilities_accepts_current_server_surface(self) -> None:
-        capabilities = {
-            "supported_message_types": [
-                "state.snapshot",
-                "event.connection_ready",
-                "event.active_operator_changed",
-                "event.activity_log_appended",
-                "event.announcement_emitted",
-                "command.request_snapshot",
-                "command.request_active_operator",
-                "command.submit_input",
-                "command.open_replay_browser",
-                "command.close_replay_browser",
-                "command.set_replay_filter",
-                "command.move_replay_selection",
-                "command.replay_history_entry",
-                "command.toggle_replay_default_haul",
-                "command.cancel_active_routine",
-                "response.success",
-                "response.error",
-            ],
-            "supported_client_roles": ["active_operator", "observer"],
-            "minimum_client_version": "1",
-            "authentication_required": True,
-            "authentication_scheme": "bearer_token",
-            "authentication_supported_transports": [
-                "authorization_header",
-                "query_parameter",
-            ],
-            "authentication_query_parameter_name": "access_token",
-            "message_schema_url": "/schema/control_room_message.json",
-            "browser_probe_url": "/browser-probe",
-        }
+        capabilities = _current_remote_capabilities()
 
         _validate_remote_observer_capabilities(
             capabilities,
@@ -490,20 +463,8 @@ class ControlRoomClientTests(unittest.TestCase):
         )
 
     def test_validate_remote_capabilities_rejects_missing_message_types(self) -> None:
-        capabilities = {
-            "supported_message_types": ["state.snapshot", "response.success", "response.error"],
-            "supported_client_roles": ["active_operator", "observer"],
-            "minimum_client_version": "1",
-            "authentication_required": True,
-            "authentication_scheme": "bearer_token",
-            "authentication_supported_transports": [
-                "authorization_header",
-                "query_parameter",
-            ],
-            "authentication_query_parameter_name": "access_token",
-            "message_schema_url": "/schema/control_room_message.json",
-            "browser_probe_url": "/browser-probe",
-        }
+        capabilities = _current_remote_capabilities()
+        capabilities["supported_message_types"] = ["state.snapshot", "response.success", "response.error"]
 
         with self.assertRaises(SystemExit) as ctx:
             _validate_remote_observer_capabilities(
@@ -518,39 +479,26 @@ class ControlRoomClientTests(unittest.TestCase):
 
         self.assertIn("does not support required message types", str(ctx.exception))
 
+    def test_validate_remote_capabilities_rejects_missing_command_breakdown(self) -> None:
+        capabilities = _current_remote_capabilities()
+        capabilities["supported_command_message_types"] = ["command.request_snapshot"]
+
+        with self.assertRaises(SystemExit) as ctx:
+            _validate_remote_observer_capabilities(
+                capabilities,
+                ObserverServerTarget(
+                    host="bridge.local",
+                    port=8765,
+                    http_base_url="http://bridge.local:8765",
+                    websocket_url="ws://bridge.local:8765/session",
+                ),
+            )
+
+        self.assertIn("does not support required command message types", str(ctx.exception))
+
     def test_validate_remote_capabilities_rejects_unsupported_client_version(self) -> None:
-        capabilities = {
-            "supported_message_types": [
-                "state.snapshot",
-                "event.connection_ready",
-                "event.active_operator_changed",
-                "event.activity_log_appended",
-                "event.announcement_emitted",
-                "command.request_snapshot",
-                "command.request_active_operator",
-                "command.submit_input",
-                "command.open_replay_browser",
-                "command.close_replay_browser",
-                "command.set_replay_filter",
-                "command.move_replay_selection",
-                "command.replay_history_entry",
-                "command.toggle_replay_default_haul",
-                "command.cancel_active_routine",
-                "response.success",
-                "response.error",
-            ],
-            "supported_client_roles": ["active_operator", "observer"],
-            "minimum_client_version": "2",
-            "authentication_required": True,
-            "authentication_scheme": "bearer_token",
-            "authentication_supported_transports": [
-                "authorization_header",
-                "query_parameter",
-            ],
-            "authentication_query_parameter_name": "access_token",
-            "message_schema_url": "/schema/control_room_message.json",
-            "browser_probe_url": "/browser-probe",
-        }
+        capabilities = _current_remote_capabilities()
+        capabilities["minimum_client_version"] = "2"
 
         with self.assertRaises(SystemExit) as ctx:
             _validate_remote_observer_capabilities(
@@ -566,35 +514,8 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertIn("requires unsupported client version", str(ctx.exception))
 
     def test_validate_remote_capabilities_rejects_missing_auth_transports(self) -> None:
-        capabilities = {
-            "supported_message_types": [
-                "state.snapshot",
-                "event.connection_ready",
-                "event.active_operator_changed",
-                "event.activity_log_appended",
-                "event.announcement_emitted",
-                "command.request_snapshot",
-                "command.request_active_operator",
-                "command.submit_input",
-                "command.open_replay_browser",
-                "command.close_replay_browser",
-                "command.set_replay_filter",
-                "command.move_replay_selection",
-                "command.replay_history_entry",
-                "command.toggle_replay_default_haul",
-                "command.cancel_active_routine",
-                "response.success",
-                "response.error",
-            ],
-            "supported_client_roles": ["active_operator", "observer"],
-            "minimum_client_version": "1",
-            "authentication_required": True,
-            "authentication_scheme": "bearer_token",
-            "authentication_supported_transports": ["authorization_header"],
-            "authentication_query_parameter_name": "access_token",
-            "message_schema_url": "/schema/control_room_message.json",
-            "browser_probe_url": "/browser-probe",
-        }
+        capabilities = _current_remote_capabilities()
+        capabilities["authentication_supported_transports"] = ["authorization_header"]
 
         with self.assertRaises(SystemExit) as ctx:
             _validate_remote_observer_capabilities(
@@ -610,38 +531,8 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertIn("does not support required authentication transports", str(ctx.exception))
 
     def test_validate_remote_capabilities_rejects_missing_browser_probe_url(self) -> None:
-        capabilities = {
-            "supported_message_types": [
-                "state.snapshot",
-                "event.connection_ready",
-                "event.active_operator_changed",
-                "event.activity_log_appended",
-                "event.announcement_emitted",
-                "command.request_snapshot",
-                "command.request_active_operator",
-                "command.submit_input",
-                "command.open_replay_browser",
-                "command.close_replay_browser",
-                "command.set_replay_filter",
-                "command.move_replay_selection",
-                "command.replay_history_entry",
-                "command.toggle_replay_default_haul",
-                "command.cancel_active_routine",
-                "response.success",
-                "response.error",
-            ],
-            "supported_client_roles": ["active_operator", "observer"],
-            "minimum_client_version": "1",
-            "authentication_required": True,
-            "authentication_scheme": "bearer_token",
-            "authentication_supported_transports": [
-                "authorization_header",
-                "query_parameter",
-            ],
-            "authentication_query_parameter_name": "access_token",
-            "message_schema_url": "/schema/control_room_message.json",
-            "browser_probe_url": "",
-        }
+        capabilities = _current_remote_capabilities()
+        capabilities["browser_probe_url"] = ""
 
         with self.assertRaises(SystemExit) as ctx:
             _validate_remote_observer_capabilities(
@@ -655,6 +546,19 @@ class ControlRoomClientTests(unittest.TestCase):
             )
 
         self.assertIn("browser_probe_url must be a non-empty string", str(ctx.exception))
+
+
+def _current_remote_capabilities() -> dict[str, object]:
+    return build_remote_observer_capabilities_payload(
+        capability_names=["local_embedded", "remote_observer"],
+        server_version="1.2.3",
+        authentication_required=True,
+        authentication_scheme=AUTHENTICATION_SCHEME_BEARER_TOKEN,
+        authentication_supported_transports=REQUIRED_AUTHENTICATION_TRANSPORTS,
+        authentication_query_parameter_name=ACCESS_TOKEN_QUERY_PARAMETER,
+        message_schema_url="/schema/control_room_message.json",
+        browser_probe_url="/browser-probe",
+    )
 
 
 if __name__ == "__main__":

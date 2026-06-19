@@ -14,15 +14,19 @@ import websockets
 
 from edap.control_room.backend import ControlRoomBackend, ControlRoomBackendEventHandler
 from edap.control_room.protocol import (
+    ACCESS_TOKEN_QUERY_PARAMETER,
     ActivityLogEntry,
     ActivityLogAppendedEvent,
+    AUTHENTICATION_SCHEME_BEARER_TOKEN,
     AnnouncementEvent,
     ControlRoomSnapshot,
+    REQUIRED_AUTHENTICATION_TRANSPORTS,
     SnapshotUpdatedEvent,
     build_activity_log_entry,
     event_from_message,
     protocol_timestamp_now,
     snapshot_from_message,
+    validate_remote_observer_capabilities_payload,
 )
 from edap.control_room_state import CommandHistoryEntry
 
@@ -31,26 +35,6 @@ from .target import ObserverServerTarget
 
 _RECONNECT_DELAY_SECONDS = 1.0
 _RECONNECT_DELAY_MAX_SECONDS = 30.0
-_REQUIRED_SUPPORTED_MESSAGE_TYPES = {
-    "state.snapshot",
-    "event.connection_ready",
-    "event.active_operator_changed",
-    "event.activity_log_appended",
-    "event.announcement_emitted",
-    "command.request_snapshot",
-    "command.request_active_operator",
-    "command.submit_input",
-    "command.open_replay_browser",
-    "command.close_replay_browser",
-    "command.set_replay_filter",
-    "command.move_replay_selection",
-    "command.replay_history_entry",
-    "command.toggle_replay_default_haul",
-    "command.cancel_active_routine",
-    "response.success",
-    "response.error",
-}
-_REQUIRED_AUTHENTICATION_TRANSPORTS = {"authorization_header", "query_parameter"}
 
 
 class RemoteObserverBackend(ControlRoomBackend):
@@ -393,92 +377,25 @@ def _validate_remote_observer_capabilities(
     capabilities: dict[str, Any],
     server_target: ObserverServerTarget,
 ) -> None:
-    supported_message_types = capabilities.get("supported_message_types")
-    if not isinstance(supported_message_types, list) or not all(
-        isinstance(item, str) for item in supported_message_types
+    validation_error = validate_remote_observer_capabilities_payload(capabilities)
+    if validation_error is None:
+        return
+    if validation_error.startswith(
+        (
+            "supported_command_message_types",
+            "supported_event_message_types",
+            "supported_response_message_types",
+            "supported_message_types",
+            "supported_client_roles",
+            "authentication_supported_transports",
+            "message_schema_url",
+            "browser_probe_url",
+        )
     ):
         raise SystemExit(
             f"Remote server {server_target.host}:{server_target.port} returned invalid capabilities: "
-            "supported_message_types must be a string list."
+            f"{validation_error}"
         )
-    missing_message_types = sorted(
-        _REQUIRED_SUPPORTED_MESSAGE_TYPES.difference(supported_message_types)
+    raise SystemExit(
+        f"Remote server {server_target.host}:{server_target.port} {validation_error}"
     )
-    if missing_message_types:
-        raise SystemExit(
-            f"Remote server {server_target.host}:{server_target.port} does not support required "
-            f"message types: {', '.join(missing_message_types)}"
-        )
-
-    supported_client_roles = capabilities.get("supported_client_roles")
-    if not isinstance(supported_client_roles, list) or not all(
-        isinstance(item, str) for item in supported_client_roles
-    ):
-        raise SystemExit(
-            f"Remote server {server_target.host}:{server_target.port} returned invalid capabilities: "
-            "supported_client_roles must be a string list."
-        )
-    if "active_operator" not in supported_client_roles or "observer" not in supported_client_roles:
-        raise SystemExit(
-            f"Remote server {server_target.host}:{server_target.port} does not advertise both "
-            "active_operator and observer roles."
-        )
-
-    minimum_client_version = capabilities.get("minimum_client_version")
-    if minimum_client_version != "1":
-        raise SystemExit(
-            f"Remote server {server_target.host}:{server_target.port} requires unsupported client "
-            f"version {minimum_client_version!r}."
-        )
-
-    authentication_required = capabilities.get("authentication_required")
-    if authentication_required is not True:
-        raise SystemExit(
-            f"Remote server {server_target.host}:{server_target.port} must require authentication "
-            "for observer mode."
-        )
-
-    authentication_scheme = capabilities.get("authentication_scheme")
-    if authentication_scheme != "bearer_token":
-        raise SystemExit(
-            f"Remote server {server_target.host}:{server_target.port} advertises unsupported "
-            f"authentication scheme {authentication_scheme!r}."
-        )
-
-    authentication_supported_transports = capabilities.get("authentication_supported_transports")
-    if not isinstance(authentication_supported_transports, list) or not all(
-        isinstance(item, str) for item in authentication_supported_transports
-    ):
-        raise SystemExit(
-            f"Remote server {server_target.host}:{server_target.port} returned invalid capabilities: "
-            "authentication_supported_transports must be a string list."
-        )
-    missing_auth_transports = sorted(
-        _REQUIRED_AUTHENTICATION_TRANSPORTS.difference(authentication_supported_transports)
-    )
-    if missing_auth_transports:
-        raise SystemExit(
-            f"Remote server {server_target.host}:{server_target.port} does not support required "
-            f"authentication transports: {', '.join(missing_auth_transports)}"
-        )
-
-    authentication_query_parameter_name = capabilities.get("authentication_query_parameter_name")
-    if authentication_query_parameter_name != "access_token":
-        raise SystemExit(
-            f"Remote server {server_target.host}:{server_target.port} advertises unsupported "
-            f"authentication query parameter {authentication_query_parameter_name!r}."
-        )
-
-    message_schema_url = capabilities.get("message_schema_url")
-    if not isinstance(message_schema_url, str) or not message_schema_url.strip():
-        raise SystemExit(
-            f"Remote server {server_target.host}:{server_target.port} returned invalid capabilities: "
-            "message_schema_url must be a non-empty string."
-        )
-
-    browser_probe_url = capabilities.get("browser_probe_url")
-    if not isinstance(browser_probe_url, str) or not browser_probe_url.strip():
-        raise SystemExit(
-            f"Remote server {server_target.host}:{server_target.port} returned invalid capabilities: "
-            "browser_probe_url must be a non-empty string."
-        )

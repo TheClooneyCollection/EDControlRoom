@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `71`
-- Latest generated iteration number: `204`
+- Generated iteration count: `72`
+- Latest generated iteration number: `205`
 
 ## Iteration 134
 
@@ -2009,3 +2009,32 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - If the hosted browser path becomes a real web client, keep explicit role-transition handling in the session layer rather than hiding it behind generic snapshot rerenders.
+
+## Iteration 205
+
+- When: `2026-06-19 18:24`
+- Area: `control-room`
+- Title: `shared-remote-capabilities`
+- Source: [2026-06-19-18-24_control-room_shared-remote-capabilities.md](iteration-logs/2026-06-19-18-24_control-room_shared-remote-capabilities.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `shared-remote-capabilities`
+- Started: `2026-06-19 18:24`
+
+## Summary
+
+- Collapsed the remote observer capability surface into one shared protocol module so server discovery, client validation, and capability-focused tests stop drifting independently.
+
+## Changes
+
+- Added `edap/control_room/protocol/capabilities.py` with shared message-role/auth constants plus helpers to build and validate the observer capability payload.
+- Rewired the observer server capability endpoint and shared-token auth description to use the shared capability constants instead of local duplicated literals.
+- Rewired the remote client capability validation and tests to use the shared builder/validator rather than repeated hand-written capability dictionaries, and tightened validation so the advertised command/event/response breakdown lists must stay aligned with the aggregate message list.
+- Updated the hosted browser probe to consume the advertised websocket auth query-parameter metadata from `GET /capabilities` instead of hardcoding `access_token`, so the browser path now behaves like a discovery-driven future web client.
+- Kept schema validation anchored to the shared protocol message-type list and verified the full suite stayed green.
+
+## Follow-ups
+
+- Run the live remote validation playbook so the next server/client slices focus on runtime behavior rather than protocol-contract drift.

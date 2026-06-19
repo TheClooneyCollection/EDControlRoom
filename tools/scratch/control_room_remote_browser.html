@@ -254,6 +254,7 @@
         websocket: null,
         messageCounter: 0,
         latestSnapshot: null,
+        latestCapabilities: null,
         reconnectDelaySeconds: RECONNECT_DELAY_SECONDS,
         reconnectTimer: null,
         manuallyDisconnected: false,
@@ -289,7 +290,14 @@
         httpUrl.protocol = httpUrl.protocol === "https:" ? "wss:" : "ws:";
         httpUrl.pathname = "/session";
         httpUrl.searchParams.set("client_name", $("clientName").value.trim() || "browser-probe");
-        httpUrl.searchParams.set("access_token", $("accessToken").value.trim());
+        const capabilities = state.latestCapabilities;
+        const supportedTransports = capabilities?.authentication_supported_transports || [];
+        if (!supportedTransports.includes("query_parameter")) {
+          throw new Error("Browser probe requires query-parameter websocket auth support.");
+        }
+        const queryParameterName =
+          capabilities?.authentication_query_parameter_name || "access_token";
+        httpUrl.searchParams.set(queryParameterName, $("accessToken").value.trim());
         return httpUrl.toString();
       }
 
@@ -435,12 +443,15 @@
           fetchJson("/capabilities"),
           fetchJson("/snapshot"),
         ]);
+        state.latestCapabilities = capabilities;
         $("healthStatus").textContent = health.status;
         $("serverVersion").textContent = capabilities.server_version;
         $("capabilitiesView").textContent = JSON.stringify(capabilities, null, 2);
         $("schemaUrl").textContent = `${httpBaseUrl()}${capabilities.message_schema_url}`;
         renderSnapshot(snapshot);
-        appendMessageLog("HTTP discovery refreshed.");
+        appendMessageLog(
+          `HTTP discovery refreshed. websocket auth query parameter=${capabilities.authentication_query_parameter_name || "(none)"}`
+        );
       }
 
       function nextMessageId(prefix) {

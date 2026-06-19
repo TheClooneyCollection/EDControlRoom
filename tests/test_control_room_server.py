@@ -533,6 +533,9 @@ class ControlRoomServerTests(unittest.TestCase):
             self.assertIn("Recent Activity", response.text)
             self.assertIn("session ready role=", response.text)
             self.assertIn("requestSnapshot();", response.text)
+            self.assertIn("authentication_supported_transports", response.text)
+            self.assertIn("authentication_query_parameter_name", response.text)
+            self.assertIn("Browser probe requires query-parameter websocket auth support.", response.text)
 
     def test_websocket_active_operator_failover_promotes_remaining_client(self) -> None:
         broker = InMemoryObserverSessionBroker()

@@ -3,11 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from edap.control_room.protocol import (
+    ACCESS_TOKEN_QUERY_PARAMETER,
+    AUTHENTICATION_SCHEME_BEARER_TOKEN,
+    REQUIRED_AUTHENTICATION_TRANSPORTS,
+)
 from starlette.requests import Request
 from starlette.websockets import WebSocket
-
-
-ACCESS_TOKEN_QUERY_PARAMETER = "access_token"
 
 
 @dataclass(frozen=True)
@@ -33,8 +35,8 @@ class SharedAccessTokenAuth:
     def describe(self) -> AuthDescription:
         return AuthDescription(
             authentication_required=True,
-            authentication_scheme="bearer_token",
-            supported_transports=("authorization_header", "query_parameter"),
+            authentication_scheme=AUTHENTICATION_SCHEME_BEARER_TOKEN,
+            supported_transports=tuple(REQUIRED_AUTHENTICATION_TRANSPORTS),
             query_parameter_name=ACCESS_TOKEN_QUERY_PARAMETER,
         )
 
