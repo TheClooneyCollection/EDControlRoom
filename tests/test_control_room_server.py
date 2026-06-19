@@ -43,7 +43,14 @@ from edap.control_room.protocol.snapshot import (
     ShipSnapshot,
     UiStateSnapshot,
 )
-from edap.control_room.server.app import _handle_session_message, build_observer_server_app
+from edap.control_room.server.app import (
+    SUPPORTED_COMMAND_MESSAGE_TYPES,
+    SUPPORTED_EVENT_MESSAGE_TYPES,
+    SUPPORTED_MESSAGE_TYPES,
+    SUPPORTED_RESPONSE_MESSAGE_TYPES,
+    _handle_session_message,
+    build_observer_server_app,
+)
 from edap.control_room.server.auth import SharedAccessTokenAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
 from edap.control_room.server.commands import ObserverSessionCommandHandler
@@ -378,6 +385,22 @@ class ControlRoomServerTests(unittest.TestCase):
             self.assertEqual(
                 capabilities.json()["supported_client_roles"],
                 ["active_operator", "observer"],
+            )
+            self.assertEqual(
+                capabilities.json()["supported_message_types"],
+                SUPPORTED_MESSAGE_TYPES,
+            )
+            self.assertEqual(
+                capabilities.json()["supported_command_message_types"],
+                SUPPORTED_COMMAND_MESSAGE_TYPES,
+            )
+            self.assertEqual(
+                capabilities.json()["supported_event_message_types"],
+                SUPPORTED_EVENT_MESSAGE_TYPES,
+            )
+            self.assertEqual(
+                capabilities.json()["supported_response_message_types"],
+                SUPPORTED_RESPONSE_MESSAGE_TYPES,
             )
             self.assertEqual(
                 capabilities.json()["authentication_query_parameter_name"],

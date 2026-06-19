@@ -19,6 +19,39 @@ from edap.control_room.server.commands import (
 from edap.control_room.server.messages import protocol_message
 
 
+SUPPORTED_COMMAND_MESSAGE_TYPES = [
+    "command.request_snapshot",
+    "command.request_active_operator",
+    "command.submit_input",
+    "command.open_replay_browser",
+    "command.close_replay_browser",
+    "command.set_replay_filter",
+    "command.move_replay_selection",
+    "command.replay_history_entry",
+    "command.toggle_replay_default_haul",
+    "command.cancel_active_routine",
+]
+
+SUPPORTED_EVENT_MESSAGE_TYPES = [
+    "event.connection_ready",
+    "event.active_operator_changed",
+    "event.activity_log_appended",
+    "event.announcement_emitted",
+]
+
+SUPPORTED_RESPONSE_MESSAGE_TYPES = [
+    "response.success",
+    "response.error",
+]
+
+SUPPORTED_MESSAGE_TYPES = [
+    "state.snapshot",
+    *SUPPORTED_EVENT_MESSAGE_TYPES,
+    *SUPPORTED_COMMAND_MESSAGE_TYPES,
+    *SUPPORTED_RESPONSE_MESSAGE_TYPES,
+]
+
+
 def build_observer_server_app(
     *,
     snapshot_provider: Callable[[], object],
@@ -61,17 +94,10 @@ def build_observer_server_app(
             {
                 "capability_names": snapshot.server_status.capability_names,
                 "supported_client_roles": ["active_operator", "observer"],
-                "supported_message_types": [
-                    "state.snapshot",
-                    "event.connection_ready",
-                    "event.active_operator_changed",
-                    "event.activity_log_appended",
-                    "event.announcement_emitted",
-                    "command.cancel_active_routine",
-                    "command.move_replay_selection",
-                    "response.success",
-                    "response.error",
-                ],
+                "supported_message_types": list(SUPPORTED_MESSAGE_TYPES),
+                "supported_command_message_types": list(SUPPORTED_COMMAND_MESSAGE_TYPES),
+                "supported_event_message_types": list(SUPPORTED_EVENT_MESSAGE_TYPES),
+                "supported_response_message_types": list(SUPPORTED_RESPONSE_MESSAGE_TYPES),
                 "minimum_client_version": "1",
                 "server_version": snapshot.server_status.server_version,
                 "authentication_required": auth_description.authentication_required,
