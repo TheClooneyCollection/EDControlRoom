@@ -419,6 +419,80 @@ class ControlRoomServerTests(unittest.TestCase):
                 self.assertEqual(announcement["message_type"], "event.announcement_emitted")
                 self.assertEqual(announcement["payload"]["announcement_id"], "startup_greeting")
 
+    def test_websocket_active_operator_failover_promotes_remaining_client(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        app = build_observer_server_app(
+            snapshot_provider=_base_snapshot,
+            command_handler=None,
+            broker=broker,
+            auth=SharedAccessTokenAuth("secret-token"),
+        )
+
+        with TestClient(app) as client:
+            with client.websocket_connect(
+                "/session?client_name=bridge-ipad&access_token=secret-token"
+            ) as first:
+                first.receive_json()
+                first.receive_json()
+                with client.websocket_connect(
+                    "/session?client_name=bridge-mac&access_token=secret-token"
+                ) as second:
+                    second.receive_json()
+                    second.receive_json()
+
+                    first.close()
+
+                    promoted_event = second.receive_json()
+                    while promoted_event["message_type"] == "state.snapshot":
+                        promoted_event = second.receive_json()
+                    self.assertEqual(promoted_event["message_type"], "event.active_operator_changed")
+                    self.assertEqual(
+                        promoted_event["payload"]["active_operator_client_name"],
+                        "bridge-mac",
+                    )
+
+                    promoted_snapshot = second.receive_json()
+                    while promoted_snapshot["message_type"] != "state.snapshot":
+                        promoted_snapshot = second.receive_json()
+                    self.assertEqual(
+                        promoted_snapshot["payload"]["session"]["client_role"],
+                        "active_operator",
+                    )
+                    self.assertEqual(
+                        promoted_snapshot["payload"]["active_operator"]["client_name"],
+                        "bridge-mac",
+                    )
+
+    def test_websocket_session_routes_replay_navigation_command(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        command_handler = _CommandHandlerRecorder()
+        app = build_observer_server_app(
+            snapshot_provider=_base_snapshot,
+            command_handler=command_handler,
+            broker=broker,
+            auth=SharedAccessTokenAuth("secret-token"),
+        )
+
+        with TestClient(app) as client:
+            with client.websocket_connect(
+                "/session?client_name=bridge-ipad&access_token=secret-token"
+            ) as websocket:
+                websocket.receive_json()
+                websocket.receive_json()
+
+                websocket.send_json(
+                    {
+                        "message_type": "command.move_replay_selection",
+                        "message_id": "message-move-1",
+                        "payload": {"offset": -1},
+                    }
+                )
+
+                response = websocket.receive_json()
+                self.assertEqual(response["message_type"], "response.success")
+                self.assertEqual(response["correlation_message_id"], "message-move-1")
+                self.assertEqual(command_handler.replay_selection_offsets, [-1])
+
     def test_broker_broadcasts_live_snapshot_updates(self) -> None:
         broker = InMemoryObserverSessionBroker()
         observer = broker.register_observer("bridge-ipad")
