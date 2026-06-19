@@ -800,6 +800,7 @@ class ControlRoomApp(App[None]):
 
     def _sync_status_snapshot(self) -> None:
         _bootstrap.sync_status_snapshot(self)
+        _bootstrap.sync_cargo_manifest(self, update_count=False)
 
     # ── Rendering ──────────────────────────────────────────────────────────────
 

@@ -1,10 +1,10 @@
 """Market trade routine launchers (buy, sell, sell-all)."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
+from edap.cargo_manifest import read_cargo_inventory as read_cargo_inventory_with_retry
 from rich.markup import escape
 
 from edap.control_room import error_text
@@ -50,14 +50,7 @@ def _parse_trade_target_and_amount(rest: str) -> tuple[str, int | str | None, bo
 
 
 def _read_cargo_inventory(journal_dir: Path) -> list[dict[str, Any]]:
-    cargo_path = journal_dir / "Cargo.json"
-    try:
-        with cargo_path.open() as fh:
-            data = json.load(fh)
-        inventory = data.get("Inventory", [])
-        return inventory if isinstance(inventory, list) else []
-    except (OSError, json.JSONDecodeError):
-        return []
+    return read_cargo_inventory_with_retry(journal_dir)
 
 
 def _sellable_cargo(inventory: list[dict[str, Any]]) -> list[dict[str, Any]]:

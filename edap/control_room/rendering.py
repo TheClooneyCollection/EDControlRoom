@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
+from edap.cargo_manifest import read_cargo_inventory as read_cargo_inventory_with_retry
 from rich.markup import escape
 from rich.text import Text
 
@@ -64,14 +64,7 @@ def build_log_text(msg: str) -> Text:
 
 
 def read_cargo_inventory(journal_dir: Path) -> list[dict[str, Any]]:
-    cargo_path = journal_dir / "Cargo.json"
-    try:
-        with cargo_path.open(encoding="utf-8") as fh:
-            data = json.load(fh)
-    except (OSError, json.JSONDecodeError):
-        return []
-    inventory = data.get("Inventory", [])
-    return inventory if isinstance(inventory, list) else []
+    return read_cargo_inventory_with_retry(journal_dir)
 
 
 def cargo_summary_lines(inventory: list[dict[str, Any]], *, limit: int = 3) -> list[str]:

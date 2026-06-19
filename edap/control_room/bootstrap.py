@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Protocol
 
+from edap.cargo_manifest import read_cargo_inventory
 from edap.control_room import rendering as _rendering
 from edap.control_room.models import MarketData, ShipState
 from edap.status import read_status
@@ -24,15 +25,7 @@ def sync_cargo_manifest(app: BootstrapHost, *, update_count: bool = True) -> boo
     cargo_path = app._journal_dir / "Cargo.json"
     if not cargo_path.exists():
         return False
-    try:
-        with cargo_path.open(encoding="utf-8") as fh:
-            data: dict[str, Any] = json.load(fh)
-    except (OSError, json.JSONDecodeError):
-        return False
-
-    inventory = data.get("Inventory", [])
-    if not isinstance(inventory, list):
-        inventory = []
+    inventory = read_cargo_inventory(app._journal_dir)
     app._ship.cargo_inventory = list(inventory)
     if update_count:
         app._ship.cargo_count = sum(int(item.get("Count", 0) or 0) for item in inventory)

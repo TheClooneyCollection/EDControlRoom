@@ -853,6 +853,33 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertEqual(self.app._ship.destination_body, "Jameson Memorial")
         self.assertEqual(self.app._ship.destination_name, "Jameson Memorial")
 
+    def test_sync_status_snapshot_refreshes_cargo_manifest_without_journal_event(self) -> None:
+        journal_dir = Path(self.tmpdir.name)
+        self.app._ship.cargo_count = 461
+        self.app._ship.cargo_inventory = []
+        (journal_dir / "Status.json").write_text(
+            json.dumps({"Flags": 0, "Cargo": 461}),
+            encoding="utf-8",
+        )
+        (journal_dir / "Cargo.json").write_text(
+            json.dumps(
+                {
+                    "Inventory": [
+                        {"Name": "bertrandite", "Name_Localised": "Bertrandite", "Count": 461},
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        self.app._sync_status_snapshot()
+
+        self.assertEqual(self.app._ship.cargo_count, 461)
+        self.assertEqual(
+            self.app._ship.cargo_inventory,
+            [{"Name": "bertrandite", "Name_Localised": "Bertrandite", "Count": 461}],
+        )
+
     def test_status_markup_shows_destination_summary(self) -> None:
         ship = ShipState(
             system="Sol",
