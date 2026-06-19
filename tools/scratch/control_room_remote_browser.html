@@ -123,6 +123,11 @@
       .status.ok {
         color: var(--accent-2);
       }
+
+      .hint {
+        margin-top: 8px;
+        color: var(--muted);
+      }
     </style>
   </head>
   <body>
@@ -161,6 +166,7 @@
           <button id="instantButton">Submit Instant</button>
         </div>
         <p id="connectionStatus" class="status">Disconnected</p>
+        <p id="operatorHint" class="hint">Observer mode: mutating controls disabled until this client is active operator.</p>
       </section>
 
       <section class="panel">
@@ -283,6 +289,41 @@
         view.scrollTop = view.scrollHeight;
       }
 
+      function isActiveOperator() {
+        return state.latestSnapshot?.session?.client_role === "active_operator";
+      }
+
+      function setControlsDisabled(ids, disabled) {
+        for (const id of ids) {
+          $(id).disabled = disabled;
+        }
+      }
+
+      function refreshOperatorControls() {
+        const disabled = !isActiveOperator();
+        setControlsDisabled(
+          [
+            "cancelButton",
+            "submitButton",
+            "instantButton",
+            "replayOpenButton",
+            "replayCloseButton",
+            "replayFilterButton",
+            "replayUpButton",
+            "replayDownButton",
+            "replayRunButton",
+            "replayEditButton",
+            "replayToggleDefaultButton",
+            "promptSubmitButton",
+            "promptDefaultButton",
+          ],
+          disabled,
+        );
+        $("operatorHint").textContent = disabled
+          ? "Observer mode: mutating controls disabled until this client is active operator."
+          : "Active operator mode: command, replay, and prompt controls enabled.";
+      }
+
       function clearReconnectTimer() {
         if (state.reconnectTimer !== null) {
           window.clearTimeout(state.reconnectTimer);
@@ -327,6 +368,7 @@
         $("routineState").textContent = routineState.active_routine_name || "idle";
         renderReplay(snapshot);
         renderPrompt(snapshot);
+        refreshOperatorControls();
       }
 
       function renderReplay(snapshot) {
@@ -379,6 +421,10 @@
           appendMessageLog(`Cannot send ${messageType}: websocket is not open.`);
           return;
         }
+        if (messageType !== "command.request_snapshot" && messageType !== "command.request_active_operator" && !isActiveOperator()) {
+          appendMessageLog(`Cannot send ${messageType}: this browser session is currently observer-only.`);
+          return;
+        }
         state.websocket.send(
           JSON.stringify({
             message_id: nextMessageId("browser"),
@@ -427,6 +473,8 @@
           setConnectionStatus(`Disconnected (${event.code})`, false);
           appendMessageLog(`websocket closed code=${event.code} reason=${event.reason || "-"}`);
           state.websocket = null;
+          state.latestSnapshot = null;
+          refreshOperatorControls();
           if (!state.manuallyDisconnected) {
             const delaySeconds = state.reconnectDelaySeconds;
             appendMessageLog(`Reconnecting in ${delaySeconds.toFixed(1)}s...`);
@@ -479,6 +527,8 @@
           state.websocket.close();
         }
         setConnectionStatus("Disconnected", false);
+        state.latestSnapshot = null;
+        refreshOperatorControls();
       });
       $("refreshButton").addEventListener("click", () => {
         refreshHttp().catch((error) => appendMessageLog(error.message));
@@ -550,6 +600,7 @@
       });
 
       initializeDefaultTarget();
+      refreshOperatorControls();
     </script>
   </body>
 </html>

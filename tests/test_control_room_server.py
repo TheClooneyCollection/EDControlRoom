@@ -524,6 +524,7 @@ class ControlRoomServerTests(unittest.TestCase):
             self.assertIn("command.toggle_replay_default_haul", response.text)
             self.assertIn("Reconnecting in", response.text)
             self.assertIn("Observer connection restored.", response.text)
+            self.assertIn("Observer mode: mutating controls disabled", response.text)
 
     def test_websocket_active_operator_failover_promotes_remaining_client(self) -> None:
         broker = InMemoryObserverSessionBroker()
