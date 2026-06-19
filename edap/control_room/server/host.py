@@ -143,15 +143,12 @@ class HeadlessControlRoomHost(ControlRoomApp):
             operator_mode="observer_only",
         )
 
-    def handle_remote_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None:
+    def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None:
         resolved = raw_input
         if skip_delay is True and not raw_input.startswith("!"):
             resolved = f"!{raw_input}"
         self._backend.submit_input(resolved)
         self._publish_snapshot()
-
-    def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None:
-        self.handle_remote_input(raw_input, skip_delay=skip_delay)
 
     def open_replay_browser(self) -> None:
         self._backend.open_replay_browser()
@@ -180,6 +177,15 @@ class HeadlessControlRoomHost(ControlRoomApp):
         self._publish_snapshot()
 
     def _publish_snapshot(self) -> None:
+        sink = self._protocol_event_sink
+        if sink is not None:
+            sink.publish_snapshot(self.snapshot())
+
+    def handle_remote_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None:
+        self.submit_input(raw_input, skip_delay=skip_delay)
+
+    def cancel_active_routine(self) -> None:
+        self._cancel_active_routine("Remote Ctrl-C")
         sink = self._protocol_event_sink
         if sink is not None:
             sink.publish_snapshot(self.snapshot())

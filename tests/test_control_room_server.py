@@ -253,6 +253,7 @@ class _SnapshotRecorder(ControlRoomEventSink):
 class _CommandHandlerRecorder(ObserverSessionCommandHandler):
     def __init__(self) -> None:
         self.submitted_inputs: list[tuple[str, bool | None]] = []
+        self.cancel_calls = 0
         self.opened_replay_browser = 0
         self.closed_replay_browser = 0
         self.replay_filters: list[str] = []
@@ -261,6 +262,9 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
 
     def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None:
         self.submitted_inputs.append((raw_input, skip_delay))
+
+    def cancel_active_routine(self) -> None:
+        self.cancel_calls += 1
 
     def open_replay_browser(self) -> None:
         self.opened_replay_browser += 1
@@ -282,8 +286,6 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
 
     def toggle_replay_default_haul(self, entry) -> None:
         self.toggled_default_hauls.append(entry.raw)
-
-
 class ControlRoomServerTests(unittest.TestCase):
     def test_headless_host_initializes_and_can_snapshot_before_mount(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -708,6 +710,45 @@ class ControlRoomServerTests(unittest.TestCase):
             "haul gold",
         )
 
+    def test_active_operator_cancel_active_routine_calls_handler(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        command_handler = _CommandHandlerRecorder()
+
+        response = _handle_session_message(
+            {
+                "message_type": "command.cancel_active_routine",
+                "message_id": "message-cancel",
+                "payload": {},
+            },
+            session_id="observer-cancel",
+            client_role="active_operator",
+            snapshot_provider=_base_snapshot,
+            command_handler=command_handler,
+            broker=broker,
+        )
+
+        self.assertEqual(command_handler.cancel_calls, 1)
+        self.assertEqual(response["message_type"], "response.success")
+        self.assertEqual(response["correlation_message_id"], "message-cancel")
+
+    def test_observer_cancel_active_routine_is_rejected(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+
+        response = _handle_session_message(
+            {
+                "message_type": "command.cancel_active_routine",
+                "message_id": "message-cancel-observer",
+                "payload": {},
+            },
+            session_id="observer-cancel-observer",
+            client_role="observer",
+            snapshot_provider=_base_snapshot,
+            command_handler=None,
+            broker=broker,
+        )
+
+        self.assertEqual(response["message_type"], "response.error")
+        self.assertEqual(response["payload"]["error_code"], "observer_read_only")
     def test_broker_personalizes_snapshot_for_active_operator_session(self) -> None:
         broker = InMemoryObserverSessionBroker()
         observer = broker.register_observer("bridge-ipad")
