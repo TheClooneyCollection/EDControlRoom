@@ -4,7 +4,7 @@
 - The status, haul, and market panels can now render from a backend snapshot instead of reading live app-owned state directly, which gives the existing Textual UI its first real path toward a remote backend.
 - Local mode now has an always-present `LocalControlRoomBackend` that owns snapshot/event subscription for the embedded app, while the old `_protocol_event_sink` hook remains only as a compatibility passthrough for external observers like `serve`.
 - Observer transport now has shared-token auth plus an app-backed `control_room connect <host>:<port>` path: authenticated `GET /capabilities`/`GET /snapshot`, `WS /session`, live `state.snapshot` updates, streamed activity/announcement events, and client-local TTS replay from streamed announcement identifiers.
-- The session transport is now bidirectional: clients can send versioned command envelopes, `command.request_snapshot` round-trips over WebSocket, observer-only sessions get correlated `response.error` replies, and active operators can drive prompt/default submissions through the headless host.
+- The session transport is now bidirectional: clients can send versioned command envelopes, `command.request_snapshot` round-trips over WebSocket, observer-only sessions get correlated `response.error` replies, and active operators can drive prompt/default submissions plus replay-browser actions through the headless host.
 - Session snapshots are now personalized per connected client instead of broadcast with one shared `session.client_role`, which removes a protocol blocker for future active-operator promotion and role-aware remote UIs.
 - Active-operator policy now exists in the server broker: the first authenticated client becomes `active_operator` automatically, later authenticated clients can claim the role explicitly, snapshots/connection-ready payloads reflect the assigned role, and disconnect failover promotes the next connected client.
 - Observer-mode server now runs through `ControlRoomEventSink`, an in-memory session broker plus thin retained server session state, a headless runtime host, and Starlette HTTP/WebSocket endpoints behind shared-token auth; it rebroadcasts merged `state.snapshot` updates both on server state changes and immediately after remote input handling so connected operators do not stay on stale prompt or market state.
@@ -12,9 +12,9 @@
 - `haul load [path]` now supports repo-local `haul.toml` launch without prompts, the operator docs include a concrete `haul.toml` example, and replay/edit pre-fills the multi-step haul prompt directly into the command input.
 - Routine failures now surface as `Failed:` plus `Try:` guidance instead of raw internal-looking output, and activity-log retention plus the repo-local `artifacts/control-room.log` mirror are covered in tests.
 ## Caveats
-- The client/server message schema is still a draft, and replay selection plus most prompt/replay cache ownership still live on the app side even though retained activity/announcement history now has a thin server-side layer.
-- `serve`/`connect` now support a real active-operator role assignment path, but deeper live validation is still needed for routine-heavy remote execution, prompt-heavy flows, and replay flows under the headless host.
+- The client/server message schema is still a draft, and replay selection/highlight plus most prompt/replay cache ownership still live on the app side even though retained activity/announcement history and replay commands now have a thin server-side layer.
+- `serve`/`connect` now support a real active-operator role assignment path plus remote replay commands, but deeper live validation is still needed for routine-heavy remote execution, prompt-heavy flows, and replay flows under the headless host.
 - Real-world validation is still needed for stale-market, wrong-station, and wrong-commodity recovery wording.
 ## Next
-- Move replay-browser, prompt-flow, and other remaining session caches onto the same server-owned state seam behind `serve`.
+- Move replay-browser selection/highlight, prompt-flow, and other remaining session caches onto the same server-owned state seam behind `serve`.
 - Live-validate active-operator claiming, failover-on-disconnect, routine-heavy remote commands, and the new failure wording/market back-out path against real Control Room cases.

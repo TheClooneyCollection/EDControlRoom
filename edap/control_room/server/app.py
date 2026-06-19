@@ -12,13 +12,17 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from edap.control_room.server.auth import ObserverServerAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
+from edap.control_room.server.commands import (
+    ObserverSessionCommandHandler,
+    command_history_entry_from_payload,
+)
 from edap.control_room.server.messages import protocol_message
 
 
 def build_observer_server_app(
     *,
     snapshot_provider: Callable[[], object],
-    command_handler: Callable[[str, bool | None], None] | None,
+    command_handler: ObserverSessionCommandHandler | None,
     broker: InMemoryObserverSessionBroker,
     auth: ObserverServerAuth,
 ) -> Starlette:
@@ -148,7 +152,7 @@ async def _receive_session_messages(
     *,
     observer,
     snapshot_provider: Callable[[], object],
-    command_handler: Callable[[str, bool | None], None] | None,
+    command_handler: ObserverSessionCommandHandler | None,
     broker: InMemoryObserverSessionBroker,
 ) -> None:
     while True:
@@ -172,7 +176,7 @@ def _handle_session_message(
     session_id: str,
     client_role: str,
     snapshot_provider: Callable[[], object],
-    command_handler: Callable[[str, bool | None], None] | None,
+    command_handler: ObserverSessionCommandHandler | None,
     broker: InMemoryObserverSessionBroker,
 ) -> dict[str, object] | None:
     message_type = str(message.get("message_type", ""))
@@ -238,7 +242,7 @@ def _handle_session_message(
         try:
             skip_delay_value = payload.get("skip_delay")
             skip_delay = skip_delay_value if isinstance(skip_delay_value, bool) else None
-            command_handler(raw_input, skip_delay=skip_delay)
+            command_handler.submit_input(raw_input, skip_delay=skip_delay)
         except Exception as exc:
             return protocol_message(
                 "response.error",
@@ -260,6 +264,106 @@ def _handle_session_message(
             correlation_message_id=correlation_message_id,
         )
 
+    if message_type == "command.open_replay_browser":
+        if client_role != "active_operator":
+            return _observer_read_only_error(correlation_message_id)
+        if command_handler is None:
+            return _transport_unavailable_error(correlation_message_id)
+        try:
+            command_handler.open_replay_browser()
+        except Exception as exc:
+            return _command_execution_failed_error(exc, correlation_message_id)
+        return protocol_message(
+            "response.success",
+            {"accepted": True, "message_text": "Replay browser opened."},
+            correlation_message_id=correlation_message_id,
+        )
+
+    if message_type == "command.close_replay_browser":
+        if client_role != "active_operator":
+            return _observer_read_only_error(correlation_message_id)
+        if command_handler is None:
+            return _transport_unavailable_error(correlation_message_id)
+        try:
+            command_handler.close_replay_browser()
+        except Exception as exc:
+            return _command_execution_failed_error(exc, correlation_message_id)
+        return protocol_message(
+            "response.success",
+            {"accepted": True, "message_text": "Replay browser closed."},
+            correlation_message_id=correlation_message_id,
+        )
+
+    if message_type == "command.set_replay_filter":
+        if client_role != "active_operator":
+            return _observer_read_only_error(correlation_message_id)
+        if command_handler is None:
+            return _transport_unavailable_error(correlation_message_id)
+        filter_text = payload.get("filter_text")
+        if not isinstance(filter_text, str):
+            return protocol_message(
+                "response.error",
+                {
+                    "error_code": "invalid_command",
+                    "error_message": "Replay filter commands must include filter_text.",
+                    "recommended_action": "Send a filter_text string.",
+                    "retryable": True,
+                },
+                correlation_message_id=correlation_message_id,
+            )
+        try:
+            command_handler.set_replay_filter(filter_text)
+        except Exception as exc:
+            return _command_execution_failed_error(exc, correlation_message_id)
+        return protocol_message(
+            "response.success",
+            {"accepted": True, "message_text": "Replay filter updated."},
+            correlation_message_id=correlation_message_id,
+        )
+
+    if message_type in {"command.replay_history_entry", "command.toggle_replay_default_haul"}:
+        if client_role != "active_operator":
+            return _observer_read_only_error(correlation_message_id)
+        if command_handler is None:
+            return _transport_unavailable_error(correlation_message_id)
+        entry = command_history_entry_from_payload(payload)
+        if entry is None:
+            return protocol_message(
+                "response.error",
+                {
+                    "error_code": "invalid_command",
+                    "error_message": "Replay commands must include a serialized history entry.",
+                    "recommended_action": "Send raw_command, command_name, arguments, and timestamp.",
+                    "retryable": True,
+                },
+                correlation_message_id=correlation_message_id,
+            )
+        if message_type == "command.toggle_replay_default_haul":
+            try:
+                command_handler.toggle_replay_default_haul(entry)
+            except Exception as exc:
+                return _command_execution_failed_error(exc, correlation_message_id)
+            return protocol_message(
+                "response.success",
+                {"accepted": True, "message_text": "Default haul updated."},
+                correlation_message_id=correlation_message_id,
+            )
+        edit_value = payload.get("edit", False)
+        skip_delay_value = payload.get("skip_delay", False)
+        try:
+            command_handler.replay_history_entry(
+                entry,
+                edit=bool(edit_value),
+                skip_delay=bool(skip_delay_value),
+            )
+        except Exception as exc:
+            return _command_execution_failed_error(exc, correlation_message_id)
+        return protocol_message(
+            "response.success",
+            {"accepted": True, "message_text": "Replay entry accepted."},
+            correlation_message_id=correlation_message_id,
+        )
+
     return protocol_message(
         "response.error",
         {
@@ -267,6 +371,48 @@ def _handle_session_message(
             "error_message": f"Unsupported message type: {message_type}",
             "recommended_action": "Use a supported command or upgrade the client.",
             "retryable": False,
+        },
+        correlation_message_id=correlation_message_id,
+    )
+
+
+def _observer_read_only_error(correlation_message_id: str | None) -> dict[str, object]:
+    return protocol_message(
+        "response.error",
+        {
+            "error_code": "observer_read_only",
+            "error_message": "Observer clients cannot issue operator commands.",
+            "recommended_action": "Use an active operator session to run commands.",
+            "retryable": False,
+        },
+        correlation_message_id=correlation_message_id,
+    )
+
+
+def _transport_unavailable_error(correlation_message_id: str | None) -> dict[str, object]:
+    return protocol_message(
+        "response.error",
+        {
+            "error_code": "active_operator_transport_unavailable",
+            "error_message": "Remote active-operator command execution is not available yet.",
+            "recommended_action": "Keep using embedded local mode for operator commands until promotion lands.",
+            "retryable": False,
+        },
+        correlation_message_id=correlation_message_id,
+    )
+
+
+def _command_execution_failed_error(
+    exc: Exception,
+    correlation_message_id: str | None,
+) -> dict[str, object]:
+    return protocol_message(
+        "response.error",
+        {
+            "error_code": "command_execution_failed",
+            "error_message": str(exc) or "Remote command execution failed.",
+            "recommended_action": "Check the command and server activity log, then try again.",
+            "retryable": True,
         },
         correlation_message_id=correlation_message_id,
     )

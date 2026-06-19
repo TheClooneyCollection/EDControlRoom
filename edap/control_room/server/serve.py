@@ -48,7 +48,7 @@ def serve_observer_mode(
     broker.publish_snapshot(runtime_host.snapshot())
     app = build_observer_server_app(
         snapshot_provider=runtime_host.snapshot,
-        command_handler=runtime_host.handle_remote_input,
+        command_handler=runtime_host,
         broker=broker,
         auth=SharedAccessTokenAuth(access_token),
     )

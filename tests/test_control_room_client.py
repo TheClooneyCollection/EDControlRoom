@@ -223,6 +223,52 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(second["message_type"], "command.submit_input")
         self.assertEqual(second["payload"]["raw_input"], "dock")
 
+    def test_remote_backend_enqueues_replay_commands(self) -> None:
+        target = ObserverServerTarget(
+            host="bridge.local",
+            port=8765,
+            http_base_url="http://bridge.local:8765",
+            websocket_url="ws://bridge.local:8765/session",
+        )
+        backend = RemoteObserverBackend(
+            server_target=target,
+            access_token="secret-token",
+            client_name="observer-ipad",
+            initial_snapshot=_snapshot(),
+        )
+
+        backend.open_replay_browser()
+        backend.set_replay_filter("haul")
+        backend.replay_history_entry(
+            entry=type("Entry", (), {
+                "raw": "haul gold",
+                "command": "haul",
+                "params": {"station_1_buying": "gold"},
+                "timestamp": "2026-06-18T13:00:00Z",
+            })(),
+            edit=True,
+            skip_delay=True,
+        )
+        backend.toggle_replay_default_haul(
+            type("Entry", (), {
+                "raw": "haul gold",
+                "command": "haul",
+                "params": {"station_1_buying": "gold"},
+                "timestamp": "2026-06-18T13:00:00Z",
+            })()
+        )
+        backend.close_replay_browser()
+
+        self.assertEqual(backend._outgoing_messages.get_nowait()["message_type"], "command.open_replay_browser")
+        self.assertEqual(backend._outgoing_messages.get_nowait()["payload"]["filter_text"], "haul")
+        replay_message = backend._outgoing_messages.get_nowait()
+        self.assertEqual(replay_message["message_type"], "command.replay_history_entry")
+        self.assertTrue(replay_message["payload"]["edit"])
+        self.assertTrue(replay_message["payload"]["skip_delay"])
+        toggle_message = backend._outgoing_messages.get_nowait()
+        self.assertEqual(toggle_message["message_type"], "command.toggle_replay_default_haul")
+        self.assertEqual(backend._outgoing_messages.get_nowait()["message_type"], "command.close_replay_browser")
+
     def test_remote_backend_enqueues_active_operator_claim(self) -> None:
         target = ObserverServerTarget(
             host="bridge.local",
