@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `72`
-- Latest generated iteration number: `205`
+- Generated iteration count: `73`
+- Latest generated iteration number: `206`
 
 ## Iteration 134
 
@@ -2040,3 +2040,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Run the live remote validation playbook so the next server/client slices focus on runtime behavior rather than protocol-contract drift.
+
+## Iteration 206
+
+- When: `2026-06-19 20:57`
+- Area: `control-room`
+- Title: `cargo-manifest-remote-refresh`
+- Source: [2026-06-19-20-57_control-room_cargo-manifest-remote-refresh.md](iteration-logs/2026-06-19-20-57_control-room_cargo-manifest-remote-refresh.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `cargo-manifest-remote-refresh`
+- Started: `2026-06-19 20:57`
+
+## Summary
+
+- Fixed the cargo-state mismatch where Control Room could show total cargo tonnage from `Status.json` while cargo details stayed empty, causing remote `sell` and resumed haul decisions to treat the hold as empty.
+
+## Changes
+
+- Added `edap/cargo_manifest.py` as a shared cargo-manifest reader that retries briefly when `Status.json` reports cargo but `Cargo.json` is temporarily empty.
+- Switched bootstrap, render/status refresh, trade routines, market routines, and two-way haul resume detection over to the shared manifest reader.
+- Updated `ControlRoomApp._sync_status_snapshot()` to refresh cargo details alongside `Status.json` so server/client snapshots recover commodity breakdown without waiting for a fresh trade event.
+- Added regression coverage for the retry helper and for status refresh repopulating cargo inventory.
+
+## Follow-ups
+
+- Live-test remote server startup and resumed haul with preloaded cargo to confirm the new retry path matches Elite/CrossOver file-write timing in practice.
