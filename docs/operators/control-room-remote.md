@@ -67,6 +67,14 @@ uv run python3 tools/scratch/scratch_control_room_remote.py 192.168.1.50:8765 --
 
 The scratch probe fetches `health`, `capabilities`, and `snapshot`, then opens a websocket session and prints the message stream summary.
 
+For a browser-native smoke check against the same LAN server, open:
+
+```text
+tools/scratch/control_room_remote_browser.html
+```
+
+The page uses `fetch()` plus browser `WebSocket` directly against `GET /health`, `GET /capabilities`, `GET /snapshot`, `GET /schema/control_room_message.json`, and `WS /session`, so it is the quickest sanity check that the remote surface is browser-usable before a real web client exists.
+
 ## Current Caveats
 
 - authentication is still a shared LAN token, not per-user auth

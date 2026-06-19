@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `59`
-- Latest generated iteration number: `192`
+- Generated iteration count: `60`
+- Latest generated iteration number: `193`
 
 ## Iteration 134
 
@@ -1685,3 +1685,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Use the served schema and capability metadata as the starting point if a dedicated browser client is introduced, then decide whether any additional browser-specific session ergonomics are needed after live LAN validation.
+
+## Iteration 193
+
+- When: `2026-06-19 17:58`
+- Area: `control-room`
+- Title: `add-browser-remote-probe`
+- Source: [2026-06-19-17-58_control-room_add-browser-remote-probe.md](iteration-logs/2026-06-19-17-58_control-room_add-browser-remote-probe.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `add-browser-remote-probe`
+- Started: `2026-06-19 17:58`
+
+## Summary
+
+- Added a no-build browser probe for the remote observer server so the new CORS/schema/discovery work can be exercised from a real browser before a dedicated web client exists.
+
+## Changes
+
+- Added `tools/scratch/control_room_remote_browser.html`, a standalone HTML/JS page that fetches `health`, `capabilities`, `snapshot`, and the served schema, then opens `WS /session` and can claim operator or request snapshots.
+- Updated the scratch-tool README and remote operator runbook so the browser probe is part of the supported validation path for future web-client work.
+- Refreshed the Control Room status handoff to call out both CLI and browser smoke probes for remote validation.
+
+## Follow-ups
+
+- If a dedicated web client is started, use the browser probe as the minimal contract check first, then replace its ad hoc rendering with a proper app without changing the server discovery/session surface casually.
