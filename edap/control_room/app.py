@@ -568,6 +568,14 @@ class ControlRoomApp(App[None]):
         self._replay_state.filter_text = value
 
     @property
+    def _selected_resume_history_entry(self) -> CommandHistoryEntry | None:
+        return self._replay_state.selected_history_entry
+
+    @_selected_resume_history_entry.setter
+    def _selected_resume_history_entry(self, value: CommandHistoryEntry | None) -> None:
+        self._replay_state.selected_history_entry = value
+
+    @property
     def _routine_active(self) -> bool:
         return self._runtime_state.routine_active
 
@@ -865,6 +873,19 @@ class ControlRoomApp(App[None]):
         self._prompt_state.dest_prompt_skip_delay = snapshot.prompt_state.destination_prompt_skip_delay
         self._replay_state.open = snapshot.replay_browser.open
         self._replay_state.filter_text = snapshot.replay_browser.filter_text
+        self._selected_resume_history_entry = (
+            CommandHistoryEntry(
+                raw=snapshot.replay_browser.selected_history_entry.raw_command,
+                command=snapshot.replay_browser.selected_history_entry.command_name,
+                params={
+                    str(key): str(value)
+                    for key, value in snapshot.replay_browser.selected_history_entry.arguments.items()
+                },
+                timestamp=snapshot.replay_browser.selected_history_entry.timestamp,
+            )
+            if snapshot.replay_browser.selected_history_entry is not None
+            else None
+        )
         self._resume_entries = [
             ReplaySelection(
                 entry=CommandHistoryEntry(
@@ -878,6 +899,10 @@ class ControlRoomApp(App[None]):
             )
             for entry in snapshot.replay_browser.visible_entries
         ]
+        try:
+            _replay.sync_resume_widget_selection(self)
+        except Exception:
+            return
 
     def _replace_activity_log(self, entries: list[ActivityLogEntry]) -> None:
         activity = self.query_one("#activity", ActivityLog)
@@ -1484,6 +1509,7 @@ class ControlRoomApp(App[None]):
 
     def on_option_list_option_highlighted(self, message: OptionList.OptionHighlighted) -> None:
         if message.option_list.id == "resume-list":
+            _replay.sync_selected_resume_entry_from_widget(self)
             self._update_resume_detail()
 
     def on_option_list_option_selected(self, message: OptionList.OptionSelected) -> None:

@@ -43,6 +43,7 @@ class SnapshotHost(Protocol):
     _history_draft: str
     _resume_filter: str
     _market_filter: str | None
+    _selected_resume_history_entry: CommandHistoryEntry | None
     _protocol_activity_log: list[ActivityLogEntry]
     _config: Any
     _ctx: Any
@@ -248,13 +249,7 @@ def _command_history_entry_snapshot(entry: CommandHistoryEntry) -> CommandHistor
 def _selected_replay_history_entry(
     app: SnapshotHost,
 ) -> CommandHistoryEntrySnapshot | None:
-    if not app._replay_state.open or not app._resume_entries:
+    selected_entry = app._selected_resume_history_entry
+    if not app._replay_state.open or selected_entry is None:
         return None
-    try:
-        option_list = app.query_one("#resume-list")
-    except Exception:
-        return None
-    highlighted = getattr(option_list, "highlighted", None)
-    if not isinstance(highlighted, int) or highlighted < 0 or highlighted >= len(app._resume_entries):
-        return None
-    return _command_history_entry_snapshot(app._resume_entries[highlighted].entry)
+    return _command_history_entry_snapshot(selected_entry)
