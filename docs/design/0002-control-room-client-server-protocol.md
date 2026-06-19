@@ -93,14 +93,12 @@ Recommended envelope example:
 {
   "schema": "edcontrolroom.control_room_message",
   "version": 1,
-  "message_type": "command.run_routine",
+  "message_type": "command.submit_input",
   "message_id": "message-000123",
   "timestamp": "2026-06-15T14:45:00Z",
   "payload": {
-    "routine_name": "market_sell",
-    "arguments": {
-      "commodity_name": "silver"
-    }
+    "raw_input": "sell silver",
+    "skip_delay": true
   }
 }
 ```
@@ -109,17 +107,21 @@ Recommended envelope example:
 
 ### Session and capability
 
-- `response.capabilities`
+- `event.connection_ready`
 - `event.active_operator_changed`
 
 ### Client commands
 
 - `command.request_snapshot`
-- `command.run_routine`
-- `command.cancel_routine`
-- `command.set_market_filter`
-- `command.clear_market_filter`
-- `command.dismiss_alert`
+- `command.request_active_operator`
+- `command.submit_input`
+- `command.open_replay_browser`
+- `command.close_replay_browser`
+- `command.set_replay_filter`
+- `command.move_replay_selection`
+- `command.replay_history_entry`
+- `command.toggle_replay_default_haul`
+- `command.cancel_active_routine`
 
 ### Server state pushes
 
@@ -129,14 +131,8 @@ Recommended envelope example:
 
 - `event.connection_ready`
 - `event.announcement_emitted`
-- `event.operator_message`
 - `event.activity_log_appended`
-- `event.routine_started`
-- `event.routine_progress`
-- `event.routine_failed`
-- `event.routine_completed`
-- `event.routine_cancelled`
-- `event.server_warning`
+- `event.active_operator_changed`
 
 ### Command responses
 
@@ -152,6 +148,9 @@ Payload:
 - `capability_names`
 - `supported_client_roles`
 - `supported_message_types`
+- `supported_command_message_types`
+- `supported_event_message_types`
+- `supported_response_message_types`
 - `minimum_client_version`
 - `server_version`
 - `authentication_required`
@@ -162,10 +161,11 @@ Payload:
 
 ### `command.request_snapshot`
 
-Payload:
+Payload: empty object
 
-- `include_activity_log`
-- `include_market_state`
+### `command.request_active_operator`
+
+Payload: empty object
 
 ### `state.snapshot`
 
@@ -343,39 +343,43 @@ This should be derived from the runtime context rather than from UI widgets.
 
 `alerts` should not be part of the required first snapshot because the current app does not maintain a separate alert store yet.
 
-### `command.run_routine`
+### `command.submit_input`
 
 Payload:
 
-- `routine_name`
-- `arguments`
+- `raw_input`
+- `skip_delay`
 
-The server should treat `arguments` as a routine-specific object and validate it per routine before execution.
+### `command.open_replay_browser`
 
-### `command.cancel_routine`
+Payload: empty object
 
-Payload:
+### `command.close_replay_browser`
 
-- `routine_id`
-- `reason`
+Payload: empty object
 
-### `command.set_market_filter`
+### `command.set_replay_filter`
 
 Payload:
 
 - `filter_text`
 
-### `command.clear_market_filter`
+### `command.move_replay_selection`
 
 Payload:
 
-- empty object
+- `offset`
 
-### `command.dismiss_alert`
+### `command.replay_history_entry`
 
 Payload:
 
-- `alert_id`
+- `raw_command`
+- `command_name`
+- `arguments`
+- `timestamp`
+- `edit`
+- `skip_delay`
 
 ### `event.connection_ready`
 
@@ -405,13 +409,16 @@ Payload:
 - `active_operator_client_name`
 - `reason`
 
-### `event.operator_message`
+`active_operator_session_id` and `active_operator_client_name` may be `null` briefly if no operator is currently assigned.
+
+### `command.toggle_replay_default_haul`
 
 Payload:
 
-- `severity`
-- `message_text`
-- `recommended_action`
+- `raw_command`
+- `command_name`
+- `arguments`
+- `timestamp`
 
 ### `event.activity_log_appended`
 
@@ -419,53 +426,9 @@ Payload:
 
 - `entry`
 
-### `event.routine_started`
+### `command.cancel_active_routine`
 
-Payload:
-
-- `routine_id`
-- `routine_name`
-- `arguments`
-
-### `event.routine_progress`
-
-Payload:
-
-- `routine_id`
-- `progress_message`
-- `progress_detail`
-
-### `event.routine_failed`
-
-Payload:
-
-- `routine_id`
-- `failure_code`
-- `failure_message`
-- `recommended_action`
-
-### `event.routine_completed`
-
-Payload:
-
-- `routine_id`
-- `completion_message`
-- `result`
-
-### `event.routine_cancelled`
-
-Payload:
-
-- `routine_id`
-- `cancellation_reason`
-
-### `event.server_warning`
-
-Payload:
-
-- `warning_code`
-- `warning_message`
-- `recommended_action`
+Payload: empty object
 
 ### `response.success`
 

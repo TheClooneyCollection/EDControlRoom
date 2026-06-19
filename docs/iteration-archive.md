@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `66`
-- Latest generated iteration number: `199`
+- Generated iteration count: `67`
+- Latest generated iteration number: `200`
 
 ## Iteration 134
 
@@ -1874,3 +1874,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - If a dedicated web client is built, preserve these basic visibility surfaces early so remote operators do not need a separate raw-state/debug page to understand session state.
+
+## Iteration 200
+
+- When: `2026-06-19 18:12`
+- Area: `control-room`
+- Title: `align-protocol-design-note`
+- Source: [2026-06-19-18-12_control-room_align-protocol-design-note.md](iteration-logs/2026-06-19-18-12_control-room_align-protocol-design-note.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `align-protocol-design-note`
+- Started: `2026-06-19 18:12`
+
+## Summary
+
+- Realigned the main Control Room protocol design note with the current shipped remote architecture so the written contract no longer describes superseded message families and payloads.
+
+## Changes
+
+- Replaced the stale draft vocabulary in `docs/design/0002-control-room-client-server-protocol.md` with the actual current command, event, and response message set used by `serve` and `connect`.
+- Updated the example envelope plus payload sections to describe `command.submit_input`, replay commands, active-operator claiming, and `command.cancel_active_routine` instead of the pre-remote routine/filter draft.
+- Expanded the capabilities section to match the current runtime metadata fields that the HTTP discovery surface returns.
+
+## Follow-ups
+
+- Keep the protocol design note and the checked-in schema moving together whenever the remote surface changes, so future web-client work is not forced to guess which document is authoritative.
