@@ -420,6 +420,7 @@ class ControlRoomApp(App[None]):
         self._backend_event_unsubscribe: Callable[[], None] | None = None
         self._exit_requested_once = False
         self._exit_prompt_active = False
+        self._suppress_replay_enter_until = 0.0
 
     def __getattr__(self, name: str) -> Any:
         target = _facade.FACADE_METHOD_MAP.get(name)
@@ -1374,6 +1375,10 @@ class ControlRoomApp(App[None]):
 
     def on_key(self, event) -> None:
         """Handle up/down arrow keys for readline-style command history."""
+        if event.key == "ctrl+r":
+            event.prevent_default()
+            self.action_open_history()
+            return
         if event.key == "ctrl+d":
             event.prevent_default()
             self.action_request_exit()
@@ -1383,6 +1388,8 @@ class ControlRoomApp(App[None]):
             self.action_request_interrupt()
             return
         if self._resume_open:
+            if event.key != "enter":
+                self._suppress_replay_enter_until = 0.0
             if event.key == "escape" or (event.key == "q" and not self._resume_filter):
                 event.prevent_default()
                 self._close_resume_picker()
@@ -1403,6 +1410,9 @@ class ControlRoomApp(App[None]):
                 self._resume_toggle_default_selected()
             elif event.key == "enter":
                 event.prevent_default()
+                if self._time_fn() <= self._suppress_replay_enter_until:
+                    self._suppress_replay_enter_until = 0.0
+                    return
                 self._resume_execute_selected()
             elif event.key == "backspace":
                 event.prevent_default()
@@ -1467,6 +1477,9 @@ class ControlRoomApp(App[None]):
         if not raw:
             return
 
+        if raw.lower() in {"replay", "history"}:
+            # Ignore the same Enter key if it also arrives after the replay browser opens.
+            self._suppress_replay_enter_until = self._time_fn() + 0.1
         self._backend.submit_input(raw)
 
     def _dispatch_command(self, raw: str, *, skip_delay: bool | None = None) -> None:
