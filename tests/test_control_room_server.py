@@ -618,6 +618,11 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertTrue(latest.replay_browser.open)
         self.assertEqual(latest.replay_browser.filter_text, "haul")
         self.assertEqual(latest.command_history.default_haul["station_1_buying"], "gold")
+        self.assertIsNotNone(latest.replay_browser.selected_history_entry)
+        self.assertEqual(
+            latest.replay_browser.selected_history_entry.raw_command,
+            "haul gold",
+        )
 
     def test_broker_personalizes_snapshot_for_active_operator_session(self) -> None:
         broker = InMemoryObserverSessionBroker()

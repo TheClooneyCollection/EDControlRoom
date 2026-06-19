@@ -49,6 +49,7 @@ class SnapshotHost(Protocol):
     _current_version: str
 
     def _activity_auto_follow_paused(self) -> bool: ...
+    def query_one(self, selector: str, widget_type: object | None = None) -> object: ...
 
 
 def snapshot_from_app(
@@ -213,7 +214,7 @@ def _replay_browser_snapshot(app: SnapshotHost) -> ReplayBrowserSnapshot:
         open=app._replay_state.open,
         filter_text=app._replay_state.filter_text,
         visible_entries=visible_entries,
-        selected_history_entry=None,
+        selected_history_entry=_selected_replay_history_entry(app),
     )
 
 
@@ -242,3 +243,18 @@ def _command_history_entry_snapshot(entry: CommandHistoryEntry) -> CommandHistor
         arguments=dict(entry.params),
         timestamp=entry.timestamp,
     )
+
+
+def _selected_replay_history_entry(
+    app: SnapshotHost,
+) -> CommandHistoryEntrySnapshot | None:
+    if not app._replay_state.open or not app._resume_entries:
+        return None
+    try:
+        option_list = app.query_one("#resume-list")
+    except Exception:
+        return None
+    highlighted = getattr(option_list, "highlighted", None)
+    if not isinstance(highlighted, int) or highlighted < 0 or highlighted >= len(app._resume_entries):
+        return None
+    return _command_history_entry_snapshot(app._resume_entries[highlighted].entry)
