@@ -14,27 +14,21 @@
     },
     "message_type": {
       "enum": [
-        "command.authenticate",
-        "command.request_snapshot",
-        "command.run_routine",
-        "command.cancel_routine",
-        "command.set_market_filter",
-        "command.clear_market_filter",
-        "command.dismiss_alert",
         "state.snapshot",
         "event.connection_ready",
-        "event.announcement_emitted",
         "event.active_operator_changed",
-        "event.operator_message",
         "event.activity_log_appended",
-        "event.routine_started",
-        "event.routine_progress",
-        "event.routine_failed",
-        "event.routine_completed",
-        "event.routine_cancelled",
-        "event.server_warning",
-        "response.authentication_result",
-        "response.capabilities",
+        "event.announcement_emitted",
+        "command.request_snapshot",
+        "command.request_active_operator",
+        "command.submit_input",
+        "command.open_replay_browser",
+        "command.close_replay_browser",
+        "command.set_replay_filter",
+        "command.move_replay_selection",
+        "command.replay_history_entry",
+        "command.toggle_replay_default_haul",
+        "command.cancel_active_routine",
         "response.success",
         "response.error"
       ]
@@ -59,18 +53,6 @@
     {
       "if": {
         "properties": {
-          "message_type": { "const": "command.authenticate" }
-        }
-      },
-      "then": {
-        "properties": {
-          "payload": { "$ref": "#/$defs/command_authenticate_payload" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
           "message_type": { "const": "command.request_snapshot" }
         }
       },
@@ -83,60 +65,60 @@
     {
       "if": {
         "properties": {
-          "message_type": { "const": "command.run_routine" }
+          "message_type": { "const": "command.request_active_operator" }
         }
       },
       "then": {
         "properties": {
-          "payload": { "$ref": "#/$defs/command_run_routine_payload" }
+          "payload": { "$ref": "#/$defs/command_request_active_operator_payload" }
         }
       }
     },
     {
       "if": {
         "properties": {
-          "message_type": { "const": "command.cancel_routine" }
+          "message_type": { "const": "command.submit_input" }
         }
       },
       "then": {
         "properties": {
-          "payload": { "$ref": "#/$defs/command_cancel_routine_payload" }
+          "payload": { "$ref": "#/$defs/command_submit_input_payload" }
         }
       }
     },
     {
       "if": {
         "properties": {
-          "message_type": { "const": "command.set_market_filter" }
+          "message_type": { "const": "command.open_replay_browser" }
         }
       },
       "then": {
         "properties": {
-          "payload": { "$ref": "#/$defs/command_set_market_filter_payload" }
+          "payload": { "$ref": "#/$defs/command_open_replay_browser_payload" }
         }
       }
     },
     {
       "if": {
         "properties": {
-          "message_type": { "const": "command.clear_market_filter" }
+          "message_type": { "const": "command.close_replay_browser" }
         }
       },
       "then": {
         "properties": {
-          "payload": { "$ref": "#/$defs/command_clear_market_filter_payload" }
+          "payload": { "$ref": "#/$defs/command_close_replay_browser_payload" }
         }
       }
     },
     {
       "if": {
         "properties": {
-          "message_type": { "const": "command.dismiss_alert" }
+          "message_type": { "const": "command.set_replay_filter" }
         }
       },
       "then": {
         "properties": {
-          "payload": { "$ref": "#/$defs/command_dismiss_alert_payload" }
+          "payload": { "$ref": "#/$defs/command_set_replay_filter_payload" }
         }
       }
     },
@@ -167,6 +149,54 @@
     {
       "if": {
         "properties": {
+          "message_type": { "const": "command.move_replay_selection" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/command_move_replay_selection_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "command.replay_history_entry" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/command_replay_history_entry_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "command.toggle_replay_default_haul" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/command_toggle_replay_default_haul_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "command.cancel_active_routine" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/command_cancel_active_routine_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
           "message_type": { "const": "event.announcement_emitted" }
         }
       },
@@ -191,120 +221,12 @@
     {
       "if": {
         "properties": {
-          "message_type": { "const": "event.operator_message" }
-        }
-      },
-      "then": {
-        "properties": {
-          "payload": { "$ref": "#/$defs/event_operator_message_payload" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
           "message_type": { "const": "event.activity_log_appended" }
         }
       },
       "then": {
         "properties": {
           "payload": { "$ref": "#/$defs/event_activity_log_appended_payload" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "message_type": { "const": "event.routine_started" }
-        }
-      },
-      "then": {
-        "properties": {
-          "payload": { "$ref": "#/$defs/event_routine_started_payload" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "message_type": { "const": "event.routine_progress" }
-        }
-      },
-      "then": {
-        "properties": {
-          "payload": { "$ref": "#/$defs/event_routine_progress_payload" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "message_type": { "const": "event.routine_failed" }
-        }
-      },
-      "then": {
-        "properties": {
-          "payload": { "$ref": "#/$defs/event_routine_failed_payload" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "message_type": { "const": "event.routine_completed" }
-        }
-      },
-      "then": {
-        "properties": {
-          "payload": { "$ref": "#/$defs/event_routine_completed_payload" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "message_type": { "const": "event.routine_cancelled" }
-        }
-      },
-      "then": {
-        "properties": {
-          "payload": { "$ref": "#/$defs/event_routine_cancelled_payload" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "message_type": { "const": "event.server_warning" }
-        }
-      },
-      "then": {
-        "properties": {
-          "payload": { "$ref": "#/$defs/event_server_warning_payload" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "message_type": { "const": "response.authentication_result" }
-        }
-      },
-      "then": {
-        "properties": {
-          "payload": { "$ref": "#/$defs/response_authentication_result_payload" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "message_type": { "const": "response.capabilities" }
-        }
-      },
-      "then": {
-        "properties": {
-          "payload": { "$ref": "#/$defs/response_capabilities_payload" }
         }
       }
     },
@@ -377,46 +299,32 @@
         "recommended_action": { "type": ["string", "null"] }
       }
     },
-    "command_authenticate_payload": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["authentication_token", "client_name", "client_version"],
-      "properties": {
-        "authentication_token": { "type": "string", "minLength": 1 },
-        "client_name": { "type": "string", "minLength": 1 },
-        "client_version": { "type": "string", "minLength": 1 }
-      }
-    },
     "command_request_snapshot_payload": {
       "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "include_activity_log": { "type": "boolean" },
-        "include_market_state": { "type": "boolean" }
-      }
+      "additionalProperties": false
     },
-    "command_run_routine_payload": {
+    "command_request_active_operator_payload": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "command_submit_input_payload": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["routine_name", "arguments"],
+      "required": ["raw_input"],
       "properties": {
-        "routine_name": { "type": "string", "minLength": 1 },
-        "arguments": {
-          "type": "object",
-          "additionalProperties": true
-        }
+        "raw_input": { "type": "string" },
+        "skip_delay": { "type": ["boolean", "null"] }
       }
     },
-    "command_cancel_routine_payload": {
+    "command_open_replay_browser_payload": {
       "type": "object",
-      "additionalProperties": false,
-      "required": ["routine_id"],
-      "properties": {
-        "routine_id": { "type": "string", "minLength": 1 },
-        "reason": { "type": ["string", "null"] }
-      }
+      "additionalProperties": false
     },
-    "command_set_market_filter_payload": {
+    "command_close_replay_browser_payload": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "command_set_replay_filter_payload": {
       "type": "object",
       "additionalProperties": false,
       "required": ["filter_text"],
@@ -424,16 +332,73 @@
         "filter_text": { "type": "string" }
       }
     },
-    "command_clear_market_filter_payload": {
+    "command_move_replay_selection_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["offset"],
+      "properties": {
+        "offset": { "type": "integer" }
+      }
+    },
+    "command_replay_history_entry_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw_command", "command_name", "arguments", "timestamp", "edit"],
+      "properties": {
+        "raw_command": { "type": "string", "minLength": 1 },
+        "command_name": { "type": "string", "minLength": 1 },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "timestamp": { "type": "string" },
+        "edit": { "type": "boolean" },
+        "skip_delay": { "type": "boolean" }
+      }
+    },
+    "command_toggle_replay_default_haul_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw_command", "command_name", "arguments", "timestamp"],
+      "properties": {
+        "raw_command": { "type": "string", "minLength": 1 },
+        "command_name": { "type": "string", "minLength": 1 },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "timestamp": { "type": "string" }
+      }
+    },
+    "command_cancel_active_routine_payload": {
       "type": "object",
       "additionalProperties": false
     },
-    "command_dismiss_alert_payload": {
+    "response_capabilities_payload": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["alert_id"],
+      "required": [
+        "capability_names",
+        "supported_client_roles",
+        "supported_message_types",
+        "supported_command_message_types",
+        "supported_event_message_types",
+        "supported_response_message_types",
+        "minimum_client_version",
+        "server_version"
+      ],
       "properties": {
-        "alert_id": { "type": "string", "minLength": 1 }
+        "capability_names": { "$ref": "#/$defs/string_list" },
+        "supported_client_roles": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/client_role" }
+        },
+        "supported_message_types": { "$ref": "#/$defs/string_list" },
+        "supported_command_message_types": { "$ref": "#/$defs/string_list" },
+        "supported_event_message_types": { "$ref": "#/$defs/string_list" },
+        "supported_response_message_types": { "$ref": "#/$defs/string_list" },
+        "minimum_client_version": { "type": "string", "minLength": 1 },
+        "server_version": { "type": "string", "minLength": 1 }
       }
     },
     "session_snapshot": {
@@ -768,8 +733,8 @@
       "additionalProperties": false,
       "required": ["active_operator_session_id", "active_operator_client_name"],
       "properties": {
-        "active_operator_session_id": { "type": "string", "minLength": 1 },
-        "active_operator_client_name": { "type": "string", "minLength": 1 },
+        "active_operator_session_id": { "type": ["string", "null"], "minLength": 1 },
+        "active_operator_client_name": { "type": ["string", "null"], "minLength": 1 },
         "reason": { "type": ["string", "null"] }
       }
     },
@@ -876,27 +841,6 @@
         "client_role": { "$ref": "#/$defs/client_role" },
         "capability_names": { "$ref": "#/$defs/string_list" },
         "operator_mode": { "type": ["string", "null"] }
-      }
-    },
-    "response_capabilities_payload": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "capability_names",
-        "supported_client_roles",
-        "supported_message_types",
-        "minimum_client_version",
-        "server_version"
-      ],
-      "properties": {
-        "capability_names": { "$ref": "#/$defs/string_list" },
-        "supported_client_roles": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/client_role" }
-        },
-        "supported_message_types": { "$ref": "#/$defs/string_list" },
-        "minimum_client_version": { "type": "string", "minLength": 1 },
-        "server_version": { "type": "string", "minLength": 1 }
       }
     },
     "response_success_payload": {
