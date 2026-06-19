@@ -187,6 +187,42 @@
         <pre id="snapshotView">-</pre>
       </section>
 
+      <section class="panel">
+        <h2>Replay</h2>
+        <label>
+          Replay filter
+          <input id="replayFilterInput" value="">
+        </label>
+        <div class="row">
+          <button id="replayOpenButton">Open Replay</button>
+          <button id="replayCloseButton">Close Replay</button>
+          <button id="replayFilterButton">Set Filter</button>
+        </div>
+        <div class="row">
+          <button id="replayUpButton">Select Up</button>
+          <button id="replayDownButton">Select Down</button>
+          <button id="replayRunButton" class="secondary">Replay Run</button>
+          <button id="replayEditButton">Replay Edit</button>
+        </div>
+        <div class="row">
+          <button id="replayToggleDefaultButton">Toggle Default Haul</button>
+        </div>
+        <pre id="replayView">-</pre>
+      </section>
+
+      <section class="panel">
+        <h2>Prompt</h2>
+        <label>
+          Prompt input
+          <input id="promptInput" value="">
+        </label>
+        <div class="row">
+          <button id="promptSubmitButton" class="secondary">Submit Prompt</button>
+          <button id="promptDefaultButton">Submit Default</button>
+        </div>
+        <pre id="promptView">-</pre>
+      </section>
+
       <section class="panel" style="grid-column: 1 / -1;">
         <h2>Message Stream</h2>
         <pre id="messageLog">-</pre>
@@ -197,6 +233,7 @@
       const state = {
         websocket: null,
         messageCounter: 0,
+        latestSnapshot: null,
       };
 
       const $ = (id) => document.getElementById(id);
@@ -252,6 +289,7 @@
       }
 
       function renderSnapshot(snapshot) {
+        state.latestSnapshot = snapshot;
         $("snapshotView").textContent = JSON.stringify(snapshot, null, 2);
         $("clientRole").textContent = snapshot.session?.client_role ?? "-";
         $("activeOperator").textContent = snapshot.active_operator?.client_name ?? "(none)";
@@ -263,6 +301,30 @@
         );
         $("promptState").textContent = promptActive ? "yes" : "no";
         $("routineState").textContent = routineState.active_routine_name || "idle";
+        renderReplay(snapshot);
+        renderPrompt(snapshot);
+      }
+
+      function renderReplay(snapshot) {
+        const replay = snapshot.replay_browser || {};
+        const selected = replay.selected_history_entry || null;
+        $("replayView").textContent = JSON.stringify({
+          open: Boolean(replay.open),
+          filter_text: replay.filter_text || "",
+          visible_entry_count: (replay.visible_entries || []).length,
+          selected_history_entry: selected,
+        }, null, 2);
+      }
+
+      function renderPrompt(snapshot) {
+        const prompt = snapshot.prompt_state || {};
+        $("promptView").textContent = JSON.stringify({
+          haul_prompt_step: prompt.haul_prompt_step || "",
+          destination_prompt_destination: prompt.destination_prompt_destination || "",
+          destination_prompt_settle_default: prompt.destination_prompt_settle_default ?? null,
+          haul_prompt_defaults: prompt.haul_prompt_defaults || {},
+          haul_parameters: prompt.haul_parameters || {},
+        }, null, 2);
       }
 
       async function refreshHttp() {
@@ -297,6 +359,21 @@
           })
         );
         appendMessageLog(`sent ${messageType}`);
+      }
+
+      function selectedReplayEntryPayload(extraPayload = {}) {
+        const selected = state.latestSnapshot?.replay_browser?.selected_history_entry;
+        if (!selected) {
+          appendMessageLog("No selected replay entry in latest snapshot.");
+          return null;
+        }
+        return {
+          raw_command: selected.raw_command,
+          command_name: selected.command_name,
+          arguments: selected.arguments || {},
+          timestamp: selected.timestamp || "",
+          ...extraPayload,
+        };
       }
 
       async function connect() {
@@ -364,6 +441,51 @@
         sendMessage("command.submit_input", {
           raw_input: $("commandInput").value,
           skip_delay: true,
+        });
+      });
+      $("replayOpenButton").addEventListener("click", () => {
+        sendMessage("command.open_replay_browser", {});
+      });
+      $("replayCloseButton").addEventListener("click", () => {
+        sendMessage("command.close_replay_browser", {});
+      });
+      $("replayFilterButton").addEventListener("click", () => {
+        sendMessage("command.set_replay_filter", {
+          filter_text: $("replayFilterInput").value,
+        });
+      });
+      $("replayUpButton").addEventListener("click", () => {
+        sendMessage("command.move_replay_selection", { offset: -1 });
+      });
+      $("replayDownButton").addEventListener("click", () => {
+        sendMessage("command.move_replay_selection", { offset: 1 });
+      });
+      $("replayRunButton").addEventListener("click", () => {
+        const payload = selectedReplayEntryPayload({ edit: false, skip_delay: false });
+        if (payload) {
+          sendMessage("command.replay_history_entry", payload);
+        }
+      });
+      $("replayEditButton").addEventListener("click", () => {
+        const payload = selectedReplayEntryPayload({ edit: true, skip_delay: false });
+        if (payload) {
+          sendMessage("command.replay_history_entry", payload);
+        }
+      });
+      $("replayToggleDefaultButton").addEventListener("click", () => {
+        const payload = selectedReplayEntryPayload();
+        if (payload) {
+          sendMessage("command.toggle_replay_default_haul", payload);
+        }
+      });
+      $("promptSubmitButton").addEventListener("click", () => {
+        sendMessage("command.submit_input", {
+          raw_input: $("promptInput").value,
+        });
+      });
+      $("promptDefaultButton").addEventListener("click", () => {
+        sendMessage("command.submit_input", {
+          raw_input: "",
         });
       });
     </script>

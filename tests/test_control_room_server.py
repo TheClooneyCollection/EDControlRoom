@@ -519,6 +519,9 @@ class ControlRoomServerTests(unittest.TestCase):
             self.assertIn("Control Room Remote Browser Probe", response.text)
             self.assertIn("command.submit_input", response.text)
             self.assertIn("command.cancel_active_routine", response.text)
+            self.assertIn("command.open_replay_browser", response.text)
+            self.assertIn("command.replay_history_entry", response.text)
+            self.assertIn("command.toggle_replay_default_haul", response.text)
 
     def test_websocket_active_operator_failover_promotes_remaining_client(self) -> None:
         broker = InMemoryObserverSessionBroker()
