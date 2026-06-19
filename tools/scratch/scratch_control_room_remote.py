@@ -10,6 +10,7 @@ import httpx
 import websockets
 
 from edap.control_room.client.target import ObserverServerTarget, parse_observer_server_target
+from edap.control_room.protocol import validate_remote_observer_capabilities_payload
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -80,12 +81,16 @@ async def _watch_session(
     *,
     token: str,
     client_name: str,
+    capabilities: dict[str, Any],
     claim_operator: bool,
     request_snapshot: bool,
     watch_seconds: float,
 ) -> None:
-    session_url = (
-        f"{target.websocket_url}?client_name={quote(client_name)}&access_token={quote(token)}"
+    session_url = _session_url_from_capabilities(
+        target,
+        token=token,
+        client_name=client_name,
+        capabilities=capabilities,
     )
     print(f"websocket: {session_url}")
     async with websockets.connect(session_url) as websocket:
@@ -133,11 +138,33 @@ async def _watch_session(
                 entry = payload.get("entry", {})
                 print(f"  activity: {entry.get('message_text')}")
             elif message_type == "event.active_operator_changed":
-                print(f"  active operator: {payload.get('client_name')}")
+                print(f"  active operator: {payload.get('active_operator_client_name')}")
             elif message_type == "response.error":
                 print(f"  error: {payload.get('error_code')} {payload.get('error_message')}")
             elif message_type == "response.success":
                 print(f"  success: {payload.get('message_text')}")
+
+
+def _session_url_from_capabilities(
+    target: ObserverServerTarget,
+    *,
+    token: str,
+    client_name: str,
+    capabilities: dict[str, Any],
+) -> str:
+    validation_error = validate_remote_observer_capabilities_payload(capabilities)
+    if validation_error is not None:
+        raise SystemExit(f"capabilities validation failed: {validation_error}")
+    supported_transports = capabilities.get("authentication_supported_transports", [])
+    if "query_parameter" not in supported_transports:
+        raise SystemExit(
+            "scratch websocket probe requires query-parameter authentication transport support"
+        )
+    query_parameter_name = str(capabilities["authentication_query_parameter_name"])
+    return (
+        f"{target.websocket_url}?client_name={quote(client_name)}"
+        f"&{quote(query_parameter_name)}={quote(token)}"
+    )
 
 
 def main() -> None:
@@ -151,8 +178,14 @@ def main() -> None:
 
         capabilities = client.get(f"{target.http_base_url}/capabilities")
         capabilities.raise_for_status()
+        capabilities_json = capabilities.json()
+        validation_error = validate_remote_observer_capabilities_payload(capabilities_json)
+        if validation_error is not None:
+            raise SystemExit(f"capabilities validation failed: {validation_error}")
         print("capabilities:")
-        print(json.dumps(capabilities.json(), indent=2, sort_keys=True))
+        print(json.dumps(capabilities_json, indent=2, sort_keys=True))
+        print(f"schema url: {target.http_base_url}{capabilities_json['message_schema_url']}")
+        print(f"browser probe url: {target.http_base_url}{capabilities_json['browser_probe_url']}")
 
         snapshot = client.get(f"{target.http_base_url}/snapshot")
         snapshot.raise_for_status()
@@ -163,6 +196,7 @@ def main() -> None:
             target,
             token=args.token,
             client_name=args.client_name,
+            capabilities=capabilities_json,
             claim_operator=args.claim_operator,
             request_snapshot=args.request_snapshot,
             watch_seconds=args.watch_seconds,
