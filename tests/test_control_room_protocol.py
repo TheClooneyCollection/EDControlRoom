@@ -134,6 +134,7 @@ class _ProtocolHarnessApp(ControlRoomApp):
 class _ActivityLogStub:
     def __init__(self) -> None:
         self.writes: list[object] = []
+        self.styles = type("Styles", (), {"display": "block"})()
 
     def write(self, content, **kwargs) -> None:
         self.writes.append((content, kwargs))
@@ -143,6 +144,7 @@ class _StaticWidgetStub:
     def __init__(self) -> None:
         self.updated = None
         self.border_title = ""
+        self.styles = type("Styles", (), {"display": "block"})()
 
     def update(self, content) -> None:
         self.updated = content
@@ -160,6 +162,11 @@ class _OptionListStub:
         self.highlighted = 0
 
 
+class _ContainerStub:
+    def __init__(self) -> None:
+        self.styles = type("Styles", (), {"display": "none"})()
+
+
 class _KeyEventStub:
     def __init__(self, key: str, *, character: str | None = None) -> None:
         self.key = key
@@ -175,21 +182,33 @@ class _RenderHarnessApp(_ProtocolHarnessApp):
         self._status_widget = _StaticWidgetStub()
         self._haul_widget = _StaticWidgetStub()
         self._market_widget = _StaticWidgetStub()
+        self._resume_help_widget = _StaticWidgetStub()
+        self._resume_detail_widget = _StaticWidgetStub()
         self._resume_list_widget = _OptionListStub()
+        self._resume_browser_widget = _ContainerStub()
+        self._command_input_widget = _InputStub()
         super().__init__(ctx) if backend is None else ControlRoomApp.__init__(self, ctx, backend=backend)
         self._activity_widget = _ActivityLogStub()
 
     def query_one(self, selector: str, widget_type=None):  # type: ignore[override]
         if selector == "#activity":
             return self._activity_widget
+        if selector == "#cmd":
+            return self._command_input_widget
         if selector == "#status":
             return self._status_widget
         if selector == "#haul":
             return self._haul_widget
         if selector == "#market":
             return self._market_widget
+        if selector == "#resume-help":
+            return self._resume_help_widget
+        if selector == "#resume-detail":
+            return self._resume_detail_widget
         if selector == "#resume-list":
             return self._resume_list_widget
+        if selector == "#resume-browser":
+            return self._resume_browser_widget
         raise AssertionError(f"Unexpected selector: {selector}")
 
 
@@ -488,6 +507,9 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
 
         self.assertEqual(app._selected_resume_history_entry, entry)
         self.assertEqual(app._resume_list_widget.highlighted, 0)
+        self.assertEqual(app._activity_widget.styles.display, "none")
+        self.assertEqual(app._resume_browser_widget.styles.display, "block")
+        self.assertEqual(app._resume_help_widget.updated.splitlines()[-1], "Filter: haul")
 
     def test_log_records_protocol_activity_entry_and_snapshot_uses_it_by_default(self) -> None:
         self.app._log("[yellow]Docked at Jameson Memorial[/]")
