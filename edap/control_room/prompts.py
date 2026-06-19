@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Callable
 from typing import Protocol
 
 from rich.markup import escape
@@ -7,12 +9,21 @@ from textual.widgets import Input
 
 from edap.config import AppConfig
 from edap.control_room import error_text
-from edap.control_room.models import ShipState
+from edap.control_room.models import PromptState, ShipState
 from edap.control_room_state import ControlRoomState
+
+
+@dataclass(frozen=True)
+class DestinationPromptDispatch:
+    destination: str
+    galaxy_map_settle: float
+    skip_delay: bool
+    raw_command: str
 
 
 class PromptHost(Protocol):
     _config: AppConfig
+    _prompt_state: PromptState
     _saved_state: ControlRoomState
     _ship: ShipState
     _haul_params: dict[str, str]
@@ -52,20 +63,73 @@ def start_dest_prompt(
     skip_delay: bool = False,
     raw_command: str | None = None,
 ) -> None:
-    app._dest_prompt_destination = destination
-    app._dest_prompt_settle_default = (
-        settle_default
-        if settle_default is not None
-        else app._config.controls.galaxy_map_settle_seconds
+    default_settle = begin_destination_prompt(
+        app._prompt_state,
+        configured_settle_default=app._config.controls.galaxy_map_settle_seconds,
+        destination=destination,
+        settle_default=settle_default,
+        skip_delay=skip_delay,
+        raw_command=raw_command,
     )
-    app._dest_prompt_raw_command = raw_command or f"{'!' if skip_delay else ''}dest {destination}"
-    app._dest_prompt_skip_delay = skip_delay
-    default_settle = app._dest_prompt_settle_default
     app._log(f"Destination: [bold]{escape(destination)}[/]")
     app._log(f"[dim]Galaxy-map settle seconds? (Enter = {default_settle:.1f})[/]")
     app.query_one("#cmd", Input).placeholder = (
         f"galaxy map settle seconds (Enter = {default_settle:.1f})..."
     )
+
+
+def begin_destination_prompt(
+    prompt_state: PromptState,
+    *,
+    configured_settle_default: float,
+    destination: str,
+    settle_default: float | None = None,
+    skip_delay: bool = False,
+    raw_command: str | None = None,
+) -> float:
+    prompt_state.dest_prompt_destination = destination
+    prompt_state.dest_prompt_settle_default = (
+        settle_default if settle_default is not None else configured_settle_default
+    )
+    prompt_state.dest_prompt_raw_command = (
+        raw_command or f"{'!' if skip_delay else ''}dest {destination}"
+    )
+    prompt_state.dest_prompt_skip_delay = skip_delay
+    return prompt_state.dest_prompt_settle_default or 0.0
+
+
+def resolve_destination_prompt_submission(
+    prompt_state: PromptState,
+    raw: str,
+    *,
+    parse_optional_nonnegative_float: Callable[[str, float, str], float | None],
+) -> DestinationPromptDispatch | None:
+    destination = prompt_state.dest_prompt_destination
+    if not destination:
+        return None
+    parsed = parse_optional_nonnegative_float(
+        raw,
+        prompt_state.dest_prompt_settle_default or 0.0,
+        "Galaxy-map settle seconds",
+    )
+    if parsed is None:
+        return None
+    raw_command = prompt_state.dest_prompt_raw_command
+    skip_delay = prompt_state.dest_prompt_skip_delay
+    clear_destination_prompt(prompt_state)
+    return DestinationPromptDispatch(
+        destination=destination,
+        galaxy_map_settle=parsed,
+        skip_delay=skip_delay,
+        raw_command=raw_command,
+    )
+
+
+def clear_destination_prompt(prompt_state: PromptState) -> None:
+    prompt_state.dest_prompt_destination = ""
+    prompt_state.dest_prompt_settle_default = None
+    prompt_state.dest_prompt_raw_command = ""
+    prompt_state.dest_prompt_skip_delay = False
 
 
 def saved_haul_defaults(
@@ -121,10 +185,7 @@ def cancel_prompt_flow(
         app._log(f"[yellow]{escape(source)} received — cancelling haul confirmation.[/]")
         return True
     if app._dest_prompt_destination:
-        app._dest_prompt_destination = ""
-        app._dest_prompt_settle_default = None
-        app._dest_prompt_raw_command = ""
-        app._dest_prompt_skip_delay = False
+        clear_destination_prompt(app._prompt_state)
         _set_prompt_input(app, placeholder=default_placeholder)
         app._log(f"[yellow]{escape(source)} received — cancelling destination prompt.[/]")
         return True

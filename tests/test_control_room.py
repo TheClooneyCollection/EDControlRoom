@@ -29,12 +29,13 @@ from edap.config import (
     TTSConfig,
 )
 from edap.control_room import error_text
+from edap.control_room import prompts as control_room_prompts
 from edap.control_room.app import ActivityLog, _JOURNAL_ARTIFACT_LOG_FLUSH_EVERY
 from edap.control_room.backend import ControlRoomBackendEventHandler
 from edap.control_room.failure_messages import describe_routine_failure
 from edap.control_room.events import apply_ship_event
 from edap.control_room import rendering as control_room_rendering
-from edap.control_room.models import MarketData, ShipState
+from edap.control_room.models import MarketData, PromptState, ShipState
 from edap.control_room.protocol.snapshot import (
     CommandHistorySnapshot,
     ControlRoomSnapshot,
@@ -2938,6 +2939,58 @@ class ControlRoomFailureMessageTests(unittest.TestCase):
             error_text.render(self.app._config, "controls_unavailable"),
             "\n".join(self.app.logged),
         )
+
+
+class ControlRoomPromptStateTests(unittest.TestCase):
+    def test_begin_and_resolve_destination_prompt_use_explicit_prompt_state(self) -> None:
+        prompt_state = PromptState()
+
+        default_settle = control_room_prompts.begin_destination_prompt(
+            prompt_state,
+            configured_settle_default=2.0,
+            destination="Achenar",
+            skip_delay=True,
+        )
+
+        self.assertEqual(default_settle, 2.0)
+        self.assertEqual(prompt_state.dest_prompt_destination, "Achenar")
+        self.assertEqual(prompt_state.dest_prompt_raw_command, "!dest Achenar")
+        self.assertTrue(prompt_state.dest_prompt_skip_delay)
+
+        dispatch = control_room_prompts.resolve_destination_prompt_submission(
+            prompt_state,
+            "",
+            parse_optional_nonnegative_float=lambda raw, default, label: default,
+        )
+
+        self.assertIsNotNone(dispatch)
+        assert dispatch is not None
+        self.assertEqual(dispatch.destination, "Achenar")
+        self.assertEqual(dispatch.galaxy_map_settle, 2.0)
+        self.assertTrue(dispatch.skip_delay)
+        self.assertEqual(dispatch.raw_command, "!dest Achenar")
+        self.assertEqual(prompt_state.dest_prompt_destination, "")
+        self.assertIsNone(prompt_state.dest_prompt_settle_default)
+        self.assertEqual(prompt_state.dest_prompt_raw_command, "")
+        self.assertFalse(prompt_state.dest_prompt_skip_delay)
+
+    def test_invalid_destination_prompt_submission_preserves_prompt_state(self) -> None:
+        prompt_state = PromptState(
+            dest_prompt_destination="Sol",
+            dest_prompt_settle_default=2.0,
+            dest_prompt_raw_command="dest Sol",
+        )
+
+        dispatch = control_room_prompts.resolve_destination_prompt_submission(
+            prompt_state,
+            "bad-number",
+            parse_optional_nonnegative_float=lambda raw, default, label: None,
+        )
+
+        self.assertIsNone(dispatch)
+        self.assertEqual(prompt_state.dest_prompt_destination, "Sol")
+        self.assertEqual(prompt_state.dest_prompt_settle_default, 2.0)
+        self.assertEqual(prompt_state.dest_prompt_raw_command, "dest Sol")
 
 
 if __name__ == "__main__":
