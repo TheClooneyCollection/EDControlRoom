@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `48`
-- Latest generated iteration number: `181`
+- Generated iteration count: `49`
+- Latest generated iteration number: `182`
 
 ## Iteration 134
 
@@ -1367,3 +1367,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-test server stop/start and forced ping-timeout cases to tune the operator-facing reconnect messaging and confirm retry pacing feels reasonable on LAN.
+
+## Iteration 182
+
+- When: `2026-06-19 16:57`
+- Area: `control-room`
+- Title: `prepare-v1-12-0-release`
+- Source: [2026-06-19-16-57_control-room_prepare-v1-12-0-release.md](iteration-logs/2026-06-19-16-57_control-room_prepare-v1-12-0-release.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `prepare-v1-12-0-release`
+- Started: `2026-06-19 16:57`
+
+## Summary
+
+- Prepared the `v1.12.0` release cut for the Control Room client/server split refactor milestone.
+- Captured the release handoff update in `docs/status/ci-release.md` and refreshed generated iteration docs.
+
+## Changes
+
+- Bumped `[project].version` to `1.12.0` for the next stable tag.
+- Regenerated `uv.lock` so the lockfile version metadata matches the release prep commit.
+- Refreshed `docs/iteration-archive.md` after adding this release-prep iteration log.
+
+## Follow-ups
+
+- Tag `v1.12.0`, push the release-prep commit, and publish the GitHub release notes for the server/client split milestone.
