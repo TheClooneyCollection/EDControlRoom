@@ -1191,6 +1191,12 @@ class ControlRoomApp(App[None]):
         self.action_request_interrupt()
 
     def _cancel_active_routine(self, source: str) -> None:
+        if self._routine_worker is None:
+            self._routine_active = False
+            self._active_routine_name = None
+            self._clear_pending_haul_stop()
+            self._log(f"[yellow]{escape(source)} received — no active routine to cancel.[/]")
+            return
         if self._active_routine_name == "haul" and not self._haul_stop_requested:
             self._haul_stop_requested = True
             self._log(
