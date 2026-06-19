@@ -158,6 +158,7 @@ Payload:
 - `authentication_supported_transports`
 - `authentication_query_parameter_name`
 - `message_schema_url`
+- `browser_probe_url`
 
 ### `command.request_snapshot`
 

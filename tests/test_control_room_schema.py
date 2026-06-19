@@ -53,6 +53,7 @@ class ControlRoomMessageSchemaTests(unittest.TestCase):
                 "minimum_client_version",
                 "server_version",
                 "message_schema_url",
+                "browser_probe_url",
                 "authentication_required",
                 "authentication_scheme",
                 "authentication_supported_transports",

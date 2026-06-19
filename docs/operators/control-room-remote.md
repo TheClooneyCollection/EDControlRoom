@@ -67,6 +67,8 @@ uv run python3 tools/scratch/scratch_control_room_remote.py 192.168.1.50:8765 --
 
 The scratch probe fetches `health`, `capabilities`, and `snapshot`, then opens a websocket session and prints the message stream summary.
 
+`GET /capabilities` now advertises both `message_schema_url` and `browser_probe_url`, so future launchers or web shells do not need to hardcode the hosted browser entrypoint.
+
 For a browser-native smoke check against the same LAN server, open:
 
 ```text
