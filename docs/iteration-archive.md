@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `55`
-- Latest generated iteration number: `188`
+- Generated iteration count: `56`
+- Latest generated iteration number: `189`
 
 ## Iteration 134
 
@@ -1573,3 +1573,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Live-validate replay-heavy remote operator sessions, active-operator failover, and routine-heavy command execution under real `serve` / `connect` runs.
 - Decide whether any additional remote operator ergonomics are needed after live validation now that replay navigation has an explicit protocol path.
+
+## Iteration 189
+
+- When: `2026-06-19 17:31`
+- Area: `control-room`
+- Title: `add-websocket-remote-validation`
+- Source: [2026-06-19-17-31_control-room_add-websocket-remote-validation.md](iteration-logs/2026-06-19-17-31_control-room_add-websocket-remote-validation.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `add-websocket-remote-validation`
+- Started: `2026-06-19 17:31`
+
+## Summary
+
+- Added websocket-level integration coverage for the observer server path so active-operator failover and replay-navigation commands are now exercised through the actual session protocol, not only through unit-level helpers.
+
+## Changes
+
+- Added `TestClient` websocket coverage proving that when the active operator disconnects, the remaining connected client receives the promotion event and subsequent personalized snapshot as the new `active_operator`.
+- Added websocket-session coverage proving `command.move_replay_selection` is accepted over the observer protocol and reaches the server command handler.
+- Re-ran the full test suite with `uv run python3 -m unittest discover -s tests` (`491 tests in 0.225s`).
+
+## Follow-ups
+
+- Live-validate routine-heavy remote execution, prompt-heavy flows, and failure/recovery wording under real `serve` / `connect` sessions.
+- Decide whether any further remote operator ergonomics are needed once live validation is done.
