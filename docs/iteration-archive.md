@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `45`
-- Latest generated iteration number: `178`
+- Generated iteration count: `46`
+- Latest generated iteration number: `179`
 
 ## Iteration 134
 
@@ -1286,3 +1286,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-validate remote active-operator prompt cancellation against real haul and destination flows under `serve` / `connect`.
+
+## Iteration 179
+
+- When: `2026-06-19 14:37`
+- Area: `control-room`
+- Title: `cargo-json-sync-after-trades`
+- Source: [2026-06-19-14-37_control-room_cargo-json-sync-after-trades.md](iteration-logs/2026-06-19-14-37_control-room_cargo-json-sync-after-trades.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `cargo-json-sync-after-trades`
+- Started: `2026-06-19 14:37`
+
+## Summary
+
+- Made post-trade cargo state authoritative from `Cargo.json` instead of trusting the app's in-memory manifest after market journal events.
+
+## Changes
+
+- Added `bootstrap.sync_cargo_manifest()` and wired `_handle_event()` to re-read `Cargo.json` after `Cargo`, `MarketBuy`, and `MarketSell`.
+- Kept bootstrap startup behavior aligned with existing expectations by leaving startup `cargo_count` sourced from `Status.json` while still loading manifest contents from `Cargo.json`.
+- Added control-room regression tests covering full-sell stale manifest cleanup plus manifest refresh after both market buys and sells.
+
+## Follow-ups
+
+- Live-test repeated remote and local `sell`/`buy` flows against real journal timing to confirm `Cargo.json` is always updated before the follow-up command path re-checks inventory.

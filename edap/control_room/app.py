@@ -1117,6 +1117,8 @@ class ControlRoomApp(App[None]):
         _events.apply_ship_event(self._ship, ev)
         self._tts.set_commander_name(self._ship.commander)
         self._sync_status_snapshot()
+        if event in {"Cargo", "MarketBuy", "MarketSell"}:
+            _bootstrap.sync_cargo_manifest(self)
 
         if event == "Docked":
             self._load_market_json()

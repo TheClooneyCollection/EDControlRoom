@@ -1,5 +1,6 @@
 # Control Room Status
 ## Current
+- Cargo state now re-syncs from `Cargo.json` after `Cargo`, `MarketBuy`, and `MarketSell` events, so repeated `sell` flows stop relying on a drift-prone in-memory manifest while bootstrap still keeps `Status.json` as the startup cargo-count source.
 - Replay-browser open/close, filter updates, selected-entry execution/edit, default-haul toggling, and prompt/default Enter submissions now route through backend intent methods alongside command submission, destination dispatch, and haul-loop launch.
 - The status, haul, and market panels can now render from a backend snapshot instead of reading live app-owned state directly, which gives the existing Textual UI its first real path toward a remote backend.
 - Local mode now has an always-present `LocalControlRoomBackend` that owns snapshot/event subscription for the embedded app, while the old `_protocol_event_sink` hook remains only as a compatibility passthrough for external observers like `serve`.

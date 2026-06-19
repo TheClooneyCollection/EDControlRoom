@@ -1167,6 +1167,49 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.assertIn("Sell-all complete", output)
         self.assertNotIn("Nothing sellable in cargo", output)
 
+    def test_sell_all_skips_stale_manifest_after_full_sell_event(self) -> None:
+        captured_targets: list[str] = []
+        self.app._ship.cargo_count = 4
+        self.app._ship.cargo_inventory = [
+            {"Name": "gold", "Name_Localised": "Gold", "Count": 4, "Stolen": 0},
+        ]
+        (Path(self.tmpdir.name) / "Cargo.json").write_text(
+            json.dumps({"Inventory": []}),
+            encoding="utf-8",
+        )
+        self.app._controls = object()
+        self.app._make_progress = lambda: (lambda _: None)
+        self.app._make_controls = lambda progress: object()
+        self.app._make_sleeper = lambda: (lambda _: None)
+        self.app._make_watcher = lambda: object()
+        self.app._run_in_thread = lambda fn: fn()
+        self.app._raise_if_worker_cancelled = lambda: None
+        self.app.call_from_thread = lambda fn, *args, **kwargs: fn(*args, **kwargs)
+
+        self.app._handle_event(
+            {
+                "event": "MarketSell",
+                "Type": "gold",
+                "Type_Localised": "Gold",
+                "Count": 4,
+                "TotalSale": 250_000,
+            }
+        )
+
+        def fake_market_sell(controls, watcher, **kwargs):
+            captured_targets.append(kwargs["target"])
+            return RoutineResult(
+                action="market_sell",
+                dispatch=ActionDispatchResult(action="market_sell", status="ok"),
+            )
+
+        with patch("edap.control_room.routines_trade.market_sell", new=fake_market_sell):
+            self.app._sell_all()
+
+        output = "\n".join(self.app.logged)
+        self.assertEqual(captured_targets, [])
+        self.assertIn("Nothing sellable is in cargo right now", output)
+
     def test_haul_dispatch_does_not_require_starting_at_sell_station(self) -> None:
         captured: dict[str, object] = {}
 
@@ -1802,6 +1845,97 @@ on_land = true
         self.assertIn(
             (AnnouncementId.SALE_PROFIT, {"revenue_short": "250 thousand credits"}),
             self.app._tts.calls,
+        )
+
+    def test_handle_event_market_sell_clears_manifest_when_cargo_reaches_zero(self) -> None:
+        self.app._ship.cargo_count = 4
+        self.app._ship.cargo_inventory = [
+            {"Name": "gold", "Name_Localised": "Gold", "Count": 4, "Stolen": 0},
+        ]
+        (Path(self.tmpdir.name) / "Cargo.json").write_text(
+            json.dumps({"Inventory": []}),
+            encoding="utf-8",
+        )
+
+        self.app._handle_event(
+            {
+                "event": "MarketSell",
+                "Type": "gold",
+                "Type_Localised": "Gold",
+                "Count": 4,
+                "TotalSale": 250_000,
+            }
+        )
+
+        self.assertEqual(self.app._ship.cargo_count, 0)
+        self.assertEqual(self.app._ship.cargo_inventory, [])
+
+    def test_handle_event_market_sell_reloads_cargo_manifest_from_json(self) -> None:
+        self.app._ship.cargo_count = 8
+        self.app._ship.cargo_inventory = [
+            {"Name": "gold", "Name_Localised": "Gold", "Count": 8, "Stolen": 0},
+        ]
+        (Path(self.tmpdir.name) / "Cargo.json").write_text(
+            json.dumps(
+                {
+                    "Inventory": [
+                        {"Name": "silver", "Name_Localised": "Silver", "Count": 2, "Stolen": 0},
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        self.app._handle_event(
+            {
+                "event": "MarketSell",
+                "Type": "gold",
+                "Type_Localised": "Gold",
+                "Count": 6,
+                "TotalSale": 250_000,
+            }
+        )
+
+        self.assertEqual(self.app._ship.cargo_count, 2)
+        self.assertEqual(
+            self.app._ship.cargo_inventory,
+            [{"Name": "silver", "Name_Localised": "Silver", "Count": 2, "Stolen": 0}],
+        )
+
+    def test_handle_event_market_buy_reloads_cargo_manifest_from_json(self) -> None:
+        self.app._ship.cargo_count = 1
+        self.app._ship.cargo_inventory = [
+            {"Name": "gold", "Name_Localised": "Gold", "Count": 1, "Stolen": 0},
+        ]
+        (Path(self.tmpdir.name) / "Cargo.json").write_text(
+            json.dumps(
+                {
+                    "Inventory": [
+                        {"Name": "gold", "Name_Localised": "Gold", "Count": 1, "Stolen": 0},
+                        {"Name": "silver", "Name_Localised": "Silver", "Count": 3, "Stolen": 0},
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        self.app._handle_event(
+            {
+                "event": "MarketBuy",
+                "Type": "silver",
+                "Type_Localised": "Silver",
+                "Count": 3,
+                "TotalCost": 180_000,
+            }
+        )
+
+        self.assertEqual(self.app._ship.cargo_count, 4)
+        self.assertEqual(
+            self.app._ship.cargo_inventory,
+            [
+                {"Name": "gold", "Name_Localised": "Gold", "Count": 1, "Stolen": 0},
+                {"Name": "silver", "Name_Localised": "Silver", "Count": 3, "Stolen": 0},
+            ],
         )
 
     def test_handle_event_appends_to_control_room_artifact_log(self) -> None:
