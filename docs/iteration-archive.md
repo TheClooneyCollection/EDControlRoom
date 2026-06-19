@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `70`
-- Latest generated iteration number: `203`
+- Generated iteration count: `71`
+- Latest generated iteration number: `204`
 
 ## Iteration 134
 
@@ -1982,3 +1982,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - If the remote transport contract changes again, keep the client handshake validator focused on the fields that real clients actually consume instead of treating `/capabilities` as a passive info blob.
+
+## Iteration 204
+
+- When: `2026-06-19 18:21`
+- Area: `control-room`
+- Title: `add-browser-role-transition-handling`
+- Source: [2026-06-19-18-21_control-room_add-browser-role-transition-handling.md](iteration-logs/2026-06-19-18-21_control-room_add-browser-role-transition-handling.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `add-browser-role-transition-handling`
+- Started: `2026-06-19 18:21`
+
+## Summary
+
+- Taught the hosted browser probe to react explicitly to operator-role transitions so the web-client path updates its session understanding immediately instead of leaving that shift implicit in later snapshots.
+
+## Changes
+
+- Added explicit browser handling for `event.connection_ready` and `event.active_operator_changed`, including session-id display and an immediate snapshot refresh after operator changes.
+- Disabled the browser `Claim Operator` button once the current session is already the active operator, so the page reflects role state more cleanly.
+- Updated endpoint coverage plus the remote operator docs/status handoff to note that the browser path now handles role transitions directly rather than only relying on passive snapshot refreshes.
+
+## Follow-ups
+
+- If the hosted browser path becomes a real web client, keep explicit role-transition handling in the session layer rather than hiding it behind generic snapshot rerenders.

@@ -531,6 +531,8 @@ class ControlRoomServerTests(unittest.TestCase):
             self.assertIn("Observer mode: mutating controls disabled", response.text)
             self.assertIn("Connected Clients", response.text)
             self.assertIn("Recent Activity", response.text)
+            self.assertIn("session ready role=", response.text)
+            self.assertIn("requestSnapshot();", response.text)
 
     def test_websocket_active_operator_failover_promotes_remaining_client(self) -> None:
         broker = InMemoryObserverSessionBroker()

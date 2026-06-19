@@ -174,6 +174,7 @@
         <dl>
           <dt>Health</dt><dd id="healthStatus">-</dd>
           <dt>Version</dt><dd id="serverVersion">-</dd>
+          <dt>Session</dt><dd id="sessionId">-</dd>
           <dt>Role</dt><dd id="clientRole">-</dd>
           <dt>Active operator</dt><dd id="activeOperator">-</dd>
           <dt>Connected clients</dt><dd id="connectedClients">-</dd>
@@ -311,6 +312,7 @@
 
       function refreshOperatorControls() {
         const disabled = !isActiveOperator();
+        $("claimButton").disabled = isActiveOperator();
         setControlsDisabled(
           [
             "cancelButton",
@@ -366,6 +368,7 @@
       function renderSnapshot(snapshot) {
         state.latestSnapshot = snapshot;
         $("snapshotView").textContent = JSON.stringify(snapshot, null, 2);
+        $("sessionId").textContent = snapshot.session?.session_id ?? "-";
         $("clientRole").textContent = snapshot.session?.client_role ?? "-";
         $("activeOperator").textContent = snapshot.active_operator?.client_name ?? "(none)";
         $("connectedClients").textContent = String((snapshot.connected_clients || []).length);
@@ -522,6 +525,11 @@
           appendMessageLog(`recv ${message.message_type}`);
           if (message.message_type === "state.snapshot") {
             renderSnapshot(message.payload);
+          } else if (message.message_type === "event.connection_ready") {
+            appendMessageLog(
+              `session ready role=${message.payload.client_role} session=${message.payload.session_id}`
+            );
+            $("sessionId").textContent = message.payload.session_id ?? "-";
           } else if (message.message_type === "event.activity_log_appended") {
             appendMessageLog(`activity ${message.payload.entry?.message_text ?? "-"}`);
             if (state.latestSnapshot?.activity_log) {
@@ -535,10 +543,14 @@
             appendMessageLog(`announcement ${message.payload.message_text ?? "-"}`);
           } else if (message.message_type === "event.active_operator_changed") {
             appendMessageLog(`active operator changed to ${message.payload.active_operator_client_name ?? "(none)"}`);
+            requestSnapshot();
           } else if (message.message_type === "response.error") {
             appendMessageLog(`error ${message.payload.error_code}: ${message.payload.error_message}`);
           } else if (message.message_type === "response.success") {
             appendMessageLog(`success ${message.payload.message_text ?? "accepted"}`);
+            if (message.payload.result?.client_role === "active_operator") {
+              requestSnapshot();
+            }
           }
         });
       }
