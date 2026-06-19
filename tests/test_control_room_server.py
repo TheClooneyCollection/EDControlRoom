@@ -302,6 +302,14 @@ class ControlRoomServerTests(unittest.TestCase):
 
         self.assertEqual(host._market_filter, "Gold")
 
+    def test_headless_host_submit_input_alias_accepts_simple_remote_input(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
+
+            host.submit_input("market filter gold")
+
+        self.assertEqual(host._market_filter, "Gold")
+
     def test_headless_host_emits_announcement_events_without_local_speech(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             host = HeadlessControlRoomHost(_make_context_with_tts(Path(temp_dir)))

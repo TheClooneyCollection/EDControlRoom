@@ -150,6 +150,9 @@ class HeadlessControlRoomHost(ControlRoomApp):
         self._backend.submit_input(resolved)
         self._publish_snapshot()
 
+    def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None:
+        self.handle_remote_input(raw_input, skip_delay=skip_delay)
+
     def open_replay_browser(self) -> None:
         self._backend.open_replay_browser()
         self._publish_snapshot()
