@@ -253,6 +253,16 @@ class _InputStub:
         self.cursor_position = 0
 
 
+class _KeyEventStub:
+    def __init__(self, key: str, *, character: str | None = None) -> None:
+        self.key = key
+        self.character = character
+        self.prevented = False
+
+    def prevent_default(self) -> None:
+        self.prevented = True
+
+
 class _ActivityLogStub:
     def __init__(self, *, scroll_y: float = 0.0, max_scroll_y: float = 0.0) -> None:
         self.border_title = ""
@@ -2277,6 +2287,46 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertTrue(self.app._resume_open)
         entry = self._last_history()
         self.assertEqual(entry.command, "replay")
+
+    def test_ctrl_r_opens_replay_picker_when_command_input_has_focus(self) -> None:
+        self.app._saved_state.history = [
+            CommandHistoryEntry(raw="dock", command="dock", timestamp="1"),
+        ]
+        event = _KeyEventStub("ctrl+r")
+
+        self.app.on_key(event)
+
+        self.assertTrue(event.prevented)
+        self.assertTrue(self.app._resume_open)
+
+    def test_replay_command_does_not_execute_selected_entry_from_same_enter(self) -> None:
+        self.app._saved_state.history = [
+            CommandHistoryEntry(raw="jump", command="jump", timestamp="1"),
+        ]
+        self.app._time_fn = lambda: 100.0
+
+        class _SubmittedEvent:
+            def __init__(self, input_widget) -> None:
+                self.value = "replay"
+                self.input = input_widget
+
+        self.app.on_input_submitted(_SubmittedEvent(self.app._command_input))
+        executions: list[str] = []
+        self.app._resume_execute_selected = lambda: executions.append("executed")  # type: ignore[method-assign]
+
+        first_enter = _KeyEventStub("enter")
+        self.app.on_key(first_enter)
+
+        self.assertTrue(first_enter.prevented)
+        self.assertTrue(self.app._resume_open)
+        self.assertEqual(executions, [])
+
+        self.app._time_fn = lambda: 101.0
+        second_enter = _KeyEventStub("enter")
+        self.app.on_key(second_enter)
+
+        self.assertTrue(second_enter.prevented)
+        self.assertEqual(executions, ["executed"])
 
     def test_exit_alias_requests_shutdown(self) -> None:
         self.app._dispatch_command("exit")
