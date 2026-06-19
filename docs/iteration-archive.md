@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `67`
-- Latest generated iteration number: `200`
+- Generated iteration count: `68`
+- Latest generated iteration number: `201`
 
 ## Iteration 134
 
@@ -1901,3 +1901,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Keep the protocol design note and the checked-in schema moving together whenever the remote surface changes, so future web-client work is not forced to guess which document is authoritative.
+
+## Iteration 201
+
+- When: `2026-06-19 18:15`
+- Area: `control-room`
+- Title: `advertise-browser-probe-url`
+- Source: [2026-06-19-18-15_control-room_advertise-browser-probe-url.md](iteration-logs/2026-06-19-18-15_control-room_advertise-browser-probe-url.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `advertise-browser-probe-url`
+- Started: `2026-06-19 18:15`
+
+## Summary
+
+- Added first-class discovery for the hosted browser probe so future launchers and web shells can find the served browser client entrypoint from `/capabilities` instead of hardcoding it.
+
+## Changes
+
+- Added `browser_probe_url` to the observer server capabilities response alongside the existing `message_schema_url`.
+- Updated the checked-in message schema, server tests, and schema regression coverage so the new discovery field is treated as part of the remote contract.
+- Refreshed the protocol design note, remote operator runbook, and control-room status handoff to describe the new browser-probe discovery path.
+
+## Follow-ups
+
+- If a dedicated launcher or browser shell is introduced, prefer reading `browser_probe_url` from capabilities rather than constructing the path independently.

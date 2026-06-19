@@ -410,6 +410,10 @@ class ControlRoomServerTests(unittest.TestCase):
                 MESSAGE_SCHEMA_URL_PATH,
             )
             self.assertEqual(
+                capabilities.json()["browser_probe_url"],
+                BROWSER_PROBE_URL_PATH,
+            )
+            self.assertEqual(
                 capabilities.json()["authentication_query_parameter_name"],
                 "access_token",
             )

@@ -115,6 +115,7 @@ def build_observer_server_app(
                 "minimum_client_version": "1",
                 "server_version": snapshot.server_status.server_version,
                 "message_schema_url": MESSAGE_SCHEMA_URL_PATH,
+                "browser_probe_url": BROWSER_PROBE_URL_PATH,
                 "authentication_required": auth_description.authentication_required,
                 "authentication_scheme": auth_description.authentication_scheme,
                 "authentication_supported_transports": list(auth_description.supported_transports),
