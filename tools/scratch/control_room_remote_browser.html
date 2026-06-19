@@ -194,6 +194,16 @@
       </section>
 
       <section class="panel">
+        <h2>Connected Clients</h2>
+        <pre id="clientsView">-</pre>
+      </section>
+
+      <section class="panel">
+        <h2>Recent Activity</h2>
+        <pre id="activityView">-</pre>
+      </section>
+
+      <section class="panel">
         <h2>Replay</h2>
         <label>
           Replay filter
@@ -366,9 +376,28 @@
         );
         $("promptState").textContent = promptActive ? "yes" : "no";
         $("routineState").textContent = routineState.active_routine_name || "idle";
+        renderClients(snapshot);
+        renderActivity(snapshot);
         renderReplay(snapshot);
         renderPrompt(snapshot);
         refreshOperatorControls();
+      }
+
+      function renderClients(snapshot) {
+        const clients = (snapshot.connected_clients || []).map((client) => ({
+          client_name: client.client_name,
+          client_role: client.client_role,
+          session_id: client.session_id,
+        }));
+        $("clientsView").textContent = JSON.stringify(clients, null, 2);
+      }
+
+      function renderActivity(snapshot) {
+        const lines = (snapshot.activity_log || []).slice(-12).map((entry) => ({
+          timestamp: entry.timestamp,
+          message_text: entry.message_text,
+        }));
+        $("activityView").textContent = JSON.stringify(lines, null, 2);
       }
 
       function renderReplay(snapshot) {
@@ -495,8 +524,17 @@
             renderSnapshot(message.payload);
           } else if (message.message_type === "event.activity_log_appended") {
             appendMessageLog(`activity ${message.payload.entry?.message_text ?? "-"}`);
+            if (state.latestSnapshot?.activity_log) {
+              state.latestSnapshot.activity_log = [
+                ...state.latestSnapshot.activity_log,
+                message.payload.entry,
+              ].slice(-50);
+              renderActivity(state.latestSnapshot);
+            }
           } else if (message.message_type === "event.announcement_emitted") {
             appendMessageLog(`announcement ${message.payload.message_text ?? "-"}`);
+          } else if (message.message_type === "event.active_operator_changed") {
+            appendMessageLog(`active operator changed to ${message.payload.active_operator_client_name ?? "(none)"}`);
           } else if (message.message_type === "response.error") {
             appendMessageLog(`error ${message.payload.error_code}: ${message.payload.error_message}`);
           } else if (message.message_type === "response.success") {

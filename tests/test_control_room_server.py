@@ -525,6 +525,8 @@ class ControlRoomServerTests(unittest.TestCase):
             self.assertIn("Reconnecting in", response.text)
             self.assertIn("Observer connection restored.", response.text)
             self.assertIn("Observer mode: mutating controls disabled", response.text)
+            self.assertIn("Connected Clients", response.text)
+            self.assertIn("Recent Activity", response.text)
 
     def test_websocket_active_operator_failover_promotes_remaining_client(self) -> None:
         broker = InMemoryObserverSessionBroker()
