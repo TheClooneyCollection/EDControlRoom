@@ -21,6 +21,20 @@ class DestinationPromptDispatch:
     raw_command: str
 
 
+@dataclass(frozen=True)
+class HaulPromptUiState:
+    placeholder: str
+    value: str = ""
+
+
+@dataclass(frozen=True)
+class HaulConfirmResolution:
+    launch_haul_loop: bool
+    skip_delay: bool
+    raw_command: str
+    station_1: str | None = None
+
+
 class PromptHost(Protocol):
     _config: AppConfig
     _prompt_state: PromptState
@@ -132,6 +146,20 @@ def clear_destination_prompt(prompt_state: PromptState) -> None:
     prompt_state.dest_prompt_skip_delay = False
 
 
+def clear_haul_prompt(prompt_state: PromptState) -> None:
+    prompt_state.haul_params = {}
+    prompt_state.haul_prompt_defaults = {}
+    prompt_state.haul_prompt_step = ""
+    prompt_state.haul_prompt_raw_command = ""
+    prompt_state.haul_prompt_skip_delay = False
+
+
+def clear_haul_confirm_prompt(prompt_state: PromptState) -> None:
+    prompt_state.haul_confirm_buy_station = ""
+    prompt_state.haul_prompt_raw_command = ""
+    prompt_state.haul_prompt_skip_delay = False
+
+
 def saved_haul_defaults(
     app: PromptHost,
     seed: dict[str, str] | None = None,
@@ -169,18 +197,12 @@ def cancel_prompt_flow(
     source: str,
 ) -> bool:
     if app._haul_prompt_step:
-        app._haul_params = {}
-        app._haul_prompt_defaults = {}
-        app._haul_prompt_step = ""
-        app._haul_prompt_raw_command = ""
-        app._haul_prompt_skip_delay = False
+        clear_haul_prompt(app._prompt_state)
         _set_prompt_input(app, placeholder=default_placeholder)
         app._log(f"[yellow]{escape(source)} received — cancelling haul prompt.[/]")
         return True
     if app._haul_confirm_buy_station:
-        app._haul_confirm_buy_station = ""
-        app._haul_prompt_raw_command = ""
-        app._haul_prompt_skip_delay = False
+        clear_haul_confirm_prompt(app._prompt_state)
         _set_prompt_input(app, placeholder=default_placeholder)
         app._log(f"[yellow]{escape(source)} received — cancelling haul confirmation.[/]")
         return True
@@ -213,16 +235,17 @@ def _parse_yes_no(value: str, *, default: bool) -> bool | None:
     return None
 
 
-def start_haul_prompt(
-    app: PromptHost,
+def begin_haul_prompt(
+    prompt_state: PromptState,
     *,
     commodity: str,
     prompt_for_commodity: bool,
-    seed: dict[str, str] | None = None,
-    skip_delay: bool = False,
-    raw_command: str | None = None,
-) -> None:
-    app._haul_params = {
+    haul_prompt_defaults: dict[str, str],
+    current_station: str | None,
+    raw_command: str,
+    skip_delay: bool,
+) -> HaulPromptUiState:
+    prompt_state.haul_params = {
         "station_1_buying": commodity.strip(),
         "station_1": "",
         "station_1_system": "",
@@ -234,41 +257,99 @@ def start_haul_prompt(
         "galaxy_map_settle": "",
         "dock_timeout": "",
     }
-    app._haul_prompt_raw_command = raw_command or f"{'!' if skip_delay else ''}haul {commodity}".strip()
-    app._haul_prompt_skip_delay = skip_delay
-    app._haul_prompt_defaults = saved_haul_defaults(app, seed)
-    app._log("Haul loop setup — enter parameters below:")
+    prompt_state.haul_prompt_raw_command = raw_command
+    prompt_state.haul_prompt_skip_delay = skip_delay
+    prompt_state.haul_prompt_defaults = dict(haul_prompt_defaults)
     if prompt_for_commodity:
-        app._haul_prompt_step = "station_1_buying"
-        default_commodity = app._haul_prompt_defaults.get("station_1_buying", "")
+        prompt_state.haul_prompt_step = "station_1_buying"
+        default_commodity = prompt_state.haul_prompt_defaults.get("station_1_buying", "")
         if default_commodity:
-            app._log(f"[dim]Station 1 buying? (optional, Enter = {escape(default_commodity)})[/]")
-            _set_prompt_input(
-                app,
+            return HaulPromptUiState(
                 placeholder=f"station 1 buying (Enter = {default_commodity})...",
                 value=default_commodity,
             )
+        return HaulPromptUiState(placeholder="station 1 buying...")
+
+    prompt_state.haul_prompt_step = "station_1"
+    default_station_1 = prompt_state.haul_prompt_defaults.get("station_1", "")
+    if default_station_1:
+        return HaulPromptUiState(
+            placeholder=f"station 1 (Enter = {default_station_1})...",
+            value=default_station_1,
+        )
+    current = current_station or "current station"
+    return HaulPromptUiState(
+        placeholder=f"station 1 (Enter = {current})...",
+    )
+
+
+def resolve_haul_confirm_prompt(
+    prompt_state: PromptState,
+    value: str,
+) -> HaulConfirmResolution | None:
+    answer = value.strip().lower()
+    if answer in {"", "y", "yes"}:
+        station = prompt_state.haul_confirm_buy_station
+        prompt_state.haul_confirm_buy_station = ""
+        prompt_state.haul_params["station_1"] = station
+        return HaulConfirmResolution(
+            launch_haul_loop=True,
+            station_1=station,
+            skip_delay=prompt_state.haul_prompt_skip_delay,
+            raw_command=prompt_state.haul_prompt_raw_command,
+        )
+    if answer in {"n", "no"}:
+        station = prompt_state.haul_confirm_buy_station
+        clear_haul_confirm_prompt(prompt_state)
+        return HaulConfirmResolution(
+            launch_haul_loop=False,
+            station_1=station,
+            skip_delay=False,
+            raw_command="",
+        )
+    return None
+
+
+def start_haul_prompt(
+    app: PromptHost,
+    *,
+    commodity: str,
+    prompt_for_commodity: bool,
+    seed: dict[str, str] | None = None,
+    skip_delay: bool = False,
+    raw_command: str | None = None,
+) -> None:
+    resolved_raw_command = raw_command or f"{'!' if skip_delay else ''}haul {commodity}".strip()
+    defaults = saved_haul_defaults(app, seed)
+    ui_state = begin_haul_prompt(
+        app._prompt_state,
+        commodity=commodity,
+        prompt_for_commodity=prompt_for_commodity,
+        haul_prompt_defaults=defaults,
+        current_station=app._ship.station,
+        raw_command=resolved_raw_command,
+        skip_delay=skip_delay,
+    )
+    app._log("Haul loop setup — enter parameters below:")
+    if prompt_for_commodity:
+        default_commodity = defaults.get("station_1_buying", "")
+        if default_commodity:
+            app._log(f"[dim]Station 1 buying? (optional, Enter = {escape(default_commodity)})[/]")
         else:
             app._log("[dim]Station 1 buying? (optional; this cargo will be sold at station 2)[/]")
-            _set_prompt_input(app, placeholder="station 1 buying...")
+        _set_prompt_input(app, placeholder=ui_state.placeholder, value=ui_state.value)
         return
 
     app._log(
         f"Haul loop: station 1 buying = [cyan]{escape(app._haul_params['station_1_buying'])}[/]"
     )
-    app._haul_prompt_step = "station_1"
-    default_station_1 = app._haul_prompt_defaults.get("station_1", "")
+    default_station_1 = defaults.get("station_1", "")
     if default_station_1:
         app._log(f"[dim]Station 1 name? (Enter = {escape(default_station_1)})[/]")
-        _set_prompt_input(
-            app,
-            placeholder=f"station 1 (Enter = {default_station_1})...",
-            value=default_station_1,
-        )
     else:
         current = app._ship.station or "current station"
         app._log(f"[dim]Station 1 name? (Enter to use {escape(current)})[/]")
-        _set_prompt_input(app, placeholder=f"station 1 (Enter = {current})...")
+    _set_prompt_input(app, placeholder=ui_state.placeholder, value=ui_state.value)
 
 
 def start_haul_confirm_prompt(
@@ -292,28 +373,27 @@ def handle_haul_confirm_prompt(
     *,
     default_placeholder: str,
 ) -> None:
-    answer = value.strip().lower()
-    if answer in {"", "y", "yes"}:
-        station = app._haul_confirm_buy_station
-        app._haul_confirm_buy_station = ""
-        app._haul_params["station_1"] = station
+    resolution = resolve_haul_confirm_prompt(app._prompt_state, value)
+    if resolution is None:
+        app._log(f"[red]{escape(error_text.render(app._config, 'confirm_yes_no'))}[/]")
+        return
+    if resolution.launch_haul_loop:
+        station = resolution.station_1 or ""
         app._log(f"  Station 1 confirmed: [cyan]{escape(station)}[/]")
         _set_prompt_input(app, placeholder=default_placeholder)
         app._dispatch_haul_loop(
-            skip_delay=app._haul_prompt_skip_delay,
-            raw_command=app._haul_prompt_raw_command,
+            skip_delay=resolution.skip_delay,
+            raw_command=resolution.raw_command,
         )
         return
-    if answer in {"n", "no"}:
-        station = app._haul_confirm_buy_station
-        app._haul_confirm_buy_station = ""
+    if resolution.station_1 is not None:
+        station = resolution.station_1
         app._log(
             f"[yellow]Haul launch cancelled — station 1 left unresolved "
             f"for [cyan]{escape(station)}[/].[/]"
         )
         _set_prompt_input(app, placeholder=default_placeholder)
         return
-    app._log(f"[red]{escape(error_text.render(app._config, 'confirm_yes_no'))}[/]")
 
 
 def handle_haul_prompt(

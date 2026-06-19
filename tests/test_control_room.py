@@ -2942,6 +2942,59 @@ class ControlRoomFailureMessageTests(unittest.TestCase):
 
 
 class ControlRoomPromptStateTests(unittest.TestCase):
+    def test_begin_haul_prompt_uses_explicit_prompt_state(self) -> None:
+        prompt_state = PromptState()
+
+        ui_state = control_room_prompts.begin_haul_prompt(
+            prompt_state,
+            commodity="Gold",
+            prompt_for_commodity=True,
+            haul_prompt_defaults={"station_1_buying": "Aluminium"},
+            current_station="Jameson Memorial",
+            raw_command="haul gold",
+            skip_delay=False,
+        )
+
+        self.assertEqual(prompt_state.haul_prompt_step, "station_1_buying")
+        self.assertEqual(prompt_state.haul_params["station_1_buying"], "Gold")
+        self.assertEqual(prompt_state.haul_prompt_raw_command, "haul gold")
+        self.assertEqual(ui_state.placeholder, "station 1 buying (Enter = Aluminium)...")
+        self.assertEqual(ui_state.value, "Aluminium")
+
+    def test_resolve_haul_confirm_prompt_updates_prompt_state(self) -> None:
+        prompt_state = PromptState(
+            haul_params={},
+            haul_confirm_buy_station="Jameson Memorial",
+            haul_prompt_raw_command="haul gold",
+            haul_prompt_skip_delay=True,
+        )
+
+        resolution = control_room_prompts.resolve_haul_confirm_prompt(prompt_state, "")
+
+        self.assertIsNotNone(resolution)
+        assert resolution is not None
+        self.assertTrue(resolution.launch_haul_loop)
+        self.assertEqual(resolution.station_1, "Jameson Memorial")
+        self.assertEqual(prompt_state.haul_params["station_1"], "Jameson Memorial")
+        self.assertEqual(prompt_state.haul_confirm_buy_station, "")
+
+    def test_clear_haul_prompt_resets_prompt_state(self) -> None:
+        prompt_state = PromptState(
+            haul_params={"station_1_buying": "Gold"},
+            haul_prompt_defaults={"station_1": "Jameson Memorial"},
+            haul_prompt_step="station_1",
+            haul_prompt_raw_command="haul gold",
+            haul_prompt_skip_delay=True,
+        )
+
+        control_room_prompts.clear_haul_prompt(prompt_state)
+
+        self.assertEqual(prompt_state.haul_params, {})
+        self.assertEqual(prompt_state.haul_prompt_defaults, {})
+        self.assertEqual(prompt_state.haul_prompt_step, "")
+        self.assertEqual(prompt_state.haul_prompt_raw_command, "")
+        self.assertFalse(prompt_state.haul_prompt_skip_delay)
+
     def test_begin_and_resolve_destination_prompt_use_explicit_prompt_state(self) -> None:
         prompt_state = PromptState()
 
