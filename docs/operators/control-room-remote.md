@@ -35,7 +35,7 @@ uv run python3 control_room.py connect 192.168.1.50:8765 --token 1001 --client-n
 uv run python3 control_room.py connect 192.168.1.50:8765 --token 1001 --claim-operator
 ```
 
-`connect` now validates the server's advertised message surface and minimum client version during the HTTP capability probe, so obviously incompatible servers fail fast before the websocket session starts.
+`connect` now validates the server's advertised message surface, auth transports, discovery URLs, and minimum client version during the HTTP capability probe, so obviously incompatible servers fail fast before the websocket session starts.
 
 ## Operator Semantics
 

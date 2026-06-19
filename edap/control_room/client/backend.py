@@ -50,6 +50,7 @@ _REQUIRED_SUPPORTED_MESSAGE_TYPES = {
     "response.success",
     "response.error",
 }
+_REQUIRED_AUTHENTICATION_TRANSPORTS = {"authorization_header", "query_parameter"}
 
 
 class RemoteObserverBackend(ControlRoomBackend):
@@ -428,4 +429,56 @@ def _validate_remote_observer_capabilities(
         raise SystemExit(
             f"Remote server {server_target.host}:{server_target.port} requires unsupported client "
             f"version {minimum_client_version!r}."
+        )
+
+    authentication_required = capabilities.get("authentication_required")
+    if authentication_required is not True:
+        raise SystemExit(
+            f"Remote server {server_target.host}:{server_target.port} must require authentication "
+            "for observer mode."
+        )
+
+    authentication_scheme = capabilities.get("authentication_scheme")
+    if authentication_scheme != "bearer_token":
+        raise SystemExit(
+            f"Remote server {server_target.host}:{server_target.port} advertises unsupported "
+            f"authentication scheme {authentication_scheme!r}."
+        )
+
+    authentication_supported_transports = capabilities.get("authentication_supported_transports")
+    if not isinstance(authentication_supported_transports, list) or not all(
+        isinstance(item, str) for item in authentication_supported_transports
+    ):
+        raise SystemExit(
+            f"Remote server {server_target.host}:{server_target.port} returned invalid capabilities: "
+            "authentication_supported_transports must be a string list."
+        )
+    missing_auth_transports = sorted(
+        _REQUIRED_AUTHENTICATION_TRANSPORTS.difference(authentication_supported_transports)
+    )
+    if missing_auth_transports:
+        raise SystemExit(
+            f"Remote server {server_target.host}:{server_target.port} does not support required "
+            f"authentication transports: {', '.join(missing_auth_transports)}"
+        )
+
+    authentication_query_parameter_name = capabilities.get("authentication_query_parameter_name")
+    if authentication_query_parameter_name != "access_token":
+        raise SystemExit(
+            f"Remote server {server_target.host}:{server_target.port} advertises unsupported "
+            f"authentication query parameter {authentication_query_parameter_name!r}."
+        )
+
+    message_schema_url = capabilities.get("message_schema_url")
+    if not isinstance(message_schema_url, str) or not message_schema_url.strip():
+        raise SystemExit(
+            f"Remote server {server_target.host}:{server_target.port} returned invalid capabilities: "
+            "message_schema_url must be a non-empty string."
+        )
+
+    browser_probe_url = capabilities.get("browser_probe_url")
+    if not isinstance(browser_probe_url, str) or not browser_probe_url.strip():
+        raise SystemExit(
+            f"Remote server {server_target.host}:{server_target.port} returned invalid capabilities: "
+            "browser_probe_url must be a non-empty string."
         )

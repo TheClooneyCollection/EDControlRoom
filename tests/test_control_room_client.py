@@ -468,6 +468,15 @@ class ControlRoomClientTests(unittest.TestCase):
             ],
             "supported_client_roles": ["active_operator", "observer"],
             "minimum_client_version": "1",
+            "authentication_required": True,
+            "authentication_scheme": "bearer_token",
+            "authentication_supported_transports": [
+                "authorization_header",
+                "query_parameter",
+            ],
+            "authentication_query_parameter_name": "access_token",
+            "message_schema_url": "/schema/control_room_message.json",
+            "browser_probe_url": "/browser-probe",
         }
 
         _validate_remote_observer_capabilities(
@@ -485,6 +494,15 @@ class ControlRoomClientTests(unittest.TestCase):
             "supported_message_types": ["state.snapshot", "response.success", "response.error"],
             "supported_client_roles": ["active_operator", "observer"],
             "minimum_client_version": "1",
+            "authentication_required": True,
+            "authentication_scheme": "bearer_token",
+            "authentication_supported_transports": [
+                "authorization_header",
+                "query_parameter",
+            ],
+            "authentication_query_parameter_name": "access_token",
+            "message_schema_url": "/schema/control_room_message.json",
+            "browser_probe_url": "/browser-probe",
         }
 
         with self.assertRaises(SystemExit) as ctx:
@@ -523,6 +541,15 @@ class ControlRoomClientTests(unittest.TestCase):
             ],
             "supported_client_roles": ["active_operator", "observer"],
             "minimum_client_version": "2",
+            "authentication_required": True,
+            "authentication_scheme": "bearer_token",
+            "authentication_supported_transports": [
+                "authorization_header",
+                "query_parameter",
+            ],
+            "authentication_query_parameter_name": "access_token",
+            "message_schema_url": "/schema/control_room_message.json",
+            "browser_probe_url": "/browser-probe",
         }
 
         with self.assertRaises(SystemExit) as ctx:
@@ -537,6 +564,97 @@ class ControlRoomClientTests(unittest.TestCase):
             )
 
         self.assertIn("requires unsupported client version", str(ctx.exception))
+
+    def test_validate_remote_capabilities_rejects_missing_auth_transports(self) -> None:
+        capabilities = {
+            "supported_message_types": [
+                "state.snapshot",
+                "event.connection_ready",
+                "event.active_operator_changed",
+                "event.activity_log_appended",
+                "event.announcement_emitted",
+                "command.request_snapshot",
+                "command.request_active_operator",
+                "command.submit_input",
+                "command.open_replay_browser",
+                "command.close_replay_browser",
+                "command.set_replay_filter",
+                "command.move_replay_selection",
+                "command.replay_history_entry",
+                "command.toggle_replay_default_haul",
+                "command.cancel_active_routine",
+                "response.success",
+                "response.error",
+            ],
+            "supported_client_roles": ["active_operator", "observer"],
+            "minimum_client_version": "1",
+            "authentication_required": True,
+            "authentication_scheme": "bearer_token",
+            "authentication_supported_transports": ["authorization_header"],
+            "authentication_query_parameter_name": "access_token",
+            "message_schema_url": "/schema/control_room_message.json",
+            "browser_probe_url": "/browser-probe",
+        }
+
+        with self.assertRaises(SystemExit) as ctx:
+            _validate_remote_observer_capabilities(
+                capabilities,
+                ObserverServerTarget(
+                    host="bridge.local",
+                    port=8765,
+                    http_base_url="http://bridge.local:8765",
+                    websocket_url="ws://bridge.local:8765/session",
+                ),
+            )
+
+        self.assertIn("does not support required authentication transports", str(ctx.exception))
+
+    def test_validate_remote_capabilities_rejects_missing_browser_probe_url(self) -> None:
+        capabilities = {
+            "supported_message_types": [
+                "state.snapshot",
+                "event.connection_ready",
+                "event.active_operator_changed",
+                "event.activity_log_appended",
+                "event.announcement_emitted",
+                "command.request_snapshot",
+                "command.request_active_operator",
+                "command.submit_input",
+                "command.open_replay_browser",
+                "command.close_replay_browser",
+                "command.set_replay_filter",
+                "command.move_replay_selection",
+                "command.replay_history_entry",
+                "command.toggle_replay_default_haul",
+                "command.cancel_active_routine",
+                "response.success",
+                "response.error",
+            ],
+            "supported_client_roles": ["active_operator", "observer"],
+            "minimum_client_version": "1",
+            "authentication_required": True,
+            "authentication_scheme": "bearer_token",
+            "authentication_supported_transports": [
+                "authorization_header",
+                "query_parameter",
+            ],
+            "authentication_query_parameter_name": "access_token",
+            "message_schema_url": "/schema/control_room_message.json",
+            "browser_probe_url": "",
+        }
+
+        with self.assertRaises(SystemExit) as ctx:
+            _validate_remote_observer_capabilities(
+                capabilities,
+                ObserverServerTarget(
+                    host="bridge.local",
+                    port=8765,
+                    http_base_url="http://bridge.local:8765",
+                    websocket_url="ws://bridge.local:8765/session",
+                ),
+            )
+
+        self.assertIn("browser_probe_url must be a non-empty string", str(ctx.exception))
 
 
 if __name__ == "__main__":
