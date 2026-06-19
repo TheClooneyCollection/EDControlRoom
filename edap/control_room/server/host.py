@@ -9,6 +9,7 @@ from edap.control_room import bootstrap as _bootstrap
 from edap.control_room.app import ControlRoomApp
 from edap.control_room.protocol import snapshot_from_app
 from edap.control_room.protocol.snapshot import ControlRoomSnapshot
+from edap.control_room.server.state import ControlRoomServerState
 from edap.runtime import RuntimeContext
 from edap.state import JournalWatcher
 from edap.tts import NullSpeechBackend, TTSAnnouncer
@@ -69,13 +70,20 @@ class _ContainerWidgetStub:
 
 
 class HeadlessControlRoomHost(ControlRoomApp):
-    def __init__(self, ctx: RuntimeContext, *, market_filter: str | None = None) -> None:
+    def __init__(
+        self,
+        ctx: RuntimeContext,
+        *,
+        market_filter: str | None = None,
+        server_state: ControlRoomServerState | None = None,
+    ) -> None:
         self._activity_widget = _ActivityWidgetStub()
         self._command_input_widget = _CommandInputWidgetStub()
         self._resume_help_widget = _StaticWidgetStub()
         self._resume_detail_widget = _StaticWidgetStub()
         self._resume_list_widget = _OptionListWidgetStub()
         self._resume_browser_widget = _ContainerWidgetStub()
+        self._server_state = server_state
         super().__init__(ctx, market_filter=market_filter)
         self._tts = TTSAnnouncer(
             self._config.tts,
@@ -177,9 +185,12 @@ class HeadlessControlRoomHost(ControlRoomApp):
         self._publish_snapshot()
 
     def _publish_snapshot(self) -> None:
+        snapshot = self.snapshot()
+        if self._server_state is not None:
+            self._server_state.capture_remote_session(snapshot)
         sink = self._protocol_event_sink
         if sink is not None:
-            sink.publish_snapshot(self.snapshot())
+            sink.publish_snapshot(snapshot)
 
     def handle_remote_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None:
         self.submit_input(raw_input, skip_delay=skip_delay)
