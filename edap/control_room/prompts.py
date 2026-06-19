@@ -35,6 +35,15 @@ class HaulConfirmResolution:
     station_1: str | None = None
 
 
+@dataclass(frozen=True)
+class HaulPromptTransition:
+    log_lines: tuple[str, ...] = ()
+    ui_state: HaulPromptUiState | None = None
+    launch_haul_loop: bool = False
+    skip_delay: bool = False
+    raw_command: str = ""
+
+
 class PromptHost(Protocol):
     _config: AppConfig
     _prompt_state: PromptState
@@ -218,10 +227,17 @@ def _prefill_value(
     app: PromptHost,
     key: str,
 ) -> str:
-    current = app._haul_params.get(key, "")
+    return _prefill_value_from_state(app._prompt_state, key)
+
+
+def _prefill_value_from_state(
+    prompt_state: PromptState,
+    key: str,
+) -> str:
+    current = prompt_state.haul_params.get(key, "")
     if current:
         return current
-    return app._haul_prompt_defaults.get(key, "")
+    return prompt_state.haul_prompt_defaults.get(key, "")
 
 
 def _parse_yes_no(value: str, *, default: bool) -> bool | None:
@@ -308,6 +324,314 @@ def resolve_haul_confirm_prompt(
             raw_command="",
         )
     return None
+
+
+def advance_haul_prompt(
+    prompt_state: PromptState,
+    value: str,
+    *,
+    current_station: str | None,
+    current_system: str | None,
+    configured_galaxy_map_settle_default: float,
+    configured_dock_timeout_default: float,
+    default_placeholder: str,
+    render_error: Callable[..., str],
+    parse_optional_nonnegative_float: Callable[[str, float, str], float | None],
+) -> HaulPromptTransition:
+    if prompt_state.haul_prompt_step == "station_1_buying":
+        resolved = value.strip()
+        prompt_state.haul_params["station_1_buying"] = resolved
+        prompt_state.haul_prompt_step = "station_1"
+        default_station_1 = prompt_state.haul_prompt_defaults.get("station_1", "")
+        if default_station_1:
+            return HaulPromptTransition(
+                log_lines=(
+                    f"  Station 1 buying: [cyan]{escape(resolved)}[/]"
+                    if resolved
+                    else "  Station 1 buying: [dim](none)[/]",
+                    f"[dim]Station 1 name? (Enter = {escape(default_station_1)})[/]",
+                ),
+                ui_state=HaulPromptUiState(
+                    placeholder=f"station 1 (Enter = {default_station_1})...",
+                    value=_prefill_value_from_state(prompt_state, "station_1"),
+                ),
+            )
+        current = current_station or "current station"
+        return HaulPromptTransition(
+            log_lines=(
+                f"  Station 1 buying: [cyan]{escape(resolved)}[/]"
+                if resolved
+                else "  Station 1 buying: [dim](none)[/]",
+                f"[dim]Station 1 name? (Enter to use {escape(current)})[/]",
+            ),
+            ui_state=HaulPromptUiState(
+                placeholder=f"station 1 (Enter = {current})...",
+                value=_prefill_value_from_state(prompt_state, "station_1"),
+            ),
+        )
+
+    if prompt_state.haul_prompt_step == "station_1":
+        resolved = value.strip()
+        prompt_state.haul_params["station_1"] = resolved
+        prompt_state.haul_prompt_step = "station_1_system"
+        default_station_1_system = prompt_state.haul_prompt_defaults.get("station_1_system", "")
+        station_log = (
+            f"  Station 1: [cyan]{escape(resolved)}[/]"
+            if resolved
+            else "  Station 1: [dim](current station)[/]"
+        )
+        if default_station_1_system:
+            return HaulPromptTransition(
+                log_lines=(
+                    station_log,
+                    f"[dim]Station 1 system? (Enter = {escape(default_station_1_system)})[/]",
+                ),
+                ui_state=HaulPromptUiState(
+                    placeholder=f"station 1 system (Enter = {default_station_1_system})...",
+                    value=_prefill_value_from_state(prompt_state, "station_1_system"),
+                ),
+            )
+        current = current_system or "current system"
+        return HaulPromptTransition(
+            log_lines=(
+                station_log,
+                f"[dim]Station 1 system? (Enter to use {escape(current)})[/]",
+            ),
+            ui_state=HaulPromptUiState(
+                placeholder=f"station 1 system (Enter = {current})...",
+                value=_prefill_value_from_state(prompt_state, "station_1_system"),
+            ),
+        )
+
+    if prompt_state.haul_prompt_step == "station_1_system":
+        resolved = value.strip()
+        prompt_state.haul_params["station_1_system"] = resolved
+        prompt_state.haul_prompt_step = "station_1_on_land"
+        default_station_1_on_land = _parse_yes_no(
+            prompt_state.haul_prompt_defaults.get("station_1_on_land", ""),
+            default=False,
+        )
+        default_label = "yes" if default_station_1_on_land else "no"
+        return HaulPromptTransition(
+            log_lines=(
+                f"  Station 1 system: [cyan]{escape(resolved)}[/]"
+                if resolved
+                else "  Station 1 system: [dim](current system)[/]",
+                f"[dim]Station 1 on land? (Enter = {default_label}; yes for settlement/manual landing)[/]",
+            ),
+            ui_state=HaulPromptUiState(
+                placeholder=f"station 1 on land? (Enter = {default_label})...",
+                value=_prefill_value_from_state(prompt_state, "station_1_on_land"),
+            ),
+        )
+
+    if prompt_state.haul_prompt_step == "station_1_on_land":
+        default_station_1_on_land = _parse_yes_no(
+            prompt_state.haul_prompt_defaults.get("station_1_on_land", ""),
+            default=False,
+        )
+        parsed = _parse_yes_no(value, default=bool(default_station_1_on_land))
+        if parsed is None:
+            return HaulPromptTransition(
+                log_lines=(f"[red]{escape(render_error('confirm_yes_no'))}[/]",),
+            )
+        prompt_state.haul_params["station_1_on_land"] = "true" if parsed else "false"
+        prompt_state.haul_prompt_step = "station_2_buying"
+        default_station_2_buying = prompt_state.haul_prompt_defaults.get("station_2_buying", "")
+        if default_station_2_buying:
+            return HaulPromptTransition(
+                log_lines=(
+                    f"  Station 1 on land: [cyan]{'yes' if parsed else 'no'}[/]",
+                    f"[dim]Station 2 buying? (optional, Enter = {escape(default_station_2_buying)})[/]",
+                ),
+                ui_state=HaulPromptUiState(
+                    placeholder=f"station 2 buying (Enter = {default_station_2_buying})...",
+                    value=_prefill_value_from_state(prompt_state, "station_2_buying"),
+                ),
+            )
+        return HaulPromptTransition(
+            log_lines=(
+                f"  Station 1 on land: [cyan]{'yes' if parsed else 'no'}[/]",
+                "[dim]Station 2 buying? (optional; this cargo will be sold at station 1)[/]",
+            ),
+            ui_state=HaulPromptUiState(
+                placeholder="station 2 buying...",
+                value=_prefill_value_from_state(prompt_state, "station_2_buying"),
+            ),
+        )
+
+    if prompt_state.haul_prompt_step == "station_2_buying":
+        resolved = value.strip()
+        prompt_state.haul_params["station_2_buying"] = resolved
+        prompt_state.haul_prompt_step = "station_2"
+        default_station_2 = prompt_state.haul_prompt_defaults.get("station_2", "")
+        if default_station_2:
+            return HaulPromptTransition(
+                log_lines=(
+                    f"  Station 2 buying: [cyan]{escape(resolved)}[/]"
+                    if resolved
+                    else "  Station 2 buying: [dim](none)[/]",
+                    f"[dim]Station 2 name? (Enter = {escape(default_station_2)})[/]",
+                ),
+                ui_state=HaulPromptUiState(
+                    placeholder=f"station 2 (Enter = {default_station_2})...",
+                    value=_prefill_value_from_state(prompt_state, "station_2"),
+                ),
+            )
+        return HaulPromptTransition(
+            log_lines=(
+                f"  Station 2 buying: [cyan]{escape(resolved)}[/]"
+                if resolved
+                else "  Station 2 buying: [dim](none)[/]",
+                "[dim]Station 2 name?[/]",
+            ),
+            ui_state=HaulPromptUiState(
+                placeholder="station 2...",
+                value=_prefill_value_from_state(prompt_state, "station_2"),
+            ),
+        )
+
+    if prompt_state.haul_prompt_step == "station_2":
+        resolved = value.strip()
+        if not resolved:
+            return HaulPromptTransition(
+                log_lines=(f"[red]{escape(render_error('station_2_name_required'))}[/]",),
+            )
+        prompt_state.haul_params["station_2"] = resolved
+        prompt_state.haul_prompt_step = "station_2_system"
+        default_station_2_system = prompt_state.haul_prompt_defaults.get("station_2_system", "")
+        if default_station_2_system:
+            return HaulPromptTransition(
+                log_lines=(
+                    f"  Station 2: [cyan]{escape(resolved)}[/]",
+                    f"[dim]Station 2 system? (Enter = {escape(default_station_2_system)})[/]",
+                ),
+                ui_state=HaulPromptUiState(
+                    placeholder=f"station 2 system (Enter = {default_station_2_system})...",
+                    value=_prefill_value_from_state(prompt_state, "station_2_system"),
+                ),
+            )
+        return HaulPromptTransition(
+            log_lines=(
+                f"  Station 2: [cyan]{escape(resolved)}[/]",
+                "[dim]Station 2 system?[/]",
+            ),
+            ui_state=HaulPromptUiState(
+                placeholder="station 2 system...",
+                value=_prefill_value_from_state(prompt_state, "station_2_system"),
+            ),
+        )
+
+    if prompt_state.haul_prompt_step == "station_2_system":
+        resolved = value.strip()
+        if not resolved:
+            return HaulPromptTransition(
+                log_lines=(f"[red]{escape(render_error('station_2_system_required'))}[/]",),
+            )
+        prompt_state.haul_params["station_2_system"] = resolved
+        prompt_state.haul_prompt_step = "station_2_on_land"
+        default_station_2_on_land = _parse_yes_no(
+            prompt_state.haul_prompt_defaults.get("station_2_on_land", ""),
+            default=False,
+        )
+        default_label = "yes" if default_station_2_on_land else "no"
+        return HaulPromptTransition(
+            log_lines=(
+                f"  Station 2 system: [cyan]{escape(resolved)}[/]",
+                f"[dim]Station 2 on land? (Enter = {default_label}; yes for settlement/manual landing)[/]",
+            ),
+            ui_state=HaulPromptUiState(
+                placeholder=f"station 2 on land? (Enter = {default_label})...",
+                value=_prefill_value_from_state(prompt_state, "station_2_on_land"),
+            ),
+        )
+
+    if prompt_state.haul_prompt_step == "station_2_on_land":
+        default_station_2_on_land = _parse_yes_no(
+            prompt_state.haul_prompt_defaults.get("station_2_on_land", ""),
+            default=False,
+        )
+        parsed = _parse_yes_no(value, default=bool(default_station_2_on_land))
+        if parsed is None:
+            return HaulPromptTransition(
+                log_lines=(f"[red]{escape(render_error('confirm_yes_no'))}[/]",),
+            )
+        prompt_state.haul_params["station_2_on_land"] = "true" if parsed else "false"
+        default_settle = float(
+            prompt_state.haul_prompt_defaults.get(
+                "galaxy_map_settle",
+                configured_galaxy_map_settle_default,
+            )
+        )
+        prompt_state.haul_prompt_step = "galaxy_map_settle"
+        return HaulPromptTransition(
+            log_lines=(
+                f"  Station 2 on land: [cyan]{'yes' if parsed else 'no'}[/]",
+                f"[dim]Galaxy-map settle seconds? (Enter = {default_settle:.1f})[/]",
+            ),
+            ui_state=HaulPromptUiState(
+                placeholder=f"galaxy map settle seconds (Enter = {default_settle:.1f})...",
+                value=prompt_state.haul_params.get("galaxy_map_settle", "") or str(default_settle),
+            ),
+        )
+
+    if prompt_state.haul_prompt_step == "galaxy_map_settle":
+        parsed = parse_optional_nonnegative_float(
+            value,
+            float(
+                prompt_state.haul_prompt_defaults.get(
+                    "galaxy_map_settle",
+                    configured_galaxy_map_settle_default,
+                )
+            ),
+            "Galaxy-map settle seconds",
+        )
+        if parsed is None:
+            return HaulPromptTransition()
+        prompt_state.haul_params["galaxy_map_settle"] = str(parsed)
+        default_timeout = float(
+            prompt_state.haul_prompt_defaults.get(
+                "dock_timeout",
+                configured_dock_timeout_default,
+            )
+        )
+        prompt_state.haul_prompt_step = "dock_timeout"
+        return HaulPromptTransition(
+            log_lines=(
+                f"  Galaxy-map settle: [cyan]{parsed:.1f}s[/]",
+                f"[dim]Haul docking timeout seconds? (Enter = {default_timeout:.1f})[/]",
+            ),
+            ui_state=HaulPromptUiState(
+                placeholder=f"haul docking timeout seconds (Enter = {default_timeout:.1f})...",
+                value=prompt_state.haul_params.get("dock_timeout", "") or str(default_timeout),
+            ),
+        )
+
+    if prompt_state.haul_prompt_step == "dock_timeout":
+        parsed = parse_optional_nonnegative_float(
+            value,
+            float(
+                prompt_state.haul_prompt_defaults.get(
+                    "dock_timeout",
+                    configured_dock_timeout_default,
+                )
+            ),
+            "Haul docking timeout seconds",
+        )
+        if parsed is None:
+            return HaulPromptTransition()
+        prompt_state.haul_params["dock_timeout"] = str(parsed)
+        prompt_state.haul_prompt_step = ""
+        prompt_state.haul_prompt_defaults = {}
+        return HaulPromptTransition(
+            log_lines=(f"  Haul docking timeout: [cyan]{parsed:.1f}s[/]",),
+            ui_state=HaulPromptUiState(placeholder=default_placeholder),
+            launch_haul_loop=True,
+            skip_delay=prompt_state.haul_prompt_skip_delay,
+            raw_command=prompt_state.haul_prompt_raw_command,
+        )
+
+    return HaulPromptTransition()
 
 
 def start_haul_prompt(
@@ -402,259 +726,36 @@ def handle_haul_prompt(
     *,
     default_placeholder: str,
 ) -> None:
-    if app._haul_prompt_step == "station_1_buying":
-        resolved = value.strip()
-        app._haul_params["station_1_buying"] = resolved
-        if resolved:
-            app._log(f"  Station 1 buying: [cyan]{escape(resolved)}[/]")
-        else:
-            app._log("  Station 1 buying: [dim](none)[/]")
-        app._haul_prompt_step = "station_1"
-        default_station_1 = app._haul_prompt_defaults.get("station_1", "")
-        if default_station_1:
-            app._log(f"[dim]Station 1 name? (Enter = {escape(default_station_1)})[/]")
-            _set_prompt_input(
+    transition = advance_haul_prompt(
+        app._prompt_state,
+        value,
+        current_station=app._ship.station,
+        current_system=app._ship.system,
+        configured_galaxy_map_settle_default=app._config.controls.galaxy_map_settle_seconds,
+        configured_dock_timeout_default=app._config.controls.haul_dock_timeout_seconds,
+        default_placeholder=default_placeholder,
+        render_error=lambda key, **kwargs: error_text.render(app._config, key, **kwargs),
+        parse_optional_nonnegative_float=lambda raw_value, default, label: (
+            parse_optional_nonnegative_float(
                 app,
-                placeholder=f"station 1 (Enter = {default_station_1})...",
-                value=_prefill_value(app, "station_1"),
+                raw_value,
+                default=default,
+                label=label,
             )
-        else:
-            current = app._ship.station or "current station"
-            app._log(f"[dim]Station 1 name? (Enter to use {escape(current)})[/]")
-            _set_prompt_input(
-                app,
-                placeholder=f"station 1 (Enter = {current})...",
-                value=_prefill_value(app, "station_1"),
-            )
-        return
-
-    if app._haul_prompt_step == "station_1":
-        resolved = value.strip()
-        app._haul_params["station_1"] = resolved
-        if resolved:
-            app._log(f"  Station 1: [cyan]{escape(resolved)}[/]")
-        else:
-            app._log("  Station 1: [dim](current station)[/]")
-        app._haul_prompt_step = "station_1_system"
-        default_station_1_system = app._haul_prompt_defaults.get("station_1_system", "")
-        if default_station_1_system:
-            app._log(f"[dim]Station 1 system? (Enter = {escape(default_station_1_system)})[/]")
-            _set_prompt_input(
-                app,
-                placeholder=f"station 1 system (Enter = {default_station_1_system})...",
-                value=_prefill_value(app, "station_1_system"),
-            )
-        else:
-            current = app._ship.system or "current system"
-            app._log(f"[dim]Station 1 system? (Enter to use {escape(current)})[/]")
-            _set_prompt_input(
-                app,
-                placeholder=f"station 1 system (Enter = {current})...",
-                value=_prefill_value(app, "station_1_system"),
-            )
-        return
-
-    if app._haul_prompt_step == "station_1_system":
-        resolved = value.strip()
-        app._haul_params["station_1_system"] = resolved
-        if resolved:
-            app._log(f"  Station 1 system: [cyan]{escape(resolved)}[/]")
-        else:
-            app._log("  Station 1 system: [dim](current system)[/]")
-        app._haul_prompt_step = "station_1_on_land"
-        default_station_1_on_land = _parse_yes_no(
-            app._haul_prompt_defaults.get("station_1_on_land", ""),
-            default=False,
-        )
-        default_label = "yes" if default_station_1_on_land else "no"
-        app._log(f"[dim]Station 1 on land? (Enter = {default_label}; yes for settlement/manual landing)[/]")
+        ),
+    )
+    for line in transition.log_lines:
+        app._log(line)
+    if transition.ui_state is not None:
         _set_prompt_input(
             app,
-            placeholder=f"station 1 on land? (Enter = {default_label})...",
-            value=_prefill_value(app, "station_1_on_land"),
+            placeholder=transition.ui_state.placeholder,
+            value=transition.ui_state.value,
         )
-        return
-
-    if app._haul_prompt_step == "station_1_on_land":
-        default_station_1_on_land = _parse_yes_no(
-            app._haul_prompt_defaults.get("station_1_on_land", ""),
-            default=False,
-        )
-        parsed = _parse_yes_no(value, default=bool(default_station_1_on_land))
-        if parsed is None:
-            app._log(f"[red]{escape(error_text.render(app._config, 'confirm_yes_no'))}[/]")
-            return
-        app._haul_params["station_1_on_land"] = "true" if parsed else "false"
-        app._log(f"  Station 1 on land: [cyan]{'yes' if parsed else 'no'}[/]")
-        app._haul_prompt_step = "station_2_buying"
-        default_station_2_buying = app._haul_prompt_defaults.get("station_2_buying", "")
-        if default_station_2_buying:
-            app._log(f"[dim]Station 2 buying? (optional, Enter = {escape(default_station_2_buying)})[/]")
-            _set_prompt_input(
-                app,
-                placeholder=f"station 2 buying (Enter = {default_station_2_buying})...",
-                value=_prefill_value(app, "station_2_buying"),
-            )
-        else:
-            app._log("[dim]Station 2 buying? (optional; this cargo will be sold at station 1)[/]")
-            _set_prompt_input(
-                app,
-                placeholder="station 2 buying...",
-                value=_prefill_value(app, "station_2_buying"),
-            )
-        return
-
-    if app._haul_prompt_step == "station_2_buying":
-        resolved = value.strip()
-        app._haul_params["station_2_buying"] = resolved
-        if resolved:
-            app._log(f"  Station 2 buying: [cyan]{escape(resolved)}[/]")
-        else:
-            app._log("  Station 2 buying: [dim](none)[/]")
-        app._haul_prompt_step = "station_2"
-        default_station_2 = app._haul_prompt_defaults.get("station_2", "")
-        if default_station_2:
-            app._log(f"[dim]Station 2 name? (Enter = {escape(default_station_2)})[/]")
-            _set_prompt_input(
-                app,
-                placeholder=f"station 2 (Enter = {default_station_2})...",
-                value=_prefill_value(app, "station_2"),
-            )
-        else:
-            app._log("[dim]Station 2 name?[/]")
-            _set_prompt_input(
-                app,
-                placeholder="station 2...",
-                value=_prefill_value(app, "station_2"),
-            )
-        return
-
-    if app._haul_prompt_step == "station_2":
-        resolved = value.strip()
-        if not resolved:
-            app._log(f"[red]{escape(error_text.render(app._config, 'station_2_name_required'))}[/]")
-            return
-        app._haul_params["station_2"] = resolved
-        if resolved:
-            app._log(f"  Station 2: [cyan]{escape(resolved)}[/]")
-        app._haul_prompt_step = "station_2_system"
-        default_station_2_system = app._haul_prompt_defaults.get("station_2_system", "")
-        if default_station_2_system:
-            app._log(f"[dim]Station 2 system? (Enter = {escape(default_station_2_system)})[/]")
-            _set_prompt_input(
-                app,
-                placeholder=f"station 2 system (Enter = {default_station_2_system})...",
-                value=_prefill_value(app, "station_2_system"),
-            )
-        else:
-            app._log("[dim]Station 2 system?[/]")
-            _set_prompt_input(
-                app,
-                placeholder="station 2 system...",
-                value=_prefill_value(app, "station_2_system"),
-            )
-        return
-
-    if app._haul_prompt_step == "station_2_system":
-        resolved = value.strip()
-        if not resolved:
-            app._log(f"[red]{escape(error_text.render(app._config, 'station_2_system_required'))}[/]")
-            return
-        app._haul_params["station_2_system"] = resolved
-        app._log(f"  Station 2 system: [cyan]{escape(resolved)}[/]")
-        app._haul_prompt_step = "station_2_on_land"
-        default_station_2_on_land = _parse_yes_no(
-            app._haul_prompt_defaults.get("station_2_on_land", ""),
-            default=False,
-        )
-        default_label = "yes" if default_station_2_on_land else "no"
-        app._log(f"[dim]Station 2 on land? (Enter = {default_label}; yes for settlement/manual landing)[/]")
-        _set_prompt_input(
-            app,
-            placeholder=f"station 2 on land? (Enter = {default_label})...",
-            value=_prefill_value(app, "station_2_on_land"),
-        )
-        return
-
-    if app._haul_prompt_step == "station_2_on_land":
-        default_station_2_on_land = _parse_yes_no(
-            app._haul_prompt_defaults.get("station_2_on_land", ""),
-            default=False,
-        )
-        parsed = _parse_yes_no(value, default=bool(default_station_2_on_land))
-        if parsed is None:
-            app._log(f"[red]{escape(error_text.render(app._config, 'confirm_yes_no'))}[/]")
-            return
-        app._haul_params["station_2_on_land"] = "true" if parsed else "false"
-        app._log(f"  Station 2 on land: [cyan]{'yes' if parsed else 'no'}[/]")
-        default_settle = float(
-            app._haul_prompt_defaults.get(
-                "galaxy_map_settle",
-                app._config.controls.galaxy_map_settle_seconds,
-            )
-        )
-        app._haul_prompt_step = "galaxy_map_settle"
-        app._log(f"[dim]Galaxy-map settle seconds? (Enter = {default_settle:.1f})[/]")
-        _set_prompt_input(
-            app,
-            placeholder=f"galaxy map settle seconds (Enter = {default_settle:.1f})...",
-            value=app._haul_params.get("galaxy_map_settle", "") or str(default_settle),
-        )
-        return
-
-    if app._haul_prompt_step == "galaxy_map_settle":
-        parsed = parse_optional_nonnegative_float(
-            app,
-            value,
-            default=float(
-                app._haul_prompt_defaults.get(
-                    "galaxy_map_settle",
-                    app._config.controls.galaxy_map_settle_seconds,
-                )
-            ),
-            label="Galaxy-map settle seconds",
-        )
-        if parsed is None:
-            return
-        app._haul_params["galaxy_map_settle"] = str(parsed)
-        app._log(f"  Galaxy-map settle: [cyan]{parsed:.1f}s[/]")
-        default_timeout = float(
-            app._haul_prompt_defaults.get(
-                "dock_timeout",
-                app._config.controls.haul_dock_timeout_seconds,
-            )
-        )
-        app._haul_prompt_step = "dock_timeout"
-        app._log(f"[dim]Haul docking timeout seconds? (Enter = {default_timeout:.1f})[/]")
-        _set_prompt_input(
-            app,
-            placeholder=f"haul docking timeout seconds (Enter = {default_timeout:.1f})...",
-            value=app._haul_params.get("dock_timeout", "") or str(default_timeout),
-        )
-        return
-
-    if app._haul_prompt_step == "dock_timeout":
-        parsed = parse_optional_nonnegative_float(
-            app,
-            value,
-            default=float(
-                app._haul_prompt_defaults.get(
-                    "dock_timeout",
-                    app._config.controls.haul_dock_timeout_seconds,
-                )
-            ),
-            label="Haul docking timeout seconds",
-        )
-        if parsed is None:
-            return
-        app._haul_params["dock_timeout"] = str(parsed)
-        app._log(f"  Haul docking timeout: [cyan]{parsed:.1f}s[/]")
-        app._haul_prompt_step = ""
-        app._haul_prompt_defaults = {}
-        _set_prompt_input(app, placeholder=default_placeholder)
+    if transition.launch_haul_loop:
         app._dispatch_haul_loop(
-            skip_delay=app._haul_prompt_skip_delay,
-            raw_command=app._haul_prompt_raw_command,
+            skip_delay=transition.skip_delay,
+            raw_command=transition.raw_command,
         )
 
 
