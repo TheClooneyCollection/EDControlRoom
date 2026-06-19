@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft
+In progress
 
 ## Why
 
@@ -17,18 +17,20 @@ To support `serve` and `connect` without building a second client UI, we need to
 ## Goals
 
 - reuse the existing Textual Control Room as both local UI and remote client UI
-- make the server authoritative for routines, journal watching, market state, activity logs, and TTS announcement events
+- make the server authoritative for routines, journal watching, market state, activity logs, and announcement events
 - establish typed snapshot and event models before networking work starts
 
-## Non-Goals
+## Current Scope Notes
 
-- no transport implementation in the first slice
-- no full backend abstraction in the first slice
-- no command routing over WebSocket yet
+- TTS playback is intentionally client-local: the server streams announcement events and each client decides whether to speak them.
+- LAN shared-token auth is acceptable for the current slice; internet-facing auth is not part of this plan yet.
+- One connected client can be the active operator at a time; additional clients are observers.
 
 ## Refactor Sequence
 
 ### 1. Protocol models
+
+Status: complete
 
 Add `edap/control_room/protocol/` with typed models for:
 
@@ -37,6 +39,8 @@ Add `edap/control_room/protocol/` with typed models for:
 - `event.announcement_emitted`
 
 ### 2. Snapshot serialization
+
+Status: complete
 
 Add a serializer that reads current `ControlRoomApp` state and produces a typed snapshot from:
 
@@ -50,17 +54,17 @@ Add a serializer that reads current `ControlRoomApp` state and produces a typed 
 
 ### 3. UI view-state seam
 
+Status: mostly complete
+
 Make the Textual app capable of rendering from a view-state object instead of only from its current internal mutable fields.
 
-Current status:
-
-- the status, haul, and market panels now refresh from a backend snapshot
-- the app still owns the underlying local mutable state in embedded mode
-- command input, prompt-confirm flows, destination dispatch, and haul-loop launch now route through backend intent methods
-- replay-browser open/filter/execute/edit/default-haul actions now route through backend intent methods too
-- remote operator-command transport and command-history/session ownership still need to move fully onto the backend seam
+- the status, haul, and market panels refresh from backend snapshots
+- prompt flows and replay state are backend-owned session state rather than widget-owned state
+- the remaining uncertainty is live validation rather than a known missing local view-state seam
 
 ### 4. Backend interface
+
+Status: complete for current local/remote needs
 
 Introduce a backend/controller seam so the UI can issue intents through either:
 
@@ -69,15 +73,17 @@ Introduce a backend/controller seam so the UI can issue intents through either:
 
 ### 5. Local backend
 
-Wrap the existing in-process behavior behind that backend seam first.
+Status: complete
 
-Current status:
+Wrap the existing in-process behavior behind that backend seam first.
 
 - `LocalControlRoomBackend` now exists and is always attached in embedded/local mode.
 - It owns snapshot generation plus local event subscription for activity-log and announcement events.
-- The legacy external sink hook remains as a compatibility passthrough for observer transport while the broader UI refactor is still underway.
+- The legacy external sink hook remains as a compatibility passthrough for observer transport.
 
 ### 6. Event adaptation
+
+Status: complete for activity log, announcement, and snapshot fanout
 
 Adapt existing UI-side effects into transport-neutral events:
 
@@ -86,41 +92,37 @@ Adapt existing UI-side effects into transport-neutral events:
 
 ### 7. Server mode
 
-Implement `control_room serve` with:
+Status: complete for LAN observer mode
 
-- `GET /health`
-- `GET /capabilities`
-- `GET /snapshot`
-- `WS /session`
-
-Observer mode should land before active-operator command routing.
+- `control_room serve` now exposes `GET /health`, `GET /capabilities`, `GET /snapshot`, and `WS /session`
+- the server runs through a headless host, in-memory session broker, retained session state, and shared-token auth
+- first authenticated client becomes active operator by default; disconnect failover promotes the next client
 
 ### 8. Remote backend
 
-Implement a remote backend that consumes snapshots and streamed events and sends user intents.
+Status: complete for current LAN client
 
-## Immediate Slice
+- the existing Textual app now runs as a remote client through `control_room connect`
+- remote clients consume snapshots, activity-log events, announcement events, and active-operator changes
+- remote clients can issue command input, replay actions, prompt Enter/default flows, and remote routine interruption when they hold the active-operator role
 
-Build only phases 1 and 2 now:
+## Current Remaining Work
 
-- scaffold protocol Python types
-- implement `snapshot_from_app()`
-- add tests proving current app state maps into the typed snapshot shape
-
-Follow-up slice now in progress:
-
-- move event publication onto the always-present local backend
-- keep `serve` compatible through an external sink passthrough
-- then move rendering and operator intents onto the backend seam panel by panel
+- run deeper live validation against real routine-heavy `serve` / multi-client `connect` sessions
+- confirm prompt cancellation, replay flows, reconnect recovery, and failover behavior under live runtime conditions
+- decide whether any extra remote operator ergonomics are still needed after that validation
 
 ## Acceptance Criteria
 
 - typed snapshot and event models exist under `edap/control_room/protocol/`
 - the serializer can map current `ControlRoomApp` state into a typed snapshot without requiring networking code
-- tests cover the key state buckets and server-status derivation
+- local embedded mode still works through the backend seam without changing the day-to-day operator UX
+- `serve` and `connect` support one active operator plus observer clients over LAN with retained session state and reconnect recovery
+- tests cover key state buckets, server-status derivation, and websocket command/session behavior
 
 ## Notes For The Next Agent
 
 - treat the current protocol schema and design note as the wire contract
 - do not tunnel existing internal app methods over the network
 - keep announcement streaming semantic: clients decide whether to perform local TTS
+- use `docs/operators/control-room-remote.md` and `tools/scratch/scratch_control_room_remote.py` as the starting point for live validation

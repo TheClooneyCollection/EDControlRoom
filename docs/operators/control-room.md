@@ -7,6 +7,8 @@ Run it with:
 ```sh
 uv run python3 control_room.py
 uv run python3 control_room.py --market aluminium
+uv run python3 control_room.py serve --token 1001
+uv run python3 control_room.py connect 192.168.1.50:8765 --token 1001
 ```
 
 If `config.toml` exists in the repo root, EDControlRoom loads it automatically. Create one only when you need explicit overrides beyond the built-in auto-detection.
@@ -20,6 +22,7 @@ EDControlRoom works by sending keyboard input to Elite Dangerous. After you fire
 - primary operator surface for current routine work
 - best-supported end-to-end path is `haul`
 - one routine runs at a time
+- can also run as a LAN observer server or remote client; see [control-room-remote.md](control-room-remote.md)
 
 ## Panels
 

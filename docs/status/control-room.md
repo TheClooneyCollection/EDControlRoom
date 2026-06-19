@@ -1,20 +1,20 @@
 # Control Room Status
 ## Current
 - Remote observer clients now retry dropped WebSocket sessions with exponential backoff, log reconnect delay and restoration messages locally, and request a fresh snapshot on reconnect so ping-timeout recovery can heal stale client state automatically.
-- Remote observer clients now fail closed on dropped WebSocket sessions such as ping timeouts: the backend clears stale active-operator/routine UI state, closes replay-open display state, and refuses to enqueue more remote commands once an established session has died.
 - Cargo state now re-syncs from `Cargo.json` after `Cargo`, `MarketBuy`, and `MarketSell` events, so repeated `sell` flows stop relying on a drift-prone in-memory manifest while bootstrap still keeps `Status.json` as the startup cargo-count source.
 - Replay-browser open/close, filter updates, selection movement, selected-entry execution/edit, default-haul toggling, and prompt/default Enter submissions now route through backend intent methods, while the status/haul/market panels render from backend snapshots instead of live app-owned state.
 - Local mode now has an always-present `LocalControlRoomBackend` that owns snapshot/event subscription for the embedded app, while the old `_protocol_event_sink` hook remains only as a compatibility passthrough for external observers like `serve`.
-- Observer transport now has shared-token auth plus `control_room connect <host>:<port>` over authenticated `GET /capabilities`/`GET /snapshot` and `WS /session`, with live snapshots, activity/announcement streams, client-local TTS replay, bidirectional command envelopes, correlated errors, and remote `Ctrl-C` prompt/routine interruption.
+- Observer transport now has shared-token auth plus `control_room connect <host>:<port>` over authenticated `GET /capabilities`/`GET /snapshot` and `WS /session`, with live snapshots, activity and announcement streams, client-local TTS replay, bidirectional command envelopes, correlated errors, and remote `Ctrl-C` prompt/routine interruption.
 - Session snapshots are now personalized per connected client, the first authenticated client becomes `active_operator` by default, later clients can claim the role explicitly, and disconnect failover promotes the next connected client.
 - Observer-mode server now runs through `ControlRoomEventSink`, an in-memory session broker, retained server-owned activity/prompt/replay session state, and a headless runtime host; replay selection/navigation plus destination/haul prompt transitions now run through explicit state helpers and protocol commands, server snapshots stay broker-retained, activity lines mirror into server logs, announcement playback stays client-side, and routine teardown is rebroadcast so remote clients do not keep stale active-routine state.
 - The observer server tests now cover real websocket-session failover, replay-navigation command routing, and destination-prompt command flow through `build_observer_server_app` plus a headless host, so the remaining uncertainty is live runtime behavior rather than untested session-protocol plumbing.
+- Remote validation now has `docs/operators/control-room-remote.md` plus `tools/scratch/scratch_control_room_remote.py` for HTTP and websocket smoke checks without launching the full TUI.
 - Control Room now supports `home` / `home set`, repo-local `haul load [path]`, and replay/edit prefill for multi-step haul prompts; the config fallback path also creates repo-root `config.toml` instead of editing `config.example.toml`.
 - Routine failures now surface as `Failed:` plus `Try:` guidance instead of raw internal-looking output, and activity-log retention plus the repo-local `artifacts/control-room.log` mirror are covered in tests.
 ## Caveats
-- The client/server message schema is still a draft, but `serve` now retains global prompt/replay session snapshots server-side and prompt/replay flows are state-driven; the main remaining gap is deeper live validation under the headless host rather than another large local-state split.
-- `serve`/`connect` now support a real active-operator role assignment path plus remote interrupt-vs-exit semantics, but deeper live validation is still needed for routine-heavy remote execution, prompt-heavy flows, and replay flows under the headless host.
+- The deepest remaining uncertainty is live runtime behavior under routine-heavy real sessions rather than transport plumbing or client-side state splits.
+- Authentication is still a shared LAN token, not per-user auth or internet-ready identity.
 - Real-world validation is still needed for stale-market, wrong-station, and wrong-commodity recovery wording.
 ## Next
-- Live-validate active-operator claiming, failover-on-disconnect, routine-heavy remote commands, and the new failure wording/market back-out path against real Control Room cases.
-- Decide whether any additional remote operator ergonomics are needed beyond the new replay-navigation command path once live validation is done.
+- Run the remote validation playbook against real `serve` / multi-client `connect` sessions, especially active-operator failover, prompt cancellation, replay flows, and reconnect recovery.
+- Decide whether any additional remote operator ergonomics are needed after that live validation.
