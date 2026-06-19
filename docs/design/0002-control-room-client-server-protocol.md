@@ -43,9 +43,9 @@ The server should assign these roles, not trust the client to self-assert them.
 
 Recommended first policy:
 
-- the local server process remains the initial `active_operator`
+- the first authenticated connected client becomes `active_operator`
 - later clients default to `observer`
-- a localhost client may optionally preempt the active operator later, but that is a follow-up policy decision, not a day-one requirement
+- any later authenticated client may explicitly claim `active_operator`, and disconnect failover promotes the next connected client automatically
 
 ## CLI Direction
 
