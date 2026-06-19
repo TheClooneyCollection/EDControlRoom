@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Control Room Remote Browser Probe</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #111318;
+        --panel: #1a1e27;
+        --line: #2f3847;
+        --text: #e8edf5;
+        --muted: #9ca9bd;
+        --accent: #46a0ff;
+        --accent-2: #77d6a5;
+        --warn: #ffb454;
+      }
+
+      body {
+        margin: 0;
+        padding: 24px;
+        font: 14px/1.45 Menlo, Monaco, Consolas, monospace;
+        background: linear-gradient(180deg, #0d1016, #151922 45%, #0f1218);
+        color: var(--text);
+      }
+
+      h1, h2 {
+        margin: 0 0 12px;
+        font-weight: 600;
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px;
+        box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+      }
+
+      label {
+        display: block;
+        margin: 0 0 10px;
+      }
+
+      input {
+        width: 100%;
+        margin-top: 4px;
+        box-sizing: border-box;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: #11161f;
+        color: var(--text);
+      }
+
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      button {
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: #151b25;
+        color: var(--text);
+        cursor: pointer;
+      }
+
+      button.primary {
+        background: var(--accent);
+        color: #07111d;
+        border-color: var(--accent);
+        font-weight: 700;
+      }
+
+      button.secondary {
+        background: var(--accent-2);
+        color: #0c1c15;
+        border-color: var(--accent-2);
+        font-weight: 700;
+      }
+
+      dl {
+        margin: 0;
+        display: grid;
+        grid-template-columns: 140px 1fr;
+        gap: 8px 12px;
+      }
+
+      dt {
+        color: var(--muted);
+      }
+
+      dd {
+        margin: 0;
+        word-break: break-word;
+      }
+
+      pre {
+        margin: 0;
+        max-height: 420px;
+        overflow: auto;
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: #0d1118;
+      }
+
+      .status {
+        color: var(--warn);
+      }
+
+      .status.ok {
+        color: var(--accent-2);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Control Room Remote Browser Probe</h1>
+    <div class="grid">
+      <section class="panel">
+        <h2>Connection</h2>
+        <label>
+          Server
+          <input id="serverTarget" value="http://127.0.0.1:8765">
+        </label>
+        <label>
+          Token
+          <input id="accessToken" value="1001">
+        </label>
+        <label>
+          Client name
+          <input id="clientName" value="browser-probe">
+        </label>
+        <div class="row">
+          <button id="connectButton" class="primary">Connect</button>
+          <button id="disconnectButton">Disconnect</button>
+          <button id="refreshButton">Refresh HTTP</button>
+        </div>
+        <div class="row">
+          <button id="claimButton" class="secondary">Claim Operator</button>
+          <button id="snapshotButton">Request Snapshot</button>
+        </div>
+        <p id="connectionStatus" class="status">Disconnected</p>
+      </section>
+
+      <section class="panel">
+        <h2>Server</h2>
+        <dl>
+          <dt>Health</dt><dd id="healthStatus">-</dd>
+          <dt>Version</dt><dd id="serverVersion">-</dd>
+          <dt>Role</dt><dd id="clientRole">-</dd>
+          <dt>Active operator</dt><dd id="activeOperator">-</dd>
+          <dt>Connected clients</dt><dd id="connectedClients">-</dd>
+          <dt>Schema URL</dt><dd id="schemaUrl">-</dd>
+        </dl>
+      </section>
+
+      <section class="panel">
+        <h2>Capabilities</h2>
+        <pre id="capabilitiesView">-</pre>
+      </section>
+
+      <section class="panel">
+        <h2>Snapshot</h2>
+        <pre id="snapshotView">-</pre>
+      </section>
+
+      <section class="panel" style="grid-column: 1 / -1;">
+        <h2>Message Stream</h2>
+        <pre id="messageLog">-</pre>
+      </section>
+    </div>
+
+    <script>
+      const state = {
+        websocket: null,
+        messageCounter: 0,
+      };
+
+      const $ = (id) => document.getElementById(id);
+
+      function normalizedTarget(raw) {
+        const value = raw.trim();
+        return value.includes("://") ? value : `http://${value}`;
+      }
+
+      function httpBaseUrl() {
+        const url = new URL(normalizedTarget($("serverTarget").value));
+        if (!url.port) {
+          url.port = url.protocol === "https:" ? "443" : "8765";
+        }
+        url.pathname = "";
+        url.search = "";
+        url.hash = "";
+        return url.toString().replace(/\/$/, "");
+      }
+
+      function websocketUrl() {
+        const httpUrl = new URL(httpBaseUrl());
+        httpUrl.protocol = httpUrl.protocol === "https:" ? "wss:" : "ws:";
+        httpUrl.pathname = "/session";
+        httpUrl.searchParams.set("client_name", $("clientName").value.trim() || "browser-probe");
+        httpUrl.searchParams.set("access_token", $("accessToken").value.trim());
+        return httpUrl.toString();
+      }
+
+      function appendMessageLog(text) {
+        const view = $("messageLog");
+        const line = `[${new Date().toISOString()}] ${text}`;
+        view.textContent = view.textContent === "-" ? line : `${view.textContent}\n${line}`;
+        view.scrollTop = view.scrollHeight;
+      }
+
+      function setConnectionStatus(text, ok) {
+        const node = $("connectionStatus");
+        node.textContent = text;
+        node.className = ok ? "status ok" : "status";
+      }
+
+      async function fetchJson(path, { auth = true } = {}) {
+        const headers = {};
+        if (auth) {
+          headers["Authorization"] = `Bearer ${$("accessToken").value.trim()}`;
+        }
+        const response = await fetch(`${httpBaseUrl()}${path}`, { headers });
+        if (!response.ok) {
+          throw new Error(`${path} failed with ${response.status}`);
+        }
+        return response.json();
+      }
+
+      function renderSnapshot(snapshot) {
+        $("snapshotView").textContent = JSON.stringify(snapshot, null, 2);
+        $("clientRole").textContent = snapshot.session?.client_role ?? "-";
+        $("activeOperator").textContent = snapshot.active_operator?.client_name ?? "(none)";
+        $("connectedClients").textContent = String((snapshot.connected_clients || []).length);
+      }
+
+      async function refreshHttp() {
+        const [health, capabilities, snapshot] = await Promise.all([
+          fetchJson("/health", { auth: false }),
+          fetchJson("/capabilities"),
+          fetchJson("/snapshot"),
+        ]);
+        $("healthStatus").textContent = health.status;
+        $("serverVersion").textContent = capabilities.server_version;
+        $("capabilitiesView").textContent = JSON.stringify(capabilities, null, 2);
+        $("schemaUrl").textContent = `${httpBaseUrl()}${capabilities.message_schema_url}`;
+        renderSnapshot(snapshot);
+        appendMessageLog("HTTP discovery refreshed.");
+      }
+
+      function nextMessageId(prefix) {
+        state.messageCounter += 1;
+        return `${prefix}-${state.messageCounter}`;
+      }
+
+      function sendMessage(messageType, payload) {
+        if (!state.websocket || state.websocket.readyState !== WebSocket.OPEN) {
+          appendMessageLog(`Cannot send ${messageType}: websocket is not open.`);
+          return;
+        }
+        state.websocket.send(
+          JSON.stringify({
+            message_id: nextMessageId("browser"),
+            message_type: messageType,
+            payload,
+          })
+        );
+        appendMessageLog(`sent ${messageType}`);
+      }
+
+      async function connect() {
+        await refreshHttp();
+        if (state.websocket) {
+          state.websocket.close();
+        }
+        state.websocket = new WebSocket(websocketUrl());
+        setConnectionStatus("Connecting...", false);
+        state.websocket.addEventListener("open", () => {
+          setConnectionStatus("Connected", true);
+          appendMessageLog("websocket opened");
+        });
+        state.websocket.addEventListener("close", (event) => {
+          setConnectionStatus(`Disconnected (${event.code})`, false);
+          appendMessageLog(`websocket closed code=${event.code} reason=${event.reason || "-"}`);
+        });
+        state.websocket.addEventListener("error", () => {
+          appendMessageLog("websocket error");
+        });
+        state.websocket.addEventListener("message", (event) => {
+          const message = JSON.parse(event.data);
+          appendMessageLog(`recv ${message.message_type}`);
+          if (message.message_type === "state.snapshot") {
+            renderSnapshot(message.payload);
+          }
+        });
+      }
+
+      $("connectButton").addEventListener("click", () => {
+        connect().catch((error) => {
+          setConnectionStatus("Connect failed", false);
+          appendMessageLog(error.message);
+        });
+      });
+      $("disconnectButton").addEventListener("click", () => {
+        if (state.websocket) {
+          state.websocket.close();
+        }
+      });
+      $("refreshButton").addEventListener("click", () => {
+        refreshHttp().catch((error) => appendMessageLog(error.message));
+      });
+      $("claimButton").addEventListener("click", () => {
+        sendMessage("command.request_active_operator", {});
+      });
+      $("snapshotButton").addEventListener("click", () => {
+        sendMessage("command.request_snapshot", {});
+      });
+    </script>
+  </body>
+</html>

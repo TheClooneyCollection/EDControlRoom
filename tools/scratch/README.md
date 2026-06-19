@@ -4,6 +4,7 @@ This directory groups exploratory probes and developer-only validation helpers t
 
 Current scripts:
 
+- `control_room_remote_browser.html`: browser-native HTTP/WebSocket probe for `serve`
 - `scratch_cgevent.py`: early Quartz input probe
 - `scratch_control_room_remote.py`: fetch remote observer HTTP surfaces and print websocket session events
 - `scratch_cv.py`: one-shot CV template matcher
