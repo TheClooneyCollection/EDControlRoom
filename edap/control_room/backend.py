@@ -34,6 +34,10 @@ class ControlRoomBackend(ControlRoomEventSink, Protocol):
 
     def submit_input(self, raw: str) -> None: ...
 
+    def interrupt_active_routine(self) -> None: ...
+
+    def exit_detaches_remote_session(self) -> bool: ...
+
     def dispatch_command(self, raw: str, *, skip_delay: bool | None = None) -> None: ...
 
     def dispatch_destination(
@@ -95,6 +99,7 @@ class LocalBackendHost(Protocol):
     def _log(self, msg: str) -> None: ...
     def _save_saved_state(self) -> None: ...
     def _activity_auto_follow_paused(self) -> bool: ...
+    def _cancel_active_routine(self, source: str) -> None: ...
     def _dispatch_command(self, raw: str, *, skip_delay: bool | None = None) -> None: ...
     def _dispatch_haul_loop(
         self,
@@ -194,6 +199,12 @@ class LocalControlRoomBackend(ControlRoomEventSink):
             )
             return
         self.dispatch_command(raw)
+
+    def interrupt_active_routine(self) -> None:
+        self._host._cancel_active_routine("Ctrl-C")
+
+    def exit_detaches_remote_session(self) -> bool:
+        return False
 
     def dispatch_command(self, raw: str, *, skip_delay: bool | None = None) -> None:
         self._host._facade.dispatch_command(raw, skip_delay=skip_delay)

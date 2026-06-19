@@ -307,8 +307,8 @@ class ActivityLog(RichLog):
 
 class ControlRoomApp(App[None]):
     BINDINGS = [
-        ("ctrl+c", "request_quit", "Quit"),
-        ("ctrl+d", "request_quit", "Quit"),
+        ("ctrl+c", "request_interrupt", "Interrupt"),
+        ("ctrl+d", "request_exit", "Exit"),
         ("ctrl+r", "open_history", "History"),
     ]
 
@@ -418,6 +418,8 @@ class ControlRoomApp(App[None]):
         self._backend: ControlRoomBackend = backend or LocalControlRoomBackend(self)
         self._view_snapshot = self._backend.current_snapshot()
         self._backend_event_unsubscribe: Callable[[], None] | None = None
+        self._exit_requested_once = False
+        self._exit_prompt_active = False
 
     def __getattr__(self, name: str) -> Any:
         target = _facade.FACADE_METHOD_MAP.get(name)
@@ -1159,11 +1161,25 @@ class ControlRoomApp(App[None]):
 
     # ── Quit ───────────────────────────────────────────────────────────────────
 
-    def action_request_quit(self) -> None:
-        if self._routine_active and self._routine_worker is not None:
-            self._cancel_active_routine("Ctrl-C / Ctrl-D")
+    def action_request_interrupt(self) -> None:
+        self._exit_requested_once = False
+        if self._routine_active:
+            self._backend.interrupt_active_routine()
             return
-        self._request_shutdown("Ctrl-C / Ctrl-D")
+        self._log("[yellow]Ctrl-C received — no active routine to cancel.[/]")
+
+    def action_request_exit(self) -> None:
+        if self._exit_prompt_active:
+            return
+        if not self._exit_requested_once:
+            self._exit_requested_once = True
+            self._log("[yellow]Ctrl-D received — press Ctrl-D again to exit control room.[/]")
+            return
+        self._exit_requested_once = False
+        if self._should_prompt_remote_exit():
+            self._start_remote_exit_prompt()
+            return
+        self._request_shutdown("Ctrl-D")
 
     def request_sigint(self) -> None:
         self._sigint_pending = True
@@ -1172,7 +1188,7 @@ class ControlRoomApp(App[None]):
         if not self._sigint_pending:
             return
         self._sigint_pending = False
-        self.action_request_quit()
+        self.action_request_interrupt()
 
     def _cancel_active_routine(self, source: str) -> None:
         if self._active_routine_name == "haul" and not self._haul_stop_requested:
@@ -1201,9 +1217,48 @@ class ControlRoomApp(App[None]):
     def _clear_pending_haul_stop(self) -> None:
         self._haul_stop_requested = False
 
+    def _should_prompt_remote_exit(self) -> bool:
+        return (
+            self._backend.exit_detaches_remote_session()
+            and self._view_snapshot.session.client_role == "active_operator"
+            and self._routine_active
+        )
+
+    def _start_remote_exit_prompt(self) -> None:
+        self._exit_prompt_active = True
+        self._log(
+            "[yellow]Remote routine still running — Enter exits this client and leaves it running; "
+            "type cancel to stop the routine and exit; type no to stay connected.[/]"
+        )
+        try:
+            command_input = self.query_one("#cmd", Input)
+        except Exception:
+            return
+        command_input.placeholder = "Enter = leave routine running | cancel = stop routine and exit | no = stay"
+
+    def _handle_exit_prompt_input(self, raw: str) -> None:
+        value = raw.strip().lower()
+        self._exit_prompt_active = False
+        try:
+            command_input = self.query_one("#cmd", Input)
+        except Exception:
+            command_input = None
+        if command_input is not None:
+            command_input.placeholder = self._default_command_placeholder
+        if value in {"", "enter", "default", "leave"}:
+            self._request_shutdown("Ctrl-D")
+            return
+        if value in {"cancel", "stop", "yes", "y"}:
+            self._backend.interrupt_active_routine()
+            self._request_shutdown("Ctrl-D")
+            return
+        self._log("[yellow]Exit cancelled — staying connected.[/]")
+
     def _request_shutdown(self, source: str) -> None:
         if self._shutdown_requested:
             return
+        self._exit_requested_once = False
+        self._exit_prompt_active = False
         self._shutdown_requested = True
         self._log(f"[yellow]{escape(source)} received — exiting control room.[/]")
         self._finalize_shutdown()
@@ -1273,7 +1328,11 @@ class ControlRoomApp(App[None]):
         """Handle up/down arrow keys for readline-style command history."""
         if event.key == "ctrl+d":
             event.prevent_default()
-            self.action_request_quit()
+            self.action_request_exit()
+            return
+        if event.key == "ctrl+c":
+            event.prevent_default()
+            self.action_request_interrupt()
             return
         if self._resume_open:
             if event.key == "escape" or (event.key == "q" and not self._resume_filter):
@@ -1298,6 +1357,14 @@ class ControlRoomApp(App[None]):
             elif event.character and event.character.isprintable() and len(event.character) == 1:
                 event.prevent_default()
                 self._backend.set_replay_filter(self._resume_filter + event.character)
+            return
+        if self._exit_prompt_active:
+            if event.key == "enter":
+                event.prevent_default()
+                cmd_input = self.query_one("#cmd", Input)
+                raw = cmd_input.value
+                cmd_input.value = ""
+                self._handle_exit_prompt_input(raw)
             return
         if self._haul_prompt_step or self._haul_confirm_buy_station or self._dest_prompt_destination:
             if event.key == "enter":
@@ -1333,6 +1400,10 @@ class ControlRoomApp(App[None]):
     def on_input_submitted(self, event: Input.Submitted) -> None:
         raw = event.value
         event.input.value = ""
+
+        if self._exit_prompt_active:
+            self._handle_exit_prompt_input(raw)
+            return
 
         if self._haul_prompt_step or self._haul_confirm_buy_station or self._dest_prompt_destination:
             self._backend.submit_input(raw)

@@ -99,6 +99,12 @@ class RemoteObserverBackend(ControlRoomBackend):
     def submit_input(self, raw: str) -> None:
         self.dispatch_command(raw)
 
+    def interrupt_active_routine(self) -> None:
+        self._send_command("command.cancel_active_routine", {})
+
+    def exit_detaches_remote_session(self) -> bool:
+        return True
+
     def dispatch_command(self, raw: str, *, skip_delay: bool | None = None) -> None:
         self._send_command(
             "command.submit_input",

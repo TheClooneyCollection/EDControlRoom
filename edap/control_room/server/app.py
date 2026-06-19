@@ -67,6 +67,7 @@ def build_observer_server_app(
                     "event.active_operator_changed",
                     "event.activity_log_appended",
                     "event.announcement_emitted",
+                    "command.cancel_active_routine",
                     "response.success",
                     "response.error",
                 ],
@@ -369,6 +370,50 @@ def _handle_session_message(
             correlation_message_id=correlation_message_id,
         )
 
+    if message_type == "command.cancel_active_routine":
+        if client_role != "active_operator":
+            return protocol_message(
+                "response.error",
+                {
+                    "error_code": "observer_read_only",
+                    "error_message": "Observer clients cannot cancel operator routines.",
+                    "recommended_action": "Use an active operator session to control routines.",
+                    "retryable": False,
+                },
+                correlation_message_id=correlation_message_id,
+            )
+        if command_handler is None:
+            return protocol_message(
+                "response.error",
+                {
+                    "error_code": "active_operator_transport_unavailable",
+                    "error_message": "Remote active-operator routine control is not available yet.",
+                    "recommended_action": "Keep using embedded local mode for operator routine control until promotion lands.",
+                    "retryable": False,
+                },
+                correlation_message_id=correlation_message_id,
+            )
+        try:
+            command_handler.cancel_active_routine()
+        except Exception as exc:
+            return protocol_message(
+                "response.error",
+                {
+                    "error_code": "command_execution_failed",
+                    "error_message": str(exc) or "Remote routine cancellation failed.",
+                    "recommended_action": "Check the server activity log, then try again.",
+                    "retryable": True,
+                },
+                correlation_message_id=correlation_message_id,
+            )
+        return protocol_message(
+            "response.success",
+            {
+                "accepted": True,
+                "message_text": "Routine cancellation requested.",
+            },
+            correlation_message_id=correlation_message_id,
+        )
     return protocol_message(
         "response.error",
         {

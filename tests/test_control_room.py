@@ -30,10 +30,23 @@ from edap.config import (
 )
 from edap.control_room import error_text
 from edap.control_room.app import ActivityLog, _JOURNAL_ARTIFACT_LOG_FLUSH_EVERY
+from edap.control_room.backend import ControlRoomBackendEventHandler
 from edap.control_room.failure_messages import describe_routine_failure
 from edap.control_room.events import apply_ship_event
 from edap.control_room import rendering as control_room_rendering
 from edap.control_room.models import MarketData, ShipState
+from edap.control_room.protocol.snapshot import (
+    CommandHistorySnapshot,
+    ControlRoomSnapshot,
+    HaulSessionSnapshot,
+    MarketSnapshot,
+    PromptStateSnapshot,
+    ReplayBrowserSnapshot,
+    ServerStatusSnapshot,
+    SessionSnapshot,
+    ShipSnapshot,
+    UiStateSnapshot,
+)
 from edap.control_room_state import CommandHistoryEntry
 from edap.routines import RoutineResult
 from edap.runtime import ResolvedPath, RuntimeContext
@@ -162,6 +175,7 @@ class _HarnessApp(ControlRoomApp):
         self._journal_artifact_log_path = ctx.config.control_room.state_file.parent / "control-room-artifact.log"
         self.logged: list[str] = []
         self.exit_calls = 0
+        self._command_input = _InputStub()
 
     def _log(self, msg: str) -> None:
         self.logged.append(msg)
@@ -193,6 +207,11 @@ class _HarnessApp(ControlRoomApp):
             return
         self._resume_open = True
         self._resume_entries = self._filtered_resume_entries()
+
+    def query_one(self, selector: str, widget_type=None):  # type: ignore[override]
+        if selector == "#cmd":
+            return self._command_input
+        return super().query_one(selector, widget_type)
 
 
 class _WorkerGroupStub:
@@ -285,6 +304,157 @@ class _FakeTTS:
         return None
 
 
+class _RemoteBackendStub:
+    def __init__(self, snapshot: ControlRoomSnapshot) -> None:
+        self._snapshot = snapshot
+        self.interrupt_calls = 0
+
+    def current_snapshot(self) -> ControlRoomSnapshot:
+        return self._snapshot
+
+    def subscribe_events(self, handler: ControlRoomBackendEventHandler):
+        def unsubscribe() -> None:
+            return None
+
+        return unsubscribe
+
+    def publish_activity_log(self, entry) -> None:
+        return None
+
+    def publish_announcement(self, event) -> None:
+        return None
+
+    def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
+        self._snapshot = snapshot
+
+    def submit_input(self, raw: str) -> None:
+        return None
+
+    def interrupt_active_routine(self) -> None:
+        self.interrupt_calls += 1
+
+    def exit_detaches_remote_session(self) -> bool:
+        return True
+
+    def dispatch_command(self, raw: str, *, skip_delay: bool | None = None) -> None:
+        return None
+
+    def dispatch_destination(
+        self,
+        destination: str,
+        galaxy_map_settle: float,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        return None
+
+    def dispatch_haul_loop(
+        self,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        return None
+
+    def handle_haul_prompt(self, value: str) -> None:
+        return None
+
+    def handle_haul_confirm_prompt(self, value: str) -> None:
+        return None
+
+    def open_replay_browser(self) -> None:
+        return None
+
+    def close_replay_browser(self) -> None:
+        return None
+
+    def refresh_replay_browser(self) -> None:
+        return None
+
+    def set_replay_filter(self, filter_text: str) -> None:
+        return None
+
+    def replay_history_entry(self, entry, *, edit: bool, skip_delay: bool = False) -> None:
+        return None
+
+    def toggle_replay_default_haul(self, entry) -> None:
+        return None
+
+
+def _remote_snapshot(*, client_role: str = "active_operator", routine_active: bool = True) -> ControlRoomSnapshot:
+    return ControlRoomSnapshot(
+        session=SessionSnapshot(session_id="observer-1", client_role=client_role),
+        connected_clients=[],
+        active_operator=None,
+        ship=ShipSnapshot(
+            commander_name="CMDR TEST",
+            ship_type="Type-9",
+            system_name="Sol",
+            station_name="Jameson Memorial",
+            status="in_station",
+            fuel_level=10.0,
+            fuel_capacity=32.0,
+            credits=1000,
+            cargo_count=2,
+            cargo_capacity=100,
+            cargo_inventory=[],
+        ),
+        market=MarketSnapshot(
+            station_name="Jameson Memorial",
+            system_name="Sol",
+            market_timestamp="2026-06-18T13:00:00Z",
+            market_filter_text=None,
+            locked=False,
+            items=[],
+        ),
+        haul_session=HaulSessionSnapshot(
+            station_1_buying="",
+            station_2_buying="",
+            station_1="",
+            station_2="",
+            active=False,
+            clean_run_active=False,
+            waiting_for_station_1_departure=False,
+            resumed_mid_run=False,
+            docked_back_at_station_1=False,
+            current_run_started_at=None,
+            current_run_elapsed_seconds=None,
+            current_run_profit=0,
+            completed_runs=0,
+            accumulated_profit=0,
+            last_run_profit=None,
+            last_run_elapsed_seconds=None,
+            total_run_elapsed_seconds=0.0,
+        ),
+        ui_state=UiStateSnapshot(
+            routine_active=routine_active,
+            active_routine_name="haul" if routine_active else None,
+            haul_stop_requested=False,
+            verbose_controls=False,
+            instant_mode=False,
+            activity_auto_follow_paused=False,
+            replay_browser_open=False,
+            shutdown_requested=False,
+            shutdown_finalized=False,
+        ),
+        command_history=CommandHistorySnapshot(history_limit=20),
+        prompt_state=PromptStateSnapshot(),
+        replay_browser=ReplayBrowserSnapshot(open=False, filter_text=""),
+        activity_log=[],
+        server_status=ServerStatusSnapshot(
+            server_name="ED Control Room",
+            server_version="1.2.3",
+            runtime_platform="macos",
+            journal_source_status="configured",
+            bindings_source_status="configured",
+            bindings_loaded=False,
+            capability_names=[],
+            operator_mode="observer_only",
+        ),
+    )
+
+
 class _ArtifactLogHandleStub:
     def __init__(self) -> None:
         self.parts: list[str] = []
@@ -364,25 +534,25 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertTrue(self.app._shutdown_requested)
         self.assertEqual(self.app.exit_calls, 1)
 
-    def test_request_quit_cancels_active_routine_without_exiting(self) -> None:
+    def test_request_interrupt_cancels_active_routine_without_exiting(self) -> None:
         worker = _FakeWorker()
         self.app._routine_active = True
         self.app._routine_worker = worker
 
-        self.app.action_request_quit()
+        self.app.action_request_interrupt()
 
         self.assertFalse(self.app._shutdown_requested)
         self.assertTrue(worker.cancelled)
         self.assertEqual(self.app.exit_calls, 0)
 
-    def test_request_quit_on_haul_schedules_stop_after_run(self) -> None:
+    def test_request_interrupt_on_haul_schedules_stop_after_run(self) -> None:
         worker = _FakeWorker()
         self.app._routine_active = True
         self.app._routine_worker = worker
         self.app._active_routine_name = "haul"
         self.app._tts = _FakeTTS()
 
-        self.app.action_request_quit()
+        self.app.action_request_interrupt()
 
         self.assertFalse(self.app._shutdown_requested)
         self.assertFalse(worker.cancelled)
@@ -393,14 +563,14 @@ class ControlRoomCommandTests(unittest.TestCase):
         )
         self.assertIn("stop after this run", "\n".join(self.app.logged))
 
-    def test_request_quit_on_haul_cancels_immediately_when_stop_already_pending(self) -> None:
+    def test_request_interrupt_on_haul_cancels_immediately_when_stop_already_pending(self) -> None:
         worker = _FakeWorker()
         self.app._routine_active = True
         self.app._routine_worker = worker
         self.app._active_routine_name = "haul"
         self.app._haul_stop_requested = True
 
-        self.app.action_request_quit()
+        self.app.action_request_interrupt()
 
         self.assertFalse(self.app._shutdown_requested)
         self.assertTrue(worker.cancelled)
@@ -420,14 +590,80 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertTrue(worker.cancelled)
         self.assertEqual(self.app.exit_calls, 0)
 
-    def test_pending_sigint_exits_when_idle(self) -> None:
+    def test_pending_sigint_does_not_exit_when_idle(self) -> None:
         self.app.request_sigint()
 
         self.app._drain_pending_sigint()
 
         self.assertFalse(self.app._sigint_pending)
+        self.assertFalse(self.app._shutdown_requested)
+        self.assertEqual(self.app.exit_calls, 0)
+        self.assertIn("no active routine to cancel", "\n".join(self.app.logged))
+
+    def test_request_exit_requires_second_press_before_shutdown(self) -> None:
+        self.app.action_request_exit()
+
+        self.assertFalse(self.app._shutdown_requested)
+        self.assertEqual(self.app.exit_calls, 0)
+        self.assertTrue(self.app._exit_requested_once)
+
+        self.app.action_request_exit()
+
         self.assertTrue(self.app._shutdown_requested)
         self.assertEqual(self.app.exit_calls, 1)
+
+    def test_remote_exit_prompt_defaults_to_detach_without_cancelling(self) -> None:
+        backend = _RemoteBackendStub(_remote_snapshot())
+        app = _HarnessApp(_make_context(Path(self.tmpdir.name)))
+        app._backend = backend
+        app._view_snapshot = backend.current_snapshot()
+        app._routine_active = True
+
+        app.action_request_exit()
+        app.action_request_exit()
+
+        self.assertTrue(app._exit_prompt_active)
+        self.assertEqual(
+            app._command_input.placeholder,
+            "Enter = leave routine running | cancel = stop routine and exit | no = stay",
+        )
+
+        app._handle_exit_prompt_input("")
+
+        self.assertEqual(backend.interrupt_calls, 0)
+        self.assertTrue(app._shutdown_requested)
+        self.assertEqual(app.exit_calls, 1)
+
+    def test_remote_exit_prompt_can_cancel_remote_routine_before_exit(self) -> None:
+        backend = _RemoteBackendStub(_remote_snapshot())
+        app = _HarnessApp(_make_context(Path(self.tmpdir.name)))
+        app._backend = backend
+        app._view_snapshot = backend.current_snapshot()
+        app._routine_active = True
+
+        app.action_request_exit()
+        app.action_request_exit()
+        app._handle_exit_prompt_input("cancel")
+
+        self.assertEqual(backend.interrupt_calls, 1)
+        self.assertTrue(app._shutdown_requested)
+        self.assertEqual(app.exit_calls, 1)
+
+    def test_remote_exit_prompt_can_be_aborted(self) -> None:
+        backend = _RemoteBackendStub(_remote_snapshot())
+        app = _HarnessApp(_make_context(Path(self.tmpdir.name)))
+        app._backend = backend
+        app._view_snapshot = backend.current_snapshot()
+        app._routine_active = True
+
+        app.action_request_exit()
+        app.action_request_exit()
+        app._handle_exit_prompt_input("no")
+
+        self.assertEqual(backend.interrupt_calls, 0)
+        self.assertFalse(app._shutdown_requested)
+        self.assertEqual(app.exit_calls, 0)
+        self.assertIn("Exit cancelled", "\n".join(app.logged))
 
     def test_bootstrap_ship_state_reads_balance_and_cargo_from_status_json(self) -> None:
         journal_dir = Path(self.tmpdir.name)

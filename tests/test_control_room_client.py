@@ -288,6 +288,25 @@ class ControlRoomClientTests(unittest.TestCase):
         message = backend._outgoing_messages.get_nowait()
         self.assertEqual(message["message_type"], "command.request_active_operator")
 
+    def test_remote_backend_enqueues_cancel_active_routine(self) -> None:
+        target = ObserverServerTarget(
+            host="bridge.local",
+            port=8765,
+            http_base_url="http://bridge.local:8765",
+            websocket_url="ws://bridge.local:8765/session",
+        )
+        backend = RemoteObserverBackend(
+            server_target=target,
+            access_token="secret-token",
+            client_name="observer-ipad",
+            initial_snapshot=_snapshot(),
+        )
+
+        backend.interrupt_active_routine()
+
+        message = backend._outgoing_messages.get_nowait()
+        self.assertEqual(message["message_type"], "command.cancel_active_routine")
+
 
 if __name__ == "__main__":
     unittest.main()

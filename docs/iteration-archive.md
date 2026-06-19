@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `42`
-- Latest generated iteration number: `175`
+- Generated iteration count: `43`
+- Latest generated iteration number: `176`
 
 ## Iteration 134
 
@@ -1205,3 +1205,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Live-check the `serve` console output during real routine runs to make sure the mirrored activity lines are the right signal density for operators.
 - If the server needs structured logs later, replace the current plain mirrored message sink with a JSON or field-based logger instead of changing the activity event shape.
+
+## Iteration 176
+
+- When: `2026-06-19 13:12`
+- Area: `control-room`
+- Title: `split-remote-interrupt-and-exit-controls`
+- Source: [2026-06-19-13-12_control-room_split-remote-interrupt-and-exit-controls.md](iteration-logs/2026-06-19-13-12_control-room_split-remote-interrupt-and-exit-controls.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `split-remote-interrupt-and-exit-controls`
+- Started: `2026-06-19 13:12`
+
+## Summary
+
+- Split connected-client quit controls so remote `Ctrl-C` requests routine cancellation while `Ctrl-D` becomes a two-step local exit with a remote-routine detach/cancel prompt.
+
+## Changes
+
+- Added backend/server command shims for `command.cancel_active_routine` so remote operators can interrupt server-side work without sending `quit` to the headless host.
+- Split `ControlRoomApp` bindings into interrupt vs exit actions, made terminal `SIGINT` follow the interrupt path, and added the local confirmation flow for exiting a connected active-operator client while a remote routine is still running.
+- Added regression coverage across app, client, and server tests for remote interrupt transport and the new exit semantics.
+
+## Follow-ups
+
+- Live-validate the new `Ctrl-C`/`Ctrl-D` flow against a real connected client, especially during haul and prompt-heavy routines, before merging another remote-control slice on top.
