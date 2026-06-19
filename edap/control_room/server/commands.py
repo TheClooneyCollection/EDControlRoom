@@ -16,6 +16,8 @@ class ObserverSessionCommandHandler(Protocol):
 
     def set_replay_filter(self, filter_text: str) -> None: ...
 
+    def move_replay_selection(self, offset: int) -> None: ...
+
     def replay_history_entry(
         self,
         entry: CommandHistoryEntry,

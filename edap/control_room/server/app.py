@@ -68,6 +68,7 @@ def build_observer_server_app(
                     "event.activity_log_appended",
                     "event.announcement_emitted",
                     "command.cancel_active_routine",
+                    "command.move_replay_selection",
                     "response.success",
                     "response.error",
                 ],
@@ -324,6 +325,33 @@ def _handle_session_message(
         return protocol_message(
             "response.success",
             {"accepted": True, "message_text": "Replay filter updated."},
+            correlation_message_id=correlation_message_id,
+        )
+
+    if message_type == "command.move_replay_selection":
+        if client_role != "active_operator":
+            return _observer_read_only_error(correlation_message_id)
+        if command_handler is None:
+            return _transport_unavailable_error(correlation_message_id)
+        offset = payload.get("offset")
+        if not isinstance(offset, int):
+            return protocol_message(
+                "response.error",
+                {
+                    "error_code": "invalid_command",
+                    "error_message": "Replay selection commands must include integer offset.",
+                    "recommended_action": "Send an integer offset such as -1 or 1.",
+                    "retryable": True,
+                },
+                correlation_message_id=correlation_message_id,
+            )
+        try:
+            command_handler.move_replay_selection(offset)
+        except Exception as exc:
+            return _command_execution_failed_error(exc, correlation_message_id)
+        return protocol_message(
+            "response.success",
+            {"accepted": True, "message_text": "Replay selection moved."},
             correlation_message_id=correlation_message_id,
         )
 

@@ -254,6 +254,9 @@ class _SnapshotBackend(ControlRoomBackend):
     def set_replay_filter(self, filter_text: str) -> None:
         return None
 
+    def move_replay_selection(self, offset: int) -> None:
+        return None
+
     def replay_history_entry(
         self,
         entry: CommandHistoryEntry,
@@ -274,6 +277,7 @@ class _IntentRecorderBackend(_SnapshotBackend):
         self.submitted_inputs: list[str] = []
         self.opened_replay_browser = 0
         self.closed_replay_browser = 0
+        self.replay_selection_offsets: list[int] = []
         self.replayed_entries: list[tuple[str, bool, bool]] = []
 
     def submit_input(self, raw: str) -> None:
@@ -287,6 +291,9 @@ class _IntentRecorderBackend(_SnapshotBackend):
 
     def close_replay_browser(self) -> None:
         self.closed_replay_browser += 1
+
+    def move_replay_selection(self, offset: int) -> None:
+        self.replay_selection_offsets.append(offset)
 
     def replay_history_entry(
         self,
@@ -607,6 +614,25 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
 
         self.assertEqual(backend.closed_replay_browser, 1)
         self.assertEqual(backend.replayed_entries, [("jump", False, False)])
+
+    def test_replay_open_arrow_keys_route_selection_through_backend(self) -> None:
+        snapshot = snapshot_from_app(self.app)
+        backend = _IntentRecorderBackend(snapshot)
+        app = _RenderHarnessApp(
+            _make_context(Path(self.tmpdir.name)),
+            backend=backend,
+        )
+        app._resume_open = True
+
+        up_event = _KeyEventStub("up")
+        down_event = _KeyEventStub("down")
+
+        app.on_key(up_event)
+        app.on_key(down_event)
+
+        self.assertTrue(up_event.prevented)
+        self.assertTrue(down_event.prevented)
+        self.assertEqual(backend.replay_selection_offsets, [-1, 1])
 
     def test_blank_input_submission_reaches_backend_during_destination_prompt(self) -> None:
         snapshot = snapshot_from_app(self.app)

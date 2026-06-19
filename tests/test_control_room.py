@@ -376,6 +376,9 @@ class _RemoteBackendStub:
     def set_replay_filter(self, filter_text: str) -> None:
         return None
 
+    def move_replay_selection(self, offset: int) -> None:
+        return None
+
     def replay_history_entry(self, entry, *, edit: bool, skip_delay: bool = False) -> None:
         return None
 

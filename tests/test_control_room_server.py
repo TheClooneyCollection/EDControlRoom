@@ -257,6 +257,7 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
         self.opened_replay_browser = 0
         self.closed_replay_browser = 0
         self.replay_filters: list[str] = []
+        self.replay_selection_offsets: list[int] = []
         self.replayed_entries: list[tuple[str, str, bool, bool]] = []
         self.toggled_default_hauls: list[str] = []
 
@@ -274,6 +275,9 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
 
     def set_replay_filter(self, filter_text: str) -> None:
         self.replay_filters.append(filter_text)
+
+    def move_replay_selection(self, offset: int) -> None:
+        self.replay_selection_offsets.append(offset)
 
     def replay_history_entry(
         self,
@@ -658,6 +662,18 @@ class ControlRoomServerTests(unittest.TestCase):
             command_handler=command_handler,
             broker=broker,
         )
+        move_response = _handle_session_message(
+            {
+                "message_type": "command.move_replay_selection",
+                "message_id": "message-move",
+                "payload": {"offset": 1},
+            },
+            session_id="observer-open",
+            client_role="active_operator",
+            snapshot_provider=_base_snapshot,
+            command_handler=command_handler,
+            broker=broker,
+        )
         replay_response = _handle_session_message(
             {
                 "message_type": "command.replay_history_entry",
@@ -709,12 +725,14 @@ class ControlRoomServerTests(unittest.TestCase):
 
         self.assertEqual(open_response["message_type"], "response.success")
         self.assertEqual(filter_response["message_type"], "response.success")
+        self.assertEqual(move_response["message_type"], "response.success")
         self.assertEqual(replay_response["message_type"], "response.success")
         self.assertEqual(toggle_response["message_type"], "response.success")
         self.assertEqual(close_response["message_type"], "response.success")
         self.assertEqual(command_handler.opened_replay_browser, 1)
         self.assertEqual(command_handler.closed_replay_browser, 1)
         self.assertEqual(command_handler.replay_filters, ["haul"])
+        self.assertEqual(command_handler.replay_selection_offsets, [1])
         self.assertEqual(
             command_handler.replayed_entries,
             [("haul gold", "haul", True, True)],
@@ -742,6 +760,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
             host.open_replay_browser()
             host.set_replay_filter("haul")
+            host.move_replay_selection(0)
             host.toggle_replay_default_haul(host._saved_state.history[0])
 
         self.assertTrue(sink.snapshots)
@@ -754,6 +773,26 @@ class ControlRoomServerTests(unittest.TestCase):
             latest.replay_browser.selected_history_entry.raw_command,
             "haul gold",
         )
+
+    def test_headless_host_replay_selection_moves_and_updates_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
+            host._saved_state.history = [
+                CommandHistoryEntry(raw="dock", command="dock", timestamp="1"),
+                CommandHistoryEntry(raw="jump", command="jump", timestamp="2"),
+            ]
+            sink = _SnapshotRecorder()
+            host._protocol_event_sink = sink
+
+            host.open_replay_browser()
+            host.move_replay_selection(1)
+
+        initial = sink.snapshots[0]
+        latest = sink.snapshots[-1]
+        self.assertIsNotNone(initial.replay_browser.selected_history_entry)
+        self.assertIsNotNone(latest.replay_browser.selected_history_entry)
+        self.assertEqual(initial.replay_browser.selected_history_entry.raw_command, "jump")
+        self.assertEqual(latest.replay_browser.selected_history_entry.raw_command, "dock")
 
     def test_headless_host_feeds_retained_server_session_state(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

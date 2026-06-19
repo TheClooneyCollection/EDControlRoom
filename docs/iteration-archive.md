@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `54`
-- Latest generated iteration number: `187`
+- Generated iteration count: `55`
+- Latest generated iteration number: `188`
 
 ## Iteration 134
 
@@ -1544,3 +1544,32 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Decide whether replay navigation should gain explicit server-native commands or remain a widget-mirrored client concern.
 - Live-validate active-operator claiming, failover-on-disconnect, and routine-heavy remote execution against real `serve`/`connect` sessions now that prompt and replay state are server-retained and state-driven.
+
+## Iteration 188
+
+- When: `2026-06-19 17:28`
+- Area: `control-room`
+- Title: `add-remote-replay-navigation`
+- Source: [2026-06-19-17-28_control-room_add-remote-replay-navigation.md](iteration-logs/2026-06-19-17-28_control-room_add-remote-replay-navigation.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `add-remote-replay-navigation`
+- Started: `2026-06-19 17:28`
+
+## Summary
+
+- Added explicit replay-selection navigation commands to the remote protocol so replay movement no longer depends on widget-local behavior as the transport model.
+
+## Changes
+
+- Added backend/server command support for replay selection movement by relative offset, including `command.move_replay_selection` on the observer websocket path.
+- Updated the local TUI so replay-browser up/down navigation routes through the backend intent surface instead of bypassing it via `OptionList` behavior.
+- Added server/client/protocol coverage proving replay selection movement is serialized over the remote command path and reflected back into snapshots.
+- Verified with `uv run python3 -m unittest discover -s tests` (`489 tests in 0.213s`).
+
+## Follow-ups
+
+- Live-validate replay-heavy remote operator sessions, active-operator failover, and routine-heavy command execution under real `serve` / `connect` runs.
+- Decide whether any additional remote operator ergonomics are needed after live validation now that replay navigation has an explicit protocol path.

@@ -239,6 +239,7 @@ class ControlRoomClientTests(unittest.TestCase):
 
         backend.open_replay_browser()
         backend.set_replay_filter("haul")
+        backend.move_replay_selection(1)
         backend.replay_history_entry(
             entry=type("Entry", (), {
                 "raw": "haul gold",
@@ -261,6 +262,9 @@ class ControlRoomClientTests(unittest.TestCase):
 
         self.assertEqual(backend._outgoing_messages.get_nowait()["message_type"], "command.open_replay_browser")
         self.assertEqual(backend._outgoing_messages.get_nowait()["payload"]["filter_text"], "haul")
+        move_message = backend._outgoing_messages.get_nowait()
+        self.assertEqual(move_message["message_type"], "command.move_replay_selection")
+        self.assertEqual(move_message["payload"]["offset"], 1)
         replay_message = backend._outgoing_messages.get_nowait()
         self.assertEqual(replay_message["message_type"], "command.replay_history_entry")
         self.assertTrue(replay_message["payload"]["edit"])
