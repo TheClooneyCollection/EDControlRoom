@@ -97,6 +97,7 @@ class ReplayBrowserState:
     entries: list[ReplaySelection] = field(default_factory=list)
     open: bool = False
     filter_text: str = ""
+    selected_history_entry: CommandHistoryEntry | None = None
 
 
 @dataclass

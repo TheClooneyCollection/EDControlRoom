@@ -22,7 +22,12 @@ from edap.control_room.history import resume_detail, resume_label
 from edap.control_room.models import ReplaySelection
 from edap.control_room.protocol import ActivityLogEntry, snapshot_from_app
 from edap.control_room.protocol.events import ActivityLogAppendedEvent, AnnouncementEvent
-from edap.control_room.protocol.snapshot import ControlRoomSnapshot
+from edap.control_room.protocol.snapshot import (
+    CommandHistoryEntrySnapshot,
+    ControlRoomSnapshot,
+    ReplayBrowserSnapshot,
+    ReplayEntrySnapshot,
+)
 from edap.control_room.protocol.sink import ControlRoomEventSink
 from edap.control_room_state import CommandHistoryEntry, ControlRoomState
 from edap.runtime import ResolvedPath, RuntimeContext
@@ -417,7 +422,7 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
                 detail="haul detail",
             )
         ]
-        app._resume_list_widget.highlighted = 0
+        app._selected_resume_history_entry = entry
 
         snapshot = snapshot_from_app(app)
 
@@ -426,6 +431,56 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
             snapshot.replay_browser.selected_history_entry.raw_command,
             "haul gold",
         )
+
+    def test_remote_snapshot_apply_syncs_resume_widget_from_selected_history_entry(self) -> None:
+        entry = CommandHistoryEntry(
+            raw="haul gold",
+            command="haul",
+            params={"station_1_buying": "gold"},
+            timestamp="2026-06-15T15:00:00Z",
+        )
+        base_app = _ProtocolHarnessApp(_make_context(Path(self.tmpdir.name)))
+        base_snapshot = snapshot_from_app(base_app)
+        history_entry_snapshot = CommandHistoryEntrySnapshot(
+            raw_command=entry.raw,
+            command_name=entry.command,
+            arguments=entry.params,
+            timestamp=entry.timestamp,
+        )
+        snapshot = ControlRoomSnapshot(
+            session=base_snapshot.session,
+            connected_clients=base_snapshot.connected_clients,
+            active_operator=base_snapshot.active_operator,
+            ship=base_snapshot.ship,
+            market=base_snapshot.market,
+            haul_session=base_snapshot.haul_session,
+            ui_state=base_snapshot.ui_state,
+            command_history=base_snapshot.command_history,
+            prompt_state=base_snapshot.prompt_state,
+            replay_browser=ReplayBrowserSnapshot(
+                open=True,
+                filter_text="haul",
+                visible_entries=[
+                    ReplayEntrySnapshot(
+                        label="haul gold",
+                        detail="haul detail",
+                        history_entry=history_entry_snapshot,
+                    )
+                ],
+                selected_history_entry=history_entry_snapshot,
+            ),
+            activity_log=base_snapshot.activity_log,
+            server_status=base_snapshot.server_status,
+        )
+        app = _RenderHarnessApp(
+            _make_context(Path(self.tmpdir.name)),
+            backend=_SnapshotBackend(snapshot),
+        )
+
+        app._sync_view_snapshot()
+
+        self.assertEqual(app._selected_resume_history_entry, entry)
+        self.assertEqual(app._resume_list_widget.highlighted, 0)
 
     def test_log_records_protocol_activity_entry_and_snapshot_uses_it_by_default(self) -> None:
         self.app._log("[yellow]Docked at Jameson Memorial[/]")

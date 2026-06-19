@@ -19,6 +19,7 @@ class ReplayHost(Protocol):
     _resume_entries: list[ReplaySelection]
     _resume_open: bool
     _resume_filter: str
+    _selected_resume_history_entry: CommandHistoryEntry | None
     _haul_params: dict[str, str]
 
     def _log(self, msg: str) -> None: ...
@@ -91,8 +92,8 @@ def show_resume_picker(app: ReplayHost) -> None:
     option_list = app.query_one("#resume-list", OptionList)
     option_list.clear_options()
     option_list.add_options([item.label for item in app._resume_entries])
-    if app._resume_entries:
-        option_list.highlighted = 0
+    app._selected_resume_history_entry = app._resume_entries[0].entry if app._resume_entries else None
+    sync_resume_widget_selection(app)
     app._resume_open = True
     app.query_one("#activity", RichLog).styles.display = "none"
     app.query_one("#resume-browser", Vertical).styles.display = "block"
@@ -105,12 +106,12 @@ def refresh_resume_picker(app: ReplayHost) -> None:
     if not app._resume_open:
         return
     option_list = app.query_one("#resume-list", OptionList)
-    highlighted = option_list.highlighted or 0
+    selected_entry = selected_resume_entry(app)
     app._resume_entries = filtered_resume_entries(app)
     option_list.clear_options()
     option_list.add_options([item.label for item in app._resume_entries])
-    if app._resume_entries:
-        option_list.highlighted = min(highlighted, len(app._resume_entries) - 1)
+    app._selected_resume_history_entry = _resolve_selected_entry(app, selected_entry)
+    sync_resume_widget_selection(app)
     refresh_resume_help(app)
     update_resume_detail(app)
 
@@ -118,19 +119,41 @@ def refresh_resume_picker(app: ReplayHost) -> None:
 def close_resume_picker(app: ReplayHost) -> None:
     app._resume_open = False
     app._resume_filter = ""
+    app._selected_resume_history_entry = None
     app.query_one("#resume-browser", Vertical).styles.display = "none"
     app.query_one("#activity", RichLog).styles.display = "block"
     app.set_focus(app.query_one("#cmd", Input))
 
 
 def selected_resume_entry(app: ReplayHost) -> CommandHistoryEntry | None:
+    return _resolve_selected_entry(app, app._selected_resume_history_entry)
+
+
+def sync_selected_resume_entry_from_widget(app: ReplayHost) -> None:
     if not app._resume_entries:
-        return None
+        app._selected_resume_history_entry = None
+        return
     option_list = app.query_one("#resume-list", OptionList)
     index = option_list.highlighted
     if index is None or index < 0 or index >= len(app._resume_entries):
-        return None
-    return app._resume_entries[index].entry
+        app._selected_resume_history_entry = app._resume_entries[0].entry
+        return
+    app._selected_resume_history_entry = app._resume_entries[index].entry
+
+
+def sync_resume_widget_selection(app: ReplayHost) -> None:
+    option_list = app.query_one("#resume-list", OptionList)
+    if not app._resume_entries:
+        option_list.highlighted = None
+        return
+    selected_entry = _resolve_selected_entry(app, app._selected_resume_history_entry)
+    app._selected_resume_history_entry = selected_entry
+    selected_index = 0
+    for index, replay_entry in enumerate(app._resume_entries):
+        if replay_entry.entry == selected_entry:
+            selected_index = index
+            break
+    option_list.highlighted = selected_index
 
 
 def update_resume_detail(app: ReplayHost) -> None:
@@ -248,3 +271,17 @@ def replay_history_entry(
         entry.raw,
         skip_delay=(True if skip_delay else None),
     )
+
+
+def _resolve_selected_entry(
+    app: ReplayHost,
+    selected_entry: CommandHistoryEntry | None,
+) -> CommandHistoryEntry | None:
+    if not app._resume_entries:
+        return None
+    if selected_entry is None:
+        return app._resume_entries[0].entry
+    for replay_entry in app._resume_entries:
+        if replay_entry.entry == selected_entry:
+            return replay_entry.entry
+    return app._resume_entries[0].entry
