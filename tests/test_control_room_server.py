@@ -493,6 +493,134 @@ class ControlRoomServerTests(unittest.TestCase):
                 self.assertEqual(response["correlation_message_id"], "message-move-1")
                 self.assertEqual(command_handler.replay_selection_offsets, [-1])
 
+    def test_websocket_session_destination_prompt_flow_updates_headless_snapshot(self) -> None:
+        def _receive_until_message_type(websocket, expected_type: str) -> dict[str, object]:
+            for _ in range(6):
+                message = websocket.receive_json()
+                if message["message_type"] == expected_type:
+                    return message
+            self.fail(f"Did not receive {expected_type}")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server_state = ControlRoomServerState()
+            broker = InMemoryObserverSessionBroker(server_state=server_state)
+            host = HeadlessControlRoomHost(
+                _make_context(Path(temp_dir)),
+                server_state=server_state,
+            )
+            host._controls = object()
+            dispatched_destinations: list[tuple[str, float, bool, str | None]] = []
+            host._backend.dispatch_destination = (  # type: ignore[method-assign]
+                lambda destination, galaxy_map_settle, *, skip_delay=False, raw_command=None: (
+                    dispatched_destinations.append(
+                        (destination, galaxy_map_settle, skip_delay, raw_command)
+                    )
+                )
+            )
+            app = build_observer_server_app(
+                snapshot_provider=host.snapshot,
+                command_handler=host,
+                broker=broker,
+                auth=SharedAccessTokenAuth("secret-token"),
+            )
+
+            with TestClient(app) as client:
+                with client.websocket_connect(
+                    "/session?client_name=bridge-ipad&access_token=secret-token"
+                ) as websocket:
+                    websocket.receive_json()
+                    websocket.receive_json()
+
+                    websocket.send_json(
+                        {
+                            "message_type": "command.submit_input",
+                            "message_id": "message-dest-open",
+                            "payload": {"raw_input": "dest achenar"},
+                        }
+                    )
+                    response = _receive_until_message_type(websocket, "response.success")
+                    self.assertEqual(response["correlation_message_id"], "message-dest-open")
+                    current_snapshot = broker.current_snapshot(
+                        snapshot_provider=host.snapshot,
+                        session_id=next(iter(broker._sessions.keys())),
+                    )
+                    self.assertEqual(
+                        current_snapshot.prompt_state.destination_prompt_destination,
+                        "achenar",
+                    )
+
+                    websocket.send_json(
+                        {
+                            "message_type": "command.submit_input",
+                            "message_id": "message-dest-submit",
+                            "payload": {"raw_input": ""},
+                        }
+                    )
+                    response = _receive_until_message_type(websocket, "response.success")
+                    self.assertEqual(response["correlation_message_id"], "message-dest-submit")
+                    current_snapshot = broker.current_snapshot(
+                        snapshot_provider=host.snapshot,
+                        session_id=next(iter(broker._sessions.keys())),
+                    )
+                    self.assertEqual(
+                        current_snapshot.prompt_state.destination_prompt_destination,
+                        "",
+                    )
+                    self.assertEqual(
+                        dispatched_destinations,
+                        [("achenar", 2.0, False, "dest achenar")],
+                    )
+
+            host.close()
+
+    def test_websocket_session_active_operator_claim_updates_broker_role(self) -> None:
+        def _receive_until_message_type(websocket, expected_type: str) -> dict[str, object]:
+            for _ in range(6):
+                message = websocket.receive_json()
+                if message["message_type"] == expected_type:
+                    return message
+            self.fail(f"Did not receive {expected_type}")
+
+        broker = InMemoryObserverSessionBroker()
+        app = build_observer_server_app(
+            snapshot_provider=_base_snapshot,
+            command_handler=None,
+            broker=broker,
+            auth=SharedAccessTokenAuth("secret-token"),
+        )
+
+        with TestClient(app) as client:
+            with client.websocket_connect(
+                "/session?client_name=bridge-ipad&access_token=secret-token"
+            ) as first:
+                first.receive_json()
+                first.receive_json()
+                with client.websocket_connect(
+                    "/session?client_name=bridge-mac&access_token=secret-token"
+                ) as second:
+                    second.receive_json()
+                    second.receive_json()
+
+                    second_session_id = next(
+                        session_id
+                        for session_id, session in broker._sessions.items()
+                        if session.client_name == "bridge-mac"
+                    )
+
+                    second.send_json(
+                        {
+                            "message_type": "command.request_active_operator",
+                            "message_id": "message-claim-live",
+                            "payload": {},
+                        }
+                    )
+                    response = _receive_until_message_type(second, "response.success")
+                    self.assertEqual(response["correlation_message_id"], "message-claim-live")
+                    self.assertEqual(
+                        broker.current_session_role(second_session_id),
+                        "active_operator",
+                    )
+
     def test_broker_broadcasts_live_snapshot_updates(self) -> None:
         broker = InMemoryObserverSessionBroker()
         observer = broker.register_observer("bridge-ipad")
