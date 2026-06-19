@@ -6,6 +6,7 @@ from pathlib import Path
 from time import monotonic, sleep
 from typing import Callable
 
+from edap.cargo_manifest import read_cargo_inventory as read_cargo_inventory_with_retry
 from edap.actions import ActionDispatchResult
 from edap.config import MarketBuyHoldSegmentConfig
 from edap.routines._base import (
@@ -241,16 +242,7 @@ def _read_available_cargo_space(journal_dir: Path) -> int | None:
 
 
 def _read_cargo_inventory(journal_dir: Path) -> list[dict] | None:
-    cargo_path = journal_dir / "Cargo.json"
-    try:
-        with cargo_path.open(encoding="utf-8") as handle:
-            cargo_data = json.load(handle)
-    except (OSError, json.JSONDecodeError):
-        return None
-    inventory = cargo_data.get("Inventory", [])
-    if not isinstance(inventory, list):
-        return None
-    return inventory
+    return read_cargo_inventory_with_retry(journal_dir)
 
 
 def _read_sell_quantity(journal_dir: Path, target: str) -> int | None:

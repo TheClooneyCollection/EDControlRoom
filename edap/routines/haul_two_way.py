@@ -8,6 +8,7 @@ from time import monotonic, sleep
 from typing import Callable
 
 from edap.actions import ActionDispatchResult
+from edap.cargo_manifest import read_cargo_inventory as read_cargo_inventory_with_retry
 from edap.config import MarketBuyHoldSegmentConfig
 from edap.routines._base import (
     RoutineResult,
@@ -25,13 +26,7 @@ from edap.tts import AnnouncementId
 
 
 def _read_cargo_json(journal_dir: Path) -> list[dict]:
-    cargo_path = journal_dir / "Cargo.json"
-    try:
-        with cargo_path.open() as fh:
-            data = json.load(fh)
-        return data.get("Inventory", [])
-    except (OSError, json.JSONDecodeError):
-        return []
+    return read_cargo_inventory_with_retry(journal_dir)
 
 
 def _read_last_cargo_capacity(journal_dir: Path) -> int | None:
