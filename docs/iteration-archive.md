@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `43`
-- Latest generated iteration number: `176`
+- Generated iteration count: `44`
+- Latest generated iteration number: `177`
 
 ## Iteration 134
 
@@ -1232,3 +1232,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-validate the new `Ctrl-C`/`Ctrl-D` flow against a real connected client, especially during haul and prompt-heavy routines, before merging another remote-control slice on top.
+
+## Iteration 177
+
+- When: `2026-06-19 13:46`
+- Area: `control-room`
+- Title: `fix-remote-routine-state-teardown`
+- Source: [2026-06-19-13-46_control-room_fix-remote-routine-state-teardown.md](iteration-logs/2026-06-19-13-46_control-room_fix-remote-routine-state-teardown.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `fix-remote-routine-state-teardown`
+- Started: `2026-06-19 13:46`
+
+## Summary
+
+- Fixed stale remote active-routine state after routine completion and guarded remote cancel against a missing server-side worker.
+
+## Changes
+
+- Published a fresh protocol snapshot from routine teardown so `serve`/`connect` clients stop seeing completed routines as still active.
+- Hardened `_cancel_active_routine()` so stale or already-finished routines log cleanly instead of throwing `'NoneType' object has no attribute 'cancel'`.
+- Added regression coverage for stale routine cancellation and teardown snapshot publication, then reran focused control-room tests plus the full suite.
+
+## Follow-ups
+
+- Live-validate the dock/undock and haul completion path over a real remote session to confirm the client prompt state now clears immediately after completion.

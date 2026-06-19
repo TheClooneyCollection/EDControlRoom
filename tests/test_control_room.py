@@ -477,6 +477,20 @@ class _ArtifactLogHandleStub:
         return "".join(self.parts)
 
 
+class _EventSinkStub:
+    def __init__(self) -> None:
+        self.snapshots: list[object] = []
+
+    def publish_activity_log(self, entry) -> None:
+        return None
+
+    def publish_announcement(self, event) -> None:
+        return None
+
+    def publish_snapshot(self, snapshot) -> None:
+        self.snapshots.append(snapshot)
+
+
 class ControlRoomCommandTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmpdir = tempfile.TemporaryDirectory()
@@ -577,6 +591,16 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertFalse(self.app._haul_stop_requested)
         self.assertIn("cancelling haul immediately", "\n".join(self.app.logged))
 
+    def test_request_interrupt_without_worker_clears_stale_routine_state(self) -> None:
+        self.app._routine_active = True
+        self.app._active_routine_name = "dock"
+
+        self.app.action_request_interrupt()
+
+        self.assertFalse(self.app._routine_active)
+        self.assertIsNone(self.app._active_routine_name)
+        self.assertIn("no active routine to cancel", "\n".join(self.app.logged))
+
     def test_pending_sigint_cancels_active_routine_without_exiting(self) -> None:
         worker = _FakeWorker()
         self.app._routine_active = True
@@ -599,6 +623,18 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertFalse(self.app._shutdown_requested)
         self.assertEqual(self.app.exit_calls, 0)
         self.assertIn("no active routine to cancel", "\n".join(self.app.logged))
+
+    def test_clear_routine_publishes_protocol_snapshot(self) -> None:
+        sink = _EventSinkStub()
+        self.app._protocol_external_event_sink = sink
+        self.app._routine_active = True
+        self.app._active_routine_name = "dock"
+
+        self.app._clear_routine()
+
+        self.assertFalse(self.app._routine_active)
+        self.assertEqual(len(sink.snapshots), 1)
+        self.assertFalse(sink.snapshots[0].ui_state.routine_active)
 
     def test_request_exit_requires_second_press_before_shutdown(self) -> None:
         self.app.action_request_exit()
