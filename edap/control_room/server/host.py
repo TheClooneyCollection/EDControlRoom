@@ -170,6 +170,10 @@ class HeadlessControlRoomHost(ControlRoomApp):
         self._backend.set_replay_filter(filter_text)
         self._publish_snapshot()
 
+    def move_replay_selection(self, offset: int) -> None:
+        self._backend.move_replay_selection(offset)
+        self._publish_snapshot()
+
     def replay_history_entry(
         self,
         entry,

@@ -156,6 +156,21 @@ def sync_resume_widget_selection(app: ReplayHost) -> None:
     option_list.highlighted = selected_index
 
 
+def move_resume_selection(app: ReplayHost, offset: int) -> None:
+    if not app._resume_entries or offset == 0:
+        return
+    selected_entry = _resolve_selected_entry(app, app._selected_resume_history_entry)
+    current_index = 0
+    for index, replay_entry in enumerate(app._resume_entries):
+        if replay_entry.entry == selected_entry:
+            current_index = index
+            break
+    next_index = max(0, min(len(app._resume_entries) - 1, current_index + offset))
+    app._selected_resume_history_entry = app._resume_entries[next_index].entry
+    sync_resume_widget_selection(app)
+    update_resume_detail(app)
+
+
 def update_resume_detail(app: ReplayHost) -> None:
     detail = "[dim]No selection[/]"
     entry = selected_resume_entry(app)

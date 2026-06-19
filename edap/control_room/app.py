@@ -1386,6 +1386,12 @@ class ControlRoomApp(App[None]):
             if event.key == "escape" or (event.key == "q" and not self._resume_filter):
                 event.prevent_default()
                 self._close_resume_picker()
+            elif event.key == "up":
+                event.prevent_default()
+                self._backend.move_replay_selection(-1)
+            elif event.key == "down":
+                event.prevent_default()
+                self._backend.move_replay_selection(1)
             elif event.key == "e" and not self._resume_filter:
                 event.prevent_default()
                 self._resume_edit_selected()

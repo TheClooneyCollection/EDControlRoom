@@ -158,6 +158,9 @@ class RemoteObserverBackend(ControlRoomBackend):
     def set_replay_filter(self, filter_text: str) -> None:
         self._send_command("command.set_replay_filter", {"filter_text": filter_text})
 
+    def move_replay_selection(self, offset: int) -> None:
+        self._send_command("command.move_replay_selection", {"offset": offset})
+
     def replay_history_entry(
         self,
         entry: CommandHistoryEntry,

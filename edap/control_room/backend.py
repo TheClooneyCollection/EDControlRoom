@@ -69,6 +69,8 @@ class ControlRoomBackend(ControlRoomEventSink, Protocol):
 
     def set_replay_filter(self, filter_text: str) -> None: ...
 
+    def move_replay_selection(self, offset: int) -> None: ...
+
     def replay_history_entry(
         self,
         entry: CommandHistoryEntry,
@@ -255,6 +257,9 @@ class LocalControlRoomBackend(ControlRoomEventSink):
     def set_replay_filter(self, filter_text: str) -> None:
         self._host._resume_filter = filter_text
         self.refresh_replay_browser()
+
+    def move_replay_selection(self, offset: int) -> None:
+        _replay.move_resume_selection(self._host, offset)
 
     def replay_history_entry(
         self,
