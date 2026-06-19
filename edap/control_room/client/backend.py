@@ -31,6 +31,25 @@ from .target import ObserverServerTarget
 
 _RECONNECT_DELAY_SECONDS = 1.0
 _RECONNECT_DELAY_MAX_SECONDS = 30.0
+_REQUIRED_SUPPORTED_MESSAGE_TYPES = {
+    "state.snapshot",
+    "event.connection_ready",
+    "event.active_operator_changed",
+    "event.activity_log_appended",
+    "event.announcement_emitted",
+    "command.request_snapshot",
+    "command.request_active_operator",
+    "command.submit_input",
+    "command.open_replay_browser",
+    "command.close_replay_browser",
+    "command.set_replay_filter",
+    "command.move_replay_selection",
+    "command.replay_history_entry",
+    "command.toggle_replay_default_haul",
+    "command.cancel_active_routine",
+    "response.success",
+    "response.error",
+}
 
 
 class RemoteObserverBackend(ControlRoomBackend):
@@ -346,6 +365,7 @@ def fetch_remote_observer_snapshot(
         )
         _raise_for_auth_or_http_error(capabilities_response, server_target)
         capabilities = capabilities_response.json()
+        _validate_remote_observer_capabilities(capabilities, server_target)
 
         snapshot_response = client.get(
             f"{server_target.http_base_url}/snapshot",
@@ -366,3 +386,46 @@ def _raise_for_auth_or_http_error(
             "Check the shared access token."
         )
     response.raise_for_status()
+
+
+def _validate_remote_observer_capabilities(
+    capabilities: dict[str, Any],
+    server_target: ObserverServerTarget,
+) -> None:
+    supported_message_types = capabilities.get("supported_message_types")
+    if not isinstance(supported_message_types, list) or not all(
+        isinstance(item, str) for item in supported_message_types
+    ):
+        raise SystemExit(
+            f"Remote server {server_target.host}:{server_target.port} returned invalid capabilities: "
+            "supported_message_types must be a string list."
+        )
+    missing_message_types = sorted(
+        _REQUIRED_SUPPORTED_MESSAGE_TYPES.difference(supported_message_types)
+    )
+    if missing_message_types:
+        raise SystemExit(
+            f"Remote server {server_target.host}:{server_target.port} does not support required "
+            f"message types: {', '.join(missing_message_types)}"
+        )
+
+    supported_client_roles = capabilities.get("supported_client_roles")
+    if not isinstance(supported_client_roles, list) or not all(
+        isinstance(item, str) for item in supported_client_roles
+    ):
+        raise SystemExit(
+            f"Remote server {server_target.host}:{server_target.port} returned invalid capabilities: "
+            "supported_client_roles must be a string list."
+        )
+    if "active_operator" not in supported_client_roles or "observer" not in supported_client_roles:
+        raise SystemExit(
+            f"Remote server {server_target.host}:{server_target.port} does not advertise both "
+            "active_operator and observer roles."
+        )
+
+    minimum_client_version = capabilities.get("minimum_client_version")
+    if minimum_client_version != "1":
+        raise SystemExit(
+            f"Remote server {server_target.host}:{server_target.port} requires unsupported client "
+            f"version {minimum_client_version!r}."
+        )
