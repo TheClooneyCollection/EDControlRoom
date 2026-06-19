@@ -382,7 +382,12 @@ class _RemoteBackendStub:
         return None
 
 
-def _remote_snapshot(*, client_role: str = "active_operator", routine_active: bool = True) -> ControlRoomSnapshot:
+def _remote_snapshot(
+    *,
+    client_role: str = "active_operator",
+    routine_active: bool = True,
+    prompt_state: PromptStateSnapshot | None = None,
+) -> ControlRoomSnapshot:
     return ControlRoomSnapshot(
         session=SessionSnapshot(session_id="observer-1", client_role=client_role),
         connected_clients=[],
@@ -439,7 +444,7 @@ def _remote_snapshot(*, client_role: str = "active_operator", routine_active: bo
             shutdown_finalized=False,
         ),
         command_history=CommandHistorySnapshot(history_limit=20),
-        prompt_state=PromptStateSnapshot(),
+        prompt_state=prompt_state or PromptStateSnapshot(),
         replay_browser=ReplayBrowserSnapshot(open=False, filter_text=""),
         activity_log=[],
         server_status=ServerStatusSnapshot(
@@ -601,6 +606,26 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertIsNone(self.app._active_routine_name)
         self.assertIn("no active routine to cancel", "\n".join(self.app.logged))
 
+    def test_request_interrupt_cancels_active_haul_prompt(self) -> None:
+        self.app._haul_params = {"station_1": "Jameson Memorial"}
+        self.app._haul_prompt_defaults = {"station_1": "Jameson Memorial"}
+        self.app._haul_prompt_step = "station_1_system"
+        self.app._haul_prompt_raw_command = "haul gold"
+        self.app._haul_prompt_skip_delay = True
+        self.app._command_input.placeholder = "station 1 system..."
+        self.app._command_input.value = "Sol"
+
+        self.app.action_request_interrupt()
+
+        self.assertEqual(self.app._haul_params, {})
+        self.assertEqual(self.app._haul_prompt_defaults, {})
+        self.assertEqual(self.app._haul_prompt_step, "")
+        self.assertEqual(self.app._haul_prompt_raw_command, "")
+        self.assertFalse(self.app._haul_prompt_skip_delay)
+        self.assertEqual(self.app._command_input.placeholder, self.app._default_command_placeholder)
+        self.assertEqual(self.app._command_input.value, "")
+        self.assertIn("cancelling haul prompt", "\n".join(self.app.logged))
+
     def test_pending_sigint_cancels_active_routine_without_exiting(self) -> None:
         worker = _FakeWorker()
         self.app._routine_active = True
@@ -700,6 +725,22 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertFalse(app._shutdown_requested)
         self.assertEqual(app.exit_calls, 0)
         self.assertIn("Exit cancelled", "\n".join(app.logged))
+
+    def test_remote_prompt_interrupt_routes_to_backend(self) -> None:
+        backend = _RemoteBackendStub(
+            _remote_snapshot(
+                routine_active=False,
+                prompt_state=PromptStateSnapshot(haul_prompt_step="station_1_system"),
+            )
+        )
+        app = _HarnessApp(_make_context(Path(self.tmpdir.name)))
+        app._backend = backend
+        app._sync_view_snapshot()
+
+        app.action_request_interrupt()
+
+        self.assertEqual(backend.interrupt_calls, 1)
+        self.assertNotIn("no active routine to cancel", "\n".join(app.logged))
 
     def test_bootstrap_ship_state_reads_balance_and_cargo_from_status_json(self) -> None:
         journal_dir = Path(self.tmpdir.name)

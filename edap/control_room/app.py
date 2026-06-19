@@ -1163,6 +1163,9 @@ class ControlRoomApp(App[None]):
 
     def action_request_interrupt(self) -> None:
         self._exit_requested_once = False
+        if self._haul_prompt_step or self._haul_confirm_buy_station or self._dest_prompt_destination:
+            self._backend.interrupt_active_routine()
+            return
         if self._routine_active:
             self._backend.interrupt_active_routine()
             return
@@ -1189,6 +1192,18 @@ class ControlRoomApp(App[None]):
             return
         self._sigint_pending = False
         self.action_request_interrupt()
+
+    def _cancel_prompt_flow(self, source: str) -> bool:
+        return _prompts.cancel_prompt_flow(
+            self,
+            default_placeholder=self._default_command_placeholder,
+            source=source,
+        )
+
+    def _handle_interrupt(self, source: str) -> None:
+        if self._cancel_prompt_flow(source):
+            return
+        self._cancel_active_routine(source)
 
     def _cancel_active_routine(self, source: str) -> None:
         if self._routine_worker is None:

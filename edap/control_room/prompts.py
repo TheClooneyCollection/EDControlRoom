@@ -98,6 +98,39 @@ def _set_prompt_input(
     cmd_input.cursor_position = len(value)
 
 
+def cancel_prompt_flow(
+    app: PromptHost,
+    *,
+    default_placeholder: str,
+    source: str,
+) -> bool:
+    if app._haul_prompt_step:
+        app._haul_params = {}
+        app._haul_prompt_defaults = {}
+        app._haul_prompt_step = ""
+        app._haul_prompt_raw_command = ""
+        app._haul_prompt_skip_delay = False
+        _set_prompt_input(app, placeholder=default_placeholder)
+        app._log(f"[yellow]{escape(source)} received — cancelling haul prompt.[/]")
+        return True
+    if app._haul_confirm_buy_station:
+        app._haul_confirm_buy_station = ""
+        app._haul_prompt_raw_command = ""
+        app._haul_prompt_skip_delay = False
+        _set_prompt_input(app, placeholder=default_placeholder)
+        app._log(f"[yellow]{escape(source)} received — cancelling haul confirmation.[/]")
+        return True
+    if app._dest_prompt_destination:
+        app._dest_prompt_destination = ""
+        app._dest_prompt_settle_default = None
+        app._dest_prompt_raw_command = ""
+        app._dest_prompt_skip_delay = False
+        _set_prompt_input(app, placeholder=default_placeholder)
+        app._log(f"[yellow]{escape(source)} received — cancelling destination prompt.[/]")
+        return True
+    return False
+
+
 def _prefill_value(
     app: PromptHost,
     key: str,
