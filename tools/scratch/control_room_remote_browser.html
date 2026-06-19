@@ -150,6 +150,15 @@
         <div class="row">
           <button id="claimButton" class="secondary">Claim Operator</button>
           <button id="snapshotButton">Request Snapshot</button>
+          <button id="cancelButton">Cancel Routine</button>
+        </div>
+        <label>
+          Command
+          <input id="commandInput" value="market">
+        </label>
+        <div class="row">
+          <button id="submitButton" class="secondary">Submit Command</button>
+          <button id="instantButton">Submit Instant</button>
         </div>
         <p id="connectionStatus" class="status">Disconnected</p>
       </section>
@@ -163,6 +172,8 @@
           <dt>Active operator</dt><dd id="activeOperator">-</dd>
           <dt>Connected clients</dt><dd id="connectedClients">-</dd>
           <dt>Schema URL</dt><dd id="schemaUrl">-</dd>
+          <dt>Prompt active</dt><dd id="promptState">-</dd>
+          <dt>Routine active</dt><dd id="routineState">-</dd>
         </dl>
       </section>
 
@@ -245,6 +256,13 @@
         $("clientRole").textContent = snapshot.session?.client_role ?? "-";
         $("activeOperator").textContent = snapshot.active_operator?.client_name ?? "(none)";
         $("connectedClients").textContent = String((snapshot.connected_clients || []).length);
+        const promptState = snapshot.prompt_state || {};
+        const routineState = snapshot.ui_state || {};
+        const promptActive = Boolean(
+          promptState.haul_prompt_step || promptState.destination_prompt_destination
+        );
+        $("promptState").textContent = promptActive ? "yes" : "no";
+        $("routineState").textContent = routineState.active_routine_name || "idle";
       }
 
       async function refreshHttp() {
@@ -304,6 +322,12 @@
           appendMessageLog(`recv ${message.message_type}`);
           if (message.message_type === "state.snapshot") {
             renderSnapshot(message.payload);
+          } else if (message.message_type === "event.activity_log_appended") {
+            appendMessageLog(`activity ${message.payload.entry?.message_text ?? "-"}`);
+          } else if (message.message_type === "response.error") {
+            appendMessageLog(`error ${message.payload.error_code}: ${message.payload.error_message}`);
+          } else if (message.message_type === "response.success") {
+            appendMessageLog(`success ${message.payload.message_text ?? "accepted"}`);
           }
         });
       }
@@ -327,6 +351,20 @@
       });
       $("snapshotButton").addEventListener("click", () => {
         sendMessage("command.request_snapshot", {});
+      });
+      $("cancelButton").addEventListener("click", () => {
+        sendMessage("command.cancel_active_routine", {});
+      });
+      $("submitButton").addEventListener("click", () => {
+        sendMessage("command.submit_input", {
+          raw_input: $("commandInput").value,
+        });
+      });
+      $("instantButton").addEventListener("click", () => {
+        sendMessage("command.submit_input", {
+          raw_input: $("commandInput").value,
+          skip_delay: true,
+        });
       });
     </script>
   </body>

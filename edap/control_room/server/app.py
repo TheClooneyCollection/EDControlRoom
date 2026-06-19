@@ -9,7 +9,7 @@ from typing import Callable
 from starlette.applications import Starlette
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
@@ -55,10 +55,15 @@ SUPPORTED_MESSAGE_TYPES = [
 ]
 
 MESSAGE_SCHEMA_URL_PATH = "/schema/control_room_message.json"
+BROWSER_PROBE_URL_PATH = "/browser-probe"
 _MESSAGE_SCHEMA_PATH = (
     Path(__file__).resolve().parents[3] / "docs" / "schemas" / "control_room_message.schema.json"
 )
+_BROWSER_PROBE_PATH = (
+    Path(__file__).resolve().parents[3] / "tools" / "scratch" / "control_room_remote_browser.html"
+)
 CONTROL_ROOM_MESSAGE_SCHEMA = json.loads(_MESSAGE_SCHEMA_PATH.read_text(encoding="utf-8"))
+CONTROL_ROOM_BROWSER_PROBE_HTML = _BROWSER_PROBE_PATH.read_text(encoding="utf-8")
 
 
 def build_observer_server_app(
@@ -126,6 +131,9 @@ def build_observer_server_app(
     async def message_schema(request):
         return JSONResponse(CONTROL_ROOM_MESSAGE_SCHEMA)
 
+    async def browser_probe(request):
+        return HTMLResponse(CONTROL_ROOM_BROWSER_PROBE_HTML)
+
     async def session(websocket: WebSocket) -> None:
         if not auth.is_websocket_authorized(websocket):
             await websocket.close(code=4401, reason="authentication required")
@@ -178,6 +186,7 @@ def build_observer_server_app(
             Route("/capabilities", capabilities),
             Route("/snapshot", snapshot),
             Route(MESSAGE_SCHEMA_URL_PATH, message_schema),
+            Route(BROWSER_PROBE_URL_PATH, browser_probe),
             WebSocketRoute("/session", session),
         ]
     )
