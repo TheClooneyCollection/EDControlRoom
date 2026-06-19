@@ -60,12 +60,15 @@ Minimum first endpoints:
 - `GET /health` for liveness and basic version information
 - `GET /snapshot` for a current state snapshot that matches the WebSocket `state.snapshot` payload family
 - `GET /capabilities` for server feature discovery if an HTTP probe is needed before opening a session
+- `GET /schema/control_room_message.json` for the checked-in wire contract used by future browser or external clients
 
 The first implementation should require a shared access token for `GET /snapshot`, `GET /capabilities`, and `WS /session`.
 
 - accept `Authorization: Bearer <token>` on HTTP requests
 - accept `access_token=<token>` on the WebSocket query string so browser clients remain viable
 - `GET /health` may stay unauthenticated for simple liveness checks
+- the schema endpoint may stay unauthenticated because it is static contract metadata rather than runtime state
+- browser-facing HTTP endpoints should allow cross-origin reads because future web clients may not be served from the same origin as the Control Room server
 
 ## WebSocket Session
 
@@ -155,6 +158,7 @@ Payload:
 - `authentication_scheme`
 - `authentication_supported_transports`
 - `authentication_query_parameter_name`
+- `message_schema_url`
 
 ### `command.request_snapshot`
 
