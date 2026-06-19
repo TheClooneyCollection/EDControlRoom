@@ -230,13 +230,26 @@
     </div>
 
     <script>
+      const RECONNECT_DELAY_SECONDS = 1.0;
+      const RECONNECT_DELAY_MAX_SECONDS = 30.0;
+
       const state = {
         websocket: null,
         messageCounter: 0,
         latestSnapshot: null,
+        reconnectDelaySeconds: RECONNECT_DELAY_SECONDS,
+        reconnectTimer: null,
+        manuallyDisconnected: false,
+        hasConnectedOnce: false,
       };
 
       const $ = (id) => document.getElementById(id);
+
+      function initializeDefaultTarget() {
+        if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+          $("serverTarget").value = window.location.origin;
+        }
+      }
 
       function normalizedTarget(raw) {
         const value = raw.trim();
@@ -268,6 +281,17 @@
         const line = `[${new Date().toISOString()}] ${text}`;
         view.textContent = view.textContent === "-" ? line : `${view.textContent}\n${line}`;
         view.scrollTop = view.scrollHeight;
+      }
+
+      function clearReconnectTimer() {
+        if (state.reconnectTimer !== null) {
+          window.clearTimeout(state.reconnectTimer);
+          state.reconnectTimer = null;
+        }
+      }
+
+      function nextReconnectDelay(delaySeconds) {
+        return Math.min(delaySeconds * 2.0, RECONNECT_DELAY_MAX_SECONDS);
       }
 
       function setConnectionStatus(text, ok) {
@@ -312,6 +336,10 @@
           open: Boolean(replay.open),
           filter_text: replay.filter_text || "",
           visible_entry_count: (replay.visible_entries || []).length,
+          visible_entries: (replay.visible_entries || []).slice(0, 8).map((entry) => ({
+            label: entry.label,
+            detail: entry.detail,
+          })),
           selected_history_entry: selected,
         }, null, 2);
       }
@@ -361,6 +389,10 @@
         appendMessageLog(`sent ${messageType}`);
       }
 
+      function requestSnapshot() {
+        sendMessage("command.request_snapshot", {});
+      }
+
       function selectedReplayEntryPayload(extraPayload = {}) {
         const selected = state.latestSnapshot?.replay_browser?.selected_history_entry;
         if (!selected) {
@@ -376,20 +408,34 @@
         };
       }
 
-      async function connect() {
-        await refreshHttp();
-        if (state.websocket) {
-          state.websocket.close();
-        }
+      function openWebsocket() {
+        clearReconnectTimer();
         state.websocket = new WebSocket(websocketUrl());
         setConnectionStatus("Connecting...", false);
         state.websocket.addEventListener("open", () => {
+          const wasReconnecting = state.hasConnectedOnce;
+          state.hasConnectedOnce = true;
+          state.reconnectDelaySeconds = RECONNECT_DELAY_SECONDS;
           setConnectionStatus("Connected", true);
           appendMessageLog("websocket opened");
+          requestSnapshot();
+          if (wasReconnecting) {
+            appendMessageLog("Observer connection restored.");
+          }
         });
         state.websocket.addEventListener("close", (event) => {
           setConnectionStatus(`Disconnected (${event.code})`, false);
           appendMessageLog(`websocket closed code=${event.code} reason=${event.reason || "-"}`);
+          state.websocket = null;
+          if (!state.manuallyDisconnected) {
+            const delaySeconds = state.reconnectDelaySeconds;
+            appendMessageLog(`Reconnecting in ${delaySeconds.toFixed(1)}s...`);
+            setConnectionStatus(`Reconnecting in ${delaySeconds.toFixed(1)}s...`, false);
+            state.reconnectTimer = window.setTimeout(() => {
+              openWebsocket();
+            }, delaySeconds * 1000.0);
+            state.reconnectDelaySeconds = nextReconnectDelay(delaySeconds);
+          }
         });
         state.websocket.addEventListener("error", () => {
           appendMessageLog("websocket error");
@@ -401,12 +447,23 @@
             renderSnapshot(message.payload);
           } else if (message.message_type === "event.activity_log_appended") {
             appendMessageLog(`activity ${message.payload.entry?.message_text ?? "-"}`);
+          } else if (message.message_type === "event.announcement_emitted") {
+            appendMessageLog(`announcement ${message.payload.message_text ?? "-"}`);
           } else if (message.message_type === "response.error") {
             appendMessageLog(`error ${message.payload.error_code}: ${message.payload.error_message}`);
           } else if (message.message_type === "response.success") {
             appendMessageLog(`success ${message.payload.message_text ?? "accepted"}`);
           }
         });
+      }
+
+      async function connect() {
+        await refreshHttp();
+        state.manuallyDisconnected = false;
+        if (state.websocket) {
+          state.websocket.close();
+        }
+        openWebsocket();
       }
 
       $("connectButton").addEventListener("click", () => {
@@ -416,9 +473,12 @@
         });
       });
       $("disconnectButton").addEventListener("click", () => {
+        state.manuallyDisconnected = true;
+        clearReconnectTimer();
         if (state.websocket) {
           state.websocket.close();
         }
+        setConnectionStatus("Disconnected", false);
       });
       $("refreshButton").addEventListener("click", () => {
         refreshHttp().catch((error) => appendMessageLog(error.message));
@@ -427,7 +487,7 @@
         sendMessage("command.request_active_operator", {});
       });
       $("snapshotButton").addEventListener("click", () => {
-        sendMessage("command.request_snapshot", {});
+        requestSnapshot();
       });
       $("cancelButton").addEventListener("click", () => {
         sendMessage("command.cancel_active_routine", {});
@@ -488,6 +548,8 @@
           raw_input: "",
         });
       });
+
+      initializeDefaultTarget();
     </script>
   </body>
 </html>

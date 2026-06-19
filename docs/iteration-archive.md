@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `63`
-- Latest generated iteration number: `196`
+- Generated iteration count: `64`
+- Latest generated iteration number: `197`
 
 ## Iteration 134
 
@@ -1793,3 +1793,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - If a dedicated web client replaces the probe, keep the replay and prompt command paths explicit rather than tunneling widget-local behavior over the wire.
+
+## Iteration 197
+
+- When: `2026-06-19 18:06`
+- Area: `control-room`
+- Title: `add-browser-remote-reconnect`
+- Source: [2026-06-19-18-06_control-room_add-browser-remote-reconnect.md](iteration-logs/2026-06-19-18-06_control-room_add-browser-remote-reconnect.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `add-browser-remote-reconnect`
+- Started: `2026-06-19 18:06`
+
+## Summary
+
+- Brought the hosted browser probe up to the same reconnect/state-healing baseline as the Textual remote client so transient disconnects do not leave the future web-client path in a stale one-shot state.
+
+## Changes
+
+- Added automatic browser-probe reconnect with exponential backoff, reconnect status messaging, and a fresh snapshot request on reconnect.
+- Improved the browser probe’s replay rendering and message stream so announcements, replay choices, and reconnect behavior are easier to inspect during remote validation.
+- Updated endpoint coverage plus the remote operator docs/status handoff so the browser path is explicitly documented as covering reconnect recovery too.
+
+## Follow-ups
+
+- If a dedicated web client is built, preserve the reconnect-and-refresh semantics as a baseline requirement rather than treating them as probe-only behavior.
