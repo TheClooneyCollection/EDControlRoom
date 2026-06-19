@@ -13,6 +13,7 @@ from edap.control_room.protocol.snapshot import (
     ConnectedClientSnapshot,
     ControlRoomSnapshot,
 )
+from edap.control_room.server.state import ControlRoomServerState
 
 
 @dataclass
@@ -24,11 +25,17 @@ class ObserverSession:
 
 
 class InMemoryObserverSessionBroker(ControlRoomEventSink):
-    def __init__(self, *, queue_size: int = 200) -> None:
+    def __init__(
+        self,
+        *,
+        queue_size: int = 200,
+        server_state: ControlRoomServerState | None = None,
+    ) -> None:
         self._queue_size = queue_size
         self._sessions: dict[str, ObserverSession] = {}
         self._latest_snapshot: ControlRoomSnapshot | None = None
         self._active_operator_session_id: str | None = None
+        self._server_state = server_state or ControlRoomServerState()
 
     def register_observer(self, client_name: str) -> ObserverSession:
         session = ObserverSession(
@@ -85,6 +92,7 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
         session_id: str | None = None,
         include_local_operator: bool = True,
     ) -> ControlRoomSnapshot:
+        base_snapshot = self._server_state.merge_snapshot(base_snapshot)
         connected_clients = list(self.connected_clients())
         active_operator = base_snapshot.active_operator
         if self._active_operator_session_id is None and include_local_operator:
@@ -128,6 +136,7 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
         )
 
     def publish_activity_log(self, entry: ActivityLogEntry) -> None:
+        self._server_state.record_activity_log(entry)
         self._broadcast(
             {
                 "message_type": "event.activity_log_appended",
@@ -143,6 +152,7 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
         )
 
     def publish_announcement(self, event: AnnouncementEvent) -> None:
+        self._server_state.record_announcement(event)
         self._broadcast(
             {
                 "message_type": "event.announcement_emitted",
@@ -155,13 +165,19 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
         )
 
     def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
-        self._latest_snapshot = snapshot
+        resolved_snapshot = self._server_state.merge_snapshot(snapshot)
+        self._latest_snapshot = resolved_snapshot
         for session in list(self._sessions.values()):
             self._queue_message(
                 session,
                 {
                     "message_type": "state.snapshot",
-                    "payload": asdict(self.merge_snapshot(snapshot, session_id=session.session_id)),
+                    "payload": asdict(
+                        self.merge_snapshot(
+                            resolved_snapshot,
+                            session_id=session.session_id,
+                        )
+                    ),
                 },
             )
 
