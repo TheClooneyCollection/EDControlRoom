@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `58`
-- Latest generated iteration number: `191`
+- Generated iteration count: `59`
+- Latest generated iteration number: `192`
 
 ## Iteration 134
 
@@ -1658,3 +1658,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Run the new remote validation playbook against real multi-client LAN sessions and capture any routine-heavy or market-recovery gaps that still appear under live runtime conditions.
+
+## Iteration 192
+
+- When: `2026-06-19 17:55`
+- Area: `control-room`
+- Title: `add-web-client-discovery-surface`
+- Source: [2026-06-19-17-55_control-room_add-web-client-discovery-surface.md](iteration-logs/2026-06-19-17-55_control-room_add-web-client-discovery-surface.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `add-web-client-discovery-surface`
+- Started: `2026-06-19 17:55`
+
+## Summary
+
+- Added browser-friendly HTTP discovery support for the remote observer server so future web clients can fetch capabilities and the wire schema directly instead of relying on same-origin coupling or repo-local files.
+
+## Changes
+
+- Added permissive CORS middleware to the observer server HTTP surface and kept websocket auth/query-token behavior unchanged.
+- Added `GET /schema/control_room_message.json` plus a `message_schema_url` field in `/capabilities` so external clients can fetch the current wire contract from the server itself.
+- Covered the new discovery surface with server tests and updated the protocol/design/status docs to reflect the browser-client path.
+
+## Follow-ups
+
+- Use the served schema and capability metadata as the starting point if a dedicated browser client is introduced, then decide whether any additional browser-specific session ergonomics are needed after live LAN validation.
