@@ -17,6 +17,7 @@ class AnnouncementId(str, Enum):
     DESTINATION_SET = "destination_set"
     STATION_CLEARED = "station_cleared"
     HAUL_ABORTED = "haul_aborted"
+    HAUL_CANCELLED = "haul_cancelled"
     HAUL_STOP_AFTER_RUN = "haul_stop_after_run"
     BUYING_CARGO = "buying_cargo"
     SELLING_CARGO = "selling_cargo"

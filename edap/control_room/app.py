@@ -1279,11 +1279,15 @@ class ControlRoomApp(App[None]):
         if self._active_routine_name == "haul" and self._haul_stop_requested:
             self._haul_stop_requested = False
             self._log(f"[yellow]{escape(source)} received again — cancelling haul immediately.[/]")
+            self._announce_tts(AnnouncementId.HAUL_CANCELLED)
         elif self._active_routine_name == "multi_leg_haul" and self._haul_stop_requested:
             self._haul_stop_requested = False
             self._log(f"[yellow]{escape(source)} received again — cancelling multi-leg haul immediately.[/]")
+            self._announce_tts(AnnouncementId.HAUL_CANCELLED)
         else:
             self._log(f"[yellow]{escape(source)} received — cancelling active routine.[/]")
+            if self._active_routine_name in {"haul", "multi_leg_haul"}:
+                self._announce_tts(AnnouncementId.HAUL_CANCELLED)
         self._routine_worker.cancel()
 
     def _clear_pending_haul_stop(self) -> None:

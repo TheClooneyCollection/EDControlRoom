@@ -602,12 +602,14 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.app._routine_worker = worker
         self.app._active_routine_name = "haul"
         self.app._haul_stop_requested = True
+        self.app._tts = _FakeTTS()
 
         self.app.action_request_interrupt()
 
         self.assertFalse(self.app._shutdown_requested)
         self.assertTrue(worker.cancelled)
         self.assertFalse(self.app._haul_stop_requested)
+        self.assertIn((AnnouncementId.HAUL_CANCELLED, {}), self.app._tts.calls)
         self.assertIn("cancelling haul immediately", "\n".join(self.app.logged))
 
     def test_request_interrupt_without_worker_clears_stale_routine_state(self) -> None:

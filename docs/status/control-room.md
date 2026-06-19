@@ -1,5 +1,6 @@
 # Control Room Status
 ## Current
+- Immediate haul cancellation now emits a dedicated TTS cancellation line, so remote/local clients still get spoken feedback when the operator aborts mid-cycle instead of waiting for a route/session completion line that never applies to a partial run.
 - Cargo manifest reads now retry briefly when `Status.json` reports cargo but `Cargo.json` is momentarily empty, and periodic status refresh now also reloads cargo details, so remote/local UIs recover the commodity breakdown and `sell`/haul resume avoid false "empty hold" decisions after server startup or transient manifest lag.
 - Remote observer clients now retry dropped WebSocket sessions with exponential backoff, log reconnect delay and restoration messages locally, and request a fresh snapshot on reconnect so ping-timeout recovery can heal stale client state automatically.
 - Cargo state now re-syncs from `Cargo.json` after `Cargo`, `MarketBuy`, and `MarketSell` events, so repeated `sell` flows stop relying on a drift-prone in-memory manifest while bootstrap still keeps `Status.json` as the startup cargo-count source.
