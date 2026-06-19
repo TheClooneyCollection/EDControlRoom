@@ -133,16 +133,16 @@ class RemoteObserverBackend(ControlRoomBackend):
         self._emit_local_message("Observer session is read-only.")
 
     def open_replay_browser(self) -> None:
-        self._emit_local_message("Remote replay control is not available yet.")
+        self._send_command("command.open_replay_browser", {})
 
     def close_replay_browser(self) -> None:
-        return None
+        self._send_command("command.close_replay_browser", {})
 
     def refresh_replay_browser(self) -> None:
-        return None
+        self.request_snapshot()
 
     def set_replay_filter(self, filter_text: str) -> None:
-        self._emit_local_message("Remote replay control is not available yet.")
+        self._send_command("command.set_replay_filter", {"filter_text": filter_text})
 
     def replay_history_entry(
         self,
@@ -151,10 +151,28 @@ class RemoteObserverBackend(ControlRoomBackend):
         edit: bool,
         skip_delay: bool = False,
     ) -> None:
-        self._emit_local_message("Remote replay control is not available yet.")
+        self._send_command(
+            "command.replay_history_entry",
+            {
+                "raw_command": entry.raw,
+                "command_name": entry.command,
+                "arguments": dict(entry.params),
+                "timestamp": entry.timestamp,
+                "edit": edit,
+                "skip_delay": skip_delay,
+            },
+        )
 
     def toggle_replay_default_haul(self, entry: CommandHistoryEntry) -> None:
-        self._emit_local_message("Remote replay control is not available yet.")
+        self._send_command(
+            "command.toggle_replay_default_haul",
+            {
+                "raw_command": entry.raw,
+                "command_name": entry.command,
+                "arguments": dict(entry.params),
+                "timestamp": entry.timestamp,
+            },
+        )
 
     def _run_stream_loop(self) -> None:
         asyncio.run(self._stream_observer_session())

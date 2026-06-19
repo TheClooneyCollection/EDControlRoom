@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `38`
-- Latest generated iteration number: `171`
+- Generated iteration count: `39`
+- Latest generated iteration number: `172`
 
 ## Iteration 134
 
@@ -1089,3 +1089,32 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Move replay-browser/session-owned state onto the same server-side seam so connect clients stop relying on app-local replay caches.
 - Decide whether retained announcement history should be exposed directly to future web clients or only kept for reconnect/session continuity.
+
+## Iteration 172
+
+- When: `2026-06-19 12:06`
+- Area: `control-room`
+- Title: `add-remote-replay-command-transport`
+- Source: [2026-06-19-12-06_control-room_add-remote-replay-command-transport.md](iteration-logs/2026-06-19-12-06_control-room_add-remote-replay-command-transport.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `add-remote-replay-command-transport`
+- Started: `2026-06-19 12:06`
+
+## Summary
+
+- Added real remote replay command transport so active operators in `connect` mode can open/filter/close replay history, replay entries, and toggle default haul through the headless server instead of hitting local “not available yet” shims.
+
+## Changes
+
+- Added an `ObserverSessionCommandHandler` shim for server-side session commands and extended WebSocket command handling to support replay-browser open/close, replay filtering, replay execution/edit, and default-haul toggling.
+- Taught `HeadlessControlRoomHost` to stub the replay widgets/styles that the existing replay helpers expect, then publish fresh snapshots after replay-state mutations.
+- Updated `RemoteObserverBackend` to send real replay command envelopes and added server/client regression coverage for the new command set.
+- Verified with `uv run python3 -m unittest tests/test_control_room_server.py tests/test_control_room_client.py` and `uv run python3 -m unittest discover -s tests`.
+
+## Follow-ups
+
+- Live-validate remote replay flows against real history entries, especially `haul` edit/execute and `dest` edit prompts under the headless host.
+- Decide whether replay-browser selection/highlight state should remain a client-local concern or be promoted into the server session model for future web clients.

@@ -43,8 +43,10 @@ from edap.control_room.protocol.snapshot import (
 from edap.control_room.server.app import _handle_session_message, build_observer_server_app
 from edap.control_room.server.auth import SharedAccessTokenAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
+from edap.control_room.server.commands import ObserverSessionCommandHandler
 from edap.control_room.server.host import HeadlessControlRoomHost
 from edap.control_room.server.state import ControlRoomServerState
+from edap.control_room_state import CommandHistoryEntry
 from edap.runtime import ResolvedPath, RuntimeContext
 
 
@@ -216,6 +218,40 @@ class _SnapshotRecorder(ControlRoomEventSink):
 
     def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
         self.snapshots.append(snapshot)
+
+
+class _CommandHandlerRecorder(ObserverSessionCommandHandler):
+    def __init__(self) -> None:
+        self.submitted_inputs: list[tuple[str, bool | None]] = []
+        self.opened_replay_browser = 0
+        self.closed_replay_browser = 0
+        self.replay_filters: list[str] = []
+        self.replayed_entries: list[tuple[str, str, bool, bool]] = []
+        self.toggled_default_hauls: list[str] = []
+
+    def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None:
+        self.submitted_inputs.append((raw_input, skip_delay))
+
+    def open_replay_browser(self) -> None:
+        self.opened_replay_browser += 1
+
+    def close_replay_browser(self) -> None:
+        self.closed_replay_browser += 1
+
+    def set_replay_filter(self, filter_text: str) -> None:
+        self.replay_filters.append(filter_text)
+
+    def replay_history_entry(
+        self,
+        entry,
+        *,
+        edit: bool,
+        skip_delay: bool = False,
+    ) -> None:
+        self.replayed_entries.append((entry.raw, entry.command, edit, skip_delay))
+
+    def toggle_replay_default_haul(self, entry) -> None:
+        self.toggled_default_hauls.append(entry.raw)
 
 
 class ControlRoomServerTests(unittest.TestCase):
@@ -423,10 +459,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_active_operator_submit_input_command_calls_handler(self) -> None:
         broker = InMemoryObserverSessionBroker()
-        received: list[tuple[str, bool | None]] = []
-
-        def command_handler(raw_input: str, *, skip_delay: bool | None = None) -> None:
-            received.append((raw_input, skip_delay))
+        command_handler = _CommandHandlerRecorder()
 
         response = _handle_session_message(
             {
@@ -441,16 +474,13 @@ class ControlRoomServerTests(unittest.TestCase):
             broker=broker,
         )
 
-        self.assertEqual(received, [("market filter gold", True)])
+        self.assertEqual(command_handler.submitted_inputs, [("market filter gold", True)])
         self.assertEqual(response["message_type"], "response.success")
         self.assertEqual(response["correlation_message_id"], "message-100")
 
     def test_active_operator_submit_input_allows_blank_prompt_submission(self) -> None:
         broker = InMemoryObserverSessionBroker()
-        received: list[tuple[str, bool | None]] = []
-
-        def command_handler(raw_input: str, *, skip_delay: bool | None = None) -> None:
-            received.append((raw_input, skip_delay))
+        command_handler = _CommandHandlerRecorder()
 
         response = _handle_session_message(
             {
@@ -465,9 +495,129 @@ class ControlRoomServerTests(unittest.TestCase):
             broker=broker,
         )
 
-        self.assertEqual(received, [("", None)])
+        self.assertEqual(command_handler.submitted_inputs, [("", None)])
         self.assertEqual(response["message_type"], "response.success")
         self.assertEqual(response["correlation_message_id"], "message-blank")
+
+    def test_active_operator_replay_commands_call_handler(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        command_handler = _CommandHandlerRecorder()
+
+        open_response = _handle_session_message(
+            {
+                "message_type": "command.open_replay_browser",
+                "message_id": "message-open",
+                "payload": {},
+            },
+            session_id="observer-open",
+            client_role="active_operator",
+            snapshot_provider=_base_snapshot,
+            command_handler=command_handler,
+            broker=broker,
+        )
+        filter_response = _handle_session_message(
+            {
+                "message_type": "command.set_replay_filter",
+                "message_id": "message-filter",
+                "payload": {"filter_text": "haul"},
+            },
+            session_id="observer-open",
+            client_role="active_operator",
+            snapshot_provider=_base_snapshot,
+            command_handler=command_handler,
+            broker=broker,
+        )
+        replay_response = _handle_session_message(
+            {
+                "message_type": "command.replay_history_entry",
+                "message_id": "message-replay",
+                "payload": {
+                    "raw_command": "haul gold",
+                    "command_name": "haul",
+                    "arguments": {"station_1_buying": "gold"},
+                    "timestamp": "2026-06-15T18:00:00Z",
+                    "edit": True,
+                    "skip_delay": True,
+                },
+            },
+            session_id="observer-open",
+            client_role="active_operator",
+            snapshot_provider=_base_snapshot,
+            command_handler=command_handler,
+            broker=broker,
+        )
+        toggle_response = _handle_session_message(
+            {
+                "message_type": "command.toggle_replay_default_haul",
+                "message_id": "message-toggle",
+                "payload": {
+                    "raw_command": "haul gold",
+                    "command_name": "haul",
+                    "arguments": {"station_1_buying": "gold"},
+                    "timestamp": "2026-06-15T18:00:00Z",
+                },
+            },
+            session_id="observer-open",
+            client_role="active_operator",
+            snapshot_provider=_base_snapshot,
+            command_handler=command_handler,
+            broker=broker,
+        )
+        close_response = _handle_session_message(
+            {
+                "message_type": "command.close_replay_browser",
+                "message_id": "message-close",
+                "payload": {},
+            },
+            session_id="observer-open",
+            client_role="active_operator",
+            snapshot_provider=_base_snapshot,
+            command_handler=command_handler,
+            broker=broker,
+        )
+
+        self.assertEqual(open_response["message_type"], "response.success")
+        self.assertEqual(filter_response["message_type"], "response.success")
+        self.assertEqual(replay_response["message_type"], "response.success")
+        self.assertEqual(toggle_response["message_type"], "response.success")
+        self.assertEqual(close_response["message_type"], "response.success")
+        self.assertEqual(command_handler.opened_replay_browser, 1)
+        self.assertEqual(command_handler.closed_replay_browser, 1)
+        self.assertEqual(command_handler.replay_filters, ["haul"])
+        self.assertEqual(
+            command_handler.replayed_entries,
+            [("haul gold", "haul", True, True)],
+        )
+        self.assertEqual(command_handler.toggled_default_hauls, ["haul gold"])
+
+    def test_headless_host_remote_replay_commands_update_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
+            host._saved_state.history = [
+                CommandHistoryEntry(
+                    raw="haul gold",
+                    command="haul",
+                    params={
+                        "station_1_buying": "gold",
+                        "station_2_buying": "silver",
+                        "station_1": "Jameson Memorial",
+                        "station_2": "Hutton Orbital",
+                    },
+                    timestamp="2026-06-15T18:00:00Z",
+                )
+            ]
+            sink = _SnapshotRecorder()
+            host._protocol_event_sink = sink
+
+            host.open_replay_browser()
+            host.set_replay_filter("haul")
+            host.toggle_replay_default_haul(host._saved_state.history[0])
+
+        self.assertTrue(sink.snapshots)
+        latest = sink.snapshots[-1]
+        self.assertTrue(latest.replay_browser.open)
+        self.assertEqual(latest.replay_browser.filter_text, "haul")
+        self.assertEqual(latest.command_history.default_haul["station_1_buying"], "gold")
 
     def test_broker_personalizes_snapshot_for_active_operator_session(self) -> None:
         broker = InMemoryObserverSessionBroker()
