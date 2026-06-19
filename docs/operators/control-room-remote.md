@@ -73,7 +73,7 @@ For a browser-native smoke check against the same LAN server, open:
 http://<server-host>:8765/browser-probe
 ```
 
-The served page uses `fetch()` plus browser `WebSocket` directly against `GET /health`, `GET /capabilities`, `GET /snapshot`, `GET /schema/control_room_message.json`, and `WS /session`, and it can claim operator, submit command input, request snapshots, and cancel active routines. It is the quickest sanity check that the remote surface is browser-usable before a real web client exists.
+The served page uses `fetch()` plus browser `WebSocket` directly against `GET /health`, `GET /capabilities`, `GET /snapshot`, `GET /schema/control_room_message.json`, and `WS /session`, and it can claim operator, submit command input, request snapshots, cancel active routines, and exercise replay-browser commands. It is the quickest sanity check that the remote surface is browser-usable before a real web client exists.
 
 If you want to open the same probe from disk instead of through the server, the source file still lives at:
 
