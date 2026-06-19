@@ -39,6 +39,7 @@ Use [docs/iteration-logs/](docs/iteration-logs/) for concise per-iteration notes
 - Always create iteration logs with `uv run python3 tools/iteration_logs.py new "<area>" "<title>"`; do not handcraft filenames.
 - Do not hand-edit an iteration number anywhere; derive it from `docs/iteration-logs/` with `uv run python3 tools/iteration_logs.py next-number` or the generated archive.
 - `docs/iteration-archive.md` is maintained current from `docs/iteration-logs/`; refresh it whenever iteration logs change before committing, pushing, or opening a PR.
+- If `docs/iteration-archive.md` conflicts during a merge or rebase, do not resolve the generated file by hand; regenerate it with `uv run python3 tools/iteration_logs.py render-archive`, then stage the regenerated result.
 - Run `uv run python3 tools/iteration_logs.py validate` before committing, pushing, or opening a PR so invalid iteration-log filenames are caught before archive generation or review.
 - Treat `docs/status-archive.md` as legacy cold storage for displaced older status/session content from the pre-iteration-log and pre-area-status workflows. Do not open or read it during normal work unless the user explicitly asks for archive/history detail or you are blocked and need older context that is not available in `docs/status/` or `docs/iteration-logs/`.
 
