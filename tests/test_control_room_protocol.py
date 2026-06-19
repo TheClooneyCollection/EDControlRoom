@@ -160,6 +160,13 @@ class _InputStub:
 class _OptionListStub:
     def __init__(self) -> None:
         self.highlighted = 0
+        self.options: list[object] = []
+
+    def clear_options(self) -> None:
+        self.options = []
+
+    def add_options(self, options: list[object]) -> None:
+        self.options.extend(options)
 
 
 class _ContainerStub:
@@ -507,6 +514,7 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
 
         self.assertEqual(app._selected_resume_history_entry, entry)
         self.assertEqual(app._resume_list_widget.highlighted, 0)
+        self.assertEqual(app._resume_list_widget.options, ["haul gold"])
         self.assertEqual(app._activity_widget.styles.display, "none")
         self.assertEqual(app._resume_browser_widget.styles.display, "block")
         self.assertEqual(app._resume_help_widget.updated.splitlines()[-1], "Filter: haul")

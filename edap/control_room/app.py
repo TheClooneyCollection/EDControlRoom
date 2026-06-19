@@ -901,6 +901,9 @@ class ControlRoomApp(App[None]):
             for entry in snapshot.replay_browser.visible_entries
         ]
         try:
+            option_list = self.query_one("#resume-list", OptionList)
+            option_list.clear_options()
+            option_list.add_options([item.label for item in self._resume_entries])
             _replay.sync_resume_widget_selection(self)
         except Exception:
             return
