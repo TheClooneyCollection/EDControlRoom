@@ -39,7 +39,7 @@ def build_observer_server_app(
         return unauthorized_response()
 
     async def health(request):
-        snapshot = broker.merge_snapshot(snapshot_provider())
+        snapshot = broker.current_snapshot(snapshot_provider=snapshot_provider)
         auth_description = auth.describe()
         return JSONResponse(
             {
@@ -55,7 +55,7 @@ def build_observer_server_app(
         auth_failure = require_http_auth(request)
         if auth_failure is not None:
             return auth_failure
-        snapshot = broker.merge_snapshot(snapshot_provider())
+        snapshot = broker.current_snapshot(snapshot_provider=snapshot_provider)
         auth_description = auth.describe()
         return JSONResponse(
             {
@@ -83,7 +83,7 @@ def build_observer_server_app(
         auth_failure = require_http_auth(request)
         if auth_failure is not None:
             return auth_failure
-        return JSONResponse(asdict(broker.merge_snapshot(snapshot_provider())))
+        return JSONResponse(asdict(broker.current_snapshot(snapshot_provider=snapshot_provider)))
 
     async def session(websocket: WebSocket) -> None:
         if not auth.is_websocket_authorized(websocket):
@@ -92,7 +92,7 @@ def build_observer_server_app(
         client_name = websocket.query_params.get("client_name", "observer-client")
         await websocket.accept()
         observer = broker.register_observer(client_name)
-        merged_snapshot = broker.merge_snapshot(snapshot_provider())
+        merged_snapshot = broker.current_snapshot(snapshot_provider=snapshot_provider)
         try:
             await websocket.send_json(
                 protocol_message(
@@ -188,7 +188,12 @@ def _handle_session_message(
     if message_type == "command.request_snapshot":
         return protocol_message(
             "state.snapshot",
-            asdict(broker.merge_snapshot(snapshot_provider(), session_id=session_id)),
+            asdict(
+                broker.current_snapshot(
+                    snapshot_provider=snapshot_provider,
+                    session_id=session_id,
+                )
+            ),
             correlation_message_id=correlation_message_id,
         )
 

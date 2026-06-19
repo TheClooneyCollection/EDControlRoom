@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `40`
-- Latest generated iteration number: `173`
+- Generated iteration count: `42`
+- Latest generated iteration number: `175`
 
 ## Iteration 134
 
@@ -1147,3 +1147,61 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Decide whether replay selection should become broker-owned session state instead of remaining a serialized reflection of the app/headless host state.
 - Keep an eye on full-suite timing on the next slices in case the slower wall-clock run reflects environment drift rather than this change.
+
+## Iteration 174
+
+- When: `2026-06-19 12:27`
+- Area: `control-room`
+- Title: `broker-serve-retained-snapshots`
+- Source: [2026-06-19-12-27_control-room_broker-serve-retained-snapshots.md](iteration-logs/2026-06-19-12-27_control-room_broker-serve-retained-snapshots.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `broker-serve-retained-snapshots`
+- Started: `2026-06-19 12:27`
+
+## Summary
+
+- Moved `/snapshot`, websocket connection bootstrap, and `command.request_snapshot` onto the broker’s retained latest snapshot path so the session layer serves its current merged view instead of always asking the headless app for a fresh direct snapshot.
+
+## Changes
+
+- Added `InMemoryObserverSessionBroker.current_snapshot()` to return the retained merged snapshot when available and fall back to the runtime snapshot provider only when the broker has not seen state yet.
+- Updated the observer HTTP and WebSocket server paths to prefer that retained broker snapshot for health/capabilities/snapshot responses, connection-ready bootstrap, and correlated snapshot requests.
+- Added coverage proving `/snapshot` returns the broker-retained snapshot even when the provider would still report an older base view.
+- Verified with `uv run python3 -m unittest tests/test_control_room_server.py` and `uv run python3 -m unittest discover -s tests`.
+
+## Follow-ups
+
+- Decide whether future web clients should read the retained broker snapshot directly through a thinner API layer instead of going back through the headless host at all.
+- Keep moving prompt-flow and the remaining replay/session ownership off the app instance now that the broker has a clearer retained-snapshot seam.
+
+## Iteration 175
+
+- When: `2026-06-19 12:27`
+- Area: `control-room`
+- Title: `server-mirror-activity-and-disable-local-tts`
+- Source: [2026-06-19-12-27_control-room_server-mirror-activity-and-disable-local-tts.md](iteration-logs/2026-06-19-12-27_control-room_server-mirror-activity-and-disable-local-tts.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `server-mirror-activity-and-disable-local-tts`
+- Started: `2026-06-19 12:27`
+
+## Summary
+
+- Changed `serve` so the headless server no longer speaks TTS locally, while connected clients still receive announcement events and can speak them client-side; server-side activity log entries are now mirrored into server logs.
+
+## Changes
+
+- Forced `HeadlessControlRoomHost` to build its `TTSAnnouncer` with a `NullSpeechBackend`, which keeps `event.announcement_emitted` intact but suppresses local server speech.
+- Added `ServerActivityLogSink` plus a small fan-out sink so `serve` mirrors protocol activity-log entries into server logs alongside the broker session stream.
+- Added server tests covering announcement-event emission without local speech and activity-log mirroring into a logger.
+- Verified with `uv run python3 -m unittest tests/test_control_room_server.py` and `uv run python3 -m unittest discover -s tests`.
+
+## Follow-ups
+
+- Live-check the `serve` console output during real routine runs to make sure the mirrored activity lines are the right signal density for operators.
+- If the server needs structured logs later, replace the current plain mirrored message sink with a JSON or field-based logger instead of changing the activity event shape.

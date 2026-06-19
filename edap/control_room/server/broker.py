@@ -85,6 +85,18 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
     def current_session_role(self, session_id: str) -> str:
         return self._resolved_session_role(session_id)
 
+    def current_snapshot(
+        self,
+        *,
+        snapshot_provider,
+        session_id: str | None = None,
+    ) -> ControlRoomSnapshot:
+        base_snapshot = self._latest_snapshot
+        if base_snapshot is None:
+            base_snapshot = self.merge_snapshot(snapshot_provider())
+            self._latest_snapshot = base_snapshot
+        return self.merge_snapshot(base_snapshot, session_id=session_id)
+
     def merge_snapshot(
         self,
         base_snapshot: ControlRoomSnapshot,

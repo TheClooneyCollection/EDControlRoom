@@ -11,6 +11,7 @@ from edap.control_room.protocol import snapshot_from_app
 from edap.control_room.protocol.snapshot import ControlRoomSnapshot
 from edap.runtime import RuntimeContext
 from edap.state import JournalWatcher
+from edap.tts import NullSpeechBackend, TTSAnnouncer
 
 
 class _ActivityWidgetStub:
@@ -76,6 +77,11 @@ class HeadlessControlRoomHost(ControlRoomApp):
         self._resume_list_widget = _OptionListWidgetStub()
         self._resume_browser_widget = _ContainerWidgetStub()
         super().__init__(ctx, market_filter=market_filter)
+        self._tts = TTSAnnouncer(
+            self._config.tts,
+            platform_name=self._config.runtime.platform,
+            backend=NullSpeechBackend(),
+        )
         self._watcher_stop = threading.Event()
         self._watcher_thread: threading.Thread | None = None
 
