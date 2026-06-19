@@ -20,6 +20,25 @@ class BootstrapHost(Protocol):
     def _refresh_market(self) -> None: ...
 
 
+def sync_cargo_manifest(app: BootstrapHost, *, update_count: bool = True) -> bool:
+    cargo_path = app._journal_dir / "Cargo.json"
+    if not cargo_path.exists():
+        return False
+    try:
+        with cargo_path.open(encoding="utf-8") as fh:
+            data: dict[str, Any] = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    inventory = data.get("Inventory", [])
+    if not isinstance(inventory, list):
+        inventory = []
+    app._ship.cargo_inventory = list(inventory)
+    if update_count:
+        app._ship.cargo_count = sum(int(item.get("Count", 0) or 0) for item in inventory)
+    return True
+
+
 def sync_status_snapshot(app: BootstrapHost) -> None:
     try:
         status = read_status(app._journal_dir)
@@ -55,7 +74,8 @@ def bootstrap_ship_state(app: BootstrapHost) -> None:
             pass
 
     sync_status_snapshot(app)
-    app._ship.cargo_inventory = _rendering.read_cargo_inventory(app._journal_dir)
+    if not sync_cargo_manifest(app, update_count=False):
+        app._ship.cargo_inventory = _rendering.read_cargo_inventory(app._journal_dir)
 
 
 def load_market_json(app: BootstrapHost) -> None:
