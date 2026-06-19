@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `65`
-- Latest generated iteration number: `198`
+- Generated iteration count: `66`
+- Latest generated iteration number: `199`
 
 ## Iteration 134
 
@@ -1847,3 +1847,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - If a dedicated web client is built, keep the client-side operator gating as a UX safeguard even though the server remains authoritative for permission checks.
+
+## Iteration 199
+
+- When: `2026-06-19 18:10`
+- Area: `control-room`
+- Title: `add-browser-remote-visibility`
+- Source: [2026-06-19-18-10_control-room_add-browser-remote-visibility.md](iteration-logs/2026-06-19-18-10_control-room_add-browser-remote-visibility.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `add-browser-remote-visibility`
+- Started: `2026-06-19 18:10`
+
+## Summary
+
+- Expanded the hosted browser probe from a command surface into a more legible remote operator surface by adding connected-client and recent-activity visibility directly in the page.
+
+## Changes
+
+- Added dedicated browser-probe panels for connected clients and recent activity, derived from the live snapshot and incremental activity-log events.
+- Kept those panels refreshed as websocket messages arrive so the browser path surfaces operator-relevant state instead of forcing the user to inspect the raw snapshot JSON alone.
+- Updated endpoint coverage plus the remote operator docs/status handoff to reflect that browser validation now covers connected-client and activity visibility too.
+
+## Follow-ups
+
+- If a dedicated web client is built, preserve these basic visibility surfaces early so remote operators do not need a separate raw-state/debug page to understand session state.
