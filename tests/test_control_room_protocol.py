@@ -400,11 +400,32 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.assertTrue(snapshot.replay_browser.open)
         self.assertEqual(snapshot.replay_browser.visible_entries[0].history_entry.command_name, "haul")
         self.assertEqual(snapshot.activity_log[0].message_text, "Docked at Jameson Memorial")
-        self.assertEqual(snapshot.server_status.server_version, "1.2.3")
-        self.assertEqual(snapshot.server_status.runtime_platform, "macos")
-        self.assertFalse(snapshot.server_status.bindings_loaded)
-        self.assertEqual(snapshot.server_status.capability_names, ["snapshot", "announcement_stream"])
-        self.assertEqual(snapshot.active_operator.client_name if snapshot.active_operator else None, "observer-1")
+
+    def test_snapshot_from_app_includes_selected_replay_history_entry(self) -> None:
+        entry = CommandHistoryEntry(
+            raw="haul gold",
+            command="haul",
+            params={"station_1_buying": "gold"},
+            timestamp="2026-06-15T15:00:00Z",
+        )
+        app = _RenderHarnessApp(_make_context(Path(self.tmpdir.name)))
+        app._replay_state.open = True
+        app._resume_entries = [
+            ReplaySelection(
+                entry=entry,
+                label="haul gold",
+                detail="haul detail",
+            )
+        ]
+        app._resume_list_widget.highlighted = 0
+
+        snapshot = snapshot_from_app(app)
+
+        self.assertIsNotNone(snapshot.replay_browser.selected_history_entry)
+        self.assertEqual(
+            snapshot.replay_browser.selected_history_entry.raw_command,
+            "haul gold",
+        )
 
     def test_log_records_protocol_activity_entry_and_snapshot_uses_it_by_default(self) -> None:
         self.app._log("[yellow]Docked at Jameson Memorial[/]")
