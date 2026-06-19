@@ -44,6 +44,7 @@ from edap.control_room.server.app import _handle_session_message, build_observer
 from edap.control_room.server.auth import SharedAccessTokenAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
 from edap.control_room.server.host import HeadlessControlRoomHost
+from edap.control_room.server.state import ControlRoomServerState
 from edap.runtime import ResolvedPath, RuntimeContext
 
 
@@ -323,6 +324,56 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(
             message["payload"]["connected_clients"][0]["client_name"],
             "bridge-ipad",
+        )
+
+    def test_broker_replays_server_owned_activity_history_in_new_snapshots(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        broker.publish_snapshot(_base_snapshot())
+        broker.publish_activity_log(
+            ActivityLogEntry(
+                entry_id="activity-000002",
+                timestamp="2026-06-15T18:01:00Z",
+                message_text="Market filter set to Gold.",
+                severity=None,
+            )
+        )
+
+        observer = broker.register_observer("bridge-ipad")
+
+        message = observer.queue.get_nowait()
+        self.assertEqual(message["message_type"], "state.snapshot")
+        self.assertEqual(
+            [entry["message_text"] for entry in message["payload"]["activity_log"]],
+            ["Hello commander.", "Market filter set to Gold."],
+        )
+
+    def test_server_state_keeps_recent_announcements_for_future_sessions(self) -> None:
+        server_state = ControlRoomServerState(announcement_limit=2)
+        server_state.record_announcement(
+            AnnouncementEvent(
+                announcement_id="startup_greeting",
+                message_text="Hello commander.",
+                message_values={},
+            )
+        )
+        server_state.record_announcement(
+            AnnouncementEvent(
+                announcement_id="arrival",
+                message_text="Arrived in Sol.",
+                message_values={"system_name": "Sol"},
+            )
+        )
+        server_state.record_announcement(
+            AnnouncementEvent(
+                announcement_id="approaching_station",
+                message_text="Approaching Jameson Memorial.",
+                message_values={"station_name": "Jameson Memorial"},
+            )
+        )
+
+        self.assertEqual(
+            [event.announcement_id for event in server_state.announcements()],
+            ["arrival", "approaching_station"],
         )
 
     def test_request_snapshot_command_returns_correlated_snapshot(self) -> None:
