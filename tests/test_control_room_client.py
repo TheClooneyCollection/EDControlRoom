@@ -3,7 +3,10 @@ from __future__ import annotations
 from dataclasses import asdict
 import unittest
 
-from edap.control_room.client.backend import RemoteObserverBackend
+from edap.control_room.client.backend import (
+    RemoteObserverBackend,
+    _validate_remote_observer_capabilities,
+)
 from edap.control_room.client.target import ObserverServerTarget, parse_observer_server_target
 from edap.control_room.protocol import (
     ActivityLogAppendedEvent,
@@ -441,6 +444,99 @@ class ControlRoomClientTests(unittest.TestCase):
 
         message = backend._outgoing_messages.get_nowait()
         self.assertEqual(message["message_type"], "command.cancel_active_routine")
+
+    def test_validate_remote_capabilities_accepts_current_server_surface(self) -> None:
+        capabilities = {
+            "supported_message_types": [
+                "state.snapshot",
+                "event.connection_ready",
+                "event.active_operator_changed",
+                "event.activity_log_appended",
+                "event.announcement_emitted",
+                "command.request_snapshot",
+                "command.request_active_operator",
+                "command.submit_input",
+                "command.open_replay_browser",
+                "command.close_replay_browser",
+                "command.set_replay_filter",
+                "command.move_replay_selection",
+                "command.replay_history_entry",
+                "command.toggle_replay_default_haul",
+                "command.cancel_active_routine",
+                "response.success",
+                "response.error",
+            ],
+            "supported_client_roles": ["active_operator", "observer"],
+            "minimum_client_version": "1",
+        }
+
+        _validate_remote_observer_capabilities(
+            capabilities,
+            ObserverServerTarget(
+                host="bridge.local",
+                port=8765,
+                http_base_url="http://bridge.local:8765",
+                websocket_url="ws://bridge.local:8765/session",
+            ),
+        )
+
+    def test_validate_remote_capabilities_rejects_missing_message_types(self) -> None:
+        capabilities = {
+            "supported_message_types": ["state.snapshot", "response.success", "response.error"],
+            "supported_client_roles": ["active_operator", "observer"],
+            "minimum_client_version": "1",
+        }
+
+        with self.assertRaises(SystemExit) as ctx:
+            _validate_remote_observer_capabilities(
+                capabilities,
+                ObserverServerTarget(
+                    host="bridge.local",
+                    port=8765,
+                    http_base_url="http://bridge.local:8765",
+                    websocket_url="ws://bridge.local:8765/session",
+                ),
+            )
+
+        self.assertIn("does not support required message types", str(ctx.exception))
+
+    def test_validate_remote_capabilities_rejects_unsupported_client_version(self) -> None:
+        capabilities = {
+            "supported_message_types": [
+                "state.snapshot",
+                "event.connection_ready",
+                "event.active_operator_changed",
+                "event.activity_log_appended",
+                "event.announcement_emitted",
+                "command.request_snapshot",
+                "command.request_active_operator",
+                "command.submit_input",
+                "command.open_replay_browser",
+                "command.close_replay_browser",
+                "command.set_replay_filter",
+                "command.move_replay_selection",
+                "command.replay_history_entry",
+                "command.toggle_replay_default_haul",
+                "command.cancel_active_routine",
+                "response.success",
+                "response.error",
+            ],
+            "supported_client_roles": ["active_operator", "observer"],
+            "minimum_client_version": "2",
+        }
+
+        with self.assertRaises(SystemExit) as ctx:
+            _validate_remote_observer_capabilities(
+                capabilities,
+                ObserverServerTarget(
+                    host="bridge.local",
+                    port=8765,
+                    http_base_url="http://bridge.local:8765",
+                    websocket_url="ws://bridge.local:8765/session",
+                ),
+            )
+
+        self.assertIn("requires unsupported client version", str(ctx.exception))
 
 
 if __name__ == "__main__":
