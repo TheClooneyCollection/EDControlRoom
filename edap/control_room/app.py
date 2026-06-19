@@ -904,6 +904,25 @@ class ControlRoomApp(App[None]):
             _replay.sync_resume_widget_selection(self)
         except Exception:
             return
+        self._apply_replay_browser_visibility()
+
+    def _apply_replay_browser_visibility(self) -> None:
+        try:
+            activity = self.query_one("#activity", ActivityLog)
+            replay_browser = self.query_one("#resume-browser", Vertical)
+        except Exception:
+            return
+        if self._resume_open:
+            activity.styles.display = "none"
+            replay_browser.styles.display = "block"
+            try:
+                _replay.refresh_resume_help(self)
+                _replay.update_resume_detail(self)
+            except Exception:
+                return
+            return
+        activity.styles.display = "block"
+        replay_browser.styles.display = "none"
 
     def _replace_activity_log(self, entries: list[ActivityLogEntry]) -> None:
         activity = self.query_one("#activity", ActivityLog)
