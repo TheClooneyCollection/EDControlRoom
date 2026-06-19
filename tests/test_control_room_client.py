@@ -13,8 +13,10 @@ from edap.control_room.protocol import (
     ActivityLogAppendedEvent,
     AUTHENTICATION_SCHEME_BEARER_TOKEN,
     REQUIRED_AUTHENTICATION_TRANSPORTS,
+    RemoteObserverWebSocketConnectInfo,
     SnapshotUpdatedEvent,
     build_remote_observer_capabilities_payload,
+    build_remote_observer_websocket_connect_info,
     event_from_message,
 )
 from edap.control_room.protocol.snapshot import (
@@ -112,6 +114,21 @@ def _snapshot() -> ControlRoomSnapshot:
     )
 
 
+def _websocket_connect_info(
+    *,
+    client_name: str = "observer-ipad",
+    capabilities: dict[str, object] | None = None,
+    prefer_authorization_header: bool = True,
+) -> RemoteObserverWebSocketConnectInfo:
+    return build_remote_observer_websocket_connect_info(
+        websocket_url="ws://bridge.local:8765/session",
+        access_token="secret-token",
+        client_name=client_name,
+        capabilities=capabilities or _current_remote_capabilities(),
+        prefer_authorization_header=prefer_authorization_header,
+    )
+
+
 class ControlRoomClientTests(unittest.TestCase):
     def test_parse_target_defaults_to_http_and_default_port(self) -> None:
         target = parse_observer_server_target("192.168.1.44")
@@ -154,6 +171,7 @@ class ControlRoomClientTests(unittest.TestCase):
             access_token="secret-token",
             client_name="observer-ipad",
             initial_snapshot=snapshot,
+            websocket_connect_info=_websocket_connect_info(),
         )
         received: list[object] = []
         backend.subscribe_events(received.append)
@@ -190,6 +208,7 @@ class ControlRoomClientTests(unittest.TestCase):
             access_token="secret-token",
             client_name="observer-ipad",
             initial_snapshot=_snapshot(),
+            websocket_connect_info=_websocket_connect_info(),
         )
         received: list[object] = []
         backend.subscribe_events(received.append)
@@ -219,6 +238,7 @@ class ControlRoomClientTests(unittest.TestCase):
             access_token="secret-token",
             client_name="observer-ipad",
             initial_snapshot=_snapshot(),
+            websocket_connect_info=_websocket_connect_info(),
         )
 
         backend.request_snapshot()
@@ -242,6 +262,7 @@ class ControlRoomClientTests(unittest.TestCase):
             access_token="secret-token",
             client_name="observer-ipad",
             initial_snapshot=_snapshot(),
+            websocket_connect_info=_websocket_connect_info(),
         )
 
         backend.open_replay_browser()
@@ -319,6 +340,7 @@ class ControlRoomClientTests(unittest.TestCase):
             access_token="secret-token",
             client_name="observer-ipad",
             initial_snapshot=snapshot,
+            websocket_connect_info=_websocket_connect_info(),
         )
         received: list[object] = []
         backend.subscribe_events(received.append)
@@ -348,6 +370,7 @@ class ControlRoomClientTests(unittest.TestCase):
             access_token="secret-token",
             client_name="observer-ipad",
             initial_snapshot=_snapshot(),
+            websocket_connect_info=_websocket_connect_info(),
         )
         received: list[object] = []
         backend.subscribe_events(received.append)
@@ -370,6 +393,7 @@ class ControlRoomClientTests(unittest.TestCase):
             access_token="secret-token",
             client_name="observer-ipad",
             initial_snapshot=_snapshot(),
+            websocket_connect_info=_websocket_connect_info(),
         )
 
         self.assertEqual(backend._next_reconnect_delay(1.0), 2.0)
@@ -389,6 +413,7 @@ class ControlRoomClientTests(unittest.TestCase):
             access_token="secret-token",
             client_name="observer-ipad",
             initial_snapshot=_snapshot(),
+            websocket_connect_info=_websocket_connect_info(),
         )
         received: list[object] = []
         backend.subscribe_events(received.append)
@@ -423,6 +448,7 @@ class ControlRoomClientTests(unittest.TestCase):
             access_token="secret-token",
             client_name="observer-ipad",
             initial_snapshot=_snapshot(),
+            websocket_connect_info=_websocket_connect_info(),
         )
 
         backend.request_active_operator()
@@ -442,6 +468,7 @@ class ControlRoomClientTests(unittest.TestCase):
             access_token="secret-token",
             client_name="observer-ipad",
             initial_snapshot=_snapshot(),
+            websocket_connect_info=_websocket_connect_info(),
         )
 
         backend.interrupt_active_routine()
@@ -478,6 +505,27 @@ class ControlRoomClientTests(unittest.TestCase):
             )
 
         self.assertIn("does not support required message types", str(ctx.exception))
+
+    def test_websocket_connect_info_prefers_authorization_header_for_native_clients(self) -> None:
+        connect_info = _websocket_connect_info()
+
+        self.assertEqual(
+            connect_info.session_url,
+            "ws://bridge.local:8765/session?client_name=observer-ipad",
+        )
+        self.assertEqual(
+            connect_info.additional_headers,
+            (("Authorization", "Bearer secret-token"),),
+        )
+
+    def test_websocket_connect_info_can_use_query_parameter_when_requested(self) -> None:
+        connect_info = _websocket_connect_info(prefer_authorization_header=False)
+
+        self.assertEqual(
+            connect_info.session_url,
+            "ws://bridge.local:8765/session?client_name=observer-ipad&access_token=secret-token",
+        )
+        self.assertEqual(connect_info.additional_headers, ())
 
     def test_validate_remote_capabilities_rejects_missing_command_breakdown(self) -> None:
         capabilities = _current_remote_capabilities()

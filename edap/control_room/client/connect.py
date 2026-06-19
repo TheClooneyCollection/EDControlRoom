@@ -12,6 +12,7 @@ from edap.control_room.protocol import (
     ActivityLogAppendedEvent,
     AnnouncementEvent,
     SnapshotUpdatedEvent,
+    build_remote_observer_websocket_connect_info,
 )
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.tts import parse_announcement_id
@@ -104,7 +105,7 @@ def connect_observer_mode(
     loaded = load_config_with_fallback(config_path)
     server_target = parse_observer_server_target(target)
     resolved_client_name = (client_name or socket.gethostname()).strip() or "observer-client"
-    _, snapshot = fetch_remote_observer_snapshot(
+    capabilities, snapshot = fetch_remote_observer_snapshot(
         server_target=server_target,
         access_token=access_token,
     )
@@ -119,6 +120,13 @@ def connect_observer_mode(
         access_token=access_token,
         client_name=resolved_client_name,
         initial_snapshot=snapshot,
+        websocket_connect_info=build_remote_observer_websocket_connect_info(
+            websocket_url=server_target.websocket_url,
+            access_token=access_token,
+            client_name=resolved_client_name,
+            capabilities=capabilities,
+            prefer_authorization_header=True,
+        ),
     )
     app = ObserverControlRoomApp(
         ctx,

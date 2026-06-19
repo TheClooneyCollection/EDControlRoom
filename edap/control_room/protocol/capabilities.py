@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from collections.abc import Mapping, Sequence
 from typing import Any
+from urllib.parse import quote
 
 
 ACCESS_TOKEN_QUERY_PARAMETER = "access_token"
@@ -40,6 +42,12 @@ REQUIRED_AUTHENTICATION_TRANSPORTS = [
     "authorization_header",
     "query_parameter",
 ]
+
+
+@dataclass(frozen=True)
+class RemoteObserverWebSocketConnectInfo:
+    session_url: str
+    additional_headers: tuple[tuple[str, str], ...] = ()
 
 
 def build_remote_observer_capabilities_payload(
@@ -174,6 +182,32 @@ def validate_remote_observer_capabilities_payload(
         return "browser_probe_url must be a non-empty string."
 
     return None
+
+
+def build_remote_observer_websocket_connect_info(
+    *,
+    websocket_url: str,
+    access_token: str,
+    client_name: str,
+    capabilities: Mapping[str, Any],
+    prefer_authorization_header: bool,
+) -> RemoteObserverWebSocketConnectInfo:
+    validation_error = validate_remote_observer_capabilities_payload(capabilities)
+    if validation_error is not None:
+        raise ValueError(validation_error)
+    supported_transports = capabilities["authentication_supported_transports"]
+    session_url = f"{websocket_url}?client_name={quote(client_name)}"
+    if prefer_authorization_header and "authorization_header" in supported_transports:
+        return RemoteObserverWebSocketConnectInfo(
+            session_url=session_url,
+            additional_headers=(("Authorization", f"Bearer {access_token}"),),
+        )
+    query_parameter_name = str(capabilities["authentication_query_parameter_name"])
+    return RemoteObserverWebSocketConnectInfo(
+        session_url=(
+            f"{session_url}&{quote(query_parameter_name)}={quote(access_token)}"
+        )
+    )
 
 
 def _is_string_list(value: object) -> bool:
