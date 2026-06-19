@@ -51,14 +51,20 @@ def _print_snapshot_summary(snapshot: dict[str, Any]) -> None:
     active_operator = snapshot.get("active_operator", {})
     activity_log = snapshot.get("activity_log", [])
     prompt = snapshot.get("prompt", {})
+    prompt_state = snapshot.get("prompt_state", {})
     replay = snapshot.get("replay_browser", {})
+    prompt_visible = bool(
+        prompt.get("is_visible")
+        or prompt_state.get("haul_prompt_step")
+        or prompt_state.get("destination_prompt_destination")
+    )
     print("snapshot:")
     print(f"  session role: {session.get('client_role')}")
     print(f"  active operator: {active_operator.get('client_name')}")
     print(f"  connected clients: {len(snapshot.get('connected_clients', []))}")
     print(f"  activity lines: {len(activity_log)}")
-    print(f"  prompt visible: {bool(prompt.get('is_visible'))}")
-    print(f"  replay open: {bool(replay.get('is_open'))}")
+    print(f"  prompt visible: {prompt_visible}")
+    print(f"  replay open: {bool(replay.get('open'))}")
 
 
 def _message(message_type: str, payload: dict[str, object], *, message_id: str) -> dict[str, object]:
