@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `35`
-- Latest generated iteration number: `168`
+- Generated iteration count: `37`
+- Latest generated iteration number: `170`
 
 ## Iteration 134
 
@@ -1008,7 +1008,7 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Live-test connected active-operator prompt flows against a running `serve` instance, especially multi-step haul prompts and other prompt-heavy commands.
 
-## Iteration 168
+## Iteration 169
 
 - When: `2026-06-18 23:36`
 - Area: `control-room`
@@ -1033,3 +1033,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-test `dest`, `haul`, and other prompt-heavy commands over `connect` against a running `serve` instance now that post-input snapshot pushes are explicit.
+
+## Iteration 170
+
+- When: `2026-06-19 11:49`
+- Area: `docs`
+- Title: `regenerate-iteration-archive-conflicts`
+- Source: [2026-06-19-11-49_____docs_____regenerate-iteration-archive-conflicts.md](iteration-logs/2026-06-19-11-49_____docs_____regenerate-iteration-archive-conflicts.md)
+
+# Iteration Log
+
+- Area: `docs`
+- Title: `regenerate-iteration-archive-conflicts`
+- Started: `2026-06-19 11:49`
+
+## Summary
+
+- Added an explicit repo rule that `docs/iteration-archive.md` must be regenerated, not hand-merged, whenever it conflicts during a merge or rebase.
+- Applied that rule while rebasing `codex/control-room-remote-followup` onto the latest `origin/main`, which avoided repeated manual conflict resolution on the generated archive.
+
+## Changes
+
+- Updated `AGENTS.md` to require `uv run python3 tools/iteration_logs.py render-archive` plus staging the regenerated file whenever the archive conflicts.
+- Updated `docs/status/docs-process.md` so the current handoff reflects the same generated-file conflict policy for future agents.
+
+## Follow-ups
+
+- Keep using regeneration for future archive conflicts and treat any hand-merged archive content as suspect until re-rendered from `docs/iteration-logs/`.
