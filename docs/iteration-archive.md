@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `47`
-- Latest generated iteration number: `180`
+- Generated iteration count: `48`
+- Latest generated iteration number: `181`
 
 ## Iteration 134
 
@@ -1340,3 +1340,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-test a real ping-timeout or server-stop case to confirm the TUI recovers cleanly and the reconnect workflow remains obvious to the operator.
+
+## Iteration 181
+
+- When: `2026-06-19 15:08`
+- Area: `control-room`
+- Title: `add-remote-reconnect-backoff`
+- Source: [2026-06-19-15-08_control-room_add-remote-reconnect-backoff.md](iteration-logs/2026-06-19-15-08_control-room_add-remote-reconnect-backoff.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `add-remote-reconnect-backoff`
+- Started: `2026-06-19 15:08`
+
+## Summary
+
+- Added automatic remote observer reconnect with exponential backoff so transient ping timeouts or server restarts do not leave the client permanently detached.
+
+## Changes
+
+- Wrapped the remote observer WebSocket session in a reconnect loop with exponential delays from 1 second up to a 30 second cap.
+- On reconnect, the client requests a fresh remote snapshot and logs `Observer connection restored.` so stale routine or operator state can self-heal.
+- Added client tests for backoff growth/capping and the reconnect messaging/snapshot refresh path.
+
+## Follow-ups
+
+- Live-test server stop/start and forced ping-timeout cases to tune the operator-facing reconnect messaging and confirm retry pacing feels reasonable on LAN.

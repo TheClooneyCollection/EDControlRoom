@@ -29,6 +29,10 @@ from edap.control_room_state import CommandHistoryEntry
 from .target import ObserverServerTarget
 
 
+_RECONNECT_DELAY_SECONDS = 1.0
+_RECONNECT_DELAY_MAX_SECONDS = 30.0
+
+
 class RemoteObserverBackend(ControlRoomBackend):
     def __init__(
         self,
@@ -193,27 +197,44 @@ class RemoteObserverBackend(ControlRoomBackend):
             f"{self._server_target.websocket_url}?client_name={quote(self._client_name)}"
             f"&access_token={quote(self._access_token)}"
         )
-        try:
-            async with websockets.connect(session_url) as websocket:
-                self._connected = True
-                self._has_connected_once = True
-                self._websocket = websocket
-                sender = asyncio.create_task(self._send_loop(websocket))
-                receiver = asyncio.create_task(self._receive_loop(websocket))
-                done, pending = await asyncio.wait(
-                    {sender, receiver},
-                    return_when=asyncio.FIRST_COMPLETED,
+        reconnect_delay = _RECONNECT_DELAY_SECONDS
+        while not self._stop_event.is_set():
+            try:
+                async with websockets.connect(session_url) as websocket:
+                    was_reconnecting = self._has_connected_once and not self._connected
+                    self._connected = True
+                    self._has_connected_once = True
+                    self._websocket = websocket
+                    reconnect_delay = _RECONNECT_DELAY_SECONDS
+                    self.request_snapshot()
+                    if was_reconnecting:
+                        self._emit_local_message("Observer connection restored.")
+                    sender = asyncio.create_task(self._send_loop(websocket))
+                    receiver = asyncio.create_task(self._receive_loop(websocket))
+                    done, pending = await asyncio.wait(
+                        {sender, receiver},
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    for task in pending:
+                        task.cancel()
+                    for task in done:
+                        task.result()
+            except Exception as exc:
+                if self._stop_event.is_set():
+                    break
+                self._handle_connection_lost(f"Observer connection lost: {exc!s}")
+                self._emit_local_message(
+                    f"Reconnecting in {reconnect_delay:.1f}s..."
                 )
-                for task in pending:
-                    task.cancel()
-                for task in done:
-                    task.result()
-        except Exception as exc:
-            self._handle_connection_lost(f"Observer connection lost: {exc!s}")
-        finally:
-            self._connected = False
-            self._websocket = None
-            self._loop = None
+                try:
+                    await asyncio.sleep(reconnect_delay)
+                except asyncio.CancelledError:
+                    break
+                reconnect_delay = self._next_reconnect_delay(reconnect_delay)
+            finally:
+                self._connected = False
+                self._websocket = None
+        self._loop = None
 
     async def _send_loop(self, websocket) -> None:
         while not self._stop_event.is_set():
@@ -284,6 +305,9 @@ class RemoteObserverBackend(ControlRoomBackend):
             )
         self._emit(SnapshotUpdatedEvent(snapshot=self._snapshot))
         self._emit_local_message(text)
+
+    def _next_reconnect_delay(self, delay_seconds: float) -> float:
+        return min(delay_seconds * 2.0, _RECONNECT_DELAY_MAX_SECONDS)
 
     def _send_command(self, message_type: str, payload: dict[str, object]) -> None:
         if not self._connected and self._has_connected_once:

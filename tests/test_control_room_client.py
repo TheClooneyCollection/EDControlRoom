@@ -348,6 +348,58 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertIsInstance(received[0], ActivityLogAppendedEvent)
         self.assertEqual(received[0].entry.message_text, "Observer connection unavailable.")
 
+    def test_remote_backend_reconnect_delay_doubles_and_caps(self) -> None:
+        backend = RemoteObserverBackend(
+            server_target=ObserverServerTarget(
+                host="bridge.local",
+                port=8765,
+                http_base_url="http://bridge.local:8765",
+                websocket_url="ws://bridge.local:8765/session",
+            ),
+            access_token="secret-token",
+            client_name="observer-ipad",
+            initial_snapshot=_snapshot(),
+        )
+
+        self.assertEqual(backend._next_reconnect_delay(1.0), 2.0)
+        self.assertEqual(backend._next_reconnect_delay(2.0), 4.0)
+        self.assertEqual(backend._next_reconnect_delay(16.0), 30.0)
+        self.assertEqual(backend._next_reconnect_delay(30.0), 30.0)
+
+    def test_remote_backend_logs_reconnect_backoff_and_restore(self) -> None:
+        target = ObserverServerTarget(
+            host="bridge.local",
+            port=8765,
+            http_base_url="http://bridge.local:8765",
+            websocket_url="ws://bridge.local:8765/session",
+        )
+        backend = RemoteObserverBackend(
+            server_target=target,
+            access_token="secret-token",
+            client_name="observer-ipad",
+            initial_snapshot=_snapshot(),
+        )
+        received: list[object] = []
+        backend.subscribe_events(received.append)
+        backend._has_connected_once = True
+
+        backend._handle_connection_lost("Observer connection lost: ping timeout")
+        backend._emit_local_message("Reconnecting in 1.0s...")
+        backend._connected = True
+        backend.request_snapshot()
+        backend._emit_local_message("Observer connection restored.")
+
+        messages = [
+            event.entry.message_text
+            for event in received
+            if isinstance(event, ActivityLogAppendedEvent)
+        ]
+        self.assertIn("Observer connection lost: ping timeout", messages)
+        self.assertIn("Reconnecting in 1.0s...", messages)
+        self.assertIn("Observer connection restored.", messages)
+        reconnect_request = backend._outgoing_messages.get_nowait()
+        self.assertEqual(reconnect_request["message_type"], "command.request_snapshot")
+
     def test_remote_backend_enqueues_active_operator_claim(self) -> None:
         target = ObserverServerTarget(
             host="bridge.local",
