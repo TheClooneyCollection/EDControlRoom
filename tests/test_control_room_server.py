@@ -44,6 +44,7 @@ from edap.control_room.protocol.snapshot import (
     UiStateSnapshot,
 )
 from edap.control_room.server.app import (
+    BROWSER_PROBE_URL_PATH,
     CONTROL_ROOM_MESSAGE_SCHEMA,
     MESSAGE_SCHEMA_URL_PATH,
     SUPPORTED_COMMAND_MESSAGE_TYPES,
@@ -498,6 +499,26 @@ class ControlRoomServerTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.headers.get("access-control-allow-origin"), "*")
             self.assertEqual(response.json(), CONTROL_ROOM_MESSAGE_SCHEMA)
+
+    def test_browser_probe_endpoint_is_public_html(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        app = build_observer_server_app(
+            snapshot_provider=_base_snapshot,
+            command_handler=None,
+            broker=broker,
+            auth=SharedAccessTokenAuth("secret-token"),
+        )
+
+        with TestClient(app) as client:
+            response = client.get(
+                BROWSER_PROBE_URL_PATH,
+                headers={"Origin": "https://bridge.local"},
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.headers.get("access-control-allow-origin"), "*")
+            self.assertIn("Control Room Remote Browser Probe", response.text)
+            self.assertIn("command.submit_input", response.text)
+            self.assertIn("command.cancel_active_routine", response.text)
 
     def test_websocket_active_operator_failover_promotes_remaining_client(self) -> None:
         broker = InMemoryObserverSessionBroker()
