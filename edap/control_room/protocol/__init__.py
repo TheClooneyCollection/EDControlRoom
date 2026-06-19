@@ -1,4 +1,17 @@
 from .adapters import build_activity_log_entry, build_announcement_event, protocol_timestamp_now
+from .capabilities import (
+    ACCESS_TOKEN_QUERY_PARAMETER,
+    AUTHENTICATION_SCHEME_BEARER_TOKEN,
+    MINIMUM_CLIENT_VERSION,
+    REQUIRED_AUTHENTICATION_TRANSPORTS,
+    SUPPORTED_CLIENT_ROLES,
+    SUPPORTED_COMMAND_MESSAGE_TYPES,
+    SUPPORTED_EVENT_MESSAGE_TYPES,
+    SUPPORTED_MESSAGE_TYPES,
+    SUPPORTED_RESPONSE_MESSAGE_TYPES,
+    build_remote_observer_capabilities_payload,
+    validate_remote_observer_capabilities_payload,
+)
 from .events import ActivityLogAppendedEvent, AnnouncementEvent, SnapshotUpdatedEvent
 from .from_app import snapshot_from_app
 from .from_message import event_from_message, snapshot_from_message
@@ -24,8 +37,11 @@ from .snapshot import (
 __all__ = [
     "ActivityLogAppendedEvent",
     "ActivityLogEntry",
+    "ACCESS_TOKEN_QUERY_PARAMETER",
     "ActiveOperatorSnapshot",
     "AnnouncementEvent",
+    "AUTHENTICATION_SCHEME_BEARER_TOKEN",
+    "build_remote_observer_capabilities_payload",
     "build_activity_log_entry",
     "build_announcement_event",
     "CommandHistoryEntrySnapshot",
@@ -36,15 +52,23 @@ __all__ = [
     "event_from_message",
     "HaulSessionSnapshot",
     "MarketSnapshot",
+    "MINIMUM_CLIENT_VERSION",
     "PromptStateSnapshot",
+    "REQUIRED_AUTHENTICATION_TRANSPORTS",
     "ReplayBrowserSnapshot",
     "ReplayEntrySnapshot",
     "ServerStatusSnapshot",
     "SessionSnapshot",
     "SnapshotUpdatedEvent",
     "ShipSnapshot",
+    "SUPPORTED_CLIENT_ROLES",
+    "SUPPORTED_COMMAND_MESSAGE_TYPES",
+    "SUPPORTED_EVENT_MESSAGE_TYPES",
+    "SUPPORTED_MESSAGE_TYPES",
+    "SUPPORTED_RESPONSE_MESSAGE_TYPES",
     "protocol_timestamp_now",
     "UiStateSnapshot",
+    "validate_remote_observer_capabilities_payload",
     "snapshot_from_app",
     "snapshot_from_message",
 ]

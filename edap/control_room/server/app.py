@@ -19,40 +19,14 @@ from edap.control_room.server.commands import (
     ObserverSessionCommandHandler,
     command_history_entry_from_payload,
 )
+from edap.control_room.protocol import (
+    SUPPORTED_COMMAND_MESSAGE_TYPES,
+    SUPPORTED_EVENT_MESSAGE_TYPES,
+    SUPPORTED_MESSAGE_TYPES,
+    SUPPORTED_RESPONSE_MESSAGE_TYPES,
+    build_remote_observer_capabilities_payload,
+)
 from edap.control_room.server.messages import protocol_message
-
-
-SUPPORTED_COMMAND_MESSAGE_TYPES = [
-    "command.request_snapshot",
-    "command.request_active_operator",
-    "command.submit_input",
-    "command.open_replay_browser",
-    "command.close_replay_browser",
-    "command.set_replay_filter",
-    "command.move_replay_selection",
-    "command.replay_history_entry",
-    "command.toggle_replay_default_haul",
-    "command.cancel_active_routine",
-]
-
-SUPPORTED_EVENT_MESSAGE_TYPES = [
-    "event.connection_ready",
-    "event.active_operator_changed",
-    "event.activity_log_appended",
-    "event.announcement_emitted",
-]
-
-SUPPORTED_RESPONSE_MESSAGE_TYPES = [
-    "response.success",
-    "response.error",
-]
-
-SUPPORTED_MESSAGE_TYPES = [
-    "state.snapshot",
-    *SUPPORTED_EVENT_MESSAGE_TYPES,
-    *SUPPORTED_COMMAND_MESSAGE_TYPES,
-    *SUPPORTED_RESPONSE_MESSAGE_TYPES,
-]
 
 MESSAGE_SCHEMA_URL_PATH = "/schema/control_room_message.json"
 BROWSER_PROBE_URL_PATH = "/browser-probe"
@@ -105,22 +79,16 @@ def build_observer_server_app(
         snapshot = broker.current_snapshot(snapshot_provider=snapshot_provider)
         auth_description = auth.describe()
         return JSONResponse(
-            {
-                "capability_names": snapshot.server_status.capability_names,
-                "supported_client_roles": ["active_operator", "observer"],
-                "supported_message_types": list(SUPPORTED_MESSAGE_TYPES),
-                "supported_command_message_types": list(SUPPORTED_COMMAND_MESSAGE_TYPES),
-                "supported_event_message_types": list(SUPPORTED_EVENT_MESSAGE_TYPES),
-                "supported_response_message_types": list(SUPPORTED_RESPONSE_MESSAGE_TYPES),
-                "minimum_client_version": "1",
-                "server_version": snapshot.server_status.server_version,
-                "message_schema_url": MESSAGE_SCHEMA_URL_PATH,
-                "browser_probe_url": BROWSER_PROBE_URL_PATH,
-                "authentication_required": auth_description.authentication_required,
-                "authentication_scheme": auth_description.authentication_scheme,
-                "authentication_supported_transports": list(auth_description.supported_transports),
-                "authentication_query_parameter_name": auth_description.query_parameter_name,
-            }
+            build_remote_observer_capabilities_payload(
+                capability_names=snapshot.server_status.capability_names,
+                server_version=snapshot.server_status.server_version,
+                authentication_required=auth_description.authentication_required,
+                authentication_scheme=auth_description.authentication_scheme,
+                authentication_supported_transports=auth_description.supported_transports,
+                authentication_query_parameter_name=auth_description.query_parameter_name,
+                message_schema_url=MESSAGE_SCHEMA_URL_PATH,
+                browser_probe_url=BROWSER_PROBE_URL_PATH,
+            )
         )
 
     async def snapshot(request):
