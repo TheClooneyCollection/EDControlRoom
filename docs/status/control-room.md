@@ -1,5 +1,6 @@
 # Control Room Status
 ## Current
+- Remote observer clients now fail closed on dropped WebSocket sessions such as ping timeouts: the backend clears stale active-operator/routine UI state, closes replay-open display state, and refuses to enqueue more remote commands once an established session has died.
 - Cargo state now re-syncs from `Cargo.json` after `Cargo`, `MarketBuy`, and `MarketSell` events, so repeated `sell` flows stop relying on a drift-prone in-memory manifest while bootstrap still keeps `Status.json` as the startup cargo-count source.
 - Replay-browser open/close, filter updates, selected-entry execution/edit, default-haul toggling, and prompt/default Enter submissions now route through backend intent methods alongside command submission, destination dispatch, and haul-loop launch.
 - The status, haul, and market panels can now render from a backend snapshot instead of reading live app-owned state directly, which gives the existing Textual UI its first real path toward a remote backend.

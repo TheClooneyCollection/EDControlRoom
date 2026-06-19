@@ -269,6 +269,85 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(toggle_message["message_type"], "command.toggle_replay_default_haul")
         self.assertEqual(backend._outgoing_messages.get_nowait()["message_type"], "command.close_replay_browser")
 
+    def test_remote_backend_marks_snapshot_disconnected_on_connection_loss(self) -> None:
+        target = ObserverServerTarget(
+            host="bridge.local",
+            port=8765,
+            http_base_url="http://bridge.local:8765",
+            websocket_url="ws://bridge.local:8765/session",
+        )
+        snapshot = ControlRoomSnapshot(
+            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+            connected_clients=[],
+            active_operator=ActiveOperatorSnapshot(
+                session_id="observer-1",
+                client_name="observer-ipad",
+            ),
+            ship=_snapshot().ship,
+            market=_snapshot().market,
+            haul_session=_snapshot().haul_session,
+            ui_state=UiStateSnapshot(
+                routine_active=True,
+                active_routine_name="dock",
+                haul_stop_requested=False,
+                verbose_controls=False,
+                instant_mode=False,
+                activity_auto_follow_paused=False,
+                replay_browser_open=True,
+                shutdown_requested=False,
+                shutdown_finalized=False,
+            ),
+            command_history=_snapshot().command_history,
+            prompt_state=_snapshot().prompt_state,
+            replay_browser=_snapshot().replay_browser,
+            activity_log=_snapshot().activity_log,
+            server_status=_snapshot().server_status,
+        )
+        backend = RemoteObserverBackend(
+            server_target=target,
+            access_token="secret-token",
+            client_name="observer-ipad",
+            initial_snapshot=snapshot,
+        )
+        received: list[object] = []
+        backend.subscribe_events(received.append)
+        backend._has_connected_once = True
+
+        backend._handle_connection_lost("Observer connection lost: ping timeout")
+
+        current = backend.current_snapshot()
+        self.assertEqual(current.connected_clients, [])
+        self.assertIsNone(current.active_operator)
+        self.assertFalse(current.ui_state.routine_active)
+        self.assertIsNone(current.ui_state.active_routine_name)
+        self.assertFalse(current.ui_state.replay_browser_open)
+        self.assertIsInstance(received[0], SnapshotUpdatedEvent)
+        self.assertIsInstance(received[1], ActivityLogAppendedEvent)
+        self.assertEqual(received[1].entry.message_text, "Observer connection lost: ping timeout")
+
+    def test_remote_backend_rejects_commands_when_disconnected(self) -> None:
+        target = ObserverServerTarget(
+            host="bridge.local",
+            port=8765,
+            http_base_url="http://bridge.local:8765",
+            websocket_url="ws://bridge.local:8765/session",
+        )
+        backend = RemoteObserverBackend(
+            server_target=target,
+            access_token="secret-token",
+            client_name="observer-ipad",
+            initial_snapshot=_snapshot(),
+        )
+        received: list[object] = []
+        backend.subscribe_events(received.append)
+        backend._has_connected_once = True
+
+        backend.dispatch_command("dock")
+
+        self.assertTrue(backend._outgoing_messages.empty())
+        self.assertIsInstance(received[0], ActivityLogAppendedEvent)
+        self.assertEqual(received[0].entry.message_text, "Observer connection unavailable.")
+
     def test_remote_backend_enqueues_active_operator_claim(self) -> None:
         target = ObserverServerTarget(
             host="bridge.local",

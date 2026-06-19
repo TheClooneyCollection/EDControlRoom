@@ -4,6 +4,7 @@ import asyncio
 import json
 import threading
 from collections.abc import Callable
+from dataclasses import replace
 from queue import Queue
 from typing import Any
 from urllib.parse import quote
@@ -49,6 +50,8 @@ class RemoteObserverBackend(ControlRoomBackend):
         self._websocket: Any | None = None
         self._outgoing_messages: Queue[dict[str, object]] = Queue()
         self._message_counter = 0
+        self._connected = False
+        self._has_connected_once = False
 
     def start(self) -> None:
         if self._thread is not None:
@@ -58,6 +61,7 @@ class RemoteObserverBackend(ControlRoomBackend):
 
     def close(self) -> None:
         self._stop_event.set()
+        self._connected = False
         self._outgoing_messages.put({})
         loop = self._loop
         websocket = self._websocket
@@ -191,6 +195,8 @@ class RemoteObserverBackend(ControlRoomBackend):
         )
         try:
             async with websockets.connect(session_url) as websocket:
+                self._connected = True
+                self._has_connected_once = True
                 self._websocket = websocket
                 sender = asyncio.create_task(self._send_loop(websocket))
                 receiver = asyncio.create_task(self._receive_loop(websocket))
@@ -203,10 +209,9 @@ class RemoteObserverBackend(ControlRoomBackend):
                 for task in done:
                     task.result()
         except Exception as exc:
-            self._emit_local_message(
-                f"Observer connection lost: {exc!s}"
-            )
+            self._handle_connection_lost(f"Observer connection lost: {exc!s}")
         finally:
+            self._connected = False
             self._websocket = None
             self._loop = None
 
@@ -262,7 +267,28 @@ class RemoteObserverBackend(ControlRoomBackend):
     def _emit_local_message(self, text: str) -> None:
         self._emit(ActivityLogAppendedEvent(entry=build_activity_log_entry(text)))
 
+    def _handle_connection_lost(self, text: str) -> None:
+        self._connected = False
+        with self._lock:
+            stale_snapshot = self._snapshot
+            self._snapshot = replace(
+                stale_snapshot,
+                active_operator=None,
+                connected_clients=[],
+                ui_state=replace(
+                    stale_snapshot.ui_state,
+                    routine_active=False,
+                    active_routine_name=None,
+                    replay_browser_open=False,
+                ),
+            )
+        self._emit(SnapshotUpdatedEvent(snapshot=self._snapshot))
+        self._emit_local_message(text)
+
     def _send_command(self, message_type: str, payload: dict[str, object]) -> None:
+        if not self._connected and self._has_connected_once:
+            self._emit_local_message("Observer connection unavailable.")
+            return
         self._message_counter += 1
         self._outgoing_messages.put(
             {

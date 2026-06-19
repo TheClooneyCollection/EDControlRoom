@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `46`
-- Latest generated iteration number: `179`
+- Generated iteration count: `47`
+- Latest generated iteration number: `180`
 
 ## Iteration 134
 
@@ -1313,3 +1313,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-test repeated remote and local `sell`/`buy` flows against real journal timing to confirm `Cargo.json` is always updated before the follow-up command path re-checks inventory.
+
+## Iteration 180
+
+- When: `2026-06-19 15:02`
+- Area: `control-room`
+- Title: `fail-closed-on-remote-ping-timeout`
+- Source: [2026-06-19-15-02_control-room_fail-closed-on-remote-ping-timeout.md](iteration-logs/2026-06-19-15-02_control-room_fail-closed-on-remote-ping-timeout.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `fail-closed-on-remote-ping-timeout`
+- Started: `2026-06-19 15:02`
+
+## Summary
+
+- Made remote observer clients fail closed after an established session drops so stale remote routine state does not linger after ping timeouts or other WebSocket disconnects.
+
+## Changes
+
+- Added a remote-backend disconnect handler that clears stale active-operator and routine UI state, emits a snapshot refresh, and logs the disconnect reason locally.
+- Kept pre-connection command queueing intact for the initial connect/startup window, but reject new commands after a previously connected session has dropped.
+- Added client tests covering disconnect-state cleanup and command rejection after disconnect.
+
+## Follow-ups
+
+- Live-test a real ping-timeout or server-stop case to confirm the TUI recovers cleanly and the reconnect workflow remains obvious to the operator.
