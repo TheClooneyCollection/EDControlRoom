@@ -97,6 +97,7 @@ Status: complete for LAN observer mode
 - `control_room serve` now exposes `GET /health`, `GET /capabilities`, `GET /snapshot`, and `WS /session`
 - `/capabilities` now advertises explicit supported command, event, and response message types so future clients do not have to infer the remote surface
 - the checked-in Control Room message schema now matches the current websocket command and event surface instead of the pre-remote draft
+- the server now exposes the message schema directly and allows cross-origin HTTP discovery so future browser clients can fetch capabilities and schema metadata without same-origin coupling
 - the server runs through a headless host, in-memory session broker, retained session state, and shared-token auth
 - first authenticated client becomes active operator by default; disconnect failover promotes the next client
 

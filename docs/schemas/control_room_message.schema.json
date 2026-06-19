@@ -385,7 +385,8 @@
         "supported_event_message_types",
         "supported_response_message_types",
         "minimum_client_version",
-        "server_version"
+        "server_version",
+        "message_schema_url"
       ],
       "properties": {
         "capability_names": { "$ref": "#/$defs/string_list" },
@@ -398,7 +399,8 @@
         "supported_event_message_types": { "$ref": "#/$defs/string_list" },
         "supported_response_message_types": { "$ref": "#/$defs/string_list" },
         "minimum_client_version": { "type": "string", "minLength": 1 },
-        "server_version": { "type": "string", "minLength": 1 }
+        "server_version": { "type": "string", "minLength": 1 },
+        "message_schema_url": { "type": "string", "minLength": 1 }
       }
     },
     "session_snapshot": {

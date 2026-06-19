@@ -44,6 +44,8 @@ from edap.control_room.protocol.snapshot import (
     UiStateSnapshot,
 )
 from edap.control_room.server.app import (
+    CONTROL_ROOM_MESSAGE_SCHEMA,
+    MESSAGE_SCHEMA_URL_PATH,
     SUPPORTED_COMMAND_MESSAGE_TYPES,
     SUPPORTED_EVENT_MESSAGE_TYPES,
     SUPPORTED_MESSAGE_TYPES,
@@ -403,6 +405,10 @@ class ControlRoomServerTests(unittest.TestCase):
                 SUPPORTED_RESPONSE_MESSAGE_TYPES,
             )
             self.assertEqual(
+                capabilities.json()["message_schema_url"],
+                MESSAGE_SCHEMA_URL_PATH,
+            )
+            self.assertEqual(
                 capabilities.json()["authentication_query_parameter_name"],
                 "access_token",
             )
@@ -441,6 +447,57 @@ class ControlRoomServerTests(unittest.TestCase):
                     announcement = websocket.receive_json()
                 self.assertEqual(announcement["message_type"], "event.announcement_emitted")
                 self.assertEqual(announcement["payload"]["announcement_id"], "startup_greeting")
+
+    def test_http_endpoints_include_cors_headers_for_browser_clients(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        app = build_observer_server_app(
+            snapshot_provider=_base_snapshot,
+            command_handler=None,
+            broker=broker,
+            auth=SharedAccessTokenAuth("secret-token"),
+        )
+
+        with TestClient(app) as client:
+            capabilities = client.get(
+                "/capabilities",
+                headers={
+                    "Authorization": "Bearer secret-token",
+                    "Origin": "https://bridge.local",
+                },
+            )
+            self.assertEqual(capabilities.status_code, 200)
+            self.assertEqual(
+                capabilities.headers.get("access-control-allow-origin"),
+                "*",
+            )
+
+            preflight = client.options(
+                "/capabilities",
+                headers={
+                    "Origin": "https://bridge.local",
+                    "Access-Control-Request-Method": "GET",
+                },
+            )
+            self.assertEqual(preflight.status_code, 200)
+            self.assertEqual(preflight.headers.get("access-control-allow-origin"), "*")
+
+    def test_message_schema_endpoint_is_public_and_matches_loaded_schema(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        app = build_observer_server_app(
+            snapshot_provider=_base_snapshot,
+            command_handler=None,
+            broker=broker,
+            auth=SharedAccessTokenAuth("secret-token"),
+        )
+
+        with TestClient(app) as client:
+            response = client.get(
+                MESSAGE_SCHEMA_URL_PATH,
+                headers={"Origin": "https://bridge.local"},
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.headers.get("access-control-allow-origin"), "*")
+            self.assertEqual(response.json(), CONTROL_ROOM_MESSAGE_SCHEMA)
 
     def test_websocket_active_operator_failover_promotes_remaining_client(self) -> None:
         broker = InMemoryObserverSessionBroker()

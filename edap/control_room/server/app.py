@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import asdict
+from pathlib import Path
 from typing import Callable
 
 from starlette.applications import Starlette
+from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route, WebSocketRoute
@@ -50,6 +53,12 @@ SUPPORTED_MESSAGE_TYPES = [
     *SUPPORTED_COMMAND_MESSAGE_TYPES,
     *SUPPORTED_RESPONSE_MESSAGE_TYPES,
 ]
+
+MESSAGE_SCHEMA_URL_PATH = "/schema/control_room_message.json"
+_MESSAGE_SCHEMA_PATH = (
+    Path(__file__).resolve().parents[3] / "docs" / "schemas" / "control_room_message.schema.json"
+)
+CONTROL_ROOM_MESSAGE_SCHEMA = json.loads(_MESSAGE_SCHEMA_PATH.read_text(encoding="utf-8"))
 
 
 def build_observer_server_app(
@@ -100,6 +109,7 @@ def build_observer_server_app(
                 "supported_response_message_types": list(SUPPORTED_RESPONSE_MESSAGE_TYPES),
                 "minimum_client_version": "1",
                 "server_version": snapshot.server_status.server_version,
+                "message_schema_url": MESSAGE_SCHEMA_URL_PATH,
                 "authentication_required": auth_description.authentication_required,
                 "authentication_scheme": auth_description.authentication_scheme,
                 "authentication_supported_transports": list(auth_description.supported_transports),
@@ -112,6 +122,9 @@ def build_observer_server_app(
         if auth_failure is not None:
             return auth_failure
         return JSONResponse(asdict(broker.current_snapshot(snapshot_provider=snapshot_provider)))
+
+    async def message_schema(request):
+        return JSONResponse(CONTROL_ROOM_MESSAGE_SCHEMA)
 
     async def session(websocket: WebSocket) -> None:
         if not auth.is_websocket_authorized(websocket):
@@ -159,14 +172,22 @@ def build_observer_server_app(
             broker.unregister(observer.session_id)
             broker.publish_snapshot(snapshot_provider())
 
-    return Starlette(
+    app = Starlette(
         routes=[
             Route("/health", health),
             Route("/capabilities", capabilities),
             Route("/snapshot", snapshot),
+            Route(MESSAGE_SCHEMA_URL_PATH, message_schema),
             WebSocketRoute("/session", session),
         ]
     )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["GET", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
+    return app
 
 
 async def _send_session_messages(websocket: WebSocket, observer) -> None:
