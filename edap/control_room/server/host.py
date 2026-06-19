@@ -185,7 +185,7 @@ class HeadlessControlRoomHost(ControlRoomApp):
         self.submit_input(raw_input, skip_delay=skip_delay)
 
     def cancel_active_routine(self) -> None:
-        self._cancel_active_routine("Remote Ctrl-C")
+        self._handle_interrupt("Remote Ctrl-C")
         sink = self._protocol_event_sink
         if sink is not None:
             sink.publish_snapshot(self.snapshot())

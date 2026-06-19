@@ -337,6 +337,20 @@ class ControlRoomServerTests(unittest.TestCase):
             "Gold",
         )
 
+    def test_headless_host_remote_ctrl_c_cancels_prompt_flow_and_publishes_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
+            sink = _SnapshotRecorder()
+            host._protocol_event_sink = sink
+            host._start_dest_prompt("Achenar")
+
+            host.cancel_active_routine()
+
+        self.assertEqual(host._dest_prompt_destination, "")
+        self.assertIsNone(host._dest_prompt_settle_default)
+        self.assertTrue(sink.snapshots)
+        self.assertEqual(sink.snapshots[-1].prompt_state.destination_prompt_destination, "")
+
     def test_http_endpoints_and_websocket_observer_stream(self) -> None:
         broker = InMemoryObserverSessionBroker()
         app = build_observer_server_app(

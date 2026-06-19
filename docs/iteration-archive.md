@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `44`
-- Latest generated iteration number: `177`
+- Generated iteration count: `45`
+- Latest generated iteration number: `178`
 
 ## Iteration 134
 
@@ -1259,3 +1259,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-validate the dock/undock and haul completion path over a real remote session to confirm the client prompt state now clears immediately after completion.
+
+## Iteration 178
+
+- When: `2026-06-19 14:10`
+- Area: `control-room`
+- Title: `remote-prompt-interrupt`
+- Source: [2026-06-19-14-10_control-room_remote-prompt-interrupt.md](iteration-logs/2026-06-19-14-10_control-room_remote-prompt-interrupt.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `remote-prompt-interrupt`
+- Started: `2026-06-19 14:10`
+
+## Summary
+
+- Fixed the remote `Ctrl-C` gap where active-operator clients could cancel routines but could not back out of prompt flows like haul setup, haul confirm, or destination settle.
+
+## Changes
+
+- Added a shared prompt-cancellation helper in `edap/control_room/prompts.py` that clears prompt state, restores the command placeholder, and logs the cancelled flow.
+- Routed both local backend interrupts and headless server-host remote interrupts through the same app-level `_handle_interrupt()` path so prompt cancellation runs before routine cancellation.
+- Added regressions covering local prompt `Ctrl-C`, remote-client prompt `Ctrl-C` forwarding, and remote host prompt-state clearing plus snapshot publication.
+
+## Follow-ups
+
+- Live-validate remote active-operator prompt cancellation against real haul and destination flows under `serve` / `connect`.
