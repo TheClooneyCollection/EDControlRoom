@@ -45,7 +45,7 @@ class ScratchControlRoomRemoteTests(unittest.TestCase):
 
         self.assertEqual(
             url,
-            "ws://bridge.local:8765/session?client_name=browser%20probe&access_token=secret%20token",
+            "ws://bridge.local:8765/session?client_name=browser%20probe",
         )
 
     def test_session_url_rejects_missing_query_parameter_transport(self) -> None:

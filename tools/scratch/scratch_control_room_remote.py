@@ -4,13 +4,15 @@ import argparse
 import asyncio
 import json
 from typing import Any
-from urllib.parse import quote
 
 import httpx
 import websockets
 
 from edap.control_room.client.target import ObserverServerTarget, parse_observer_server_target
-from edap.control_room.protocol import validate_remote_observer_capabilities_payload
+from edap.control_room.protocol import (
+    build_remote_observer_websocket_connect_info,
+    validate_remote_observer_capabilities_payload,
+)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -93,7 +95,17 @@ async def _watch_session(
         capabilities=capabilities,
     )
     print(f"websocket: {session_url}")
-    async with websockets.connect(session_url) as websocket:
+    connect_info = build_remote_observer_websocket_connect_info(
+        websocket_url=target.websocket_url,
+        access_token=token,
+        client_name=client_name,
+        capabilities=capabilities,
+        prefer_authorization_header=True,
+    )
+    async with websockets.connect(
+        connect_info.session_url,
+        additional_headers=connect_info.additional_headers,
+    ) as websocket:
         if claim_operator:
             await websocket.send(
                 json.dumps(
@@ -152,19 +164,16 @@ def _session_url_from_capabilities(
     client_name: str,
     capabilities: dict[str, Any],
 ) -> str:
-    validation_error = validate_remote_observer_capabilities_payload(capabilities)
-    if validation_error is not None:
-        raise SystemExit(f"capabilities validation failed: {validation_error}")
-    supported_transports = capabilities.get("authentication_supported_transports", [])
-    if "query_parameter" not in supported_transports:
-        raise SystemExit(
-            "scratch websocket probe requires query-parameter authentication transport support"
-        )
-    query_parameter_name = str(capabilities["authentication_query_parameter_name"])
-    return (
-        f"{target.websocket_url}?client_name={quote(client_name)}"
-        f"&{quote(query_parameter_name)}={quote(token)}"
-    )
+    try:
+        return build_remote_observer_websocket_connect_info(
+            websocket_url=target.websocket_url,
+            access_token=token,
+            client_name=client_name,
+            capabilities=capabilities,
+            prefer_authorization_header=True,
+        ).session_url
+    except ValueError as exc:
+        raise SystemExit(f"capabilities validation failed: {exc}") from exc
 
 
 def main() -> None:

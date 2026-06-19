@@ -7,20 +7,17 @@ from collections.abc import Callable
 from dataclasses import replace
 from queue import Queue
 from typing import Any
-from urllib.parse import quote
 
 import httpx
 import websockets
 
 from edap.control_room.backend import ControlRoomBackend, ControlRoomBackendEventHandler
 from edap.control_room.protocol import (
-    ACCESS_TOKEN_QUERY_PARAMETER,
     ActivityLogEntry,
     ActivityLogAppendedEvent,
-    AUTHENTICATION_SCHEME_BEARER_TOKEN,
     AnnouncementEvent,
     ControlRoomSnapshot,
-    REQUIRED_AUTHENTICATION_TRANSPORTS,
+    RemoteObserverWebSocketConnectInfo,
     SnapshotUpdatedEvent,
     build_activity_log_entry,
     event_from_message,
@@ -45,11 +42,13 @@ class RemoteObserverBackend(ControlRoomBackend):
         access_token: str,
         client_name: str,
         initial_snapshot: ControlRoomSnapshot,
+        websocket_connect_info: RemoteObserverWebSocketConnectInfo,
     ) -> None:
         self._server_target = server_target
         self._access_token = access_token
         self._client_name = client_name
         self._snapshot = initial_snapshot
+        self._websocket_connect_info = websocket_connect_info
         self._event_handlers: list[ControlRoomBackendEventHandler] = []
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
@@ -200,14 +199,13 @@ class RemoteObserverBackend(ControlRoomBackend):
 
     async def _stream_observer_session(self) -> None:
         self._loop = asyncio.get_running_loop()
-        session_url = (
-            f"{self._server_target.websocket_url}?client_name={quote(self._client_name)}"
-            f"&access_token={quote(self._access_token)}"
-        )
         reconnect_delay = _RECONNECT_DELAY_SECONDS
         while not self._stop_event.is_set():
             try:
-                async with websockets.connect(session_url) as websocket:
+                async with websockets.connect(
+                    self._websocket_connect_info.session_url,
+                    additional_headers=self._websocket_connect_info.additional_headers,
+                ) as websocket:
                     was_reconnecting = self._has_connected_once and not self._connected
                     self._connected = True
                     self._has_connected_once = True

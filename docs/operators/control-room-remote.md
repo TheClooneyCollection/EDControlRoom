@@ -37,6 +37,8 @@ uv run python3 control_room.py connect 192.168.1.50:8765 --token 1001 --claim-op
 
 `connect` now validates the server's advertised message surface, auth transports, discovery URLs, and minimum client version during the HTTP capability probe, so obviously incompatible servers fail fast before the websocket session starts.
 
+The Textual remote client prefers websocket `Authorization: Bearer` auth when the server advertises it, and falls back to the advertised query-parameter transport only if needed. The hosted browser probe still uses the query-parameter path because browsers do not expose a way to attach arbitrary websocket auth headers.
+
 ## Operator Semantics
 
 - command input is enabled only for the `active_operator`
@@ -67,7 +69,7 @@ uv run python3 tools/scratch/scratch_control_room_remote.py 192.168.1.50:8765 --
 uv run python3 tools/scratch/scratch_control_room_remote.py 192.168.1.50:8765 --token 1001 --claim-operator --watch-seconds 10
 ```
 
-The scratch probe fetches `health`, `capabilities`, and `snapshot`, validates the advertised remote surface, then opens a websocket session using the server's advertised websocket auth query parameter and prints the message stream summary.
+The scratch probe fetches `health`, `capabilities`, and `snapshot`, validates the advertised remote surface, then opens a websocket session using the same native auth preference as `connect`: bearer header first, advertised query-parameter fallback second.
 
 `GET /capabilities` now advertises both `message_schema_url` and `browser_probe_url`, so future launchers or web shells do not need to hardcode the hosted browser entrypoint.
 
