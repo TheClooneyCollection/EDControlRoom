@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `60`
-- Latest generated iteration number: `193`
+- Generated iteration count: `61`
+- Latest generated iteration number: `194`
 
 ## Iteration 134
 
@@ -1712,3 +1712,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - If a dedicated web client is started, use the browser probe as the minimal contract check first, then replace its ad hoc rendering with a proper app without changing the server discovery/session surface casually.
+
+## Iteration 194
+
+- When: `2026-06-19 17:59`
+- Area: `control-room`
+- Title: `align-remote-capabilities-contract`
+- Source: [2026-06-19-17-59_control-room_align-remote-capabilities-contract.md](iteration-logs/2026-06-19-17-59_control-room_align-remote-capabilities-contract.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `align-remote-capabilities-contract`
+- Started: `2026-06-19 17:59`
+
+## Summary
+
+- Corrected the remaining capability-contract drift so the design note, checked-in schema, and runtime-discovered auth metadata all describe the same remote observer behavior.
+
+## Changes
+
+- Updated the protocol design note to match the real first-connected-client active-operator policy plus explicit operator claiming and disconnect failover.
+- Expanded the capabilities payload schema to include the auth metadata and schema URL fields that the server actually returns.
+- Added regression coverage so future schema edits have to keep the capabilities contract aligned with the runtime surface.
+
+## Follow-ups
+
+- If the remote surface grows again, update the runtime constants and the checked-in schema together in the same changeset instead of letting the design note drift ahead or behind implementation.

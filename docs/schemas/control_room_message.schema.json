@@ -386,7 +386,11 @@
         "supported_response_message_types",
         "minimum_client_version",
         "server_version",
-        "message_schema_url"
+        "message_schema_url",
+        "authentication_required",
+        "authentication_scheme",
+        "authentication_supported_transports",
+        "authentication_query_parameter_name"
       ],
       "properties": {
         "capability_names": { "$ref": "#/$defs/string_list" },
@@ -400,7 +404,11 @@
         "supported_response_message_types": { "$ref": "#/$defs/string_list" },
         "minimum_client_version": { "type": "string", "minLength": 1 },
         "server_version": { "type": "string", "minLength": 1 },
-        "message_schema_url": { "type": "string", "minLength": 1 }
+        "message_schema_url": { "type": "string", "minLength": 1 },
+        "authentication_required": { "type": "boolean" },
+        "authentication_scheme": { "type": "string", "minLength": 1 },
+        "authentication_supported_transports": { "$ref": "#/$defs/string_list" },
+        "authentication_query_parameter_name": { "type": ["string", "null"], "minLength": 1 }
       }
     },
     "session_snapshot": {

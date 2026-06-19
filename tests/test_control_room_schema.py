@@ -37,6 +37,29 @@ class ControlRoomMessageSchemaTests(unittest.TestCase):
             ["string", "null"],
         )
 
+    def test_capabilities_payload_schema_includes_runtime_auth_and_schema_fields(self) -> None:
+        schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+        payload = schema["$defs"]["response_capabilities_payload"]
+
+        self.assertEqual(
+            payload["required"],
+            [
+                "capability_names",
+                "supported_client_roles",
+                "supported_message_types",
+                "supported_command_message_types",
+                "supported_event_message_types",
+                "supported_response_message_types",
+                "minimum_client_version",
+                "server_version",
+                "message_schema_url",
+                "authentication_required",
+                "authentication_scheme",
+                "authentication_supported_transports",
+                "authentication_query_parameter_name",
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
