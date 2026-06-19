@@ -11,6 +11,7 @@ from edap.control_room.server.auth import SharedAccessTokenAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
 from edap.control_room.server.host import HeadlessControlRoomHost
 from edap.control_room.server.sink import FanoutControlRoomEventSink, ServerActivityLogSink
+from edap.control_room.server.state import ControlRoomServerState
 from edap.runtime import build_runtime_context, load_config_with_fallback
 
 
@@ -42,8 +43,9 @@ def serve_observer_mode(
         )
         sys.exit(1)
 
-    broker = InMemoryObserverSessionBroker()
-    runtime_host = HeadlessControlRoomHost(ctx)
+    server_state = ControlRoomServerState()
+    broker = InMemoryObserverSessionBroker(server_state=server_state)
+    runtime_host = HeadlessControlRoomHost(ctx, server_state=server_state)
     runtime_host._protocol_event_sink = FanoutControlRoomEventSink(
         [broker, ServerActivityLogSink()]
     )

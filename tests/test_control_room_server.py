@@ -479,6 +479,37 @@ class ControlRoomServerTests(unittest.TestCase):
             ["arrival", "approaching_station"],
         )
 
+    def test_server_state_retains_remote_prompt_and_replay_session_state(self) -> None:
+        server_state = ControlRoomServerState()
+        retained_snapshot = replace(
+            _base_snapshot(),
+            command_history=replace(
+                _base_snapshot().command_history,
+                draft_command="haul gold",
+                replay_filter_text="haul",
+            ),
+            prompt_state=PromptStateSnapshot(
+                destination_prompt_destination="Achenar",
+                destination_prompt_settle_default=2.0,
+                destination_prompt_raw_command="dest achenar",
+            ),
+            replay_browser=ReplayBrowserSnapshot(
+                open=True,
+                filter_text="haul",
+            ),
+            ui_state=replace(_base_snapshot().ui_state, replay_browser_open=True),
+        )
+        server_state.capture_remote_session(retained_snapshot)
+
+        merged = server_state.merge_snapshot(_base_snapshot())
+
+        self.assertEqual(merged.command_history.draft_command, "haul gold")
+        self.assertEqual(merged.command_history.replay_filter_text, "haul")
+        self.assertEqual(merged.prompt_state.destination_prompt_destination, "Achenar")
+        self.assertTrue(merged.replay_browser.open)
+        self.assertEqual(merged.replay_browser.filter_text, "haul")
+        self.assertTrue(merged.ui_state.replay_browser_open)
+
     def test_request_snapshot_command_returns_correlated_snapshot(self) -> None:
         broker = InMemoryObserverSessionBroker()
         observer = broker.register_observer("bridge-ipad")
@@ -723,6 +754,21 @@ class ControlRoomServerTests(unittest.TestCase):
             latest.replay_browser.selected_history_entry.raw_command,
             "haul gold",
         )
+
+    def test_headless_host_feeds_retained_server_session_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server_state = ControlRoomServerState()
+            host = HeadlessControlRoomHost(
+                _make_context(Path(temp_dir)),
+                server_state=server_state,
+            )
+            host._start_dest_prompt("Achenar")
+            host._publish_snapshot()
+
+            merged = server_state.merge_snapshot(_base_snapshot())
+
+        self.assertEqual(merged.prompt_state.destination_prompt_destination, "Achenar")
+        self.assertEqual(merged.prompt_state.destination_prompt_raw_command, "dest Achenar")
 
     def test_active_operator_cancel_active_routine_calls_handler(self) -> None:
         broker = InMemoryObserverSessionBroker()

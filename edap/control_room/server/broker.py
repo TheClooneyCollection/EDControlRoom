@@ -177,6 +177,7 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
         )
 
     def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
+        self._server_state.capture_remote_session(snapshot)
         resolved_snapshot = self._server_state.merge_snapshot(snapshot)
         self._latest_snapshot = resolved_snapshot
         for session in list(self._sessions.values()):
