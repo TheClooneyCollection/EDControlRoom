@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import asdict
+from dataclasses import replace
+import logging
 import unittest
 import warnings
 from pathlib import Path
@@ -45,9 +48,11 @@ from edap.control_room.server.auth import SharedAccessTokenAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
 from edap.control_room.server.commands import ObserverSessionCommandHandler
 from edap.control_room.server.host import HeadlessControlRoomHost
+from edap.control_room.server.sink import ServerActivityLogSink
 from edap.control_room.server.state import ControlRoomServerState
 from edap.control_room_state import CommandHistoryEntry
 from edap.runtime import ResolvedPath, RuntimeContext
+from edap.tts import AnnouncementId
 
 
 def _make_config(journal_dir: Path) -> AppConfig:
@@ -121,6 +126,31 @@ def _make_context(journal_dir: Path) -> RuntimeContext:
         binding_lookup=None,
         config_path=journal_dir / "config.toml",
         used_example_config_fallback=False,
+    )
+
+
+def _make_context_with_tts(journal_dir: Path) -> RuntimeContext:
+    ctx = _make_context(journal_dir)
+    return RuntimeContext(
+        config=replace(
+            ctx.config,
+            tts=replace(
+                ctx.config.tts,
+                enabled=True,
+                phrases={
+                    "arrival": "Arrived in {system_name}",
+                    "startup_greeting": "Hello {title}",
+                },
+            ),
+        ),
+        game_paths=ctx.game_paths,
+        journal=ctx.journal,
+        bindings=ctx.bindings,
+        input_controller=ctx.input_controller,
+        screen_capture=ctx.screen_capture,
+        binding_lookup=ctx.binding_lookup,
+        config_path=ctx.config_path,
+        used_example_config_fallback=ctx.used_example_config_fallback,
     )
 
 
@@ -272,6 +302,17 @@ class ControlRoomServerTests(unittest.TestCase):
 
         self.assertEqual(host._market_filter, "Gold")
 
+    def test_headless_host_emits_announcement_events_without_local_speech(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            host = HeadlessControlRoomHost(_make_context_with_tts(Path(temp_dir)))
+            sink = _SnapshotRecorder()
+            host._protocol_event_sink = sink
+
+            host._announce_tts(AnnouncementId.ARRIVAL, system_name="Sol")
+
+        self.assertEqual([event.announcement_id for event in sink.announcements], ["arrival"])
+        self.assertIsNone(host._tts._speaker)
+
     def test_headless_host_publishes_snapshot_after_remote_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
@@ -345,6 +386,8 @@ class ControlRoomServerTests(unittest.TestCase):
                     )
                 )
                 announcement = websocket.receive_json()
+                while announcement["message_type"] == "state.snapshot":
+                    announcement = websocket.receive_json()
                 self.assertEqual(announcement["message_type"], "event.announcement_emitted")
                 self.assertEqual(announcement["payload"]["announcement_id"], "startup_greeting")
 
@@ -436,6 +479,39 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(response["correlation_message_id"], "message-42")
         self.assertEqual(response["payload"]["session"]["client_role"], "active_operator")
         self.assertEqual(response["payload"]["connected_clients"][0]["client_name"], "bridge-ipad")
+
+    def test_snapshot_endpoint_prefers_broker_retained_snapshot(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        retained_snapshot = ControlRoomSnapshot(
+            session=_base_snapshot().session,
+            connected_clients=_base_snapshot().connected_clients,
+            active_operator=_base_snapshot().active_operator,
+            ship=ShipSnapshot(**{**asdict(_base_snapshot().ship), "system_name": "Achenar"}),
+            market=_base_snapshot().market,
+            haul_session=_base_snapshot().haul_session,
+            ui_state=_base_snapshot().ui_state,
+            command_history=_base_snapshot().command_history,
+            prompt_state=_base_snapshot().prompt_state,
+            replay_browser=_base_snapshot().replay_browser,
+            activity_log=_base_snapshot().activity_log,
+            server_status=_base_snapshot().server_status,
+        )
+        broker.publish_snapshot(retained_snapshot)
+        app = build_observer_server_app(
+            snapshot_provider=_base_snapshot,
+            command_handler=None,
+            broker=broker,
+            auth=SharedAccessTokenAuth("secret-token"),
+        )
+
+        with TestClient(app) as client:
+            snapshot = client.get(
+                "/snapshot",
+                headers={"Authorization": "Bearer secret-token"},
+            )
+
+        self.assertEqual(snapshot.status_code, 200)
+        self.assertEqual(snapshot.json()["ship"]["system_name"], "Achenar")
 
     def test_observer_submit_input_command_is_rejected(self) -> None:
         broker = InMemoryObserverSessionBroker()
@@ -677,3 +753,29 @@ class ControlRoomServerTests(unittest.TestCase):
 
             snapshot = client.get("/snapshot")
             self.assertEqual(snapshot.status_code, 401)
+
+    def test_server_activity_log_sink_mirrors_activity_messages(self) -> None:
+        logger = logging.getLogger("tests.control_room.server.activity")
+        records: list[str] = []
+
+        class _Handler(logging.Handler):
+            def emit(self, record: logging.LogRecord) -> None:
+                records.append(record.getMessage())
+
+        handler = _Handler()
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+        try:
+            sink = ServerActivityLogSink(logger)
+            sink.publish_activity_log(
+                ActivityLogEntry(
+                    entry_id="activity-000100",
+                    timestamp="2026-06-19T12:20:00Z",
+                    message_text="Command accepted.",
+                    severity=None,
+                )
+            )
+        finally:
+            logger.removeHandler(handler)
+
+        self.assertEqual(records, ["Command accepted."])
