@@ -73,7 +73,7 @@ For a browser-native smoke check against the same LAN server, open:
 http://<server-host>:8765/browser-probe
 ```
 
-The served page uses `fetch()` plus browser `WebSocket` directly against `GET /health`, `GET /capabilities`, `GET /snapshot`, `GET /schema/control_room_message.json`, and `WS /session`, and it can claim operator, submit command input, request snapshots, cancel active routines, and exercise replay-browser commands. It also mirrors the TUI client’s reconnect/backoff behavior so stale browser state heals from a fresh snapshot after transient disconnects.
+The served page uses `fetch()` plus browser `WebSocket` directly against `GET /health`, `GET /capabilities`, `GET /snapshot`, `GET /schema/control_room_message.json`, and `WS /session`, and it can claim operator, submit command input, request snapshots, cancel active routines, and exercise replay-browser commands. It also mirrors the TUI client’s reconnect/backoff behavior so stale browser state heals from a fresh snapshot after transient disconnects, and it disables mutating controls while the browser session is only an observer.
 
 If you want to open the same probe from disk instead of through the server, the source file still lives at:
 
