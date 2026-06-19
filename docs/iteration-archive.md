@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `51`
-- Latest generated iteration number: `184`
+- Generated iteration count: `52`
+- Latest generated iteration number: `185`
 
 ## Iteration 134
 
@@ -1455,3 +1455,33 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Move prompt mutation itself onto explicit server-owned state transitions so the headless server path no longer depends on app-local prompt orchestration.
 - Decide whether replay-browser navigation should grow an explicit server-native selection command model or remain a thin mirror of local widget navigation for now.
+
+## Iteration 185
+
+- When: `2026-06-19 17:14`
+- Area: `control-room`
+- Title: `state-drive-destination-prompt`
+- Source: [2026-06-19-17-14_control-room_state-drive-destination-prompt.md](iteration-logs/2026-06-19-17-14_control-room_state-drive-destination-prompt.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `state-drive-destination-prompt`
+- Started: `2026-06-19 17:14`
+
+## Summary
+
+- Moved destination-prompt submission off the backend’s inline field-mutation path and into explicit `PromptState` helpers, which gives the remote architecture a cleaner prompt-state seam ahead of the larger haul wizard migration.
+
+## Changes
+
+- Added `begin_destination_prompt`, `resolve_destination_prompt_submission`, and `clear_destination_prompt` helpers in `edap/control_room/prompts.py` that operate directly on `PromptState`.
+- Updated `start_dest_prompt` and prompt cancellation to reuse those state helpers, so destination-prompt state reset/dispatch logic is no longer open-coded in multiple places.
+- Changed `LocalControlRoomBackend.submit_input()` to resolve destination-prompt submissions through the new prompt-state helper and dispatch the resulting `DestinationPromptDispatch` instead of editing destination prompt fields inline.
+- Added direct prompt-state tests for successful and invalid destination-prompt submission paths.
+- Verified with `uv run python3 -m unittest discover -s tests` (`481 tests in 0.211s`).
+
+## Follow-ups
+
+- Move the multi-step haul prompt onto the same explicit prompt-state transition model so remote prompt orchestration no longer depends on headless-app-local branching for wizard progression.
+- Decide whether replay navigation should get explicit server-native commands or remain a widget-mirrored client concern after the haul prompt work lands.

@@ -5,6 +5,7 @@ from typing import Any, Protocol, TypeAlias
 
 from rich.markup import escape
 
+from edap.control_room import prompts as _prompts
 from edap.control_room import replay as _replay
 from edap.control_room.protocol import (
     ActivityLogAppendedEvent,
@@ -82,6 +83,7 @@ class ControlRoomBackend(ControlRoomEventSink, Protocol):
 class LocalBackendHost(Protocol):
     _facade: Any
     _config: Any
+    _prompt_state: Any
     _saved_state: Any
     _protocol_external_event_sink: ControlRoomEventSink | None
     _resume_entries: list[Any]
@@ -175,27 +177,26 @@ class LocalControlRoomBackend(ControlRoomEventSink):
             self.handle_haul_confirm_prompt(raw)
             return
         if self._host._dest_prompt_destination:
-            destination = self._host._dest_prompt_destination
-            parsed = self._host._parse_optional_nonnegative_float(
+            dispatch = _prompts.resolve_destination_prompt_submission(
+                self._host._prompt_state,
                 raw,
-                default=self._host._dest_prompt_settle_default or 0.0,
-                label="Galaxy-map settle seconds",
+                parse_optional_nonnegative_float=lambda value, default, label: (
+                    self._host._parse_optional_nonnegative_float(
+                        value,
+                        default=default,
+                        label=label,
+                    )
+                ),
             )
-            if parsed is None:
+            if dispatch is None:
                 return
-            self._host._dest_prompt_destination = ""
-            self._host._dest_prompt_settle_default = None
-            raw_command = self._host._dest_prompt_raw_command
-            skip_delay = self._host._dest_prompt_skip_delay
-            self._host._dest_prompt_raw_command = ""
-            self._host._dest_prompt_skip_delay = False
             command_input = self._host.query_one("#cmd")
             command_input.placeholder = self._host._default_command_placeholder
             self.dispatch_destination(
-                destination,
-                parsed,
-                skip_delay=skip_delay,
-                raw_command=raw_command,
+                dispatch.destination,
+                dispatch.galaxy_map_settle,
+                skip_delay=dispatch.skip_delay,
+                raw_command=dispatch.raw_command,
             )
             return
         self.dispatch_command(raw)
