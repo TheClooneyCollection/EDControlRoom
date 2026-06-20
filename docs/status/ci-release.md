@@ -1,7 +1,7 @@
 # CI and Release Status
 ## Current
 - The Discord workflow-failure notifier is now split into a checked-in Python script plus a thin workflow wrapper, so the same payload/fetch/post path can be dry-run locally against saved jobs JSON and exercised in CI without keeping the logic trapped inside inline workflow shell.
-- `main` is now prepared for `v1.12.0`, covering the Control Room observer client/server split plus the follow-up remote session recovery and fail-closed fixes.
+- `main` is now prepared for `v1.13.0`, covering the browser-facing remote observer workflow, replay/operator-control follow-ups, haul/runtime fixes, and the extracted Discord workflow-failure notifier.
 - Stable tags have been backfilled across the post-`v1.7.3` milestones as `v1.8.0`, `v1.9.0`, and `v1.10.0`; only the latest milestone on `main` carries a fresh release-prep version bump.
 - `main` is now the rolling-update branch, and stable features or releases are identified with tags instead of `dev -> main` promotion.
 - The legacy `.github/workflows/promote-dev-to-main.yml` automation has been removed; release/process automation now centers on `main`, semantic version tags, and manual GitHub release publishing.
