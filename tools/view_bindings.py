@@ -2,7 +2,7 @@
 
 Renders the curated ``REQUIRED_BINDINGS`` scope as colored, grouped panels via
 ``rich``. Mirrors the ``--config`` / ``--bindings-file`` surface of
-``check_bindings.py`` so users can switch between the JSON output and the
+``tools/check_bindings.py`` so users can switch between the JSON output and the
 glanceable layout without learning new flags.
 """
 

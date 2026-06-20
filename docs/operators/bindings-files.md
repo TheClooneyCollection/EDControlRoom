@@ -1,6 +1,6 @@
 # Bindings Files Utility
 
-`bindings_files.py` is a small operator utility for inspecting, backing up, restoring, and replacing Elite Dangerous `.binds` files.
+`tools/bindings_files.py` is a small operator utility for inspecting, backing up, restoring, and replacing Elite Dangerous `.binds` files.
 
 It works against the currently detected active bindings file unless you pass `--bindings-file`.
 
@@ -9,28 +9,28 @@ It works against the currently detected active bindings file unless you pass `--
 List detected `.binds` files in the live Frontier bindings folder:
 
 ```sh
-uv run python3 bindings_files.py
+uv run python3 tools/bindings_files.py
 ```
 
 Back up the newest detected file into the repo-local gitignored backup folder:
 
 ```sh
-uv run python3 bindings_files.py backup
+uv run python3 tools/bindings_files.py backup
 ```
 
 Back up a specific detected file by number or filename:
 
 ```sh
-uv run python3 bindings_files.py backup 2
-uv run python3 bindings_files.py backup Custom.4.2.binds
+uv run python3 tools/bindings_files.py backup 2
+uv run python3 tools/bindings_files.py backup Custom.4.2.binds
 ```
 
 Restore a backup onto the active bindings file:
 
 ```sh
-uv run python3 bindings_files.py restore
-uv run python3 bindings_files.py restore 3
-uv run python3 bindings_files.py restore Custom.4.2-2026-06-09.binds
+uv run python3 tools/bindings_files.py restore
+uv run python3 tools/bindings_files.py restore 3
+uv run python3 tools/bindings_files.py restore Custom.4.2-2026-06-09.binds
 ```
 
 Notes:
@@ -41,9 +41,9 @@ Notes:
 Apply a shipped default preset over the active custom bindings file:
 
 ```sh
-uv run python3 bindings_files.py apply-default
-uv run python3 bindings_files.py apply-default 1
-uv run python3 bindings_files.py apply-default ControlPad.binds
+uv run python3 tools/bindings_files.py apply-default
+uv run python3 tools/bindings_files.py apply-default 1
+uv run python3 tools/bindings_files.py apply-default ControlPad.binds
 ```
 
 Notes:

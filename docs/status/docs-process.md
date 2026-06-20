@@ -1,5 +1,6 @@
 # Docs Process Status
 ## Current
+- Only `control_room.py` now stays at the repo root; auxiliary operator and validation CLIs live under `tools/`, while `tools/scratch/` remains the exploratory bucket.
 - `AGENTS.md` now treats `docs/iteration-archive.md` as fully generated during rebases and merges: if it conflicts, regenerate it with `uv run python3 tools/iteration_logs.py render-archive` and stage the regenerated file instead of hand-resolving conflict markers.
 - `AGENTS.md` now treats `0.3s` as the full-suite runtime budget for `uv run python3 -m unittest discover -s tests`; only slower runs need the follow-up timing report.
 - `AGENTS.md` now requires `docs/iteration-archive.md` refresh whenever iteration logs change before commit/push/PR, and delegated-agent slices must be committed on their own branch before a parent push or PR depends on them.

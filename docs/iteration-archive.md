@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `77`
-- Latest generated iteration number: `210`
+- Generated iteration count: `78`
+- Latest generated iteration number: `211`
 
 ## Iteration 134
 
@@ -2176,3 +2176,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Keep notifier validation centered on the tested Python entrypoint and ad hoc saved jobs JSON files instead of a checked-in sample payload unless a stable operator-facing fixture is needed later.
+
+## Iteration 211
+
+- When: `2026-06-20 11:30`
+- Area: `docs-process`
+- Title: `move-auxiliary-clis-into-tools`
+- Source: [2026-06-20-11-30_docs-process_move-auxiliary-clis-into-tools.md](iteration-logs/2026-06-20-11-30_docs-process_move-auxiliary-clis-into-tools.md)
+
+# Iteration Log
+
+- Area: `docs-process`
+- Title: `move-auxiliary-clis-into-tools`
+- Started: `2026-06-20 11:30`
+
+## Summary
+
+- Moved every supported root-level Python CLI except `control_room.py` into `tools/` so the repo root now presents one obvious primary entrypoint while auxiliary operator and diagnostics scripts live in one utility namespace.
+
+## Changes
+
+- Moved `bindings_files.py`, `check_bindings.py`, `diagnostics.py`, `run_routine.py`, `set_binding.py`, `ship_controls.py`, `speak.py`, `view_bindings.py`, and `watch_journal.py` into `tools/`.
+- Added `tools/__init__.py` so the CLI unit tests can import the relocated modules directly.
+- Updated maintained README and operator/diagnostics docs to use `tools/...` command paths and recorded the new layout in `docs/status/docs-process.md`.
+- Updated CLI unit tests and moved-script self-references to target the `tools.*` modules and executable paths.
+
+## Follow-ups
+
+- Keep future auxiliary CLIs under `tools/` unless there is a strong reason they belong in the runtime package or scratch space, so `control_room.py` remains the only root Python entrypoint.

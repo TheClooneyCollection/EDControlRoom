@@ -9,7 +9,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
-import bindings_files
+from tools import bindings_files
 from edap.bindings_inventory import BindingsFileEntry
 
 
@@ -61,13 +61,13 @@ class BindingsFilesCliTests(unittest.TestCase):
             detected.parent.mkdir(parents=True)
             detected.write_text(CUSTOM_XML, encoding="utf-8")
 
-            with patch("bindings_files._resolve_bindings_file", return_value=detected), patch(
+            with patch("tools.bindings_files._resolve_bindings_file", return_value=detected), patch(
                 "sys.stdout", new_callable=io.StringIO
             ) as stdout, patch("sys.stderr", new_callable=io.StringIO):
                 with patch(
                     "sys.argv",
                     [
-                        "bindings_files.py",
+                        "tools/bindings_files.py",
                         "--bindings-file",
                         str(detected),
                         "backup",
@@ -96,13 +96,13 @@ class BindingsFilesCliTests(unittest.TestCase):
             restored = backup_dir / "Custom.4.2-2026-06-09.binds"
             restored.write_text(BACKUP_XML, encoding="utf-8")
 
-            with patch("bindings_files._resolve_bindings_file", return_value=detected), patch(
+            with patch("tools.bindings_files._resolve_bindings_file", return_value=detected), patch(
                 "sys.stdout", new_callable=io.StringIO
             ) as stdout, patch("sys.stderr", new_callable=io.StringIO):
                 with patch(
                     "sys.argv",
                     [
-                        "bindings_files.py",
+                        "tools/bindings_files.py",
                         "--bindings-file",
                         str(detected),
                         "restore",
@@ -135,8 +135,8 @@ class BindingsFilesCliTests(unittest.TestCase):
             first.write_text(CUSTOM_XML, encoding="utf-8")
             second.write_text(BACKUP_XML, encoding="utf-8")
 
-            with patch("bindings_files._resolve_bindings_file", return_value=detected), patch(
-                "bindings_files._choose_entry_interactively",
+            with patch("tools.bindings_files._resolve_bindings_file", return_value=detected), patch(
+                "tools.bindings_files._choose_entry_interactively",
                 side_effect=lambda entries, *_args, **_kwargs: next(
                     entry for entry in entries if entry.name == "B.binds"
                 ),
@@ -146,7 +146,7 @@ class BindingsFilesCliTests(unittest.TestCase):
                 with patch(
                     "sys.argv",
                     [
-                        "bindings_files.py",
+                        "tools/bindings_files.py",
                         "--bindings-file",
                         str(detected),
                         "restore",
@@ -176,9 +176,9 @@ class BindingsFilesCliTests(unittest.TestCase):
         fake_stdout = _FakeTTY()
 
         with patch("sys.stdin", fake_stdin), patch("sys.stdout", fake_stdout), patch(
-            "bindings_files.os.name", "posix"
-        ), patch("bindings_files.termios", object()), patch("bindings_files.tty", object()), patch(
-            "bindings_files._read_key",
+            "tools.bindings_files.os.name", "posix"
+        ), patch("tools.bindings_files.termios", object()), patch("tools.bindings_files.tty", object()), patch(
+            "tools.bindings_files._read_key",
             side_effect=["b", "\n"],
         ):
             selected = bindings_files._choose_entry_interactively(entries, label="backup file")
@@ -201,9 +201,9 @@ class BindingsFilesCliTests(unittest.TestCase):
         fake_stdout = _FakeTTY()
 
         with patch("sys.stdin", fake_stdin), patch("sys.stdout", fake_stdout), patch(
-            "bindings_files.os.name", "posix"
-        ), patch("bindings_files.termios", object()), patch("bindings_files.tty", object()), patch(
-            "bindings_files._read_key",
+            "tools.bindings_files.os.name", "posix"
+        ), patch("tools.bindings_files.termios", object()), patch("tools.bindings_files.tty", object()), patch(
+            "tools.bindings_files._read_key",
             side_effect=["\x03"],
         ):
             with self.assertRaisesRegex(ValueError, "selection cancelled"):
@@ -230,8 +230,8 @@ class BindingsFilesCliTests(unittest.TestCase):
             detected.write_text(CUSTOM_XML, encoding="utf-8")
             preset.write_text(PRESET_XML, encoding="utf-8")
 
-            with patch("bindings_files._resolve_bindings_file", return_value=detected), patch(
-                "bindings_files._confirm_overwrite",
+            with patch("tools.bindings_files._resolve_bindings_file", return_value=detected), patch(
+                "tools.bindings_files._confirm_overwrite",
                 return_value=True,
             ), patch("sys.stdout", new_callable=io.StringIO) as stdout, patch(
                 "sys.stderr", new_callable=io.StringIO
@@ -239,7 +239,7 @@ class BindingsFilesCliTests(unittest.TestCase):
                 with patch(
                     "sys.argv",
                     [
-                        "bindings_files.py",
+                        "tools/bindings_files.py",
                         "--bindings-file",
                         str(detected),
                         "apply-default",
@@ -283,8 +283,8 @@ class BindingsFilesCliTests(unittest.TestCase):
             detected.write_text(CUSTOM_XML, encoding="utf-8")
             preset.write_text(PRESET_XML, encoding="utf-8")
 
-            with patch("bindings_files._resolve_bindings_file", return_value=detected), patch(
-                "bindings_files._confirm_overwrite",
+            with patch("tools.bindings_files._resolve_bindings_file", return_value=detected), patch(
+                "tools.bindings_files._confirm_overwrite",
                 return_value=True,
             ), patch("sys.stdout", new_callable=io.StringIO) as stdout, patch(
                 "sys.stderr", new_callable=io.StringIO
@@ -292,7 +292,7 @@ class BindingsFilesCliTests(unittest.TestCase):
                 with patch(
                     "sys.argv",
                     [
-                        "bindings_files.py",
+                        "tools/bindings_files.py",
                         "--bindings-file",
                         str(detected),
                         "--json",
@@ -331,8 +331,8 @@ class BindingsFilesCliTests(unittest.TestCase):
             detected.write_text(CUSTOM_XML, encoding="utf-8")
             preset.write_text(PRESET_XML, encoding="utf-8")
 
-            with patch("bindings_files._resolve_bindings_file", return_value=detected), patch(
-                "bindings_files._confirm_overwrite",
+            with patch("tools.bindings_files._resolve_bindings_file", return_value=detected), patch(
+                "tools.bindings_files._confirm_overwrite",
                 return_value=False,
             ), patch("sys.stdout", new_callable=io.StringIO) as stdout, patch(
                 "sys.stderr", new_callable=io.StringIO
@@ -340,7 +340,7 @@ class BindingsFilesCliTests(unittest.TestCase):
                 with patch(
                     "sys.argv",
                     [
-                        "bindings_files.py",
+                        "tools/bindings_files.py",
                         "--bindings-file",
                         str(detected),
                         "apply-default",

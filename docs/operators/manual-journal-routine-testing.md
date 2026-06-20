@@ -8,31 +8,31 @@ This is a validation harness document, not the main day-to-day operator path. Fo
 - `auto_zero_throttle_on_arrival` dispatches `SetSpeedZero` when a `SupercruiseExit` event appears
 - `jump` dispatches `HyperSuperCombination`, waits for jump start, waits to re-enter `in_supercruise`, then dispatches `SetSpeedZero`
 - `dock` can wait for `SupercruiseExit`, send the docking-request menu sequence, wait for docking events, and optionally trigger the station refuel menu after `Docked`
-- `watch_journal.py` is the quickest low-level probe for confirming that live journal events are arriving as expected
-- `run_routine.py` is the supported manual harness for running those paths against a real Elite session
+- `tools/watch_journal.py` is the quickest low-level probe for confirming that live journal events are arriving as expected
+- `tools/run_routine.py` is the supported manual harness for running those paths against a real Elite session
 
 ## Current Commands
 
 Run:
 
 ```sh
-uv run python3 run_routine.py --routine auto_zero_throttle_on_arrival
-uv run python3 run_routine.py --routine jump
-uv run python3 run_routine.py --routine dock
+uv run python3 tools/run_routine.py --routine auto_zero_throttle_on_arrival
+uv run python3 tools/run_routine.py --routine jump
+uv run python3 tools/run_routine.py --routine dock
 ```
 
 Useful variants:
 
 ```sh
-uv run python3 run_routine.py --routine auto_zero_throttle_on_arrival --delay-seconds 5
-uv run python3 run_routine.py --routine jump --delay-seconds 5
-uv run python3 run_routine.py --routine jump --max-retries 3 --start-timeout-seconds 20 --completion-timeout-seconds 30
-uv run python3 run_routine.py --routine dock --delay-seconds 5
-uv run python3 run_routine.py --routine dock --delay-seconds 5 --auto-refuel --log-events
-uv run python3 run_routine.py --routine dock --skip-supercruise-exit --delay-seconds 5
-uv run python3 run_routine.py --routine auto_zero_throttle_on_arrival --poll-interval-seconds 0.5
-uv run python3 run_routine.py --routine auto_zero_throttle_on_arrival --hold-seconds 0.1
-uv run python3 run_routine.py --routine auto_zero_throttle_on_arrival --repeat 2
+uv run python3 tools/run_routine.py --routine auto_zero_throttle_on_arrival --delay-seconds 5
+uv run python3 tools/run_routine.py --routine jump --delay-seconds 5
+uv run python3 tools/run_routine.py --routine jump --max-retries 3 --start-timeout-seconds 20 --completion-timeout-seconds 30
+uv run python3 tools/run_routine.py --routine dock --delay-seconds 5
+uv run python3 tools/run_routine.py --routine dock --delay-seconds 5 --auto-refuel --log-events
+uv run python3 tools/run_routine.py --routine dock --skip-supercruise-exit --delay-seconds 5
+uv run python3 tools/run_routine.py --routine auto_zero_throttle_on_arrival --poll-interval-seconds 0.5
+uv run python3 tools/run_routine.py --routine auto_zero_throttle_on_arrival --hold-seconds 0.1
+uv run python3 tools/run_routine.py --routine auto_zero_throttle_on_arrival --repeat 2
 ```
 
 ## What This Proves
@@ -57,20 +57,20 @@ Before running the manual test:
 If you are unsure about the runtime prerequisites, verify them first with:
 
 ```sh
-uv run python3 watch_journal.py
-uv run python3 diagnostics.py
-uv run python3 diagnostics.py --send-test-key --test-key space --delay-seconds 3
-uv run python3 check_bindings.py
-uv run python3 ship_controls.py --action SetSpeedZero --delay-seconds 3
+uv run python3 tools/watch_journal.py
+uv run python3 tools/diagnostics.py
+uv run python3 tools/diagnostics.py --send-test-key --test-key space --delay-seconds 3
+uv run python3 tools/check_bindings.py
+uv run python3 tools/ship_controls.py --action SetSpeedZero --delay-seconds 3
 ```
 
-`watch_journal.py` prints only a small filtered event set to stdout and writes every raw event to `artifacts/journal-watcher.log`, which is useful when you want to confirm event sequences before testing a routine.
+`tools/watch_journal.py` prints only a small filtered event set to stdout and writes every raw event to `artifacts/journal-watcher.log`, which is useful when you want to confirm event sequences before testing a routine.
 
 The distinction matters:
 
-- `diagnostics.py --send-test-key` proves only that the active platform backend can inject a literal keypress.
-- `check_bindings.py` proves that required Elite actions resolve from the current `.binds` file.
-- `ship_controls.py --action SetSpeedZero` proves the combined path: binding lookup plus live input dispatch for that Elite action.
+- `tools/diagnostics.py --send-test-key` proves only that the active platform backend can inject a literal keypress.
+- `tools/check_bindings.py` proves that required Elite actions resolve from the current `.binds` file.
+- `tools/ship_controls.py --action SetSpeedZero` proves the combined path: binding lookup plus live input dispatch for that Elite action.
 
 ## Manual Test Flow: Arrival Throttle Zero
 
@@ -80,7 +80,7 @@ Recommended flow:
 2. Run:
 
 ```sh
-uv run python3 run_routine.py --routine auto_zero_throttle_on_arrival --delay-seconds 5
+uv run python3 tools/run_routine.py --routine auto_zero_throttle_on_arrival --delay-seconds 5
 ```
 
 3. During the countdown, focus the Elite window.
@@ -96,7 +96,7 @@ Recommended flow:
 2. Run:
 
 ```sh
-uv run python3 run_routine.py --routine jump --delay-seconds 5
+uv run python3 tools/run_routine.py --routine jump --delay-seconds 5
 ```
 
 3. During the countdown, focus the Elite window.
@@ -112,7 +112,7 @@ Recommended flow:
 2. Run:
 
 ```sh
-uv run python3 run_routine.py --routine dock --delay-seconds 5 --log-events
+uv run python3 tools/run_routine.py --routine dock --delay-seconds 5 --log-events
 ```
 
 3. During the countdown, focus the Elite window.
@@ -127,13 +127,13 @@ uv run python3 run_routine.py --routine dock --delay-seconds 5 --log-events
 For a manual trigger while already outside the station in local space, use:
 
 ```sh
-uv run python3 run_routine.py --routine dock --skip-supercruise-exit --delay-seconds 5 --log-events
+uv run python3 tools/run_routine.py --routine dock --skip-supercruise-exit --delay-seconds 5 --log-events
 ```
 
 To chain the in-station refuel menu automatically after docking:
 
 ```sh
-uv run python3 run_routine.py --routine dock --delay-seconds 5 --auto-refuel --log-events
+uv run python3 tools/run_routine.py --routine dock --delay-seconds 5 --auto-refuel --log-events
 ```
 
 ## Expected Output
@@ -189,7 +189,7 @@ For `dock`, the key part of the result is that:
 - `--log-events`
   Logs every watched journal event during a routine run.
 - `--event-log-path artifacts/run-routine-events.log`
-  Controls where `run_routine.py --log-events` writes raw event output.
+  Controls where `tools/run_routine.py --log-events` writes raw event output.
 - `--skip-supercruise-exit`
   Starts `dock` immediately instead of waiting for `SupercruiseExit`.
 - `--auto-refuel`
@@ -205,7 +205,7 @@ For `dock`, the key part of the result is that:
 - The game reacts inconsistently, which may justify trying a larger dwell or repeat count before changing routine logic.
 - `jump` times out before `StartJump`, which points at a bad bind, bad focus, or a game state that was not actually ready to jump.
 - `jump` sees `StartJump` but never reaches `FSDJump` / `SupercruiseEntry` before timeout, which points at an incomplete or interrupted jump sequence rather than a journal-resolution failure.
-- If a routine behaves unexpectedly, compare the concise terminal output with the raw event log from `watch_journal.py` or `run_routine.py --log-events`.
+- If a routine behaves unexpectedly, compare the concise terminal output with the raw event log from `tools/watch_journal.py` or `tools/run_routine.py --log-events`.
 
 ## Follow-On Work
 

@@ -96,8 +96,8 @@ Use these checks only when you need to troubleshoot input, journal detection, or
 With `uv`:
 
 ```sh
-uv run python3 watch_journal.py
-uv run python3 ship_controls.py --action SetSpeedZero --delay-seconds 3
+uv run python3 tools/watch_journal.py
+uv run python3 tools/ship_controls.py --action SetSpeedZero --delay-seconds 3
 ```
 
 If your Windows shell does not provide `python3`, use `uv run python ...` instead.
@@ -105,21 +105,21 @@ If your Windows shell does not provide `python3`, use `uv run python ...` instea
 Without `uv`:
 
 ```sh
-python watch_journal.py
-python ship_controls.py --action SetSpeedZero --delay-seconds 3
+python tools/watch_journal.py
+python tools/ship_controls.py --action SetSpeedZero --delay-seconds 3
 ```
 
-- `watch_journal.py` tails the Elite journal and prints events as they arrive. Run it only while the game is open, otherwise nothing new will appear.
-- `ship_controls.py --action SetSpeedZero --delay-seconds 3` waits three seconds, then presses the key currently bound to Elite's `SetSpeedZero` action. Expect your throttle-zero keybind to fire in game.
+- `tools/watch_journal.py` tails the Elite journal and prints events as they arrive. Run it only while the game is open, otherwise nothing new will appear.
+- `tools/ship_controls.py --action SetSpeedZero --delay-seconds 3` waits three seconds, then presses the key currently bound to Elite's `SetSpeedZero` action. Expect your throttle-zero keybind to fire in game.
 
 If journal or bindings auto-detection still looks wrong after that, add explicit `paths.journal_dir` and `paths.bindings_file` overrides in `config.toml`.
 
 ## Routine Harness
 
 ```sh
-uv run python3 run_routine.py --routine jump --delay-seconds 5
-uv run python3 run_routine.py --routine dock --delay-seconds 5 --log-events
-uv run python3 run_routine.py --routine haul_loop
+uv run python3 tools/run_routine.py --routine jump --delay-seconds 5
+uv run python3 tools/run_routine.py --routine dock --delay-seconds 5 --log-events
+uv run python3 tools/run_routine.py --routine haul_loop
 ```
 
 `haul_loop` is the current two-way haul routine and matches the Control Room haul path.
@@ -127,14 +127,14 @@ uv run python3 run_routine.py --routine haul_loop
 Windows equivalents:
 
 ```sh
-uv run python run_routine.py --routine jump --delay-seconds 5
-python run_routine.py --routine jump --delay-seconds 5
+uv run python tools/run_routine.py --routine jump --delay-seconds 5
+python tools/run_routine.py --routine jump --delay-seconds 5
 ```
 
 Linux equivalent:
 
 ```sh
-uv run python3 run_routine.py --routine jump --delay-seconds 5
+uv run python3 tools/run_routine.py --routine jump --delay-seconds 5
 ```
 
 For current supported manual validation flows, see [../operators/manual-journal-routine-testing.md](../operators/manual-journal-routine-testing.md).

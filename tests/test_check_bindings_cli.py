@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import check_bindings
+from tools import check_bindings
 from edap.binding_lookup import build_binding_lookup
 from edap.bindings import Binding
 from edap.config import load_config
@@ -40,22 +40,22 @@ class CheckBindingsCliTests(unittest.TestCase):
             actions=["SetSpeedZero", "UI_Back", "PrimaryFire", "MouseReset"],
         )
 
-        with patch("check_bindings.load_config_with_fallback", return_value=loaded), patch(
-            "check_bindings.build_runtime_context",
+        with patch("tools.check_bindings.load_config_with_fallback", return_value=loaded), patch(
+            "tools.check_bindings.build_runtime_context",
             return_value=runtime,
-        ), patch("check_bindings.load_binding_lookup", return_value=lookup), patch(
-            "check_bindings.REQUIRED_BINDINGS",
+        ), patch("tools.check_bindings.load_binding_lookup", return_value=lookup), patch(
+            "tools.check_bindings.REQUIRED_BINDINGS",
             ["SetSpeedZero", "UI_Back", "PrimaryFire", "MouseReset"],
         ), patch(
-            "check_bindings.AUTOPILOT_REQUIRED_BINDINGS",
+            "tools.check_bindings.AUTOPILOT_REQUIRED_BINDINGS",
             ["SetSpeedZero", "UI_Back"],
         ), patch(
-            "check_bindings.AUTOPILOT_OPTIONAL_BINDINGS",
+            "tools.check_bindings.AUTOPILOT_OPTIONAL_BINDINGS",
             ["PrimaryFire", "MouseReset"],
         ), patch("sys.stdout", new_callable=io.StringIO) as stdout, patch(
             "sys.stderr", new_callable=io.StringIO
         ):
-            with patch("sys.argv", ["check_bindings.py", "--json"]):
+            with patch("sys.argv", ["tools/check_bindings.py", "--json"]):
                 exit_code = check_bindings.main()
 
         self.assertEqual(exit_code, 1)
@@ -95,22 +95,22 @@ class CheckBindingsCliTests(unittest.TestCase):
             actions=["SetSpeedZero", "UI_Back"],
         )
 
-        with patch("check_bindings.load_config_with_fallback", return_value=loaded), patch(
-            "check_bindings.build_runtime_context",
+        with patch("tools.check_bindings.load_config_with_fallback", return_value=loaded), patch(
+            "tools.check_bindings.build_runtime_context",
             return_value=runtime,
-        ), patch("check_bindings.load_binding_lookup", return_value=lookup), patch(
-            "check_bindings.REQUIRED_BINDINGS",
+        ), patch("tools.check_bindings.load_binding_lookup", return_value=lookup), patch(
+            "tools.check_bindings.REQUIRED_BINDINGS",
             ["SetSpeedZero", "UI_Back"],
         ), patch(
-            "check_bindings.AUTOPILOT_REQUIRED_BINDINGS",
+            "tools.check_bindings.AUTOPILOT_REQUIRED_BINDINGS",
             ["SetSpeedZero", "UI_Back"],
         ), patch(
-            "check_bindings.AUTOPILOT_OPTIONAL_BINDINGS",
+            "tools.check_bindings.AUTOPILOT_OPTIONAL_BINDINGS",
             [],
         ), patch("sys.stdout", new_callable=io.StringIO) as stdout, patch(
             "sys.stderr", new_callable=io.StringIO
         ):
-            with patch("sys.argv", ["check_bindings.py"]):
+            with patch("sys.argv", ["tools/check_bindings.py"]):
                 exit_code = check_bindings.main()
 
         self.assertEqual(exit_code, 1)
@@ -139,13 +139,13 @@ class CheckBindingsCliTests(unittest.TestCase):
             },
         )()
 
-        with patch("check_bindings.load_config_with_fallback", return_value=loaded), patch(
-            "check_bindings.build_runtime_context",
+        with patch("tools.check_bindings.load_config_with_fallback", return_value=loaded), patch(
+            "tools.check_bindings.build_runtime_context",
             return_value=runtime,
         ), patch("sys.stdout", new_callable=io.StringIO), patch(
             "sys.stderr", new_callable=io.StringIO
         ) as stderr:
-            with patch("sys.argv", ["check_bindings.py"]):
+            with patch("sys.argv", ["tools/check_bindings.py"]):
                 exit_code = check_bindings.main()
 
         self.assertEqual(exit_code, 2)

@@ -49,7 +49,7 @@ Non-keyboard slots do not override a keyboard slot. Practical effect:
 - joystick/mouse `Primary` + keyboard `Secondary` => runtime uses the keyboard `Secondary`
 - joystick/mouse only, with no keyboard bind in either slot => runtime reports the action missing, because EDControlRoom can only emulate keyboard input today
 
-This is not just display detail. It changes what `control_room.py`, `run_routine.py`, and `ship_controls.py` will actually press.
+This is not just display detail. It changes what `control_room.py`, `tools/run_routine.py`, and `tools/ship_controls.py` will actually press.
 
 Example:
 

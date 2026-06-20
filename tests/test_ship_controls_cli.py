@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import ship_controls
+from tools import ship_controls
 from edap.config import load_config
 from edap.runtime import LoadedConfig
 
@@ -83,15 +83,15 @@ class ShipControlsCliTests(unittest.TestCase):
             },
         )()
 
-        with patch("ship_controls.load_config_with_fallback", return_value=loaded), patch(
-            "ship_controls.build_runtime_context",
+        with patch("tools.ship_controls.load_config_with_fallback", return_value=loaded), patch(
+            "tools.ship_controls.build_runtime_context",
             return_value=runtime,
-        ), patch("ship_controls.ShipControls.from_binding_lookup",
+        ), patch("tools.ship_controls.ShipControls.from_binding_lookup",
             return_value=fake_controls,
         ), patch("sys.stdout", new_callable=io.StringIO) as stdout, patch(
             "sys.stderr", new_callable=io.StringIO
         ) as stderr:
-            with patch("sys.argv", ["ship_controls.py", "--action", "RollLeftButton", "--repeat", "2", "--hold-seconds", "0.1"]):
+            with patch("sys.argv", ["tools/ship_controls.py", "--action", "RollLeftButton", "--repeat", "2", "--hold-seconds", "0.1"]):
                 exit_code = ship_controls.main()
 
         self.assertEqual(exit_code, 0)
@@ -129,15 +129,15 @@ class ShipControlsCliTests(unittest.TestCase):
             },
         )()
 
-        with patch("ship_controls.load_config_with_fallback", return_value=loaded), patch(
-            "ship_controls.build_runtime_context",
+        with patch("tools.ship_controls.load_config_with_fallback", return_value=loaded), patch(
+            "tools.ship_controls.build_runtime_context",
             return_value=runtime,
-        ), patch("ship_controls.ShipControls.from_binding_lookup",
+        ), patch("tools.ship_controls.ShipControls.from_binding_lookup",
             return_value=fake_controls,
         ), patch("sys.stdout", new_callable=io.StringIO) as stdout, patch(
             "sys.stderr", new_callable=io.StringIO
         ) as stderr:
-            with patch("sys.argv", ["ship_controls.py", "--action", "RollLeftButton", "--total-seconds", "0.45"]):
+            with patch("sys.argv", ["tools/ship_controls.py", "--action", "RollLeftButton", "--total-seconds", "0.45"]):
                 exit_code = ship_controls.main()
 
         self.assertEqual(exit_code, 0)
@@ -173,13 +173,13 @@ class ShipControlsCliTests(unittest.TestCase):
             },
         )()
 
-        with patch("ship_controls.load_config_with_fallback", return_value=loaded), patch(
-            "ship_controls.build_runtime_context",
+        with patch("tools.ship_controls.load_config_with_fallback", return_value=loaded), patch(
+            "tools.ship_controls.build_runtime_context",
             return_value=runtime,
-        ), patch("ship_controls.ShipControls.from_binding_lookup",
+        ), patch("tools.ship_controls.ShipControls.from_binding_lookup",
             return_value=fake_controls,
-        ), patch("ship_controls.sleep") as sleep_mock, patch(
-            "ship_controls._sleep_with_countdown",
+        ), patch("tools.ship_controls.sleep") as sleep_mock, patch(
+            "tools.ship_controls._sleep_with_countdown",
             wraps=ship_controls._sleep_with_countdown,
         ), patch("sys.stdout", new_callable=io.StringIO) as stdout, patch(
             "sys.stderr", new_callable=io.StringIO
@@ -187,7 +187,7 @@ class ShipControlsCliTests(unittest.TestCase):
             with patch(
                 "sys.argv",
                 [
-                    "ship_controls.py",
+                    "tools/ship_controls.py",
                     "--sequence",
                     "SetSpeedZero; RollLeftButton total=0.45; UI_Select repeat=2 hold=0.1 delay=5",
                 ],
@@ -237,19 +237,19 @@ class ShipControlsCliTests(unittest.TestCase):
             },
         )()
 
-        with patch("ship_controls.load_config_with_fallback", return_value=loaded), patch(
-            "ship_controls.build_runtime_context",
+        with patch("tools.ship_controls.load_config_with_fallback", return_value=loaded), patch(
+            "tools.ship_controls.build_runtime_context",
             return_value=runtime,
         ), patch(
-            "ship_controls.ShipControls.from_binding_lookup",
+            "tools.ship_controls.ShipControls.from_binding_lookup",
             return_value=fake_controls,
-        ), patch("ship_controls.sleep") as sleep_mock, patch(
+        ), patch("tools.ship_controls.sleep") as sleep_mock, patch(
             "sys.stdout", new_callable=io.StringIO
         ) as stdout, patch("sys.stderr", new_callable=io.StringIO) as stderr:
             with patch(
                 "sys.argv",
                 [
-                    "ship_controls.py",
+                    "tools/ship_controls.py",
                     "--preset",
                     "station_refuel_menu",
                 ],
@@ -273,7 +273,7 @@ class ShipControlsCliTests(unittest.TestCase):
         self.assertEqual(sleep_mock.call_count, 2)
 
     def test_countdown_logs_to_stderr(self) -> None:
-        with patch("ship_controls.sleep") as sleep_mock, patch(
+        with patch("tools.ship_controls.sleep") as sleep_mock, patch(
             "sys.stderr", new_callable=io.StringIO
         ) as stderr:
             ship_controls._sleep_with_countdown("RollLeftButton", 2.0)

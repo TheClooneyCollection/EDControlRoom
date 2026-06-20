@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-import run_routine
+from tools import run_routine
 from edap.binding_lookup import build_binding_lookup
 from edap.bindings import Binding
 from edap.config import load_config
@@ -125,22 +125,22 @@ class RunRoutineCliTests(unittest.TestCase):
             },
         )()
 
-        with patch("run_routine.load_config_with_fallback", return_value=loaded), patch(
-            "run_routine.build_runtime_context",
+        with patch("tools.run_routine.load_config_with_fallback", return_value=loaded), patch(
+            "tools.run_routine.build_runtime_context",
             return_value=runtime,
         ), patch(
-            "run_routine.ShipControls.from_binding_lookup",
+            "tools.run_routine.ShipControls.from_binding_lookup",
             return_value=fake_controls,
         ), patch(
-            "run_routine.JournalWatcher",
+            "tools.run_routine.JournalWatcher",
             return_value=type("_Watcher", (), {"watch": lambda self: iter(())})(),
         ), patch(
-            "run_routine.auto_zero_throttle_on_arrival",
+            "tools.run_routine.auto_zero_throttle_on_arrival",
             return_value=fake_result,
         ) as auto_zero_mock, patch("sys.stdout", new_callable=io.StringIO) as stdout, patch(
             "sys.stderr", new_callable=io.StringIO
         ) as stderr:
-            with patch("sys.argv", ["run_routine.py", "--routine", "auto_zero_throttle_on_arrival", "--json"]):
+            with patch("sys.argv", ["tools/run_routine.py", "--routine", "auto_zero_throttle_on_arrival", "--json"]):
                 exit_code = run_routine.main()
 
         self.assertEqual(exit_code, 0)
@@ -206,22 +206,22 @@ class RunRoutineCliTests(unittest.TestCase):
             },
         )()
 
-        with patch("run_routine.load_config_with_fallback", return_value=loaded), patch(
-            "run_routine.build_runtime_context",
+        with patch("tools.run_routine.load_config_with_fallback", return_value=loaded), patch(
+            "tools.run_routine.build_runtime_context",
             return_value=runtime,
         ) as build_runtime_context_mock, patch(
-            "run_routine.ShipControls.from_binding_lookup",
+            "tools.run_routine.ShipControls.from_binding_lookup",
             return_value=fake_controls,
         ), patch(
-            "run_routine.JournalWatcher",
+            "tools.run_routine.JournalWatcher",
             return_value=type("_Watcher", (), {"watch": lambda self: iter(()), "poll": lambda self: []})(),
         ), patch(
-            "run_routine.jump",
+            "tools.run_routine.jump",
             return_value=fake_result,
         ) as jump_mock, patch("sys.stdout", new_callable=io.StringIO) as stdout, patch(
             "sys.stderr", new_callable=io.StringIO
         ) as stderr:
-            with patch("sys.argv", ["run_routine.py", "--routine", "jump", "--json"]):
+            with patch("sys.argv", ["tools/run_routine.py", "--routine", "jump", "--json"]):
                 exit_code = run_routine.main()
 
         self.assertEqual(exit_code, 0)
@@ -285,22 +285,22 @@ class RunRoutineCliTests(unittest.TestCase):
             },
         )()
 
-        with patch("run_routine.load_config_with_fallback", return_value=loaded), patch(
-            "run_routine.build_runtime_context",
+        with patch("tools.run_routine.load_config_with_fallback", return_value=loaded), patch(
+            "tools.run_routine.build_runtime_context",
             return_value=runtime,
         ), patch(
-            "run_routine.ShipControls.from_binding_lookup",
+            "tools.run_routine.ShipControls.from_binding_lookup",
             return_value=fake_controls,
         ), patch(
-            "run_routine.JournalWatcher",
+            "tools.run_routine.JournalWatcher",
             return_value=type("_Watcher", (), {"watch": lambda self: iter(()), "poll": lambda self: []})(),
         ), patch(
-            "run_routine.station_refuel_menu",
+            "tools.run_routine.station_refuel_menu",
             return_value=fake_result,
         ) as station_refuel_menu_mock, patch("sys.stdout", new_callable=io.StringIO) as stdout, patch(
             "sys.stderr", new_callable=io.StringIO
         ) as stderr:
-            with patch("sys.argv", ["run_routine.py", "--routine", "station_refuel_menu", "--json"]):
+            with patch("sys.argv", ["tools/run_routine.py", "--routine", "station_refuel_menu", "--json"]):
                 exit_code = run_routine.main()
 
         self.assertEqual(exit_code, 0)
@@ -379,24 +379,24 @@ class RunRoutineCliTests(unittest.TestCase):
             },
         )()
 
-        with patch("run_routine.load_config_with_fallback", return_value=loaded), patch(
-            "run_routine.build_runtime_context",
+        with patch("tools.run_routine.load_config_with_fallback", return_value=loaded), patch(
+            "tools.run_routine.build_runtime_context",
             return_value=runtime,
         ) as build_runtime_context_mock, patch(
-            "run_routine.ShipControls.from_binding_lookup",
+            "tools.run_routine.ShipControls.from_binding_lookup",
             return_value=fake_controls,
         ), patch(
-            "run_routine.JournalWatcher",
+            "tools.run_routine.JournalWatcher",
             return_value=type("_Watcher", (), {"watch": lambda self: iter(()), "poll": lambda self: []})(),
         ), patch(
-            "run_routine.dock",
+            "tools.run_routine.dock",
             return_value=fake_result,
         ) as dock_mock, patch("sys.stdout", new_callable=io.StringIO) as stdout, patch(
             "sys.stderr", new_callable=io.StringIO
         ) as stderr:
             with patch(
                 "sys.argv",
-                ["run_routine.py", "--routine", "dock", "--skip-supercruise-exit", "--auto-refuel", "--json"],
+                ["tools/run_routine.py", "--routine", "dock", "--skip-supercruise-exit", "--auto-refuel", "--json"],
             ):
                 exit_code = run_routine.main()
 
@@ -487,20 +487,20 @@ class RunRoutineCliTests(unittest.TestCase):
                 )(),
                 log_path,
             )
-            with patch("run_routine.load_config_with_fallback", return_value=loaded), patch(
-                "run_routine.build_runtime_context",
+            with patch("tools.run_routine.load_config_with_fallback", return_value=loaded), patch(
+                "tools.run_routine.build_runtime_context",
                 return_value=runtime,
             ), patch(
-                "run_routine.ShipControls.from_binding_lookup",
+                "tools.run_routine.ShipControls.from_binding_lookup",
                 return_value=fake_controls,
             ), patch(
-                "run_routine.JournalWatcher",
+                "tools.run_routine.JournalWatcher",
                 return_value=type("_InnerWatcher", (), {"watch": lambda self: iter(()), "poll": lambda self: []})(),
             ), patch(
-                "run_routine.LoggingJournalWatcher",
+                "tools.run_routine.LoggingJournalWatcher",
                 return_value=watcher,
             ), patch(
-                "run_routine.auto_zero_throttle_on_arrival",
+                "tools.run_routine.auto_zero_throttle_on_arrival",
                 return_value=fake_result,
             ), patch("sys.stdout", new_callable=io.StringIO) as stdout, patch(
                 "sys.stderr", new_callable=io.StringIO
@@ -508,7 +508,7 @@ class RunRoutineCliTests(unittest.TestCase):
                 with patch(
                     "sys.argv",
                     [
-                        "run_routine.py",
+                        "tools/run_routine.py",
                         "--routine",
                         "auto_zero_throttle_on_arrival",
                         "--log-events",
@@ -558,13 +558,13 @@ class RunRoutineCliTests(unittest.TestCase):
             },
         )()
 
-        with patch("run_routine.load_config_with_fallback", return_value=loaded), patch(
-            "run_routine.build_runtime_context",
+        with patch("tools.run_routine.load_config_with_fallback", return_value=loaded), patch(
+            "tools.run_routine.build_runtime_context",
             return_value=runtime,
         ), patch("sys.stdout", new_callable=io.StringIO), patch(
             "sys.stderr", new_callable=io.StringIO
         ) as stderr:
-            with patch("sys.argv", ["run_routine.py", "--routine", "auto_zero_throttle_on_arrival"]):
+            with patch("sys.argv", ["tools/run_routine.py", "--routine", "auto_zero_throttle_on_arrival"]):
                 exit_code = run_routine.main()
 
         self.assertEqual(exit_code, 2)
@@ -605,19 +605,19 @@ class RunRoutineCliTests(unittest.TestCase):
             },
         )()
 
-        with patch("run_routine.load_config_with_fallback", return_value=loaded), patch(
-            "run_routine.build_runtime_context",
+        with patch("tools.run_routine.load_config_with_fallback", return_value=loaded), patch(
+            "tools.run_routine.build_runtime_context",
             return_value=runtime,
         ), patch(
-            "run_routine.ShipControls.from_binding_lookup",
+            "tools.run_routine.ShipControls.from_binding_lookup",
             return_value=fake_controls,
         ), patch(
-            "run_routine.auto_zero_throttle_on_arrival",
+            "tools.run_routine.auto_zero_throttle_on_arrival",
             side_effect=KeyboardInterrupt,
         ), patch("sys.stdout", new_callable=io.StringIO), patch(
             "sys.stderr", new_callable=io.StringIO
         ) as stderr:
-            with patch("sys.argv", ["run_routine.py", "--routine", "auto_zero_throttle_on_arrival"]):
+            with patch("sys.argv", ["tools/run_routine.py", "--routine", "auto_zero_throttle_on_arrival"]):
                 exit_code = run_routine.main()
 
         self.assertEqual(exit_code, 130)

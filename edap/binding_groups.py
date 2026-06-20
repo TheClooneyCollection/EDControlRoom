@@ -2,7 +2,7 @@
 
 This module is intentionally rendering-agnostic: it produces a structured
 ``list[BindingGroup]`` from a binding lookup result so that the rendering
-layer in ``view_bindings.py`` can stay thin and the grouping is unit-testable
+layer in ``tools/view_bindings.py`` can stay thin and the grouping is unit-testable
 without importing ``rich``.
 """
 
