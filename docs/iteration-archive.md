@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `76`
-- Latest generated iteration number: `209`
+- Generated iteration count: `77`
+- Latest generated iteration number: `210`
 
 ## Iteration 134
 
@@ -2150,3 +2150,29 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Push the release-prep commit and `v1.13.0` tag, then publish the GitHub release with high-level notes focused on Control Room remote operations and notifier reliability.
+
+## Iteration 210
+
+- When: `2026-06-20 11:22`
+- Area: `ci-release`
+- Title: `remove-jobs-sample-payload`
+- Source: [2026-06-20-11-22__ci-release__remove-jobs-sample-payload.md](iteration-logs/2026-06-20-11-22__ci-release__remove-jobs-sample-payload.md)
+
+# Iteration Log
+
+- Area: `ci-release`
+- Title: `remove-jobs-sample-payload`
+- Started: `2026-06-20 11:22`
+
+## Summary
+
+- Removed the unused `jobs.sample.json` fixture from the repo after the `v1.13.0` release cut because nothing in the notifier tests or runtime reads it.
+
+## Changes
+
+- Deleted the root-level `jobs.sample.json` file.
+- Confirmed there are no remaining references to the sample payload in tracked source or tests.
+
+## Follow-ups
+
+- Keep notifier validation centered on the tested Python entrypoint and ad hoc saved jobs JSON files instead of a checked-in sample payload unless a stable operator-facing fixture is needed later.
