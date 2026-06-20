@@ -182,7 +182,11 @@ def post_to_discord(*, webhook_url: str, payload: dict[str, object]) -> None:
     webhook_request = request.Request(
         webhook_url,
         data=body,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "EDControlRoom-DiscordNotifier/1.0 (+https://github.com/TheClooneyCollection/EDControlRoom)",
+        },
         method="POST",
     )
     try:
