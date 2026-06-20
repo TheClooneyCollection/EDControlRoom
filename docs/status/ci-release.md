@@ -1,5 +1,6 @@
 # CI and Release Status
 ## Current
+- The Discord workflow-failure notifier is now split into a checked-in Python script plus a thin workflow wrapper, so the same payload/fetch/post path can be dry-run locally against saved jobs JSON and exercised in CI without keeping the logic trapped inside inline workflow shell.
 - `main` is now prepared for `v1.12.0`, covering the Control Room observer client/server split plus the follow-up remote session recovery and fail-closed fixes.
 - Stable tags have been backfilled across the post-`v1.7.3` milestones as `v1.8.0`, `v1.9.0`, and `v1.10.0`; only the latest milestone on `main` carries a fresh release-prep version bump.
 - `main` is now the rolling-update branch, and stable features or releases are identified with tags instead of `dev -> main` promotion.
@@ -15,6 +16,6 @@
 - Retroactive milestone tags after `v1.7.3` were placed directly on existing commits to avoid rewriting `main`, so historical release-prep commits do not exist for those backfilled cuts.
 - Historical iteration logs and generated archives still mention the old promotion path because they are retained as chronology, not current policy.
 ## Next
-- Live-check the next failing Actions run to confirm the job/step lookup and markdown link rendering match the local proof-of-concept.
+- Live-check the next failing Actions run to confirm the extracted notifier script matches the locally tested payload and webhook behavior end to end.
 - Confirm the next PR that changes iteration logs is refreshed locally so the `Tests` archive guard remains the only enforcement path.
 - Remove or refresh any remaining non-historical promotion or legacy release-automation references if they surface in future docs or automation changes.
