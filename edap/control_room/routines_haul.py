@@ -36,6 +36,23 @@ def cmd_haul(
 ) -> None:
     station_1_buying = rest.strip()
     parts = station_1_buying.split(None, 1)
+    if parts and parts[0].lower() == "route":
+        route_index_raw = parts[1].strip() if len(parts) > 1 else ""
+        if not route_index_raw:
+            app._log("[red]Usage: haul route <result-number>[/]")
+            return
+        try:
+            route_index = int(route_index_raw)
+        except ValueError:
+            app._log("[red]Route number must be an integer.[/]")
+            return
+        load_haul_from_trade_route(
+            app,
+            route_index=route_index,
+            skip_delay=skip_delay,
+            raw_command=raw_command or f"{'!' if skip_delay else ''}haul route {route_index}".strip(),
+        )
+        return
     if parts and parts[0].lower() == "search":
         if app._routine_active:
             app._log("[yellow]A routine is already running — wait for it to finish[/]")
@@ -100,6 +117,45 @@ def cmd_haul(
             skip_delay=skip_delay,
             raw_command=raw_command,
         )
+
+
+def load_haul_from_trade_route(
+    app: HaulHost,
+    *,
+    route_index: int,
+    skip_delay: bool = False,
+    raw_command: str | None = None,
+) -> None:
+    route = next((item for item in app._trade_routes.routes if item.index == route_index), None)
+    if route is None:
+        app._log(f"[red]No trade-route result #{route_index} is loaded.[/]")
+        return
+    if not route.source_buy_commodity:
+        app._log(
+            f"[red]Route #{route_index} does not expose a source buy commodity, so it cannot prefill haul.[/]"
+        )
+        return
+
+    app._log(
+        f"Loading haul from route #{route_index}: [cyan]{escape(route.from_station)}[/] -> "
+        f"[cyan]{escape(route.to_station)}[/]"
+    )
+    app._start_haul_prompt(
+        commodity="",
+        prompt_for_commodity=True,
+        seed={
+            "station_1_buying": route.source_buy_commodity,
+            "station_1": route.from_station,
+            "station_1_system": route.from_system,
+            "station_1_on_land": "false",
+            "station_2_buying": route.target_buy_commodity or "",
+            "station_2": route.to_station,
+            "station_2_system": route.to_system,
+            "station_2_on_land": "false",
+        },
+        skip_delay=skip_delay,
+        raw_command=raw_command,
+    )
 
 
 def _set_trade_routes_loading(app: HaulHost, *, system_name: str, query_url: str) -> None:

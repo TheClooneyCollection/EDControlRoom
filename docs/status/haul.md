@@ -1,6 +1,6 @@
 # Haul Status
 ## Current
-- `haul search [system]` now opens a full editable Inara parameter flow seeded from ignored local `haul_search.toml`, the current ship system, and current ship cargo capacity; `haul search url <inara-url>` bypasses the prompt and fetches that exact live query, and replay/edit treats search entries separately from loop-haul defaults.
+- `haul search [system]` now opens one editable all-parameters-at-once Inara search line seeded from ignored local `haul_search.toml`, the current ship system, and current ship cargo capacity; `haul search url <inara-url>` bypasses that editor and fetches the pasted query directly, and `haul route <n>` loads a shown result into the haul prompt with station and commodity defaults prefilled.
 - Two-way haul phase detection now tolerates brief `Cargo.json` lag when `Status.json` already reports cargo, which avoids false resume/buy decisions immediately after reconnect or server startup when the manifest lands slightly later than the cargo count.
 - Two-way `haul` can now load a text-editable TOML profile via `haul load [path]`; repo-root `haul.toml` is the default profile and maps directly onto the existing two-station haul parameters.
 - Market buy/sell quantity restore is now configurable: buy `MAX` defaults to `0-99t = 3.0s`, `100-300t = 5.0s`, then a `301t+` log curve that hits about `8.0s` at `800t`, with a `20.0s` global hold cap; sell `MAX` still restores quantity with configurable rapid `UI_Right` taps instead of a long hold.

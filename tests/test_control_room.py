@@ -962,16 +962,17 @@ class ControlRoomCommandTests(unittest.TestCase):
                 searched_at="2026-06-22T11:00:00Z",
                 routes=[
                     TradeRoute(
-                        index=1,
-                        from_station="Savitskaya Orbital",
-                        from_system="TSONGORIS",
-                        to_station="Scully-Power Station",
-                        to_system="IX",
-                        route_distance="33.08 Ly",
-                        profit_per_unit="45,485 Cr",
-                        profit_per_hour="88,275,035 Cr",
-                        updated="4 hours ago",
-                    )
+                    index=1,
+                    from_station="Savitskaya Orbital",
+                    from_system="TSONGORIS",
+                    to_station="Scully-Power Station",
+                    to_system="IX",
+                    source_buy_commodity="Silver",
+                    route_distance="33.08 Ly",
+                    profit_per_unit="45,485 Cr",
+                    profit_per_hour="88,275,035 Cr",
+                    updated="4 hours ago",
+                )
                 ],
             )
         )
@@ -979,7 +980,9 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertIn("Praea Euq AK-A d25", markup)
         self.assertIn("Savitskaya Orbital", markup)
         self.assertIn("Scully-Power Station", markup)
+        self.assertIn("buy Silver", markup)
         self.assertIn("route 33.08 Ly", markup)
+        self.assertIn("haul route <n>", markup)
 
     def test_trade_routes_markup_empty_state_escapes_system_placeholder(self) -> None:
         markup = control_room_rendering.trade_routes_markup(TradeRoutesData())
@@ -1511,7 +1514,7 @@ on_land = true
         output = "\n".join(self.app.logged)
         self.assertIn("Haul config file not found", output)
 
-    def test_haul_search_uses_current_system_prompt_then_updates_trade_routes(self) -> None:
+    def test_haul_search_uses_all_at_once_prompt_and_ship_cargo_default(self) -> None:
         self.app._ship.system = "Praea Euq AK-A d25"
         self.app._ship.cargo_capacity = 460
         self.app._controls = object()
@@ -1539,9 +1542,10 @@ on_land = true
         with patch("edap.control_room.routines_haul.search_trade_routes", return_value=result):
             self.app._cmd_haul("search", raw_command="haul search")
             self.assertEqual(self.app._prompt_state.haul_prompt_mode, "search")
-            self.assertEqual(self.app._haul_prompt_step, "search_near_system")
-            for _ in range(11):
-                self.app._handle_haul_prompt("")
+            self.assertEqual(self.app._haul_prompt_step, "search_edit")
+            self.assertIn("near_system='Praea Euq AK-A d25'", self.app._command_input.value)
+            self.assertIn("cargo_capacity=460", self.app._command_input.value)
+            self.app._handle_haul_prompt(self.app._command_input.value)
 
         self.assertEqual(self.app._trade_routes.system_name, "Praea Euq AK-A d25")
         self.assertEqual(len(self.app._trade_routes.routes), 1)
@@ -1589,6 +1593,30 @@ on_land = true
         self.assertEqual(self.app._saved_state.history[-1].params["mode"], "search")
         self.assertEqual(self.app._saved_state.history[-1].params["near_system"], "Praea Euq AK-A d25")
         self.assertEqual(self.app._saved_state.history[-1].params["order_by"], "best_profit_per_hour_estimate")
+
+    def test_haul_route_loads_trade_route_into_haul_prompt(self) -> None:
+        self.app._trade_routes = TradeRoutesData(
+            system_name="Praea Euq AK-A d25",
+            routes=[
+                TradeRoute(
+                    index=2,
+                    from_station="Savitskaya Orbital",
+                    from_system="TSONGORIS",
+                    to_station="Nyberg Vision",
+                    to_system="NJOKUJINUN",
+                    source_buy_commodity="Beryllium",
+                    target_buy_commodity="Bauxite",
+                )
+            ],
+        )
+
+        self.app._cmd_haul("route 2", raw_command="haul route 2")
+
+        self.assertEqual(self.app._haul_prompt_step, "station_1_buying")
+        self.assertEqual(self.app._command_input.value, "Beryllium")
+        self.assertEqual(self.app._prompt_state.haul_prompt_defaults["station_2_buying"], "Bauxite")
+        self.assertEqual(self.app._prompt_state.haul_prompt_defaults["station_1"], "Savitskaya Orbital")
+        self.assertEqual(self.app._prompt_state.haul_prompt_defaults["station_2"], "Nyberg Vision")
 
     def test_haul_dispatch_passes_on_land_flags(self) -> None:
         captured: dict[str, object] = {}

@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `85`
-- Latest generated iteration number: `218`
+- Generated iteration count: `86`
+- Latest generated iteration number: `219`
 
 ## Iteration 134
 
@@ -2404,3 +2404,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-validate the prompt defaults and direct URL flow against a real Inara session, then decide whether `pi14` / `pi15` should stay pinned passthrough defaults or become explicit Powerplay prompt fields.
+
+## Iteration 219
+
+- When: `2026-06-22 12:14`
+- Area: `haul`
+- Title: `fix-inara-search-editor-and-route-load`
+- Source: [2026-06-22-12-14_____haul_____fix-inara-search-editor-and-route-load.md](iteration-logs/2026-06-22-12-14_____haul_____fix-inara-search-editor-and-route-load.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `fix-inara-search-editor-and-route-load`
+- Started: `2026-06-22 12:14`
+
+## Summary
+
+- Corrected the first Inara search UX pass so search parameters are edited all at once, ship cargo capacity actually defaults into the editor, and returned routes can now be loaded into the haul prompt.
+
+## Changes
+
+- Replaced the sequential search question flow with a single prefilled `key=value` editor line backed by the same prompt-state machinery, removing the duplicated `min_supply` step bug and making every search field visible at once.
+- Extended route parsing to retain the source buy commodity and optional return-leg buy commodity, then surfaced those fields in the `TRADE ROUTES` panel.
+- Added `haul route <n>` so operators can load a shown Inara result into the haul prompt with station names, systems, and cargo defaults prefilled for review before launch.
+- Expanded tests for all-at-once search editing, ship cargo defaulting, route-to-haul loading, and commodity extraction from route cards.
+
+## Follow-ups
+
+- Live-validate the `haul route <n>` commodity mapping against a few real one-way and round-trip Inara cards, especially rows where the site layout or labels differ from the sample shapes used in tests.

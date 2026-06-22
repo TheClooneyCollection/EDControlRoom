@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import shlex
 from typing import Callable
 from typing import Protocol
 
@@ -329,6 +330,34 @@ _ORDER_BY_LABELS = {
     "best_profit_per_hour_estimate": "Best profit per hour (estimate)",
 }
 
+_SEARCH_PARAM_ORDER = (
+    "near_system",
+    "cargo_capacity",
+    "max_route_distance_ly",
+    "max_price_age_hours",
+    "min_landing_pad",
+    "max_station_distance_ls",
+    "use_surface_stations",
+    "min_supply",
+    "min_demand",
+    "include_round_trips",
+    "order_by",
+)
+
+_SEARCH_PARAM_LABELS = {
+    "near_system": "Near star system",
+    "cargo_capacity": "Cargo capacity",
+    "max_route_distance_ly": "Max. route distance (Ly)",
+    "max_price_age_hours": "Max. price age (hours)",
+    "min_landing_pad": "Min. landing pad",
+    "max_station_distance_ls": "Max. station distance (Ls)",
+    "use_surface_stations": "Use surface stations",
+    "min_supply": "Min. supply",
+    "min_demand": "Min. demand",
+    "include_round_trips": "Include round trips",
+    "order_by": "Order by",
+}
+
 
 def _parse_search_landing_pad(value: str, *, default: str) -> str | None:
     raw = value.strip().lower().replace("pad", "")
@@ -382,6 +411,36 @@ def _parse_order_by(value: str, *, default: str) -> str | None:
         "hour": "best_profit_per_hour_estimate",
     }
     return aliases.get(raw)
+
+
+def _format_search_param_value(key: str, value: str) -> str:
+    if key == "min_landing_pad":
+        return _search_choice_label(value, _LANDING_PAD_LABELS)
+    if key == "use_surface_stations":
+        return _search_choice_label(value, _SURFACE_STATION_LABELS)
+    if key == "order_by":
+        return _search_choice_label(value, _ORDER_BY_LABELS)
+    if key == "include_round_trips":
+        return "Yes" if value.strip().lower() == "true" else "No"
+    return value
+
+
+def _serialize_haul_search_params(params: dict[str, str]) -> str:
+    tokens: list[str] = []
+    for key in _SEARCH_PARAM_ORDER:
+        value = params.get(key, "")
+        if not value:
+            continue
+        tokens.append(f"{key}={shlex.quote(value)}")
+    return " ".join(tokens)
+
+
+def _render_haul_search_summary(params: dict[str, str]) -> tuple[str, ...]:
+    return tuple(
+        f"  {escape(_SEARCH_PARAM_LABELS[key])}: [cyan]{escape(_format_search_param_value(key, params.get(key, '')))}[/]"
+        for key in _SEARCH_PARAM_ORDER
+        if params.get(key, "")
+    )
 
 
 def begin_haul_prompt(
@@ -831,17 +890,20 @@ def start_haul_search_prompt(
     app._prompt_state.haul_prompt_defaults = {}
     app._prompt_state.haul_search_prompt_defaults = defaults
     app._prompt_state.haul_prompt_mode = "search"
-    app._prompt_state.haul_prompt_step = "search_near_system"
+    app._prompt_state.haul_prompt_step = "search_edit"
     app._prompt_state.haul_prompt_raw_command = resolved_raw_command
     app._prompt_state.haul_prompt_skip_delay = skip_delay
-    default_system = defaults["near_system"]
-
     app._log("Haul search setup — edit Inara parameters below:")
-    app._log(f"[dim]Near star system? (Enter = {escape(default_system)})[/]")
+    for line in _render_haul_search_summary(defaults):
+        app._log(line)
+    app._log(
+        "[dim]Edit any `key=value` pairs in the command bar, then press Enter to search.[/]"
+    )
+    serialized = _serialize_haul_search_params(defaults)
     _set_prompt_input(
         app,
-        placeholder=f"near star system (Enter = {default_system})...",
-        value=_search_prefill_value_from_state(app._prompt_state, "near_system") or default_system,
+        placeholder="edit Inara search params then press Enter...",
+        value=serialized,
     )
 
 
@@ -959,203 +1021,149 @@ def advance_haul_search_prompt(
 ) -> HaulSearchPromptTransition:
     prompt_state = app._prompt_state
     defaults = prompt_state.haul_search_prompt_defaults
+    if prompt_state.haul_prompt_step != "search_edit":
+        return HaulSearchPromptTransition()
 
-    def resolved_default(key: str) -> str:
-        return defaults.get(key, "")
+    try:
+        tokens = shlex.split(value)
+    except ValueError as exc:
+        return HaulSearchPromptTransition(
+            log_lines=(f"[red]Invalid search parameter syntax: {escape(str(exc))}[/]",),
+        )
 
-    if prompt_state.haul_prompt_step == "search_near_system":
-        resolved = value.strip() or resolved_default("near_system")
-        if not resolved:
+    parsed = dict(defaults)
+    for token in tokens:
+        if "=" not in token:
             return HaulSearchPromptTransition(
-                log_lines=("[red]Near star system is required.[/]",),
+                log_lines=(f"[red]Expected key=value pairs only; got `{escape(token)}`.[/]",),
             )
-        prompt_state.haul_search_params["near_system"] = resolved
-        prompt_state.haul_prompt_step = "search_cargo_capacity"
-        default_value = resolved_default("cargo_capacity")
+        key, raw_value = token.split("=", 1)
+        key = key.strip()
+        if key not in _SEARCH_PARAM_ORDER:
+            return HaulSearchPromptTransition(
+                log_lines=(f"[red]Unknown search parameter `{escape(key)}`.[/]",),
+            )
+        parsed[key] = raw_value.strip()
+
+    near_system = parsed.get("near_system", "").strip()
+    if not near_system:
+        return HaulSearchPromptTransition(
+            log_lines=("[red]Near star system is required.[/]",),
+        )
+
+    cargo_capacity = parse_optional_nonnegative_int(
+        app,
+        parsed.get("cargo_capacity", ""),
+        default=defaults.get("cargo_capacity", ""),
+        label="Cargo capacity",
+    )
+    if cargo_capacity is None:
+        return HaulSearchPromptTransition()
+    max_route_distance = parse_optional_nonnegative_int(
+        app,
+        parsed.get("max_route_distance_ly", ""),
+        default=defaults.get("max_route_distance_ly", ""),
+        label="Max. route distance (Ly)",
+    )
+    if max_route_distance is None:
+        return HaulSearchPromptTransition()
+    max_price_age = parse_optional_nonnegative_int(
+        app,
+        parsed.get("max_price_age_hours", ""),
+        default=defaults.get("max_price_age_hours", ""),
+        label="Max. price age (hours)",
+    )
+    if max_price_age is None:
+        return HaulSearchPromptTransition()
+    max_station_distance = parse_optional_nonnegative_int(
+        app,
+        parsed.get("max_station_distance_ls", ""),
+        default=defaults.get("max_station_distance_ls", ""),
+        label="Max. station distance (Ls)",
+    )
+    if max_station_distance is None:
+        return HaulSearchPromptTransition()
+    min_supply = parse_optional_nonnegative_int(
+        app,
+        parsed.get("min_supply", ""),
+        default=defaults.get("min_supply", ""),
+        label="Min. supply",
+    )
+    if min_supply is None:
+        return HaulSearchPromptTransition()
+    min_demand = parse_optional_nonnegative_int(
+        app,
+        parsed.get("min_demand", ""),
+        default=defaults.get("min_demand", ""),
+        label="Min. demand",
+    )
+    if min_demand is None:
+        return HaulSearchPromptTransition()
+
+    landing_pad = _parse_search_landing_pad(
+        parsed.get("min_landing_pad", ""),
+        default=defaults.get("min_landing_pad", "large"),
+    )
+    if landing_pad is None:
+        return HaulSearchPromptTransition(
+            log_lines=("[red]Min. landing pad must be small, medium, or large.[/]",),
+        )
+    surface_stations = _parse_surface_stations(
+        parsed.get("use_surface_stations", ""),
+        default=defaults.get("use_surface_stations", "no"),
+    )
+    if surface_stations is None:
         return HaulSearchPromptTransition(
             log_lines=(
-                f"  Near star system: [cyan]{escape(resolved)}[/]",
-                f"[dim]Cargo capacity? (Enter = {escape(default_value)})[/]",
+                "[red]Use surface stations must be no, yes-with-odyssey, or yes-exclude-odyssey.[/]",
             ),
-            ui_state=HaulPromptUiState(
-                placeholder=f"cargo capacity (Enter = {default_value})...",
-                value=_search_prefill_value_from_state(prompt_state, "cargo_capacity") or default_value,
+        )
+    order_by = _parse_order_by(
+        parsed.get("order_by", ""),
+        default=defaults.get("order_by", "best_profit_per_hour_estimate"),
+    )
+    if order_by is None:
+        return HaulSearchPromptTransition(
+            log_lines=(
+                "[red]Order by must be best-profit/hour, best-profit, last-update, route-distance, or distance.[/]",
             ),
         )
 
-    numeric_steps = {
-        "search_cargo_capacity": ("cargo_capacity", "Cargo capacity", "search_max_route_distance_ly"),
-        "search_max_route_distance_ly": (
-            "max_route_distance_ly",
-            "Max. route distance (Ly)",
-            "search_max_price_age_hours",
-        ),
-        "search_max_price_age_hours": (
-            "max_price_age_hours",
-            "Max. price age (hours)",
-            "search_min_landing_pad",
-        ),
-        "search_max_station_distance_ls": (
-            "max_station_distance_ls",
-            "Max. station distance (Ls)",
-            "search_use_surface_stations",
-        ),
-        "search_min_supply": ("min_supply", "Min. supply", "search_min_demand"),
-        "search_min_demand": ("min_demand", "Min. demand", "search_include_round_trips"),
+    round_trips = _parse_yes_no(
+        parsed.get("include_round_trips", ""),
+        default=defaults.get("include_round_trips", "true").strip().lower() == "true",
+    )
+    if round_trips is None:
+        return HaulSearchPromptTransition(
+            log_lines=(f"[red]{escape(error_text.render(app._config, 'confirm_yes_no'))}[/]",),
+        )
+
+    query_params = {
+        "cargo_capacity": cargo_capacity,
+        "max_route_distance_ly": max_route_distance,
+        "max_price_age_hours": max_price_age,
+        "min_landing_pad": landing_pad,
+        "max_station_distance_ls": max_station_distance,
+        "use_surface_stations": surface_stations,
+        "min_supply": min_supply,
+        "min_demand": min_demand,
+        "include_round_trips": "true" if round_trips else "false",
+        "order_by": order_by,
     }
-    if prompt_state.haul_prompt_step in numeric_steps:
-        key, label, next_step = numeric_steps[prompt_state.haul_prompt_step]
-        parsed = parse_optional_nonnegative_int(app, value, default=resolved_default(key), label=label)
-        if parsed is None:
-            return HaulSearchPromptTransition()
-        prompt_state.haul_search_params[key] = parsed
-        prompt_state.haul_prompt_step = next_step
-
-        if next_step == "search_max_route_distance_ly":
-            default_value = resolved_default("max_route_distance_ly")
-            prompt_label = "Max. route distance? (Ly)"
-            placeholder = f"max route distance ly (Enter = {default_value})..."
-            next_key = "max_route_distance_ly"
-        elif next_step == "search_max_price_age_hours":
-            default_value = resolved_default("max_price_age_hours")
-            prompt_label = "Max. price age? (hours)"
-            placeholder = f"max price age hours (Enter = {default_value})..."
-            next_key = "max_price_age_hours"
-        elif next_step == "search_use_surface_stations":
-            default_value = resolved_default("use_surface_stations")
-            label_value = _search_choice_label(default_value, _SURFACE_STATION_LABELS)
-            return HaulSearchPromptTransition(
-                log_lines=(
-                    f"  {escape(label)}: [cyan]{escape(parsed)}[/]",
-                    f"[dim]Use surface stations? (Enter = {escape(label_value)})[/]",
-                ),
-                ui_state=HaulPromptUiState(
-                    placeholder=f"use surface stations (Enter = {label_value})...",
-                    value=_search_prefill_value_from_state(prompt_state, "use_surface_stations")
-                    or default_value,
-                ),
-            )
-        elif next_step == "search_min_demand":
-            default_value = resolved_default("min_demand")
-            prompt_label = "Min. demand?"
-            placeholder = f"min demand (Enter = {default_value})..."
-            next_key = "min_demand"
-        else:
-            default_value = resolved_default("min_supply")
-            prompt_label = "Min. supply?"
-            placeholder = f"min supply (Enter = {default_value})..."
-            next_key = "min_supply"
-
-        return HaulSearchPromptTransition(
-            log_lines=(
-                f"  {escape(label)}: [cyan]{escape(parsed)}[/]",
-                f"[dim]{escape(prompt_label)} (Enter = {escape(default_value)})[/]",
-            ),
-            ui_state=HaulPromptUiState(
-                placeholder=placeholder,
-                value=_search_prefill_value_from_state(prompt_state, next_key) or default_value,
-            ),
-        )
-
-    if prompt_state.haul_prompt_step == "search_min_landing_pad":
-        default_value = resolved_default("min_landing_pad")
-        parsed = _parse_search_landing_pad(value, default=default_value)
-        if parsed is None:
-            return HaulSearchPromptTransition(
-                log_lines=("[red]Min. landing pad must be small, medium, or large.[/]",),
-            )
-        prompt_state.haul_search_params["min_landing_pad"] = parsed
-        prompt_state.haul_prompt_step = "search_max_station_distance_ls"
-        next_default = resolved_default("max_station_distance_ls")
-        return HaulSearchPromptTransition(
-            log_lines=(
-                f"  Min. landing pad: [cyan]{_search_choice_label(parsed, _LANDING_PAD_LABELS)}[/]",
-                f"[dim]Max. station distance? (Ls, Enter = {escape(next_default)})[/]",
-            ),
-            ui_state=HaulPromptUiState(
-                placeholder=f"max station distance ls (Enter = {next_default})...",
-                value=_search_prefill_value_from_state(prompt_state, "max_station_distance_ls")
-                or next_default,
-            ),
-        )
-
-    if prompt_state.haul_prompt_step == "search_use_surface_stations":
-        default_value = resolved_default("use_surface_stations")
-        parsed = _parse_surface_stations(value, default=default_value)
-        if parsed is None:
-            return HaulSearchPromptTransition(
-                log_lines=(
-                    "[red]Use surface stations must be no, yes-with-odyssey, or yes-exclude-odyssey.[/]",
-                ),
-            )
-        prompt_state.haul_search_params["use_surface_stations"] = parsed
-        prompt_state.haul_prompt_step = "search_min_supply"
-        next_default = resolved_default("min_supply")
-        return HaulSearchPromptTransition(
-            log_lines=(
-                f"  Use surface stations: [cyan]{escape(_search_choice_label(parsed, _SURFACE_STATION_LABELS))}[/]",
-                f"[dim]Min. supply? (Enter = {escape(next_default)})[/]",
-            ),
-            ui_state=HaulPromptUiState(
-                placeholder=f"min supply (Enter = {next_default})...",
-                value=_search_prefill_value_from_state(prompt_state, "min_supply") or next_default,
-            ),
-        )
-
-    if prompt_state.haul_prompt_step == "search_include_round_trips":
-        parsed = _parse_yes_no(
-            value,
-            default=resolved_default("include_round_trips").strip().lower() == "true",
-        )
-        if parsed is None:
-            return HaulSearchPromptTransition(
-                log_lines=(f"[red]{escape(error_text.render(app._config, 'confirm_yes_no'))}[/]",),
-            )
-        prompt_state.haul_search_params["include_round_trips"] = "true" if parsed else "false"
-        prompt_state.haul_prompt_step = "search_order_by"
-        default_value = resolved_default("order_by")
-        label_value = _search_choice_label(default_value, _ORDER_BY_LABELS)
-        return HaulSearchPromptTransition(
-            log_lines=(
-                f"  Include round trips: [cyan]{'yes' if parsed else 'no'}[/]",
-                f"[dim]Order by? (Enter = {escape(label_value)})[/]",
-            ),
-            ui_state=HaulPromptUiState(
-                placeholder=f"order by (Enter = {label_value})...",
-                value=_search_prefill_value_from_state(prompt_state, "order_by") or default_value,
-            ),
-        )
-
-    if prompt_state.haul_prompt_step == "search_order_by":
-        default_value = resolved_default("order_by")
-        parsed = _parse_order_by(value, default=default_value)
-        if parsed is None:
-            return HaulSearchPromptTransition(
-                log_lines=(
-                    "[red]Order by must be best-profit/hour, best-profit, last-update, route-distance, or distance.[/]",
-                ),
-            )
-        prompt_state.haul_search_params["order_by"] = parsed
-        prompt_state.haul_prompt_step = ""
-        prompt_state.haul_prompt_mode = ""
-        prompt_state.haul_prompt_defaults = {}
-        prompt_state.haul_search_prompt_defaults = {}
-        query_params = dict(prompt_state.haul_search_params)
-        prompt_state.haul_search_params = {}
-        system_name = query_params.pop("near_system", "").strip()
-        return HaulSearchPromptTransition(
-            log_lines=(
-                f"  Order by: [cyan]{escape(_search_choice_label(parsed, _ORDER_BY_LABELS))}[/]",
-            ),
-            ui_state=HaulPromptUiState(placeholder=default_placeholder),
-            launch_haul_search=bool(system_name),
-            system_name=system_name,
-            query_params=query_params,
-            skip_delay=prompt_state.haul_prompt_skip_delay,
-            raw_command=prompt_state.haul_prompt_raw_command,
-        )
-
-    return HaulSearchPromptTransition()
+    prompt_state.haul_prompt_step = ""
+    prompt_state.haul_prompt_mode = ""
+    prompt_state.haul_prompt_defaults = {}
+    prompt_state.haul_search_prompt_defaults = {}
+    prompt_state.haul_search_params = {}
+    return HaulSearchPromptTransition(
+        log_lines=_render_haul_search_summary({"near_system": near_system, **query_params}),
+        ui_state=HaulPromptUiState(placeholder=default_placeholder),
+        launch_haul_search=True,
+        system_name=near_system,
+        query_params=query_params,
+        skip_delay=prompt_state.haul_prompt_skip_delay,
+        raw_command=prompt_state.haul_prompt_raw_command,
+    )
 
 
 def parse_optional_nonnegative_float(

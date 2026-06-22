@@ -298,6 +298,10 @@ def trade_routes_markup(data: TradeRoutesData) -> str:
             f"   -> {escape(route.to_station)} [dim]({escape(route.to_system)})[/]"
         )
         details: list[str] = []
+        if route.source_buy_commodity:
+            details.append(f"buy {escape(route.source_buy_commodity)}")
+        if route.target_buy_commodity:
+            details.append(f"return {escape(route.target_buy_commodity)}")
         if route.route_distance:
             details.append(f"route {escape(route.route_distance)}")
         if route.profit_per_unit:
@@ -310,6 +314,7 @@ def trade_routes_markup(data: TradeRoutesData) -> str:
             lines.append(f"   [dim]{' | '.join(details)}[/]")
     if len(data.routes) > 5:
         lines.append(f"\n[dim]{len(data.routes) - 5} more route(s) not shown.[/]")
+    lines.append("\n[dim]Run `haul route <n>` to load a shown route into the haul prompt.[/]")
     return "\n".join(lines)
 
 

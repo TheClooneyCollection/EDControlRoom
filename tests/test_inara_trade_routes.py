@@ -39,6 +39,8 @@ class InaraTradeRoutesTests(unittest.TestCase):
                 "text": "",
                 "lines": [
                     "FROM Savitskaya Orbital | TSONGORIS\ue81d\ufe0e",
+                    "BUY",
+                    "Silver",
                     "TO Scully-Power Station | IX\ue81d\ufe0e",
                     "ROUTE DISTANCE 33.08 Ly",
                     "UPDATED 3 hours ago",
@@ -55,6 +57,31 @@ class InaraTradeRoutesTests(unittest.TestCase):
         self.assertEqual(route.route_distance, "33.08 Ly")
         self.assertEqual(route.updated, "3 hours ago")
         self.assertEqual(route.profit_per_unit, "45,510 Cr")
+        self.assertEqual(route.source_buy_commodity, "Silver")
+
+    def test_row_to_route_parses_return_buy_commodity(self) -> None:
+        route = _row_to_route(
+            {
+                "index": 2,
+                "text": "",
+                "lines": [
+                    "FROM Savitskaya Orbital | TSONGORIS",
+                    "BUY",
+                    "Beryllium",
+                    "SELL",
+                    "Bauxite",
+                    "TO Nyberg Vision | NJOKUJINUN",
+                    "SELL",
+                    "Beryllium",
+                    "BUY",
+                    "Bauxite",
+                ],
+                "links": [],
+            }
+        )
+
+        self.assertEqual(route.source_buy_commodity, "Beryllium")
+        self.assertEqual(route.target_buy_commodity, "Bauxite")
 
 
 if __name__ == "__main__":
