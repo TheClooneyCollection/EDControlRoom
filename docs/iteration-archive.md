@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `78`
-- Latest generated iteration number: `211`
+- Generated iteration count: `81`
+- Latest generated iteration number: `214`
 
 ## Iteration 134
 
@@ -2204,3 +2204,91 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Keep future auxiliary CLIs under `tools/` unless there is a strong reason they belong in the runtime package or scratch space, so `control_room.py` remains the only root Python entrypoint.
+
+## Iteration 212
+
+- When: `2026-06-22 10:42`
+- Area: `control-room`
+- Title: `add-optional-playwright-extra`
+- Source: [2026-06-22-10-42_control-room_add-optional-playwright-extra.md](iteration-logs/2026-06-22-10-42_control-room_add-optional-playwright-extra.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `add-optional-playwright-extra`
+- Started: `2026-06-22 10:42`
+
+## Summary
+
+- Added an optional Playwright-based browsing dependency path so Inara route work can use a real browser without changing the default install set for normal users.
+
+## Changes
+
+- Added a `browsing` extra in `pyproject.toml` with `playwright>=1.53` instead of placing Playwright in base dependencies or the existing `dev` extra.
+- Refreshed `uv.lock`; the optional extra resolved to `playwright`, `greenlet`, and `pyee`.
+- Confirmed the current Inara assumption for this environment: direct HTTP requests still hit the access-check interstitial even with copied authenticated cookies, so the live route prototype should start from browser-backed DOM acquisition.
+- Re-ran the full unittest suite after the packaging change; `519` tests passed in `0.286s`.
+
+## Follow-ups
+
+- Install the extra explicitly with `uv sync --extra browsing` only on machines that need the browser-backed route probe.
+- After that install, add a headed Playwright probe that opens the Inara traderoutes page, waits for `div.mainblock.traderoutebox`, and prints a compact parsed summary.
+
+## Iteration 213
+
+- When: `2026-06-22 10:53`
+- Area: `control-room`
+- Title: `add-inara-playwright-probe`
+- Source: [2026-06-22-10-53_control-room_add-inara-playwright-probe.md](iteration-logs/2026-06-22-10-53_control-room_add-inara-playwright-probe.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `add-inara-playwright-probe`
+- Started: `2026-06-22 10:53`
+
+## Summary
+
+- Added a scratch Playwright probe that can open a live Inara trade-routes page, wait for the route cards to render, and print compact summaries from the real DOM.
+
+## Changes
+
+- Added `tools/scratch/scratch_inara_trade_routes.py` with a persistent Playwright browser profile, timeout handling for Inara's access-check interstitial, optional HTML/JSON/screenshot capture, and compact route summary output.
+- Kept the probe outside the main runtime surface by placing it under `tools/scratch/` and by importing Playwright lazily with an explicit install hint if the optional `browsing` extra is missing.
+- Added unit coverage for the probe's inline text parsing and endpoint cleanup in `tests/test_scratch_inara_trade_routes.py`.
+- Updated `tools/scratch/README.md` and `docs/diagnostics/cli-reference.md` to advertise the new probe.
+- Verified a live headless run against the provided Inara traderoutes URL; the probe loaded 50 `div.mainblock.traderoutebox` rows and printed route/profit summaries, confirming Playwright can reach the real results DOM where plain HTTP fetches were challenged.
+
+## Follow-ups
+
+- Move the route extraction from scratch-script dicts into typed parser/model code once the exact Control Room presentation shape is chosen.
+- Decide whether the first Control Room integration should read saved probe JSON, call the probe subprocess, or share the Playwright extraction logic directly.
+
+## Iteration 214
+
+- When: `2026-06-22 10:58`
+- Area: `control-room`
+- Title: `default-inara-probe-headless`
+- Source: [2026-06-22-10-58_control-room_default-inara-probe-headless.md](iteration-logs/2026-06-22-10-58_control-room_default-inara-probe-headless.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `default-inara-probe-headless`
+- Started: `2026-06-22 10:58`
+
+## Summary
+
+- Switched the Inara Playwright probe to headless-by-default execution so normal runs do not briefly flash a browser window.
+
+## Changes
+
+- Replaced the old opt-in `--headless` flag with opt-in `--show-browser`, making invisible execution the default path for both the scratch probe and the future backend it will inform.
+- Improved the access-check messaging so headless runs explicitly tell the operator to retry with `--show-browser` if manual confirmation is needed.
+- Updated scratch-tool and CLI-reference docs to show both the default headless call and the visible-browser override.
+- Re-ran the live probe in its new default mode against the Inara traderoutes URL; it still fetched 50 route rows successfully.
+- Re-ran the full unittest suite after the UX change; `521` tests passed in `0.229s`.
+
+## Follow-ups
+
+- Keep the eventual shared Inara backend headless by default and reserve visible-browser mode for explicit recovery or debugging paths.

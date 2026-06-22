@@ -8,6 +8,7 @@ Current scripts:
 - `scratch_cgevent.py`: early Quartz input probe
 - `scratch_control_room_remote.py`: fetch remote observer HTTP surfaces and print websocket session events
 - `scratch_cv.py`: one-shot CV template matcher
+- `scratch_inara_trade_routes.py`: headless-by-default Playwright probe for live Inara route rows
 - `scratch_market.py`: `Market.json` inspector
 - `scratch_rebake.py`: template rebake helper
 

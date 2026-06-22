@@ -43,6 +43,8 @@ uv run python3 tools/ship_controls.py --sequence "SetSpeedZero; RollLeftButton t
 
 ```sh
 uv run python3 tools/scratch/scratch_cv.py --save-debug /tmp/cv-debug.png
+uv run python3 tools/scratch/scratch_inara_trade_routes.py "https://inara.cz/elite/market-traderoutes/?..."
+uv run python3 tools/scratch/scratch_inara_trade_routes.py "https://inara.cz/elite/market-traderoutes/?..." --show-browser
 uv run python3 tools/scratch/scratch_rebake.py destination --delay 3 --open
 uv run python3 tools/scratch/scratch_market.py --raw
 uv run python3 tools/scratch/scratch_cgevent.py x --modifier ctrl --hold 0.2
