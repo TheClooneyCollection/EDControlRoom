@@ -117,6 +117,18 @@ class ControlRoomStateTests(unittest.TestCase):
 
         self.assertEqual(loaded.default_haul, {})
 
+    def test_drops_search_default_haul(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "state.json"
+            path.write_text(
+                '{"default_haul":{"mode":"search","near_system":"Sol","cargo_capacity":"460"},"history":[]}',
+                encoding="utf-8",
+            )
+
+            loaded = load_control_room_state(path)
+
+        self.assertEqual(loaded.default_haul, {})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,6 @@
 # Haul Status
 ## Current
-- `haul search [system]` now fetches live Inara route cards through the shared headless Playwright path and shows the top routes in Control Room's `TRADE ROUTES` panel; with no explicit system it uses the current ship system, and unlike trade routines it does not require bindings/controls to be available.
+- `haul search [system]` now opens a full editable Inara parameter flow seeded from ignored local `haul_search.toml`, the current ship system, and current ship cargo capacity; `haul search url <inara-url>` bypasses the prompt and fetches that exact live query, and replay/edit treats search entries separately from loop-haul defaults.
 - Two-way haul phase detection now tolerates brief `Cargo.json` lag when `Status.json` already reports cargo, which avoids false resume/buy decisions immediately after reconnect or server startup when the manifest lands slightly later than the cargo count.
 - Two-way `haul` can now load a text-editable TOML profile via `haul load [path]`; repo-root `haul.toml` is the default profile and maps directly onto the existing two-station haul parameters.
 - Market buy/sell quantity restore is now configurable: buy `MAX` defaults to `0-99t = 3.0s`, `100-300t = 5.0s`, then a `301t+` log curve that hits about `8.0s` at `800t`, with a `20.0s` global hold cap; sell `MAX` still restores quantity with configurable rapid `UI_Right` taps instead of a long hold.
@@ -16,4 +16,4 @@
 - One-sided haul loops still need live validation to confirm station-side UI timing and resume behavior when a station intentionally has no configured buy cargo.
 - Multi-leg flow still needs live validation for repeated stations, consecutive trades, final-leg completion semantics, and external routes that mark surface destinations with `on_land`; the new Inara search path also needs a decision on whether its fetched route state should remain local-only or become part of remote snapshots.
 ## Next
-- Live-validate multi-jump haul routes plus `on land` destinations to confirm the final-system arrival match and post-drop manual handoff behavior in live Odyssey/CrossOver runs, and then decide whether `haul search` should grow configurable Inara query parameters beyond the initial operator-supplied defaults.
+- Live-validate multi-jump haul routes plus `on land` destinations to confirm the final-system arrival match and post-drop manual handoff behavior in live Odyssey/CrossOver runs, and then decide whether the remaining Powerplay-like Inara URL params (`pi14`/`pi15`) need first-class prompt/config support beyond the current pinned passthrough defaults.

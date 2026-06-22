@@ -5,6 +5,7 @@ from typing import Any, Protocol, TypeAlias
 
 from rich.markup import escape
 
+from edap.control_room import history as _history
 from edap.control_room import prompts as _prompts
 from edap.control_room import replay as _replay
 from edap.control_room.protocol import (
@@ -276,8 +277,8 @@ class LocalControlRoomBackend(ControlRoomEventSink):
         )
 
     def toggle_replay_default_haul(self, entry: CommandHistoryEntry) -> None:
-        if entry.command != "haul":
-            self._host._log("[dim]Only haul entries can be saved as the default.[/]")
+        if entry.command != "haul" or _history.is_haul_search_entry(entry):
+            self._host._log("[dim]Only two-station haul loop entries can be saved as the default.[/]")
             return
         if _replay.default_haul_matches(self._host, entry):
             self._host._saved_state.default_haul = {}

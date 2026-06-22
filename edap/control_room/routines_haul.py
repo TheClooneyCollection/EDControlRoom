@@ -11,7 +11,11 @@ from edap.control_room.interfaces import HaulHost
 from edap.control_room.models import TradeRoutesData
 from edap.control_room_state import CommandHistoryEntry
 from edap.haul_config import DEFAULT_HAUL_CONFIG_PATH, HaulConfigError, load_haul_config
-from edap.inara.trade_routes import build_trade_routes_url, search_trade_routes
+from edap.inara.trade_routes import (
+    build_trade_routes_url,
+    parse_trade_routes_url,
+    search_trade_routes,
+)
 from edap.multi_leg_haul import load_multi_leg_haul_definition
 from edap.routines import haul_loop_two_way, multi_leg_haul
 
@@ -36,13 +40,32 @@ def cmd_haul(
         if app._routine_active:
             app._log("[yellow]A routine is already running — wait for it to finish[/]")
             return
-        system_name = parts[1].strip() if len(parts) > 1 else (app._ship.system or "").strip()
+        search_rest = parts[1].strip() if len(parts) > 1 else ""
+        if search_rest.lower().startswith("url "):
+            query_url = search_rest[4:].strip()
+            if not query_url:
+                app._log("[red]Usage: haul search url <inara-url>[/]")
+                return
+            try:
+                system_name, query_params = parse_trade_routes_url(query_url)
+            except ValueError as exc:
+                app._log(f"[red]{escape(str(exc))}[/]")
+                return
+            dispatch_haul_search(
+                app,
+                system_name=system_name,
+                query_params=query_params,
+                skip_delay=skip_delay,
+                raw_command=raw_command or f"{'!' if skip_delay else ''}haul search url {query_url}".strip(),
+            )
+            return
+        system_name = search_rest if search_rest else (app._ship.system or "").strip()
         if not system_name:
             app._log("[red]haul search needs a system name, or the current ship system must be known.[/]")
             return
-        dispatch_haul_search(
-            app,
+        app._start_haul_search_prompt(
             system_name=system_name,
+            seed=None,
             skip_delay=skip_delay,
             raw_command=raw_command or f"{'!' if skip_delay else ''}haul search {system_name}".strip(),
         )
@@ -122,15 +145,21 @@ def dispatch_haul_search(
     app: HaulHost,
     *,
     system_name: str,
+    query_params: dict[str, str],
     skip_delay: bool = False,
     raw_command: str | None = None,
 ) -> None:
-    query_url = build_trade_routes_url(system_name)
+    query_url = build_trade_routes_url(system_name, query_params=query_params)
+    history_params = {
+        "mode": "search",
+        "near_system": system_name,
+        **{str(key): str(value) for key, value in query_params.items()},
+    }
     app._record_history_entry(
         CommandHistoryEntry(
             raw=raw_command or f"{'!' if skip_delay else ''}haul search {system_name}".strip(),
             command="haul",
-            params={"mode": "search", "system": system_name},
+            params=history_params,
             timestamp=now_iso(),
         )
     )
@@ -141,7 +170,7 @@ def dispatch_haul_search(
 
     def run_search() -> None:
         try:
-            result = search_trade_routes(system_name)
+            result = search_trade_routes(system_name, query_params=query_params)
         except Exception as exc:
             app.call_from_thread(
                 _set_trade_routes_error,

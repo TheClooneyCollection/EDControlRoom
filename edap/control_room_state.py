@@ -31,6 +31,10 @@ def _is_legacy_haul_params(params: dict[str, Any]) -> bool:
     return bool(keys & _LEGACY_HAUL_KEYS) and not (keys & _TWO_WAY_HAUL_KEYS)
 
 
+def _is_search_haul_params(params: dict[str, Any]) -> bool:
+    return str(params.get("mode", "")).strip().lower() == "search"
+
+
 def load_control_room_state(path: Path) -> ControlRoomState:
     if not path.exists():
         return ControlRoomState()
@@ -45,6 +49,8 @@ def load_control_room_state(path: Path) -> ControlRoomState:
     if not isinstance(default_haul, dict):
         default_haul = {}
     elif _is_legacy_haul_params(default_haul):
+        default_haul = {}
+    elif _is_search_haul_params(default_haul):
         default_haul = {}
 
     raw_history = raw.get("history", [])

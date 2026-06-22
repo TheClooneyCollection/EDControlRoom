@@ -162,8 +162,11 @@ def _command_history_snapshot(payload: dict[str, object]) -> CommandHistorySnaps
 def _prompt_state_snapshot(payload: dict[str, object]) -> PromptStateSnapshot:
     return PromptStateSnapshot(
         haul_parameters=_string_mapping(payload.get("haul_parameters", {})),
+        haul_search_parameters=_string_mapping(payload.get("haul_search_parameters", {})),
         haul_prompt_defaults=_string_mapping(payload.get("haul_prompt_defaults", {})),
+        haul_search_prompt_defaults=_string_mapping(payload.get("haul_search_prompt_defaults", {})),
         haul_prompt_step=str(payload.get("haul_prompt_step", "")),
+        haul_prompt_mode=str(payload.get("haul_prompt_mode", "")),
         haul_confirm_buy_station=str(payload.get("haul_confirm_buy_station", "")),
         haul_prompt_raw_command=str(payload.get("haul_prompt_raw_command", "")),
         haul_prompt_skip_delay=bool(payload.get("haul_prompt_skip_delay", False)),

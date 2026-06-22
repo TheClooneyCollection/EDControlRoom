@@ -189,6 +189,22 @@ class ControlRoomFacade:
             raw_command=raw_command,
         )
 
+    def start_haul_search_prompt(
+        self,
+        *,
+        system_name: str,
+        seed: dict[str, str] | None = None,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        _prompts.start_haul_search_prompt(
+            self._app,
+            system_name=system_name,
+            seed=seed,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+
     def cmd_buy(self, rest: str, *, skip_delay: bool = False) -> None:
         routines_trade.cmd_buy(self._app, rest, skip_delay=skip_delay)
 
@@ -258,6 +274,22 @@ class ControlRoomFacade:
             raw_command=raw_command,
         )
 
+    def dispatch_haul_search(
+        self,
+        *,
+        system_name: str,
+        query_params: dict[str, str],
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        routines_haul.dispatch_haul_search(
+            self._app,
+            system_name=system_name,
+            query_params=query_params,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+
     def cmd_reload(self) -> None:
         reloaded: list[str] = []
         for module in self._reloadable_modules:
@@ -304,6 +336,7 @@ FACADE_METHOD_MAP = {
     "_dispatch_dest": "dispatch_dest",
     "_saved_haul_defaults": "saved_haul_defaults",
     "_start_haul_prompt": "start_haul_prompt",
+    "_start_haul_search_prompt": "start_haul_search_prompt",
     "_cmd_buy": "cmd_buy",
     "_cmd_sell": "cmd_sell",
     "_sell_item": "sell_item",
@@ -314,6 +347,7 @@ FACADE_METHOD_MAP = {
     "_handle_haul_confirm_prompt": "handle_haul_confirm_prompt",
     "_handle_haul_prompt": "handle_haul_prompt",
     "_dispatch_haul_loop": "dispatch_haul_loop",
+    "_dispatch_haul_search": "dispatch_haul_search",
     "_cmd_reload": "cmd_reload",
     "_dispatch_command": "dispatch_command",
 }

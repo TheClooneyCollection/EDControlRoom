@@ -1511,8 +1511,9 @@ on_land = true
         output = "\n".join(self.app.logged)
         self.assertIn("Haul config file not found", output)
 
-    def test_haul_search_uses_current_system_and_updates_trade_routes(self) -> None:
+    def test_haul_search_uses_current_system_prompt_then_updates_trade_routes(self) -> None:
         self.app._ship.system = "Praea Euq AK-A d25"
+        self.app._ship.cargo_capacity = 460
         self.app._controls = object()
         self.app._run_in_thread = lambda fn: fn()
 
@@ -1537,13 +1538,18 @@ on_land = true
 
         with patch("edap.control_room.routines_haul.search_trade_routes", return_value=result):
             self.app._cmd_haul("search", raw_command="haul search")
+            self.assertEqual(self.app._prompt_state.haul_prompt_mode, "search")
+            self.assertEqual(self.app._haul_prompt_step, "search_near_system")
+            for _ in range(11):
+                self.app._handle_haul_prompt("")
 
         self.assertEqual(self.app._trade_routes.system_name, "Praea Euq AK-A d25")
         self.assertEqual(len(self.app._trade_routes.routes), 1)
         self.assertFalse(self.app._trade_routes.loading)
         self.assertIsNone(self.app._trade_routes.error)
         self.assertEqual(self.app._saved_state.history[-1].params["mode"], "search")
-        self.assertEqual(self.app._saved_state.history[-1].params["system"], "Praea Euq AK-A d25")
+        self.assertEqual(self.app._saved_state.history[-1].params["near_system"], "Praea Euq AK-A d25")
+        self.assertEqual(self.app._saved_state.history[-1].params["cargo_capacity"], "460")
         self.assertIn("Loaded 1 Inara route(s)", "\n".join(self.app.logged))
 
     def test_haul_search_reports_missing_system_when_current_unknown(self) -> None:
@@ -1552,6 +1558,37 @@ on_land = true
         self.app._cmd_haul("search", raw_command="haul search")
 
         self.assertIn("haul search needs a system name", "\n".join(self.app.logged))
+
+    def test_haul_search_url_fetches_directly(self) -> None:
+        self.app._controls = object()
+        self.app._run_in_thread = lambda fn: fn()
+
+        result = TradeRouteSearchResult(
+            system_name="Praea Euq AK-A d25",
+            query_url="https://inara.cz/elite/market-traderoutes/?ps1=Praea+Euq+AK-A+d25&pi10=460",
+            searched_at="2026-06-22T11:00:00Z",
+            routes=(
+                TradeRoute(
+                    index=1,
+                    from_station="Savitskaya Orbital",
+                    from_system="TSONGORIS",
+                    to_station="Scully-Power Station",
+                    to_system="IX",
+                ),
+            ),
+        )
+        url = (
+            "https://inara.cz/elite/market-traderoutes/?ps1=Praea+Euq+AK-A+d25"
+            "&pi10=460&pi2=60&pi5=8&pi3=3&pi9=500&pi4=1&pi7=5000&pi12=5000&pi8=1&pi14=0&pi15=0&pi1=4"
+        )
+
+        with patch("edap.control_room.routines_haul.search_trade_routes", return_value=result):
+            self.app._cmd_haul(f"search url {url}", raw_command=f"haul search url {url}")
+
+        self.assertEqual(self.app._trade_routes.system_name, "Praea Euq AK-A d25")
+        self.assertEqual(self.app._saved_state.history[-1].params["mode"], "search")
+        self.assertEqual(self.app._saved_state.history[-1].params["near_system"], "Praea Euq AK-A d25")
+        self.assertEqual(self.app._saved_state.history[-1].params["order_by"], "best_profit_per_hour_estimate")
 
     def test_haul_dispatch_passes_on_land_flags(self) -> None:
         captured: dict[str, object] = {}

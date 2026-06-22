@@ -15,7 +15,7 @@ Routine commands (type in the input bar):
     buy <item> [N]     buy N units (default MAX) of commodity
     sell [item] [N]    sell commodity (default: market filter); amount default MAX
     jump               FSD jump sequence
-    haul [commodity]   start haul loop; or use `haul load [path]` / `haul search [system]`
+    haul [commodity]   start haul loop; or use `haul load [path]` / `haul search [system]` / `haul search url <inara-url>`
     multi_leg_haul <route.json|spansh-url>   run a standalone multi-leg haul route
     dest <system>      open galaxy map and plot a route to the named system
     set_dest <system>  alias for dest
@@ -140,7 +140,7 @@ _STARTUP_BINDING_WARNING_IGNORED_ACTIONS = frozenset({
     "YawRightButton",
 })
 
-_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul load | haul search [system] | multi_leg_haul <route> | dest <system> | home | market ... | reload | q"
+_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul load | haul search [system] | haul search url <url> | multi_leg_haul <route> | dest <system> | home | market ... | reload | q"
 _ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS = 10.0
 _JOURNAL_ARTIFACT_LOG_PATH = Path("artifacts/control-room.log")
 _JOURNAL_ARTIFACT_LOG_BUFFER_SIZE = 8192
@@ -885,8 +885,13 @@ class ControlRoomApp(App[None]):
         self._history_draft = snapshot.command_history.draft_command
         self._resume_filter = snapshot.command_history.replay_filter_text
         self._prompt_state.haul_params = dict(snapshot.prompt_state.haul_parameters)
+        self._prompt_state.haul_search_params = dict(snapshot.prompt_state.haul_search_parameters)
         self._prompt_state.haul_prompt_defaults = dict(snapshot.prompt_state.haul_prompt_defaults)
+        self._prompt_state.haul_search_prompt_defaults = dict(
+            snapshot.prompt_state.haul_search_prompt_defaults
+        )
         self._prompt_state.haul_prompt_step = snapshot.prompt_state.haul_prompt_step
+        self._prompt_state.haul_prompt_mode = snapshot.prompt_state.haul_prompt_mode
         self._prompt_state.haul_confirm_buy_station = snapshot.prompt_state.haul_confirm_buy_station
         self._prompt_state.haul_prompt_raw_command = snapshot.prompt_state.haul_prompt_raw_command
         self._prompt_state.haul_prompt_skip_delay = snapshot.prompt_state.haul_prompt_skip_delay

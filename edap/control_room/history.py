@@ -23,8 +23,18 @@ def resume_detail(entry: CommandHistoryEntry) -> str:
     return f"{entry.raw}\n" + "\n".join(parts)
 
 
+def is_haul_search_entry(entry: CommandHistoryEntry) -> bool:
+    return entry.command == "haul" and str(entry.params.get("mode", "")).strip().lower() == "search"
+
+
 def default_haul_matches(entry: CommandHistoryEntry, default_haul: Mapping[str, str]) -> bool:
-    return entry.command == "haul" and bool(default_haul) and entry.params == default_haul
+    return (
+        entry.command == "haul"
+        and not is_haul_search_entry(entry)
+        and bool(default_haul)
+        and default_haul.get("mode", "").strip().lower() != "search"
+        and entry.params == default_haul
+    )
 
 
 def resume_label(entry: CommandHistoryEntry, default_haul: Mapping[str, str]) -> str:

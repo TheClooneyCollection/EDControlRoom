@@ -109,8 +109,11 @@ class CommandHistorySnapshot:
 @dataclass(frozen=True)
 class PromptStateSnapshot:
     haul_parameters: dict[str, str] = field(default_factory=dict)
+    haul_search_parameters: dict[str, str] = field(default_factory=dict)
     haul_prompt_defaults: dict[str, str] = field(default_factory=dict)
+    haul_search_prompt_defaults: dict[str, str] = field(default_factory=dict)
     haul_prompt_step: str = ""
+    haul_prompt_mode: str = ""
     haul_confirm_buy_station: str = ""
     haul_prompt_raw_command: str = ""
     haul_prompt_skip_delay: bool = False

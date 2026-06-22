@@ -31,6 +31,14 @@ class ReplayHost(Protocol):
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None: ...
+    def _dispatch_haul_search(
+        self,
+        *,
+        system_name: str,
+        query_params: dict[str, str],
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None: ...
     def _dispatch_dest(
         self,
         destination: str,
@@ -44,6 +52,14 @@ class ReplayHost(Protocol):
         *,
         commodity: str,
         prompt_for_commodity: bool,
+        seed: dict[str, str] | None = None,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None: ...
+    def _start_haul_search_prompt(
+        self,
+        *,
+        system_name: str,
         seed: dict[str, str] | None = None,
         skip_delay: bool = False,
         raw_command: str | None = None,
@@ -207,8 +223,8 @@ def resume_toggle_default_selected(app: ReplayHost) -> None:
     entry = selected_resume_entry(app)
     if entry is None:
         return
-    if entry.command != "haul":
-        app._log("[dim]Only haul entries can be saved as the default.[/]")
+    if entry.command != "haul" or _history.is_haul_search_entry(entry):
+        app._log("[dim]Only two-station haul loop entries can be saved as the default.[/]")
         return
     if default_haul_matches(app, entry):
         app._saved_state.default_haul = {}
@@ -232,6 +248,21 @@ def replay_history_entry(
 ) -> None:
     if edit:
         if entry.command == "haul":
+            if _history.is_haul_search_entry(entry):
+                seed = {
+                    str(key): str(value)
+                    for key, value in entry.params.items()
+                    if str(key) != "mode"
+                }
+                system_name = seed.get("near_system", "").strip()
+                if system_name:
+                    app._start_haul_search_prompt(
+                        system_name=system_name,
+                        seed=seed,
+                        skip_delay=skip_delay,
+                        raw_command=entry.raw,
+                    )
+                    return
             app._start_haul_prompt(
                 commodity="",
                 prompt_for_commodity=True,
@@ -259,6 +290,21 @@ def replay_history_entry(
         return
 
     if entry.command == "haul":
+        if _history.is_haul_search_entry(entry):
+            params = {
+                str(key): str(value)
+                for key, value in entry.params.items()
+                if str(key) != "mode"
+            }
+            system_name = params.pop("near_system", "").strip()
+            if system_name:
+                app._dispatch_haul_search(
+                    system_name=system_name,
+                    query_params=params,
+                    skip_delay=skip_delay or entry.raw.startswith("!"),
+                    raw_command=entry.raw,
+                )
+            return
         app._haul_params = {str(key): str(value) for key, value in entry.params.items()}
         app._dispatch_haul_loop(
             skip_delay=skip_delay or entry.raw.startswith("!"),

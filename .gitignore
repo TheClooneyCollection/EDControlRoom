@@ -13,4 +13,5 @@ artifacts/
 backup/
 worktrees/
 config.toml
+haul_search.toml
 .control_room_state.json

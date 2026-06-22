@@ -190,8 +190,11 @@ def _prompt_state_snapshot(app: SnapshotHost) -> PromptStateSnapshot:
     state = app._prompt_state
     return PromptStateSnapshot(
         haul_parameters=dict(state.haul_params),
+        haul_search_parameters=dict(state.haul_search_params),
         haul_prompt_defaults=dict(state.haul_prompt_defaults),
+        haul_search_prompt_defaults=dict(state.haul_search_prompt_defaults),
         haul_prompt_step=state.haul_prompt_step,
+        haul_prompt_mode=state.haul_prompt_mode,
         haul_confirm_buy_station=state.haul_confirm_buy_station,
         haul_prompt_raw_command=state.haul_prompt_raw_command,
         haul_prompt_skip_delay=state.haul_prompt_skip_delay,

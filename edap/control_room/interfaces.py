@@ -123,6 +123,14 @@ class HaulHost(RoutineHost, Protocol):
     _haul_params: dict[str, str]
 
     def _record_history_entry(self, entry: CommandHistoryEntry) -> None: ...
+    def _start_haul_search_prompt(
+        self,
+        *,
+        system_name: str,
+        seed: dict[str, str] | None = None,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None: ...
     def _start_haul_prompt(
         self,
         *,
@@ -133,6 +141,14 @@ class HaulHost(RoutineHost, Protocol):
         raw_command: str | None = None,
     ) -> None: ...
     def _start_haul_confirm_prompt(self, station: str) -> None: ...
+    def _dispatch_haul_search(
+        self,
+        *,
+        system_name: str,
+        query_params: dict[str, str],
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None: ...
     def _start_haul_stats(
         self,
         *,

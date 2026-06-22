@@ -5,7 +5,7 @@ from datetime import datetime, UTC
 import re
 import urllib.parse
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -13,22 +13,50 @@ _DEFAULT_PROFILE_DIR = _REPO_ROOT / "artifacts" / "playwright" / "inara-profile"
 _BASE_TRADE_ROUTES_URL = "https://inara.cz/elite/market-traderoutes/"
 
 # These parameters are the operator-supplied starting defaults from the initial
-# Praea Euq AK-A d25 experiment. Only the source system (`ps1`) changes for
-# `haul search [system]` right now.
+# Praea Euq AK-A d25 experiment. The `pi14`/`pi15` passthrough defaults remain
+# pinned until the remaining Powerplay mapping is confirmed live.
 DEFAULT_TRADE_ROUTE_QUERY_PARAMS: dict[str, str] = {
-    "pi10": "460",
-    "pi2": "60",
-    "pi5": "8",
-    "pi3": "3",
-    "pi9": "500",
-    "pi4": "1",
-    "pi7": "5000",
-    "pi12": "5000",
-    "pi8": "1",
     "pi14": "0",
     "pi15": "0",
-    "pi1": "4",
 }
+
+DEFAULT_TRADE_ROUTE_SEARCH_PARAMS: dict[str, str] = {
+    "cargo_capacity": "460",
+    "max_route_distance_ly": "60",
+    "max_price_age_hours": "8",
+    "min_landing_pad": "large",
+    "max_station_distance_ls": "500",
+    "use_surface_stations": "no",
+    "min_supply": "5000",
+    "min_demand": "5000",
+    "include_round_trips": "true",
+    "order_by": "best_profit_per_hour_estimate",
+}
+
+_LANDING_PAD_TO_QUERY = {
+    "small": "1",
+    "medium": "2",
+    "large": "3",
+}
+_LANDING_PAD_FROM_QUERY = {value: key for key, value in _LANDING_PAD_TO_QUERY.items()}
+
+_SURFACE_STATIONS_TO_QUERY = {
+    "yes_with_odyssey": "0",
+    "no": "1",
+    "yes_exclude_odyssey": "2",
+}
+_SURFACE_STATIONS_FROM_QUERY = {
+    value: key for key, value in _SURFACE_STATIONS_TO_QUERY.items()
+}
+
+_ORDER_BY_TO_QUERY = {
+    "best_profit": "0",
+    "last_update": "1",
+    "route_distance": "2",
+    "distance": "3",
+    "best_profit_per_hour_estimate": "4",
+}
+_ORDER_BY_FROM_QUERY = {value: key for key, value in _ORDER_BY_TO_QUERY.items()}
 
 _ENDPOINT_RE = re.compile(r"^(FROM|TO)\s+(.+?)\s+\|\s+(.+)$")
 _FIELD_LABEL_RE = re.compile(r"^[A-Z][A-Z0-9 %/+.-]*(?: [A-Z0-9 %/+.-]+)*$")
@@ -72,6 +100,82 @@ class TradeRouteSearchResult:
     query_url: str
     searched_at: str
     routes: tuple[TradeRoute, ...]
+
+
+def trade_route_search_defaults() -> dict[str, str]:
+    return dict(DEFAULT_TRADE_ROUTE_SEARCH_PARAMS)
+
+
+def _as_bool_string(value: str) -> str:
+    return "true" if value.strip().lower() in {"1", "true", "y", "yes"} else "false"
+
+
+def _clean_search_params(params: Mapping[str, str] | None) -> dict[str, str]:
+    cleaned = trade_route_search_defaults()
+    if params is None:
+        return cleaned
+    for key, value in params.items():
+        if value is None:
+            continue
+        cleaned[str(key)] = str(value).strip()
+    cleaned["include_round_trips"] = _as_bool_string(cleaned.get("include_round_trips", "true"))
+    return cleaned
+
+
+def build_trade_route_query_params(search_params: Mapping[str, str] | None = None) -> dict[str, str]:
+    params = _clean_search_params(search_params)
+    query_params = dict(DEFAULT_TRADE_ROUTE_QUERY_PARAMS)
+    query_params["pi10"] = params["cargo_capacity"]
+    query_params["pi2"] = params["max_route_distance_ly"]
+    query_params["pi5"] = params["max_price_age_hours"]
+    query_params["pi3"] = _LANDING_PAD_TO_QUERY.get(params["min_landing_pad"], "3")
+    query_params["pi9"] = params["max_station_distance_ls"]
+    query_params["pi4"] = _SURFACE_STATIONS_TO_QUERY.get(params["use_surface_stations"], "1")
+    query_params["pi7"] = params["min_supply"]
+    query_params["pi12"] = params["min_demand"]
+    query_params["pi1"] = _ORDER_BY_TO_QUERY.get(params["order_by"], "4")
+    if params["include_round_trips"] == "true":
+        query_params["pi8"] = "1"
+    else:
+        query_params.pop("pi8", None)
+    return query_params
+
+
+def parse_trade_routes_url(query_url: str) -> tuple[str, dict[str, str]]:
+    parsed = urllib.parse.urlparse(query_url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("Inara trade-route URL must start with http:// or https://.")
+    if parsed.netloc.lower() != "inara.cz":
+        raise ValueError("Only inara.cz trade-route URLs are supported.")
+    if not parsed.path.rstrip("/").endswith("/elite/market-traderoutes"):
+        raise ValueError("URL must point to Inara's /elite/market-traderoutes page.")
+
+    query = urllib.parse.parse_qs(parsed.query)
+    system_name = (query.get("ps1", [""])[0] or "").strip()
+    if not system_name:
+        raise ValueError("Inara trade-route URL is missing the ps1 source-system parameter.")
+
+    return system_name, {
+        "cargo_capacity": (query.get("pi10", [""])[0] or DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["cargo_capacity"]).strip(),
+        "max_route_distance_ly": (query.get("pi2", [""])[0] or DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["max_route_distance_ly"]).strip(),
+        "max_price_age_hours": (query.get("pi5", [""])[0] or DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["max_price_age_hours"]).strip(),
+        "min_landing_pad": _LANDING_PAD_FROM_QUERY.get(
+            (query.get("pi3", [""])[0] or "").strip(),
+            DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["min_landing_pad"],
+        ),
+        "max_station_distance_ls": (query.get("pi9", [""])[0] or DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["max_station_distance_ls"]).strip(),
+        "use_surface_stations": _SURFACE_STATIONS_FROM_QUERY.get(
+            (query.get("pi4", [""])[0] or "").strip(),
+            DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["use_surface_stations"],
+        ),
+        "min_supply": (query.get("pi7", [""])[0] or DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["min_supply"]).strip(),
+        "min_demand": (query.get("pi12", [""])[0] or DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["min_demand"]).strip(),
+        "include_round_trips": "true" if (query.get("pi8", [""])[0] or "").strip() == "1" else "false",
+        "order_by": _ORDER_BY_FROM_QUERY.get(
+            (query.get("pi1", [""])[0] or "").strip(),
+            DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["order_by"],
+        ),
+    }
 
 
 def _load_sync_playwright() -> Any:
@@ -205,9 +309,7 @@ def build_trade_routes_url(
     *,
     query_params: dict[str, str] | None = None,
 ) -> str:
-    params = dict(DEFAULT_TRADE_ROUTE_QUERY_PARAMS)
-    if query_params is not None:
-        params.update({str(key): str(value) for key, value in query_params.items()})
+    params = build_trade_route_query_params(query_params)
     params["ps1"] = system_name
     return f"{_BASE_TRADE_ROUTES_URL}?{urllib.parse.urlencode(params)}"
 
