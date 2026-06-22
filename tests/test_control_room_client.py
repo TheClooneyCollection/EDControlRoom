@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import asdict
 from pathlib import Path
 import unittest
@@ -243,6 +244,36 @@ class ControlRoomClientTests(unittest.TestCase):
 
         self.assertIsNone(app._journal_dir)
         self.assertIsNone(app._market_path)
+
+    def test_observer_app_mounts_without_local_journal_dir(self) -> None:
+        target = ObserverServerTarget(
+            host="bridge.local",
+            port=8765,
+            http_base_url="http://bridge.local:8765",
+            websocket_url="ws://bridge.local:8765/session",
+        )
+        backend = RemoteObserverBackend(
+            server_target=target,
+            access_token="secret-token",
+            client_name="observer-ipad",
+            initial_snapshot=_snapshot(),
+            websocket_connect_info=_websocket_connect_info(),
+        )
+        backend.start = lambda: None  # type: ignore[method-assign]
+        backend.close = lambda: None  # type: ignore[method-assign]
+
+        app = ObserverControlRoomApp(
+            _make_observer_context(),
+            backend=backend,
+            server_target=target,
+            client_name="observer-ipad",
+        )
+
+        async def exercise() -> None:
+            async with app.run_test():
+                self.assertIsNotNone(app._backend_event_unsubscribe)
+
+        asyncio.run(exercise())
 
     def test_parse_target_defaults_to_http_and_default_port(self) -> None:
         target = parse_observer_server_target("192.168.1.44")

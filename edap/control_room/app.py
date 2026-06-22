@@ -678,6 +678,8 @@ class ControlRoomApp(App[None]):
 
     def on_mount(self) -> None:
         self._configure_screen_widgets()
+        if self._backend.exit_detaches_remote_session():
+            return
         self._mount_local_runtime()
 
     def _configure_screen_widgets(self) -> None:

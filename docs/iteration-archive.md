@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `83`
-- Latest generated iteration number: `216`
+- Generated iteration count: `84`
+- Latest generated iteration number: `217`
 
 ## Iteration 134
 
@@ -2349,3 +2349,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Re-run the live multi-machine observer flow to confirm the remote TUI now reaches the initial snapshot cleanly on a non-ED client host.
+
+## Iteration 217
+
+- When: `2026-06-22 11:53`
+- Area: `control-room`
+- Title: `guard-remote-journal-mount`
+- Source: [2026-06-22-11-53_control-room_guard-remote-journal-mount.md](iteration-logs/2026-06-22-11-53_control-room_guard-remote-journal-mount.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `guard-remote-journal-mount`
+- Started: `2026-06-22 11:53`
+
+## Summary
+
+- Guarded `ControlRoomApp.on_mount()` behind the backend mode so remote-backed mounts cannot trip the local journal-directory runtime check.
+
+## Changes
+
+- Added a backend-aware early return in [edap/control_room/app.py](/Users/nicholasclooney/Source/Projects/EDControlRoom/edap/control_room/app.py:679) before local runtime setup.
+- Added a regression test in [tests/test_control_room_client.py](/Users/nicholasclooney/Source/Projects/EDControlRoom/tests/test_control_room_client.py:246) that mounts the observer app without a local journal directory.
+- Verified `tests/test_control_room_client.py` passes; full `unittest discover -s tests` stays at `0.256s` but currently has one unrelated existing failure in `test_haul_search_uses_current_system_and_updates_trade_routes`.
+
+## Follow-ups
+
+- Re-run a live `control_room connect` session against `serve` to confirm the shipped remote client no longer surfaces the local journal runtime error.
