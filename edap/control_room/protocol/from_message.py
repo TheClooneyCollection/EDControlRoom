@@ -16,6 +16,8 @@ from .snapshot import (
     ServerStatusSnapshot,
     SessionSnapshot,
     ShipSnapshot,
+    TradeRouteSnapshot,
+    TradeRoutesSnapshot,
     UiStateSnapshot,
 )
 
@@ -56,6 +58,7 @@ def snapshot_from_message(payload: dict[str, object]) -> ControlRoomSnapshot:
             for entry in _sequence(payload["activity_log"])
         ],
         server_status=_server_status_snapshot(_mapping(payload["server_status"])),
+        trade_routes=_trade_routes_snapshot(_mapping(payload.get("trade_routes", {}))),
     )
 
 
@@ -174,6 +177,9 @@ def _prompt_state_snapshot(payload: dict[str, object]) -> PromptStateSnapshot:
         destination_prompt_settle_default=_optional_float(payload.get("destination_prompt_settle_default")),
         destination_prompt_raw_command=str(payload.get("destination_prompt_raw_command", "")),
         destination_prompt_skip_delay=bool(payload.get("destination_prompt_skip_delay", False)),
+        command_input_prefill_active=bool(payload.get("command_input_prefill_active", False)),
+        command_input_placeholder=str(payload.get("command_input_placeholder", "")),
+        command_input_value=str(payload.get("command_input_value", "")),
     )
 
 
@@ -208,6 +214,35 @@ def _server_status_snapshot(payload: dict[str, object]) -> ServerStatusSnapshot:
         bindings_loaded=bool(payload.get("bindings_loaded", False)),
         capability_names=[str(name) for name in _sequence(payload.get("capability_names", []))],
         operator_mode=_optional_str(payload.get("operator_mode")),
+    )
+
+
+def _trade_routes_snapshot(payload: dict[str, object]) -> TradeRoutesSnapshot:
+    return TradeRoutesSnapshot(
+        system_name=str(payload.get("system_name", "")),
+        query_url=str(payload.get("query_url", "")),
+        searched_at=str(payload.get("searched_at", "")),
+        loading=bool(payload.get("loading", False)),
+        error=_optional_str(payload.get("error")),
+        routes=[
+            TradeRouteSnapshot(
+                index=int(entry.get("index", 0)),
+                from_station=str(entry.get("from_station", "")),
+                from_system=str(entry.get("from_system", "")),
+                to_station=str(entry.get("to_station", "")),
+                to_system=str(entry.get("to_system", "")),
+                source_buy_commodity=_optional_str(entry.get("source_buy_commodity")),
+                target_buy_commodity=_optional_str(entry.get("target_buy_commodity")),
+                route_distance=_optional_str(entry.get("route_distance")),
+                profit_per_unit=_optional_str(entry.get("profit_per_unit")),
+                profit_per_trip=_optional_str(entry.get("profit_per_trip")),
+                profit_per_hour=_optional_str(entry.get("profit_per_hour")),
+                updated=_optional_str(entry.get("updated")),
+                raw_text=str(entry.get("raw_text", "")),
+                url_links=[str(link) for link in _sequence(entry.get("url_links", []))],
+            )
+            for entry in (_mapping(item) for item in _sequence(payload.get("routes", [])))
+        ],
     )
 
 

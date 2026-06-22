@@ -21,6 +21,8 @@ from .snapshot import (
     ServerStatusSnapshot,
     SessionSnapshot,
     ShipSnapshot,
+    TradeRouteSnapshot,
+    TradeRoutesSnapshot,
     UiStateSnapshot,
 )
 
@@ -43,6 +45,7 @@ class SnapshotHost(Protocol):
     _history_draft: str
     _resume_filter: str
     _market_filter: str | None
+    _trade_routes: Any
     _selected_resume_history_entry: CommandHistoryEntry | None
     _protocol_activity_log: list[ActivityLogEntry]
     _config: Any
@@ -99,6 +102,7 @@ def snapshot_from_app(
             capability_names=list(capability_names),
             operator_mode=operator_mode,
         ),
+        trade_routes=_trade_routes_snapshot(app),
     )
 
 
@@ -202,6 +206,9 @@ def _prompt_state_snapshot(app: SnapshotHost) -> PromptStateSnapshot:
         destination_prompt_settle_default=state.dest_prompt_settle_default,
         destination_prompt_raw_command=state.dest_prompt_raw_command,
         destination_prompt_skip_delay=state.dest_prompt_skip_delay,
+        command_input_prefill_active=state.command_input_prefill_active,
+        command_input_placeholder=state.command_input_placeholder,
+        command_input_value=state.command_input_value,
     )
 
 
@@ -237,6 +244,36 @@ def _server_status_snapshot(
         bindings_loaded=app._ctx.binding_lookup is not None,
         capability_names=capability_names,
         operator_mode=operator_mode,
+    )
+
+
+def _trade_routes_snapshot(app: SnapshotHost) -> TradeRoutesSnapshot:
+    trade_routes = app._trade_routes
+    return TradeRoutesSnapshot(
+        system_name=trade_routes.system_name,
+        query_url=trade_routes.query_url,
+        searched_at=trade_routes.searched_at,
+        loading=trade_routes.loading,
+        error=trade_routes.error,
+        routes=[
+            TradeRouteSnapshot(
+                index=route.index,
+                from_station=route.from_station,
+                from_system=route.from_system,
+                to_station=route.to_station,
+                to_system=route.to_system,
+                source_buy_commodity=route.source_buy_commodity,
+                target_buy_commodity=route.target_buy_commodity,
+                route_distance=route.route_distance,
+                profit_per_unit=route.profit_per_unit,
+                profit_per_trip=route.profit_per_trip,
+                profit_per_hour=route.profit_per_hour,
+                updated=route.updated,
+                raw_text=route.raw_text,
+                url_links=list(route.url_links),
+            )
+            for route in trade_routes.routes
+        ],
     )
 
 

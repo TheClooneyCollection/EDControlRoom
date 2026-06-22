@@ -33,6 +33,8 @@ from .snapshot import (
     ServerStatusSnapshot,
     SessionSnapshot,
     ShipSnapshot,
+    TradeRouteSnapshot,
+    TradeRoutesSnapshot,
     UiStateSnapshot,
 )
 
@@ -70,6 +72,8 @@ __all__ = [
     "SUPPORTED_EVENT_MESSAGE_TYPES",
     "SUPPORTED_MESSAGE_TYPES",
     "SUPPORTED_RESPONSE_MESSAGE_TYPES",
+    "TradeRouteSnapshot",
+    "TradeRoutesSnapshot",
     "protocol_timestamp_now",
     "UiStateSnapshot",
     "validate_remote_observer_capabilities_payload",

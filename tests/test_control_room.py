@@ -1545,6 +1545,9 @@ on_land = true
             self.assertEqual(self.app._haul_prompt_step, "search_edit")
             self.assertIn("near_system='Praea Euq AK-A d25'", self.app._command_input.value)
             self.assertIn("cargo_capacity=460", self.app._command_input.value)
+            snapshot = self.app._backend.current_snapshot()
+            self.assertTrue(snapshot.prompt_state.command_input_prefill_active)
+            self.assertIn("near_system='Praea Euq AK-A d25'", snapshot.prompt_state.command_input_value)
             self.app._handle_haul_prompt(self.app._command_input.value)
 
         self.assertEqual(self.app._trade_routes.system_name, "Praea Euq AK-A d25")
@@ -1555,6 +1558,11 @@ on_land = true
         self.assertEqual(self.app._saved_state.history[-1].params["near_system"], "Praea Euq AK-A d25")
         self.assertEqual(self.app._saved_state.history[-1].params["cargo_capacity"], "460")
         self.assertIn("Loaded 1 Inara route(s)", "\n".join(self.app.logged))
+
+        snapshot = self.app._backend.current_snapshot()
+        self.assertEqual(snapshot.trade_routes.system_name, "Praea Euq AK-A d25")
+        self.assertEqual(len(snapshot.trade_routes.routes), 1)
+        self.assertEqual(snapshot.trade_routes.routes[0].from_station, "Savitskaya Orbital")
 
     def test_haul_search_reports_missing_system_when_current_unknown(self) -> None:
         self.app._controls = object()
@@ -2978,6 +2986,8 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertEqual(input_stub.value, "jump")
         self.assertEqual(input_stub.cursor_position, 4)
         self.assertEqual(focused, [input_stub])
+        self.assertTrue(self.app._prompt_state.command_input_prefill_active)
+        self.assertEqual(self.app._prompt_state.command_input_value, "jump")
 
     def test_non_executable_command_stays_immediate_even_with_delay_configured(self) -> None:
         delays: list[float] = []

@@ -9,12 +9,14 @@ from textual.widgets import Input, OptionList, RichLog, Static
 
 from edap.config import AppConfig
 from edap.control_room import history as _history
+from edap.control_room import prompts as _prompts
 from edap.control_room.models import ReplaySelection
 from edap.control_room_state import CommandHistoryEntry, ControlRoomState
 
 
 class ReplayHost(Protocol):
     _config: AppConfig
+    _prompt_state: object
     _saved_state: ControlRoomState
     _resume_entries: list[ReplaySelection]
     _resume_open: bool
@@ -286,6 +288,11 @@ def replay_history_entry(
         cmd_input = app.query_one("#cmd", Input)
         cmd_input.value = entry.raw
         cmd_input.cursor_position = len(cmd_input.value)
+        _prompts.set_command_input_prefill(
+            app._prompt_state,
+            placeholder=getattr(cmd_input, "placeholder", ""),
+            value=entry.raw,
+        )
         app.set_focus(cmd_input)
         return
 

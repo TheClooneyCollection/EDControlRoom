@@ -88,11 +88,15 @@ class ObserverControlRoomApp(ControlRoomApp):
         command_input = self.query_one("#cmd", Input)
         is_active_operator = self._view_snapshot.session.client_role == "active_operator"
         command_input.disabled = not is_active_operator
-        command_input.placeholder = (
-            self._default_command_placeholder
-            if is_active_operator
-            else "observer mode - read only"
-        )
+        if not is_active_operator:
+            command_input.placeholder = "observer mode - read only"
+            return
+        if self._prompt_state.command_input_prefill_active:
+            command_input.placeholder = self._prompt_state.command_input_placeholder
+            command_input.value = self._prompt_state.command_input_value
+            command_input.cursor_position = len(command_input.value)
+            return
+        command_input.placeholder = self._default_command_placeholder
 
 
 def connect_observer_mode(

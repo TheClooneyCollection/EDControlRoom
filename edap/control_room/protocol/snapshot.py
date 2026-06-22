@@ -121,6 +121,37 @@ class PromptStateSnapshot:
     destination_prompt_settle_default: float | None = None
     destination_prompt_raw_command: str = ""
     destination_prompt_skip_delay: bool = False
+    command_input_prefill_active: bool = False
+    command_input_placeholder: str = ""
+    command_input_value: str = ""
+
+
+@dataclass(frozen=True)
+class TradeRouteSnapshot:
+    index: int
+    from_station: str
+    from_system: str
+    to_station: str
+    to_system: str
+    source_buy_commodity: str | None = None
+    target_buy_commodity: str | None = None
+    route_distance: str | None = None
+    profit_per_unit: str | None = None
+    profit_per_trip: str | None = None
+    profit_per_hour: str | None = None
+    updated: str | None = None
+    raw_text: str = ""
+    url_links: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class TradeRoutesSnapshot:
+    system_name: str = ""
+    query_url: str = ""
+    searched_at: str = ""
+    loading: bool = False
+    error: str | None = None
+    routes: list[TradeRouteSnapshot] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -172,3 +203,4 @@ class ControlRoomSnapshot:
     replay_browser: ReplayBrowserSnapshot
     activity_log: list[ActivityLogEntry]
     server_status: ServerStatusSnapshot
+    trade_routes: TradeRoutesSnapshot = field(default_factory=TradeRoutesSnapshot)

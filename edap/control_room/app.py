@@ -94,6 +94,7 @@ from edap.control_room.protocol.adapters import (
 from edap.control_room.protocol.events import AnnouncementEvent
 from edap.control_room.protocol.sink import ControlRoomEventSink
 from edap.control_room.protocol.snapshot import ActivityLogEntry
+from edap.inara.trade_routes import TradeRoute
 
 # Modules eligible for in-place hot reload via the `reload` command.
 # Order matters: leaf modules first, then modules that import from them.
@@ -899,6 +900,13 @@ class ControlRoomApp(App[None]):
         self._prompt_state.dest_prompt_settle_default = snapshot.prompt_state.destination_prompt_settle_default
         self._prompt_state.dest_prompt_raw_command = snapshot.prompt_state.destination_prompt_raw_command
         self._prompt_state.dest_prompt_skip_delay = snapshot.prompt_state.destination_prompt_skip_delay
+        self._prompt_state.command_input_prefill_active = (
+            snapshot.prompt_state.command_input_prefill_active
+        )
+        self._prompt_state.command_input_placeholder = (
+            snapshot.prompt_state.command_input_placeholder
+        )
+        self._prompt_state.command_input_value = snapshot.prompt_state.command_input_value
         self._replay_state.open = snapshot.replay_browser.open
         self._replay_state.filter_text = snapshot.replay_browser.filter_text
         self._selected_resume_history_entry = (
@@ -927,6 +935,40 @@ class ControlRoomApp(App[None]):
             )
             for entry in snapshot.replay_browser.visible_entries
         ]
+        self._trade_routes = TradeRoutesData(
+            system_name=snapshot.trade_routes.system_name,
+            query_url=snapshot.trade_routes.query_url,
+            searched_at=snapshot.trade_routes.searched_at,
+            loading=snapshot.trade_routes.loading,
+            error=snapshot.trade_routes.error,
+            routes=[
+                TradeRoute(
+                    index=route.index,
+                    from_station=route.from_station,
+                    from_system=route.from_system,
+                    to_station=route.to_station,
+                    to_system=route.to_system,
+                    source_buy_commodity=route.source_buy_commodity,
+                    target_buy_commodity=route.target_buy_commodity,
+                    route_distance=route.route_distance,
+                    profit_per_unit=route.profit_per_unit,
+                    profit_per_trip=route.profit_per_trip,
+                    profit_per_hour=route.profit_per_hour,
+                    updated=route.updated,
+                    raw_text=route.raw_text,
+                    url_links=tuple(route.url_links),
+                )
+                for route in snapshot.trade_routes.routes
+            ],
+        )
+        try:
+            command_input = self.query_one("#cmd", Input)
+        except Exception:
+            command_input = None
+        if command_input is not None and self._prompt_state.command_input_prefill_active:
+            command_input.placeholder = self._prompt_state.command_input_placeholder
+            command_input.value = self._prompt_state.command_input_value
+            command_input.cursor_position = len(command_input.value)
         try:
             option_list = self.query_one("#resume-list", OptionList)
             option_list.clear_options()

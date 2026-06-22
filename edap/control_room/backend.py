@@ -202,6 +202,7 @@ class LocalControlRoomBackend(ControlRoomEventSink):
                 raw_command=dispatch.raw_command,
             )
             return
+        _prompts.clear_command_input_prefill(self._host._prompt_state)
         self.dispatch_command(raw)
 
     def interrupt_active_routine(self) -> None:

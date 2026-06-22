@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 import unittest
+
+from textual.widgets import Input
 
 from edap.config import (
     AppConfig,
@@ -46,6 +48,8 @@ from edap.control_room.protocol.snapshot import (
     ServerStatusSnapshot,
     SessionSnapshot,
     ShipSnapshot,
+    TradeRouteSnapshot,
+    TradeRoutesSnapshot,
     UiStateSnapshot,
 )
 from edap.runtime import ResolvedPath, RuntimeContext
@@ -272,6 +276,111 @@ class ControlRoomClientTests(unittest.TestCase):
         async def exercise() -> None:
             async with app.run_test():
                 self.assertIsNotNone(app._backend_event_unsubscribe)
+
+        asyncio.run(exercise())
+
+    def test_observer_app_applies_remote_replay_edit_prefill(self) -> None:
+        target = ObserverServerTarget(
+            host="bridge.local",
+            port=8765,
+            http_base_url="http://bridge.local:8765",
+            websocket_url="ws://bridge.local:8765/session",
+        )
+        backend = RemoteObserverBackend(
+            server_target=target,
+            access_token="secret-token",
+            client_name="observer-ipad",
+            initial_snapshot=_snapshot(),
+            websocket_connect_info=_websocket_connect_info(),
+        )
+        backend.start = lambda: None  # type: ignore[method-assign]
+        backend.close = lambda: None  # type: ignore[method-assign]
+
+        app = ObserverControlRoomApp(
+            _make_observer_context(),
+            backend=backend,
+            server_target=target,
+            client_name="observer-ipad",
+        )
+
+        updated_snapshot = replace(
+            _snapshot(),
+            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+            prompt_state=PromptStateSnapshot(
+                command_input_prefill_active=True,
+                command_input_placeholder="commands | help dock | ...",
+                command_input_value="jump",
+            ),
+        )
+
+        async def exercise() -> None:
+            async with app.run_test() as pilot:
+                backend._snapshot = updated_snapshot
+                app._apply_remote_snapshot(replace_activity=True)
+                await pilot.pause()
+                command_input = app.query_one("#cmd", Input)
+                self.assertFalse(command_input.disabled)
+                self.assertEqual(command_input.value, "jump")
+                self.assertEqual(command_input.cursor_position, 4)
+
+        asyncio.run(exercise())
+
+    def test_observer_app_applies_remote_trade_routes_snapshot(self) -> None:
+        target = ObserverServerTarget(
+            host="bridge.local",
+            port=8765,
+            http_base_url="http://bridge.local:8765",
+            websocket_url="ws://bridge.local:8765/session",
+        )
+        backend = RemoteObserverBackend(
+            server_target=target,
+            access_token="secret-token",
+            client_name="observer-ipad",
+            initial_snapshot=_snapshot(),
+            websocket_connect_info=_websocket_connect_info(),
+        )
+        backend.start = lambda: None  # type: ignore[method-assign]
+        backend.close = lambda: None  # type: ignore[method-assign]
+
+        app = ObserverControlRoomApp(
+            _make_observer_context(),
+            backend=backend,
+            server_target=target,
+            client_name="observer-ipad",
+        )
+
+        updated_snapshot = replace(
+            _snapshot(),
+            trade_routes=TradeRoutesSnapshot(
+                system_name="Praea Euq AK-A d25",
+                query_url="https://inara.cz/elite/market-traderoutes/?ps1=Praea+Euq+AK-A+d25",
+                searched_at="2026-06-22T11:00:00Z",
+                routes=[
+                    TradeRouteSnapshot(
+                        index=1,
+                        from_station="Savitskaya Orbital",
+                        from_system="TSONGORIS",
+                        to_station="Scully-Power Station",
+                        to_system="IX",
+                        source_buy_commodity="Silver",
+                        route_distance="33.08 Ly",
+                        profit_per_unit="45,510 Cr",
+                        profit_per_hour="88,323,553 Cr",
+                        updated="3 hours ago",
+                    )
+                ],
+            ),
+        )
+
+        async def exercise() -> None:
+            async with app.run_test() as pilot:
+                backend._snapshot = updated_snapshot
+                app._apply_remote_snapshot(replace_activity=True)
+                await pilot.pause()
+                self.assertEqual(app._trade_routes.system_name, "Praea Euq AK-A d25")
+                self.assertEqual(len(app._trade_routes.routes), 1)
+                self.assertEqual(app._trade_routes.routes[0].from_station, "Savitskaya Orbital")
+                self.assertEqual(app._trade_routes.routes[0].source_buy_commodity, "Silver")
 
         asyncio.run(exercise())
 

@@ -176,6 +176,7 @@ def clear_destination_prompt(prompt_state: PromptState) -> None:
     prompt_state.dest_prompt_settle_default = None
     prompt_state.dest_prompt_raw_command = ""
     prompt_state.dest_prompt_skip_delay = False
+    clear_command_input_prefill(prompt_state)
 
 
 def clear_haul_prompt(prompt_state: PromptState) -> None:
@@ -187,12 +188,31 @@ def clear_haul_prompt(prompt_state: PromptState) -> None:
     prompt_state.haul_prompt_mode = ""
     prompt_state.haul_prompt_raw_command = ""
     prompt_state.haul_prompt_skip_delay = False
+    clear_command_input_prefill(prompt_state)
 
 
 def clear_haul_confirm_prompt(prompt_state: PromptState) -> None:
     prompt_state.haul_confirm_buy_station = ""
     prompt_state.haul_prompt_raw_command = ""
     prompt_state.haul_prompt_skip_delay = False
+    clear_command_input_prefill(prompt_state)
+
+
+def clear_command_input_prefill(prompt_state: PromptState) -> None:
+    prompt_state.command_input_prefill_active = False
+    prompt_state.command_input_placeholder = ""
+    prompt_state.command_input_value = ""
+
+
+def set_command_input_prefill(
+    prompt_state: PromptState,
+    *,
+    placeholder: str,
+    value: str = "",
+) -> None:
+    prompt_state.command_input_prefill_active = True
+    prompt_state.command_input_placeholder = placeholder
+    prompt_state.command_input_value = value
 
 
 def saved_haul_defaults(
@@ -237,11 +257,20 @@ def _set_prompt_input(
     *,
     placeholder: str,
     value: str = "",
+    prefill_active: bool = True,
 ) -> None:
     cmd_input = app.query_one("#cmd", Input)
     cmd_input.placeholder = placeholder
     cmd_input.value = value
     cmd_input.cursor_position = len(value)
+    if prefill_active:
+        set_command_input_prefill(
+            app._prompt_state,
+            placeholder=placeholder,
+            value=value,
+        )
+    else:
+        clear_command_input_prefill(app._prompt_state)
 
 
 def cancel_prompt_flow(
@@ -252,17 +281,17 @@ def cancel_prompt_flow(
 ) -> bool:
     if app._haul_prompt_step:
         clear_haul_prompt(app._prompt_state)
-        _set_prompt_input(app, placeholder=default_placeholder)
+        _set_prompt_input(app, placeholder=default_placeholder, prefill_active=False)
         app._log(f"[yellow]{escape(source)} received — cancelling haul prompt.[/]")
         return True
     if app._haul_confirm_buy_station:
         clear_haul_confirm_prompt(app._prompt_state)
-        _set_prompt_input(app, placeholder=default_placeholder)
+        _set_prompt_input(app, placeholder=default_placeholder, prefill_active=False)
         app._log(f"[yellow]{escape(source)} received — cancelling haul confirmation.[/]")
         return True
     if app._dest_prompt_destination:
         clear_destination_prompt(app._prompt_state)
-        _set_prompt_input(app, placeholder=default_placeholder)
+        _set_prompt_input(app, placeholder=default_placeholder, prefill_active=False)
         app._log(f"[yellow]{escape(source)} received — cancelling destination prompt.[/]")
         return True
     return False
@@ -935,7 +964,7 @@ def handle_haul_confirm_prompt(
     if resolution.launch_haul_loop:
         station = resolution.station_1 or ""
         app._log(f"  Station 1 confirmed: [cyan]{escape(station)}[/]")
-        _set_prompt_input(app, placeholder=default_placeholder)
+        _set_prompt_input(app, placeholder=default_placeholder, prefill_active=False)
         app._dispatch_haul_loop(
             skip_delay=resolution.skip_delay,
             raw_command=resolution.raw_command,
@@ -947,7 +976,7 @@ def handle_haul_confirm_prompt(
             f"[yellow]Haul launch cancelled — station 1 left unresolved "
             f"for [cyan]{escape(station)}[/].[/]"
         )
-        _set_prompt_input(app, placeholder=default_placeholder)
+        _set_prompt_input(app, placeholder=default_placeholder, prefill_active=False)
         return
 
 

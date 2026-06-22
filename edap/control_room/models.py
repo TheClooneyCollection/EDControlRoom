@@ -97,6 +97,9 @@ class PromptState:
     dest_prompt_settle_default: float | None = None
     dest_prompt_raw_command: str = ""
     dest_prompt_skip_delay: bool = False
+    command_input_prefill_active: bool = False
+    command_input_placeholder: str = ""
+    command_input_value: str = ""
 
 
 @dataclass
