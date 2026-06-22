@@ -385,8 +385,10 @@ class ControlRoomApp(App[None]):
         self._config_path: Path = ctx.config_path
         self._config_loaded_from_example_fallback = ctx.used_example_config_fallback
         self._default_command_placeholder = _DEFAULT_COMMAND_PLACEHOLDER
-        self._journal_dir: Path = ctx.journal.effective_path  # type: ignore[assignment]
-        self._market_path = self._journal_dir / "Market.json"
+        self._journal_dir: Path | None = ctx.journal.effective_path
+        self._market_path: Path | None = (
+            self._journal_dir / "Market.json" if self._journal_dir is not None else None
+        )
         self._ship = ShipState()
         self._market = MarketData()
         self._haul_stats = HaulStats()
@@ -692,6 +694,8 @@ class ControlRoomApp(App[None]):
         self.query_one("#trade-routes", Static).border_title = "TRADE ROUTES"
 
     def _mount_local_runtime(self) -> None:
+        if self._journal_dir is None or self._market_path is None:
+            raise RuntimeError("Local control-room runtime requires a resolved journal directory.")
         self._build_controls()
         self._log_bindings_status()
         self._load_saved_state()

@@ -1,5 +1,6 @@
 # Control Room Status
 ## Current
+- Remote observer clients can now start on machines without a local Elite Dangerous journal path; `control_room connect` no longer crashes during app initialization before the remote snapshot and command surface come up.
 - Control Room now has a local-only `TRADE ROUTES` panel fed by the shared Playwright-backed Inara fetcher: `haul search [system]` loads live route cards headlessly by default, falls back to the current ship system when no system is supplied, and the scratch probe still supports `--show-browser` for manual login or access-check confirmation.
 - Immediate haul cancellation now emits a dedicated TTS cancellation line, so remote/local clients still get spoken feedback when the operator aborts mid-cycle instead of waiting for a route/session completion line that never applies to a partial run.
 - Cargo manifest reads now retry briefly when `Status.json` reports cargo but `Cargo.json` is momentarily empty, and periodic status refresh now also reloads cargo details, so remote/local UIs recover the commodity breakdown and `sell`/haul resume avoid false "empty hold" decisions after server startup or transient manifest lag.

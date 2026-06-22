@@ -1,8 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from pathlib import Path
 import unittest
 
+from edap.config import (
+    AppConfig,
+    CaptureConfig,
+    CaptureRegionConfig,
+    ControlRoomConfig,
+    ControlsConfig,
+    MarketBuyHoldSegmentConfig,
+    PathsConfig,
+    RuntimeConfig,
+    ScreenConfig,
+    TTSConfig,
+)
+from edap.control_room.client.connect import ObserverControlRoomApp
 from edap.control_room.client.backend import (
     RemoteObserverBackend,
     _validate_remote_observer_capabilities,
@@ -33,6 +47,81 @@ from edap.control_room.protocol.snapshot import (
     ShipSnapshot,
     UiStateSnapshot,
 )
+from edap.runtime import ResolvedPath, RuntimeContext
+
+
+def _make_observer_context() -> RuntimeContext:
+    journal = ResolvedPath(
+        configured={"path": None, "status": "not_configured", "reason": "test observer has no local journal"},
+        auto_detected={"path": None, "status": "unsupported", "reason": "test observer has no local journal"},
+        effective={"path": None, "status": "unsupported", "source": "auto_detected", "reason": "no path available"},
+    )
+    bindings = ResolvedPath(
+        configured={"path": None, "status": "not_configured", "reason": "test observer has no local bindings"},
+        auto_detected={"path": None, "status": "unsupported", "reason": "test observer has no local bindings"},
+        effective={"path": None, "status": "unsupported", "source": "auto_detected", "reason": "no path available"},
+    )
+    return RuntimeContext(
+        config=AppConfig(
+            paths=PathsConfig(journal_dir=None, bindings_file=None),
+            controls=ControlsConfig(
+                start_hotkey="home",
+                stop_hotkey="end",
+                scanner_mode="off",
+                minimum_action_hold_seconds=0.1,
+                continuous_action_hold_seconds=0.2,
+                step_delay_seconds=0.3,
+                galaxy_map_settle_seconds=2.0,
+                dock_supercruise_exit_settle_seconds=3.0,
+                haul_dock_timeout_seconds=600.0,
+                undock_timeout_seconds=30.0,
+                undock_no_track_timeout_seconds=600.0,
+                mass_lock_boost_delay_seconds=5.0,
+                market_nav_delay_seconds=0.1,
+                market_trade_max_attempts=3,
+                market_buy_max_hold_seconds=10.0,
+                market_buy_hold_segments=(
+                    MarketBuyHoldSegmentConfig(start=0, function="flat", hold_seconds=1.0),
+                    MarketBuyHoldSegmentConfig(start=100, function="linear", seconds_per_ton=0.01),
+                    MarketBuyHoldSegmentConfig(start=301, function="log", base_seconds=-4.25, multiplier=1.1829),
+                ),
+                market_sell_quantity_restore_taps=5,
+                market_sell_quantity_restore_tap_delay_seconds=0.05,
+                market_critical_level_multiplier=10.0,
+                haul_post_sell_settle_seconds=2.0,
+                haul_two_way_auto_hyperspace_engage=True,
+                haul_two_way_open_nav_panel_after_hyperspace_arrival=True,
+                haul_two_way_nav_panel_open_delay_seconds=3.0,
+            ),
+            screen=ScreenConfig(
+                resolution_width=1920,
+                resolution_height=1080,
+                scale=1.0,
+                capture_debug_path=None,
+                capture=CaptureConfig(
+                    mode="fullscreen",
+                    base_region=CaptureRegionConfig(0.0, 0.0, 1.0, 1.0),
+                    regions={},
+                ),
+            ),
+            runtime=RuntimeConfig(platform="macos", debug=False),
+            control_room=ControlRoomConfig(
+                state_file=Path("/tmp/control-room-state.json"),
+                history_limit=20,
+                activity_log_max_lines=2000,
+                command_delay_seconds=0.0,
+            ),
+            tts=TTSConfig(enabled=False),
+        ),
+        game_paths=None,
+        journal=journal,
+        bindings=bindings,
+        input_controller=None,
+        screen_capture=None,
+        binding_lookup=None,
+        config_path=Path("/tmp/config.toml"),
+        used_example_config_fallback=False,
+    )
 
 
 def _snapshot() -> ControlRoomSnapshot:
@@ -130,6 +219,31 @@ def _websocket_connect_info(
 
 
 class ControlRoomClientTests(unittest.TestCase):
+    def test_observer_app_initializes_without_local_journal_dir(self) -> None:
+        target = ObserverServerTarget(
+            host="bridge.local",
+            port=8765,
+            http_base_url="http://bridge.local:8765",
+            websocket_url="ws://bridge.local:8765/session",
+        )
+        backend = RemoteObserverBackend(
+            server_target=target,
+            access_token="secret-token",
+            client_name="observer-ipad",
+            initial_snapshot=_snapshot(),
+            websocket_connect_info=_websocket_connect_info(),
+        )
+
+        app = ObserverControlRoomApp(
+            _make_observer_context(),
+            backend=backend,
+            server_target=target,
+            client_name="observer-ipad",
+        )
+
+        self.assertIsNone(app._journal_dir)
+        self.assertIsNone(app._market_path)
+
     def test_parse_target_defaults_to_http_and_default_port(self) -> None:
         target = parse_observer_server_target("192.168.1.44")
 

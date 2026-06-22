@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `82`
-- Latest generated iteration number: `215`
+- Generated iteration count: `83`
+- Latest generated iteration number: `216`
 
 ## Iteration 134
 
@@ -2323,3 +2323,29 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Decide whether Inara route state should remain local-only or be promoted into the remote observer snapshot/wire contract.
 - Decide whether the current operator-supplied Inara query defaults should move into explicit config once the route panel ergonomics settle.
+
+## Iteration 216
+
+- When: `2026-06-22 11:24`
+- Area: `control-room`
+- Title: `observer-connect-no-local-journal`
+- Source: [2026-06-22-11-24_control-room_observer-connect-no-local-journal.md](iteration-logs/2026-06-22-11-24_control-room_observer-connect-no-local-journal.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `observer-connect-no-local-journal`
+- Started: `2026-06-22 11:24`
+
+## Summary
+
+- Fixed `control_room connect` so remote observer clients can start on machines without a local Elite Dangerous install or resolved journal path.
+
+## Changes
+
+- Let `ControlRoomApp` initialize with no local journal/market path for observer-mode clients while keeping local runtime startup guarded behind an explicit journal requirement.
+- Added a regression test that instantiates `ObserverControlRoomApp` with no local journal path and confirmed the full unittest suite still passes in `0.282s`.
+
+## Follow-ups
+
+- Re-run the live multi-machine observer flow to confirm the remote TUI now reaches the initial snapshot cleanly on a non-ED client host.
