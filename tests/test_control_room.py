@@ -56,6 +56,7 @@ from edap.control_room.workers import PendingRoutineCancelled, RoutineCancelled,
 from edap.haul_config import DEFAULT_HAUL_CONFIG_PATH
 from edap.inara.trade_routes import TradeRoute, TradeRouteSearchResult
 from edap.version import GitHubRelease
+from rich.text import Text
 
 
 def _make_config(journal_dir: Path, *, activity_log_max_lines: int = 2000) -> AppConfig:
@@ -979,6 +980,13 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertIn("Savitskaya Orbital", markup)
         self.assertIn("Scully-Power Station", markup)
         self.assertIn("route 33.08 Ly", markup)
+
+    def test_trade_routes_markup_empty_state_escapes_system_placeholder(self) -> None:
+        markup = control_room_rendering.trade_routes_markup(TradeRoutesData())
+
+        rendered = Text.from_markup(markup)
+
+        self.assertIn("haul search <system>", rendered.plain)
 
     def test_load_market_json_seeds_ship_station_when_in_station(self) -> None:
         journal_dir = Path(self.tmpdir.name)

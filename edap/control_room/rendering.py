@@ -282,7 +282,7 @@ def trade_routes_markup(data: TradeRoutesData) -> str:
     if not data.routes:
         return (
             "[dim]No Inara route search yet.[/]\n\n"
-            "Run `haul search [system]`\n"
+            "Run `haul search <system>`\n"
             "to fetch live trade routes."
         )
 
