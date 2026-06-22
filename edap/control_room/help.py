@@ -48,9 +48,9 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
     ),
     CommandHelp(
         name="haul",
-        usage="haul [commodity] | haul load [path]",
-        summary="Run the two-station haul loop from prompts or by loading a text-editable TOML profile.",
-        detail="Starts a two-station loop: each station sells the other station's outbound cargo if present, then buys its own outbound cargo if configured. Plain `haul` still prompts for both station names, both systems, both outbound cargo names, the galaxy-map settle delay, and the docking timeout. `haul load` reads `haul.toml` by default, or a supplied TOML path, then launches the same routine with those values. At least one station buy commodity is required.",
+        usage="haul [commodity] | haul load [path] | haul search [system]",
+        summary="Run the two-station haul loop, load a saved haul profile, or fetch live Inara trade routes.",
+        detail="Starts a two-station loop: each station sells the other station's outbound cargo if present, then buys its own outbound cargo if configured. Plain `haul` still prompts for both station names, both systems, both outbound cargo names, the galaxy-map settle delay, and the docking timeout. `haul load` reads `haul.toml` by default, or a supplied TOML path, then launches the same routine with those values. `haul search [system]` fetches live Inara trade routes into the Control Room trade-routes panel; with no explicit system it uses the current ship system. At least one station buy commodity is required for the loop mode.",
     ),
     CommandHelp(
         name="multi_leg_haul",

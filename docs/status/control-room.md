@@ -1,6 +1,6 @@
 # Control Room Status
 ## Current
-- `tools/scratch/scratch_inara_trade_routes.py` now runs headless by default so normal Inara route fetches do not flash a browser window; `--show-browser` remains available for manual login or access-check confirmation, and the Playwright probe still loads live `div.mainblock.traderoutebox` rows where direct HTTP requests are challenged.
+- Control Room now has a local-only `TRADE ROUTES` panel fed by the shared Playwright-backed Inara fetcher: `haul search [system]` loads live route cards headlessly by default, falls back to the current ship system when no system is supplied, and the scratch probe still supports `--show-browser` for manual login or access-check confirmation.
 - Immediate haul cancellation now emits a dedicated TTS cancellation line, so remote/local clients still get spoken feedback when the operator aborts mid-cycle instead of waiting for a route/session completion line that never applies to a partial run.
 - Cargo manifest reads now retry briefly when `Status.json` reports cargo but `Cargo.json` is momentarily empty, and periodic status refresh now also reloads cargo details, so remote/local UIs recover the commodity breakdown and `sell`/haul resume avoid false "empty hold" decisions after server startup or transient manifest lag.
 - Remote observer clients now retry dropped WebSocket sessions with exponential backoff, log reconnect delay and restoration messages locally, and request a fresh snapshot on reconnect so ping-timeout recovery can heal stale client state automatically.
@@ -16,4 +16,4 @@
 - The deepest remaining uncertainty is live runtime behavior under routine-heavy real sessions rather than transport plumbing or client-side state splits.
 - Authentication is still a shared LAN token, not per-user auth or internet-ready identity, and live validation is still needed for stale-market, wrong-station, and wrong-commodity recovery wording.
 ## Next
-- Run the remote validation playbook against real `serve` / multi-client `connect` sessions, then decide whether any extra remote operator ergonomics are still needed; promote the working Inara Playwright probe into typed route parsing and Control Room presentation.
+- Run the remote validation playbook against real `serve` / multi-client `connect` sessions, then decide whether any extra remote operator ergonomics are still needed; decide whether Inara route state should remain local-only or be promoted into the remote observer snapshot contract.

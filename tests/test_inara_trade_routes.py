@@ -2,11 +2,22 @@ from __future__ import annotations
 
 import unittest
 
-from tools.scratch.scratch_inara_trade_routes import _extract_key_value_pairs, _route_summary
+from edap.inara.trade_routes import (
+    _extract_key_value_pairs,
+    _row_to_route,
+    build_trade_routes_url,
+)
 
 
-class ScratchInaraTradeRoutesTests(unittest.TestCase):
-    def test_extract_key_value_pairs_reads_uppercase_metric_rows(self) -> None:
+class InaraTradeRoutesTests(unittest.TestCase):
+    def test_build_trade_routes_url_uses_default_query_and_system(self) -> None:
+        url = build_trade_routes_url("Praea Euq AK-A d25")
+
+        self.assertIn("ps1=Praea+Euq+AK-A+d25", url)
+        self.assertIn("pi10=460", url)
+        self.assertIn("pi2=60", url)
+
+    def test_extract_key_value_pairs_reads_inline_metric_rows(self) -> None:
         fields = _extract_key_value_pairs(
             [
                 "FROM Savitskaya Orbital | TSONGORIS",
@@ -21,8 +32,8 @@ class ScratchInaraTradeRoutesTests(unittest.TestCase):
         self.assertEqual(fields["UPDATED"], "3 hours ago")
         self.assertEqual(fields["PROFIT PER HOUR"], "88,323,553 Cr")
 
-    def test_route_summary_parses_endpoints_and_metrics(self) -> None:
-        summary = _route_summary(
+    def test_row_to_route_parses_endpoints_and_metrics(self) -> None:
+        route = _row_to_route(
             {
                 "index": 1,
                 "text": "",
@@ -37,13 +48,13 @@ class ScratchInaraTradeRoutesTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(summary["from_station"], "Savitskaya Orbital")
-        self.assertEqual(summary["from_system"], "TSONGORIS")
-        self.assertEqual(summary["to_station"], "Scully-Power Station")
-        self.assertEqual(summary["to_system"], "IX")
-        self.assertEqual(summary["route_distance"], "33.08 Ly")
-        self.assertEqual(summary["updated"], "3 hours ago")
-        self.assertEqual(summary["profit_per_unit"], "45,510 Cr")
+        self.assertEqual(route.from_station, "Savitskaya Orbital")
+        self.assertEqual(route.from_system, "TSONGORIS")
+        self.assertEqual(route.to_station, "Scully-Power Station")
+        self.assertEqual(route.to_system, "IX")
+        self.assertEqual(route.route_distance, "33.08 Ly")
+        self.assertEqual(route.updated, "3 hours ago")
+        self.assertEqual(route.profit_per_unit, "45,510 Cr")
 
 
 if __name__ == "__main__":

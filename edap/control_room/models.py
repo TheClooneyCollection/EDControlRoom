@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from edap.control_room_state import CommandHistoryEntry
+from edap.inara.trade_routes import TradeRoute
 
 
 @dataclass
@@ -53,6 +54,16 @@ class HaulStats:
     last_run_profit: int | None = None
     last_run_elapsed_s: float | None = None
     total_run_elapsed_s: float = 0.0
+
+
+@dataclass
+class TradeRoutesData:
+    system_name: str = ""
+    query_url: str = ""
+    searched_at: str = ""
+    loading: bool = False
+    error: str | None = None
+    routes: list[TradeRoute] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

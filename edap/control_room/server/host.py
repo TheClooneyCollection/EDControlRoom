@@ -120,6 +120,9 @@ class HeadlessControlRoomHost(ControlRoomApp):
     def _refresh_haul_stats(self) -> None:  # type: ignore[override]
         return None
 
+    def _refresh_trade_routes(self) -> None:  # type: ignore[override]
+        return None
+
     def _refresh_activity_title(self) -> None:  # type: ignore[override]
         return None
 

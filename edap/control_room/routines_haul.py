@@ -8,8 +8,10 @@ from rich.markup import escape
 from edap.control_room import error_text
 from edap.control_room.history import now_iso
 from edap.control_room.interfaces import HaulHost
+from edap.control_room.models import TradeRoutesData
 from edap.control_room_state import CommandHistoryEntry
 from edap.haul_config import DEFAULT_HAUL_CONFIG_PATH, HaulConfigError, load_haul_config
+from edap.inara.trade_routes import build_trade_routes_url, search_trade_routes
 from edap.multi_leg_haul import load_multi_leg_haul_definition
 from edap.routines import haul_loop_two_way, multi_leg_haul
 
@@ -28,10 +30,25 @@ def cmd_haul(
     skip_delay: bool = False,
     raw_command: str | None = None,
 ) -> None:
-    if not app._check_routine_ready():
-        return
     station_1_buying = rest.strip()
     parts = station_1_buying.split(None, 1)
+    if parts and parts[0].lower() == "search":
+        if app._routine_active:
+            app._log("[yellow]A routine is already running — wait for it to finish[/]")
+            return
+        system_name = parts[1].strip() if len(parts) > 1 else (app._ship.system or "").strip()
+        if not system_name:
+            app._log("[red]haul search needs a system name, or the current ship system must be known.[/]")
+            return
+        dispatch_haul_search(
+            app,
+            system_name=system_name,
+            skip_delay=skip_delay,
+            raw_command=raw_command or f"{'!' if skip_delay else ''}haul search {system_name}".strip(),
+        )
+        return
+    if not app._check_routine_ready():
+        return
     if parts and parts[0].lower() == "load":
         source = Path(parts[1].strip()) if len(parts) > 1 and parts[1].strip() else DEFAULT_HAUL_CONFIG_PATH
         try:
@@ -60,6 +77,99 @@ def cmd_haul(
             skip_delay=skip_delay,
             raw_command=raw_command,
         )
+
+
+def _set_trade_routes_loading(app: HaulHost, *, system_name: str, query_url: str) -> None:
+    app._trade_routes = TradeRoutesData(
+        system_name=system_name,
+        query_url=query_url,
+        searched_at=now_iso(),
+        loading=True,
+        error=None,
+        routes=[],
+    )
+    app._refresh_trade_routes()
+    app._publish_protocol_snapshot()
+
+
+def _set_trade_routes_loaded(app: HaulHost, result) -> None:
+    app._trade_routes = TradeRoutesData(
+        system_name=result.system_name,
+        query_url=result.query_url,
+        searched_at=result.searched_at,
+        loading=False,
+        error=None,
+        routes=list(result.routes),
+    )
+    app._refresh_trade_routes()
+    app._publish_protocol_snapshot()
+
+
+def _set_trade_routes_error(app: HaulHost, *, system_name: str, query_url: str, message: str) -> None:
+    app._trade_routes = TradeRoutesData(
+        system_name=system_name,
+        query_url=query_url,
+        searched_at=now_iso(),
+        loading=False,
+        error=message,
+        routes=[],
+    )
+    app._refresh_trade_routes()
+    app._publish_protocol_snapshot()
+
+
+def dispatch_haul_search(
+    app: HaulHost,
+    *,
+    system_name: str,
+    skip_delay: bool = False,
+    raw_command: str | None = None,
+) -> None:
+    query_url = build_trade_routes_url(system_name)
+    app._record_history_entry(
+        CommandHistoryEntry(
+            raw=raw_command or f"{'!' if skip_delay else ''}haul search {system_name}".strip(),
+            command="haul",
+            params={"mode": "search", "system": system_name},
+            timestamp=now_iso(),
+        )
+    )
+
+    def on_start() -> None:
+        app._log(f"Searching Inara trade routes for [cyan]{escape(system_name)}[/]...")
+        _set_trade_routes_loading(app, system_name=system_name, query_url=query_url)
+
+    def run_search() -> None:
+        try:
+            result = search_trade_routes(system_name)
+        except Exception as exc:
+            app.call_from_thread(
+                _set_trade_routes_error,
+                app,
+                system_name=system_name,
+                query_url=query_url,
+                message=str(exc),
+            )
+            app.call_from_thread(
+                app._log,
+                f"[red]Failed to load Inara routes for {escape(system_name)}: {escape(str(exc))}[/]",
+            )
+            return None
+        app.call_from_thread(_set_trade_routes_loaded, app, result)
+        app.call_from_thread(
+            app._log,
+            f"[green]Loaded {len(result.routes)} Inara route(s) for [cyan]{escape(system_name)}[/].[/]",
+        )
+        return None
+
+    app._start_delayed_routine(
+        description=f"haul search {system_name}",
+        start_message="",
+        skip_delay=skip_delay,
+        fn=run_search,
+        active_routine_name="haul_search",
+        on_start=on_start,
+    )
 
 
 def dispatch_haul_loop(

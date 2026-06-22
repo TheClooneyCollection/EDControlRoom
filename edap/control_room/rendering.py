@@ -8,7 +8,7 @@ from edap.cargo_manifest import read_cargo_inventory as read_cargo_inventory_wit
 from rich.markup import escape
 from rich.text import Text
 
-from edap.control_room.models import HaulStats, MarketData, ShipState
+from edap.control_room.models import HaulStats, MarketData, ShipState, TradeRoutesData
 from edap.routines.market import _is_sell_market_item
 
 
@@ -263,6 +263,54 @@ def market_markup(market: MarketData, market_filter: str | None) -> str:
         sections.append(f"\n[dim]No items{no_match}.[/]")
 
     return "\n".join(sections)
+
+
+def trade_routes_markup(data: TradeRoutesData) -> str:
+    if data.loading:
+        system = escape(data.system_name or "?")
+        return (
+            f"[dim]Searching Inara routes for[/] [bold]{system}[/]\n\n"
+            "[dim]Fetching live route cards...[/]"
+        )
+
+    if data.error:
+        lines = ["[red]Inara route search failed.[/]", "", escape(data.error)]
+        if data.system_name:
+            lines.extend(["", f"[dim]System[/]  [bold]{escape(data.system_name)}[/]"])
+        return "\n".join(lines)
+
+    if not data.routes:
+        return (
+            "[dim]No Inara route search yet.[/]\n\n"
+            "Run `haul search [system]`\n"
+            "to fetch live trade routes."
+        )
+
+    header = f"[bold]{escape(data.system_name)}[/]"
+    if data.searched_at:
+        header += f"\n[dim]{escape(data.searched_at)}[/]"
+    lines = [header]
+    for route in data.routes[:5]:
+        lines.append(
+            "\n"
+            f"[bold]{route.index}.[/] "
+            f"{escape(route.from_station)} [dim]({escape(route.from_system)})[/]\n"
+            f"   -> {escape(route.to_station)} [dim]({escape(route.to_system)})[/]"
+        )
+        details: list[str] = []
+        if route.route_distance:
+            details.append(f"route {escape(route.route_distance)}")
+        if route.profit_per_unit:
+            details.append(f"ppu {escape(route.profit_per_unit)}")
+        if route.profit_per_hour:
+            details.append(f"hour {escape(route.profit_per_hour)}")
+        if route.updated:
+            details.append(f"updated {escape(route.updated)}")
+        if details:
+            lines.append(f"   [dim]{' | '.join(details)}[/]")
+    if len(data.routes) > 5:
+        lines.append(f"\n[dim]{len(data.routes) - 5} more route(s) not shown.[/]")
+    return "\n".join(lines)
 
 
 def activity_line(ev: dict[str, Any]) -> str | None:

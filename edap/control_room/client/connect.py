@@ -74,6 +74,7 @@ class ObserverControlRoomApp(ControlRoomApp):
         self._refresh_status()
         self._refresh_haul_stats()
         self._refresh_market()
+        self._refresh_trade_routes()
         self._update_resume_detail()
         self._refresh_remote_command_input()
 

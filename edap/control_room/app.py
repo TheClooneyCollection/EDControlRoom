@@ -15,7 +15,7 @@ Routine commands (type in the input bar):
     buy <item> [N]     buy N units (default MAX) of commodity
     sell [item] [N]    sell commodity (default: market filter); amount default MAX
     jump               FSD jump sequence
-    haul [commodity]   start haul loop; or use `haul load [path]` for haul.toml
+    haul [commodity]   start haul loop; or use `haul load [path]` / `haul search [system]`
     multi_leg_haul <route.json|spansh-url>   run a standalone multi-leg haul route
     dest <system>      open galaxy map and plot a route to the named system
     set_dest <system>  alias for dest
@@ -85,6 +85,7 @@ from edap.control_room.models import (
     ReplaySelection,
     RuntimeUIState,
     ShipState,
+    TradeRoutesData,
 )
 from edap.control_room.protocol.adapters import (
     build_activity_log_entry,
@@ -139,7 +140,7 @@ _STARTUP_BINDING_WARNING_IGNORED_ACTIONS = frozenset({
     "YawRightButton",
 })
 
-_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul load | multi_leg_haul <route> | dest <system> | home | market ... | reload | q"
+_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul load | haul search [system] | multi_leg_haul <route> | dest <system> | home | market ... | reload | q"
 _ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS = 10.0
 _JOURNAL_ARTIFACT_LOG_PATH = Path("artifacts/control-room.log")
 _JOURNAL_ARTIFACT_LOG_BUFFER_SIZE = 8192
@@ -336,6 +337,11 @@ class ControlRoomApp(App[None]):
         border: solid $primary;
         padding: 0 1;
     }
+    #trade-routes {
+        height: 1fr;
+        border: solid $primary;
+        padding: 0 1;
+    }
     #market {
         height: 1fr;
         border: solid $primary;
@@ -384,6 +390,7 @@ class ControlRoomApp(App[None]):
         self._ship = ShipState()
         self._market = MarketData()
         self._haul_stats = HaulStats()
+        self._trade_routes = TradeRoutesData()
         self._market_filter = market_filter
         self._market_mtime: float | None = None
         self._controls: ShipControls | None = None
@@ -663,6 +670,7 @@ class ControlRoomApp(App[None]):
             with Vertical(id="right"):
                 yield Static(id="market")
                 yield Static(id="haul")
+                yield Static(id="trade-routes")
         yield Input(placeholder=_DEFAULT_COMMAND_PLACEHOLDER, id="cmd")
         yield Footer()
 
@@ -681,6 +689,7 @@ class ControlRoomApp(App[None]):
         self.query_one("#resume-browser", Vertical).border_title = "REPLAY HISTORY"
         self.query_one("#haul", Static).border_title = "HAUL"
         self.query_one("#market", Static).border_title = "MARKET"
+        self.query_one("#trade-routes", Static).border_title = "TRADE ROUTES"
 
     def _mount_local_runtime(self) -> None:
         self._build_controls()
@@ -694,6 +703,7 @@ class ControlRoomApp(App[None]):
         self._refresh_status()
         self._refresh_haul_stats()
         self._refresh_market()
+        self._refresh_trade_routes()
         self._watcher_worker = self._start_watcher()
         self.set_interval(0.1, self._drain_pending_sigint)
         self.set_focus(self.query_one("#cmd", Input))
@@ -830,6 +840,11 @@ class ControlRoomApp(App[None]):
                     self._view_snapshot.market.market_filter_text,
                 )
             )
+        )
+
+    def _refresh_trade_routes(self) -> None:
+        self.query_one("#trade-routes", Static).update(
+            Text.from_markup(_rendering.trade_routes_markup(self._trade_routes))
         )
 
     def _activity_auto_follow_paused(self) -> bool:

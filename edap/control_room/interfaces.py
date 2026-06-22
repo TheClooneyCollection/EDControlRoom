@@ -6,7 +6,7 @@ from typing import Any, Callable, Protocol
 from textual.widgets import Input
 
 from edap.config import AppConfig
-from edap.control_room.models import MarketData, ShipState
+from edap.control_room.models import MarketData, ShipState, TradeRoutesData
 from edap.control_room_state import CommandHistoryEntry, ControlRoomState
 from edap.progress_controls import ProgressShipControls
 from edap.tts import AnnouncementId
@@ -21,6 +21,7 @@ class CommandHost(Protocol):
     _instant_mode: bool
     _market_filter: str | None
     _market: MarketData
+    _trade_routes: TradeRoutesData
     _saved_state: ControlRoomState
 
     def _log(self, msg: str) -> None: ...
@@ -59,6 +60,7 @@ class CommandHost(Protocol):
     def _show_resume_picker(self) -> None: ...
     def _load_market_json(self) -> None: ...
     def _refresh_market(self) -> None: ...
+    def _refresh_trade_routes(self) -> None: ...
 
 
 class RoutineHost(Protocol):
@@ -71,6 +73,7 @@ class RoutineHost(Protocol):
     _journal_dir: Path
     _market_path: Path
     _ship: ShipState
+    _trade_routes: TradeRoutesData
     _active_routine_name: str | None
     _haul_stop_requested: bool
     _time_fn: Callable[[], float]
@@ -95,6 +98,8 @@ class RoutineHost(Protocol):
     def _run_in_thread(self, fn: Callable[[], Any]) -> Any: ...
     def _raise_if_worker_cancelled(self) -> None: ...
     def _clear_pending_haul_stop(self) -> None: ...
+    def _refresh_trade_routes(self) -> None: ...
+    def _publish_protocol_snapshot(self) -> None: ...
     def call_from_thread(self, callback: Callable[..., Any], *args: Any) -> None: ...
 
 

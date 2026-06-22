@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `81`
-- Latest generated iteration number: `214`
+- Generated iteration count: `82`
+- Latest generated iteration number: `215`
 
 ## Iteration 134
 
@@ -2292,3 +2292,34 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Keep the eventual shared Inara backend headless by default and reserve visible-browser mode for explicit recovery or debugging paths.
+
+## Iteration 215
+
+- When: `2026-06-22 11:16`
+- Area: `haul`
+- Title: `add-inara-haul-search`
+- Source: [2026-06-22-11-16_____haul_____add-inara-haul-search.md](iteration-logs/2026-06-22-11-16_____haul_____add-inara-haul-search.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `add-inara-haul-search`
+- Started: `2026-06-22 11:16`
+
+## Summary
+
+- Added the first real `haul search [system]` path so Control Room can fetch live Inara trade routes headlessly and keep the results visible in a dedicated panel.
+
+## Changes
+
+- Extracted the Playwright-backed Inara route fetch and row parsing into `edap/inara/trade_routes.py`, with the scratch probe slimmed down into a wrapper over that shared module.
+- Added a local `TradeRoutesData` state model plus a `TRADE ROUTES` panel in Control Room, rendered independently from the existing market and haul panels.
+- Extended `haul` command handling so `haul search [system]` records history, defaults to the current ship system when omitted, skips the bindings/controls prerequisite, and updates the panel with loading, success, or failure state.
+- Updated haul help text and the command placeholder to advertise `haul search [system]`.
+- Added unit coverage for the shared Inara helpers, the new panel rendering, and the `haul search` command flow.
+- Verified the shared scratch probe still fetches the live Inara DOM after the refactor and re-ran the full suite successfully.
+
+## Follow-ups
+
+- Decide whether Inara route state should remain local-only or be promoted into the remote observer snapshot/wire contract.
+- Decide whether the current operator-supplied Inara query defaults should move into explicit config once the route panel ergonomics settle.

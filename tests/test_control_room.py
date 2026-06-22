@@ -35,7 +35,7 @@ from edap.control_room.backend import ControlRoomBackendEventHandler
 from edap.control_room.failure_messages import describe_routine_failure
 from edap.control_room.events import apply_ship_event
 from edap.control_room import rendering as control_room_rendering
-from edap.control_room.models import MarketData, PromptState, ShipState
+from edap.control_room.models import MarketData, PromptState, ShipState, TradeRoutesData
 from edap.control_room.protocol.snapshot import (
     CommandHistorySnapshot,
     ControlRoomSnapshot,
@@ -54,6 +54,7 @@ from edap.runtime import ResolvedPath, RuntimeContext
 from edap.tts import AnnouncementId
 from edap.control_room.workers import PendingRoutineCancelled, RoutineCancelled, run_routine_thread
 from edap.haul_config import DEFAULT_HAUL_CONFIG_PATH
+from edap.inara.trade_routes import TradeRoute, TradeRouteSearchResult
 from edap.version import GitHubRelease
 
 
@@ -194,6 +195,9 @@ class _HarnessApp(ControlRoomApp):
         self.exit()
 
     def _refresh_market(self) -> None:  # type: ignore[override]
+        return None
+
+    def _refresh_trade_routes(self) -> None:  # type: ignore[override]
         return None
 
     def _refresh_haul_stats(self) -> None:  # type: ignore[override]
@@ -950,6 +954,32 @@ class ControlRoomCommandTests(unittest.TestCase):
 
         self.assertLess(markup.index("Food Cartridges"), markup.index("Gold"))
 
+    def test_trade_routes_markup_shows_top_routes(self) -> None:
+        markup = control_room_rendering.trade_routes_markup(
+            TradeRoutesData(
+                system_name="Praea Euq AK-A d25",
+                searched_at="2026-06-22T11:00:00Z",
+                routes=[
+                    TradeRoute(
+                        index=1,
+                        from_station="Savitskaya Orbital",
+                        from_system="TSONGORIS",
+                        to_station="Scully-Power Station",
+                        to_system="IX",
+                        route_distance="33.08 Ly",
+                        profit_per_unit="45,485 Cr",
+                        profit_per_hour="88,275,035 Cr",
+                        updated="4 hours ago",
+                    )
+                ],
+            )
+        )
+
+        self.assertIn("Praea Euq AK-A d25", markup)
+        self.assertIn("Savitskaya Orbital", markup)
+        self.assertIn("Scully-Power Station", markup)
+        self.assertIn("route 33.08 Ly", markup)
+
     def test_load_market_json_seeds_ship_station_when_in_station(self) -> None:
         journal_dir = Path(self.tmpdir.name)
         (journal_dir / "Journal.240101000000.01.log").write_text(
@@ -1472,6 +1502,48 @@ on_land = true
 
         output = "\n".join(self.app.logged)
         self.assertIn("Haul config file not found", output)
+
+    def test_haul_search_uses_current_system_and_updates_trade_routes(self) -> None:
+        self.app._ship.system = "Praea Euq AK-A d25"
+        self.app._controls = object()
+        self.app._run_in_thread = lambda fn: fn()
+
+        result = TradeRouteSearchResult(
+            system_name="Praea Euq AK-A d25",
+            query_url="https://inara.cz/elite/market-traderoutes/?ps1=Praea+Euq+AK-A+d25",
+            searched_at="2026-06-22T11:00:00Z",
+            routes=(
+                TradeRoute(
+                    index=1,
+                    from_station="Savitskaya Orbital",
+                    from_system="TSONGORIS",
+                    to_station="Scully-Power Station",
+                    to_system="IX",
+                    route_distance="33.08 Ly",
+                    profit_per_unit="45,485 Cr",
+                    profit_per_hour="88,275,035 Cr",
+                    updated="4 hours ago",
+                ),
+            ),
+        )
+
+        with patch("edap.control_room.routines_haul.search_trade_routes", return_value=result):
+            self.app._cmd_haul("search", raw_command="haul search")
+
+        self.assertEqual(self.app._trade_routes.system_name, "Praea Euq AK-A d25")
+        self.assertEqual(len(self.app._trade_routes.routes), 1)
+        self.assertFalse(self.app._trade_routes.loading)
+        self.assertIsNone(self.app._trade_routes.error)
+        self.assertEqual(self.app._saved_state.history[-1].params["mode"], "search")
+        self.assertEqual(self.app._saved_state.history[-1].params["system"], "Praea Euq AK-A d25")
+        self.assertIn("Loaded 1 Inara route(s)", "\n".join(self.app.logged))
+
+    def test_haul_search_reports_missing_system_when_current_unknown(self) -> None:
+        self.app._controls = object()
+
+        self.app._cmd_haul("search", raw_command="haul search")
+
+        self.assertIn("haul search needs a system name", "\n".join(self.app.logged))
 
     def test_haul_dispatch_passes_on_land_flags(self) -> None:
         captured: dict[str, object] = {}
