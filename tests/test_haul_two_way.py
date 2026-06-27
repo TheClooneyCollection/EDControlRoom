@@ -868,6 +868,130 @@ class TwoWayHaulLoopTests(unittest.TestCase):
         self.assertEqual(result.dispatch.reason, "manual landing required")
         dock_mock.assert_not_called()
 
+    def test_undock_skips_galaxy_map_destination_for_same_system_stations(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher([
+            [],
+            [{"event": "Undocked", "StationName": _STATION_1}],
+            [{"event": "Music", "MusicTrack": "NoTrack"}],
+            [{"event": "SupercruiseExit", "BodyType": "Station", "StarSystem": _SYSTEM_1}],
+            [],
+            [{"event": "DockingGranted", "LandingPad": 1, "StationName": _STATION_2}],
+            [{"event": "Docked", "StationName": _STATION_2}],
+        ])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_market(
+                journal_dir,
+                _STATION_1,
+                [
+                    {"Category": "Metals", "Name": "aluminium", "Name_Localised": _CARGO_1, "DemandBracket": 1, "Stock": 1000},
+                    {"Category": "Minerals", "Name": "bertrandite", "Name_Localised": _CARGO_2, "DemandBracket": 1, "Stock": 1000},
+                ],
+            )
+            _write_cargo(journal_dir, [{"Name": "bertrandite", "Count": 64, "Stolen": 0}])
+            with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
+                "edap.routines.haul_two_way.market_buy"
+            ) as market_buy_mock, patch("edap.routines.haul_two_way.set_gal_map_destination") as set_destination_mock:
+                market_sell_mock.return_value = RoutineResult(
+                    action="market_sell",
+                    dispatch=ActionDispatchResult(action="market_sell", status="error", reason="stop after same-system undock transit"),
+                )
+                market_buy_mock.return_value = RoutineResult(
+                    action="market_buy",
+                    dispatch=ActionDispatchResult(action="market_buy", status="ok"),
+                )
+
+                result = haul_loop_two_way(
+                    controls,
+                    watcher,
+                    journal_dir=journal_dir,
+                    station_1=_STATION_1,
+                    station_1_buying=_CARGO_1,
+                    station_1_system=_SYSTEM_1,
+                    station_2=_STATION_2,
+                    station_2_buying=_CARGO_2,
+                    station_2_system=_SYSTEM_1,
+                    iterations=1,
+                    step_delay_s=0.0,
+                    settle_s=0.0,
+                    supercruise_exit_settle_s=0.0,
+                    boost_settle_s=0.0,
+                    dock_timeout_s=30.0,
+                    request_timeout_s=10.0,
+                    undock_timeout_s=10.0,
+                    undock_no_track_timeout_s=10.0,
+                    trade_timeout_s=10.0,
+                    time_fn=_ticking_clock(),
+                    sleeper=lambda _: None,
+                )
+
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertEqual(result.dispatch.reason, "stop after same-system undock transit")
+        set_destination_mock.assert_not_called()
+
+    def test_depart_skips_galaxy_map_destination_for_same_system_stations(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher([
+            [{"event": "SupercruiseExit", "BodyType": "Station", "StarSystem": _SYSTEM_1}],
+            [],
+            [{"event": "DockingGranted", "LandingPad": 1, "StationName": _STATION_2}],
+            [{"event": "Docked", "StationName": _STATION_2}],
+        ])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_journal(
+                journal_dir,
+                {"event": "Location", "Docked": False, "StarSystem": _SYSTEM_1},
+                {"event": "Cargo", "Count": 64, "CargoCapacity": 64},
+            )
+            _write_market(
+                journal_dir,
+                _STATION_1,
+                [
+                    {"Category": "Metals", "Name": "aluminium", "Name_Localised": _CARGO_1, "DemandBracket": 1, "Stock": 1000},
+                    {"Category": "Minerals", "Name": "bertrandite", "Name_Localised": _CARGO_2, "DemandBracket": 1, "Stock": 1000},
+                ],
+            )
+            _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 64, "Stolen": 0}])
+            with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
+                "edap.routines.haul_two_way.set_gal_map_destination"
+            ) as set_destination_mock:
+                market_sell_mock.return_value = RoutineResult(
+                    action="market_sell",
+                    dispatch=ActionDispatchResult(action="market_sell", status="error", reason="stop after same-system transit"),
+                )
+
+                result = haul_loop_two_way(
+                    controls,
+                    watcher,
+                    journal_dir=journal_dir,
+                    station_1=_STATION_1,
+                    station_1_buying=_CARGO_1,
+                    station_1_system=_SYSTEM_1,
+                    station_2=_STATION_2,
+                    station_2_buying=_CARGO_2,
+                    station_2_system=_SYSTEM_1,
+                    iterations=1,
+                    step_delay_s=0.0,
+                    settle_s=0.0,
+                    supercruise_exit_settle_s=0.0,
+                    boost_settle_s=0.0,
+                    dock_timeout_s=30.0,
+                    request_timeout_s=10.0,
+                    undock_timeout_s=10.0,
+                    undock_no_track_timeout_s=10.0,
+                    trade_timeout_s=10.0,
+                    time_fn=_ticking_clock(),
+                    sleeper=lambda _: None,
+                )
+
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertEqual(result.dispatch.reason, "stop after same-system transit")
+        set_destination_mock.assert_not_called()
+
     def test_resume_in_destination_supercruise_opens_nav_without_waiting_for_new_jump(self) -> None:
         controls = FakeShipControls()
         watcher = FakeWatcher([

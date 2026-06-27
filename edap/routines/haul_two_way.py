@@ -587,6 +587,16 @@ def _stopped_routine_result(reason: str) -> RoutineResult:
     )
 
 
+def _should_set_galaxy_map_destination(*, current_system: str, destination_system: str) -> bool:
+    current_system_normalized = current_system.strip().lower()
+    destination_system_normalized = destination_system.strip().lower()
+    if not destination_system_normalized:
+        return False
+    if current_system_normalized and current_system_normalized == destination_system_normalized:
+        return False
+    return True
+
+
 def _undock_and_route(
     ctx: _HaulCtx,
     *,
@@ -607,7 +617,10 @@ def _undock_and_route(
     if result.dispatch.status != "ok":
         return result, next_phase
 
-    if destination_system:
+    if _should_set_galaxy_map_destination(
+        current_system=current_leg.system,
+        destination_system=destination_system,
+    ):
         ctx.progress_fn(f"Setting galaxy map destination: {destination_system}...")
         ctx.announce_fn(AnnouncementId.DESTINATION_SET, system_name=destination_system)
         set_gal_map_destination(
@@ -658,7 +671,10 @@ def _depart_system(
     next_phase: Phase,
 ) -> tuple[RoutineResult | None, Phase]:
     ctx.progress_fn(f"Departing {current_leg.label} system in normal space...")
-    if destination_system:
+    if _should_set_galaxy_map_destination(
+        current_system=current_leg.system,
+        destination_system=destination_system,
+    ):
         ctx.progress_fn(f"Setting galaxy map destination: {destination_system}...")
         ctx.announce_fn(AnnouncementId.DESTINATION_SET, system_name=destination_system)
         set_gal_map_destination(
