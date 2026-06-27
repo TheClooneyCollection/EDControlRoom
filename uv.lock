@@ -47,10 +47,11 @@ wheels = [
 
 [[package]]
 name = "edcontrolroom"
-version = "1.14.0"
+version = "1.14.1"
 source = { virtual = "." }
 dependencies = [
     { name = "httpx" },
+    { name = "playwright" },
     { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
     { name = "pyyaml" },
     { name = "rich" },
@@ -61,9 +62,6 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-browsing = [
-    { name = "playwright" },
-]
 dev = [
     { name = "numpy" },
     { name = "opencv-python" },
@@ -77,7 +75,7 @@ requires-dist = [
     { name = "numpy", marker = "extra == 'dev'", specifier = ">=1.26" },
     { name = "opencv-python", marker = "extra == 'dev'", specifier = ">=4.8" },
     { name = "pillow", marker = "sys_platform == 'darwin' and extra == 'dev'", specifier = ">=9.0" },
-    { name = "playwright", marker = "extra == 'browsing'", specifier = ">=1.53" },
+    { name = "playwright", specifier = ">=1.53" },
     { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'", specifier = ">=12.1" },
     { name = "pytesseract", marker = "extra == 'dev'", specifier = ">=0.3.10" },
     { name = "pyyaml", specifier = ">=6.0" },
@@ -87,7 +85,7 @@ requires-dist = [
     { name = "uvicorn", specifier = ">=0.34" },
     { name = "websockets", specifier = ">=15.0" },
 ]
-provides-extras = ["browsing", "dev"]
+provides-extras = ["dev"]
 
 [[package]]
 name = "greenlet"

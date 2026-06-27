@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `103`
-- Latest generated iteration number: `236`
+- Generated iteration count: `104`
+- Latest generated iteration number: `237`
 
 ## Iteration 134
 
@@ -2896,3 +2896,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Push the release-prep commit and `v1.14.0` tag, then publish the GitHub release with high-level notes focused on the Inara haul-search and remote observer/control-room additions.
+
+## Iteration 237
+
+- When: `2026-06-27 19:07`
+- Area: `ci`
+- Title: `promote-playwright-runtime-dependency`
+- Source: [2026-06-27-19-07______ci______promote-playwright-runtime-dependency.md](iteration-logs/2026-06-27-19-07______ci______promote-playwright-runtime-dependency.md)
+
+# Iteration Log
+
+- Area: `ci`
+- Title: `promote-playwright-runtime-dependency`
+- Started: `2026-06-27 19:07`
+
+## Summary
+
+- Promoted `playwright` from the optional `browsing` extra into the base project dependency list so released installs include the browser dependency by default.
+
+## Changes
+
+- Updated `pyproject.toml` to add `playwright>=1.53` to `[project].dependencies` and removed the now-obsolete `browsing` extra entry.
+- Refreshed `uv.lock` so the locked project metadata now advertises Playwright as a normal runtime dependency instead of an extra-gated dependency.
+- Updated `docs/status/ci-release.md` so the current release handoff reflects that published installs no longer require a separate Playwright extra.
+
+## Follow-ups
+
+- Keep future install docs and release notes aligned with the new default dependency shape; do not reintroduce a browser-only extra unless the runtime surface changes again.

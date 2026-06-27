@@ -1,10 +1,11 @@
 [project]
 name = "EDControlRoom"
-version = "1.14.0"
+version = "1.14.1"
 description = "Elite Dangerous control-room and routine tooling"
 requires-python = ">=3.12"
 dependencies = [
   "httpx>=0.28",
+  "playwright>=1.53",
   "PyYAML>=6.0",
   "pyobjc-framework-Quartz>=12.1; sys_platform == 'darwin'",
   "rich>=14.0",
@@ -22,9 +23,6 @@ dependencies = [
 # "PyAutoGUI~=0.9.42",
 # "kthread~=0.2.2",
 # "keyboard~=0.13.3",
-browsing = [
-  "playwright>=1.53",
-]
 dev = [
   "numpy>=1.26",
   "opencv-python>=4.8",
