@@ -1450,6 +1450,62 @@ class TwoWayHaulLoopTests(unittest.TestCase):
         self.assertIn("GalaxyMapOpen", actions)
         self.assertNotIn("UseBoostJuice", actions)
 
+    def test_carrier_exploration_allows_haul_departure_to_continue(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher([
+            [],
+            [{"event": "Undocked", "StationName": "Stronghold Carrier", "StationType": "SurfaceStation"}],
+            [{"event": "Music", "MusicTrack": "DockingComputer"}],
+            [{"event": "Music", "MusicTrack": "Exploration"}],
+            [{"event": "DockingGranted", "LandingPad": 1, "StationName": _STATION_2}],
+        ])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_market(
+                journal_dir,
+                "Stronghold Carrier",
+                [
+                    {"Category": "Metals", "Name": "aluminium", "Name_Localised": _CARGO_1, "DemandBracket": 1, "Stock": 1000},
+                    {"Category": "Minerals", "Name": "bertrandite", "Name_Localised": _CARGO_2, "DemandBracket": 1, "Stock": 1000},
+                ],
+            )
+            _write_cargo(journal_dir, [])
+            (journal_dir / "Status.json").write_text(json.dumps({"Flags": 0}), encoding="utf-8")
+
+            with patch("edap.routines.haul_two_way.dock") as dock_mock:
+                dock_mock.return_value = RoutineResult(
+                    action="dock",
+                    dispatch=ActionDispatchResult(action="dock", status="error", reason="stop after first transit"),
+                )
+                result = haul_loop_two_way(
+                    controls,
+                    watcher,
+                    journal_dir=journal_dir,
+                    station_1="Stronghold Carrier",
+                    station_1_buying=_CARGO_1,
+                    station_1_system="HIP 17597",
+                    station_2=_STATION_2,
+                    station_2_buying=_CARGO_2,
+                    station_2_system=_SYSTEM_2,
+                    iterations=1,
+                    start_phase=Phase.UNDOCK_STATION_1,
+                    step_delay_s=0.0,
+                    settle_s=0.0,
+                    boost_settle_s=0.0,
+                    dock_timeout_s=30.0,
+                    request_timeout_s=10.0,
+                    undock_timeout_s=10.0,
+                    trade_timeout_s=10.0,
+                    time_fn=_ticking_clock(),
+                    sleeper=lambda _: None,
+                )
+
+        self.assertEqual(result.dispatch.status, "error")
+        actions = [call["action"] for call in controls.calls]
+        self.assertIn("SetSpeed100", actions)
+        self.assertIn("HyperSuperCombination", actions)
+
     def test_skips_sell_when_cargo_empty(self) -> None:
         controls = FakeShipControls()
         market_calls: list[tuple[str, str]] = []

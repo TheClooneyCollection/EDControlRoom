@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `104`
-- Latest generated iteration number: `237`
+- Generated iteration count: `105`
+- Latest generated iteration number: `238`
 
 ## Iteration 134
 
@@ -2923,3 +2923,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Keep future install docs and release notes aligned with the new default dependency shape; do not reintroduce a browser-only extra unless the runtime surface changes again.
+
+## Iteration 238
+
+- When: `2026-06-27 19:31`
+- Area: `haul`
+- Title: `carrier-launch-exploration-handoff`
+- Source: [2026-06-27-19-31_____haul_____carrier-launch-exploration-handoff.md](iteration-logs/2026-06-27-19-31_____haul_____carrier-launch-exploration-handoff.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `carrier-launch-exploration-handoff`
+- Started: `2026-06-27 19:31`
+
+## Summary
+
+- Added a carrier-specific undock handoff so haul/manual undock can treat `MusicTrack="Exploration"` as resumed manual launch control after `Undocked` from `Stronghold Carrier` or `Fleet Carrier`.
+
+## Changes
+
+- Added shared journal-event helpers for carrier detection and the `Exploration` manual-resume special case.
+- Updated undock/haul clear-of-station handling to accept carrier `Exploration`, then continue into the normal mass-lock escape and hyperspace path.
+- Updated ship-state and Control Room event reducers so carrier `Exploration` clears `in_undocking` to `in_space` instead of waiting indefinitely for `NoTrack`.
+- Added routine, haul, state, and Control Room tests for the carrier `Exploration` path and widened the failure-message matcher for the new timeout wording.
+
+## Follow-ups
+
+- Live-validate both named `Stronghold Carrier` launches and real owner-named `Fleet Carrier` launches to confirm the carrier-name/type heuristics are sufficient in journal output.

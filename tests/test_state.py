@@ -117,6 +117,26 @@ class StateTests(unittest.TestCase):
             self.assertEqual(state.status, "in_space")
             self.assertIsNone(state.station)
 
+    def test_read_ship_state_treats_carrier_exploration_as_manual_launch_resume(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            log_path = Path(temp_dir) / "Journal.log"
+            _write_lines(
+                log_path,
+                [
+                    '{"event":"LoadGame","Ship":"type6"}',
+                    '{"event":"Location","Docked":true,"StarSystem":"HIP 17597","StationName":"Stronghold Carrier"}',
+                    '{"event":"Undocked","StationName":"Stronghold Carrier","StationType":"SurfaceStation"}',
+                    '{"event":"Music","MusicTrack":"DockingComputer"}',
+                    '{"event":"Music","MusicTrack":"Exploration"}',
+                ],
+            )
+            os.utime(log_path, None)
+
+            state = read_ship_state(log_path)
+
+            self.assertEqual(state.status, "in_space")
+            self.assertIsNone(state.station)
+
     def test_read_ship_state_keeps_last_known_system_on_docked_event(self) -> None:
         with TemporaryDirectory() as temp_dir:
             log_path = Path(temp_dir) / "Journal.log"

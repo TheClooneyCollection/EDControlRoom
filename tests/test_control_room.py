@@ -3198,6 +3198,23 @@ class ControlRoomEventReducerTests(unittest.TestCase):
         self.assertEqual(ship.status, "in_space")
         self.assertIsNone(ship.station)
 
+    def test_carrier_exploration_marks_manual_launch_resume(self) -> None:
+        ship = ShipState(system="HIP 17597", station="Stronghold Carrier", status="in_station")
+
+        apply_ship_event(
+            ship,
+            {"event": "Undocked", "StationName": "Stronghold Carrier", "StationType": "SurfaceStation"},
+        )
+
+        self.assertEqual(ship.status, "in_undocking")
+        self.assertEqual(ship.station, "Stronghold Carrier")
+
+        apply_ship_event(ship, {"event": "Music", "MusicTrack": "DockingComputer"})
+        apply_ship_event(ship, {"event": "Music", "MusicTrack": "Exploration"})
+
+        self.assertEqual(ship.status, "in_space")
+        self.assertIsNone(ship.station)
+
 
 class ControlRoomFailureMessageTests(unittest.TestCase):
     def setUp(self) -> None:

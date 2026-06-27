@@ -428,6 +428,30 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(result.dispatch.status, "error")
         self.assertIn("NoTrack", result.dispatch.reason)
 
+    def test_undock_accepts_exploration_as_manual_resume_for_carriers(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher([
+            [],
+            [{"event": "Undocked", "StationName": "Stronghold Carrier", "StationType": "SurfaceStation"}],
+            [{"event": "Music", "MusicTrack": "DockingComputer"}],
+            [{"event": "Music", "MusicTrack": "Exploration"}],
+        ])
+        time_values = iter([0.0, 0.0, 0.1, 0.2, 0.3, 0.4])
+
+        result = undock(
+            controls,
+            watcher,
+            undock_timeout_s=1.0,
+            no_track_timeout_s=1.0,
+            step_delay_s=0.0,
+            time_fn=lambda: next(time_values),
+            sleeper=lambda _: None,
+        )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(result.action, "ManualLaunchControlResumed")
+        self.assertEqual(result.trigger_event, {"event": "Music", "MusicTrack": "Exploration"})
+
     def test_docking_request_sequence_dispatches_stream_deck_menu_walk(self) -> None:
         controls = FakeShipControls(
             set_speed_zero_result=ActionDispatchResult(

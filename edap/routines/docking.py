@@ -4,6 +4,7 @@ from time import monotonic, sleep
 from typing import Callable
 
 from edap.actions import ActionDispatchResult
+from edap.journal_events import is_manual_launch_control_resumed_event
 from edap.routines._base import (
     RoutineResult,
     SupportsDockingControls,
@@ -416,8 +417,8 @@ def undock(
         return clear_result
 
     return RoutineResult(
-        action="NoTrack",
-        dispatch=result.dispatch,
+        action=clear_result.action,
+        dispatch=clear_result.dispatch,
         trigger_event=clear_result.trigger_event,
         details={"phase": "complete", "undocked_event": result.trigger_event},
     )
@@ -526,9 +527,19 @@ def _wait_for_clear_of_station(
 
     progress_fn(f"Waiting for NoTrack / clear of station (timeout {no_track_timeout_s:.0f}s)...")
 
+    station_name = undocked_event.get("StationName") if undocked_event is not None else None
+    station_type = undocked_event.get("StationType") if undocked_event is not None else None
+
+    def _is_clear_of_station_event(event: dict[str, object]) -> bool:
+        return _is_music_no_track_event(event) or is_manual_launch_control_resumed_event(
+            event,
+            station_name=station_name,
+            station_type=station_type,
+        )
+
     no_track_event, _ = _wait_for_event_with_pending(
         watcher,
-        predicate=_is_music_no_track_event,
+        predicate=_is_clear_of_station_event,
         deadline=time_fn() + no_track_timeout_s,
         time_fn=time_fn,
         pending_events=pending_events,
@@ -539,10 +550,26 @@ def _wait_for_clear_of_station(
             dispatch=ActionDispatchResult(
                 action="Undocked",
                 status="error",
-                reason=f"NoTrack music event was not observed within {no_track_timeout_s:.0f}s after Undocked",
+                reason=(
+                    "NoTrack or carrier Exploration music event was not observed "
+                    f"within {no_track_timeout_s:.0f}s after Undocked"
+                ),
             ),
             trigger_event=undocked_event,
             details={"phase": "wait_for_no_track", "no_track_timeout_s": no_track_timeout_s},
+        )
+
+    if is_manual_launch_control_resumed_event(
+        no_track_event,
+        station_name=station_name,
+        station_type=station_type,
+    ):
+        progress_fn("Confirmed carrier manual launch control resumed via Exploration")
+        return RoutineResult(
+            action="ManualLaunchControlResumed",
+            dispatch=ActionDispatchResult(action="ManualLaunchControlResumed", status="ok"),
+            trigger_event=no_track_event,
+            details={"phase": "complete", "undocked_event": undocked_event},
         )
 
     progress_fn("Confirmed clear of station via NoTrack")

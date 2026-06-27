@@ -104,7 +104,9 @@ def describe_routine_failure(
             error_text.render(config, "undocked_timeout_suggestion"),
         )
 
-    if reason.startswith("NoTrack music event was not observed within"):
+    if reason.startswith("NoTrack music event was not observed within") or reason.startswith(
+        "NoTrack or carrier Exploration music event was not observed within"
+    ):
         return (
             error_text.render(config, "no_track_timeout_message"),
             error_text.render(config, "no_track_timeout_suggestion"),

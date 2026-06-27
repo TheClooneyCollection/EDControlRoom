@@ -7,6 +7,8 @@ from pathlib import Path
 from time import sleep
 from typing import Callable, Iterator
 
+from edap.journal_events import is_manual_launch_control_resumed_event
+
 
 @dataclass(frozen=True)
 class ShipState:
@@ -135,6 +137,13 @@ def read_ship_state(log_path: Path) -> ShipState:
             log = loads(line)
             event = log.get("event")
             status_before_event = ship["status"]
+            manual_launch_control_resumed = (
+                ship["status"] == "in_undocking"
+                and is_manual_launch_control_resumed_event(
+                    log,
+                    station_name=ship["station"],
+                )
+            )
 
             if event == "StartJump":
                 ship["status"] = f"starting_{log['JumpType']}".lower()
@@ -149,6 +158,7 @@ def read_ship_state(log_path: Path) -> ShipState:
                     and log.get("MusicTrack") == "NoTrack"
                     and ship["status"] == "in_undocking"
                 )
+                or manual_launch_control_resumed
                 or (event in {"Location", "CarrierJump"} and log.get("Docked") is False)
             ):
                 ship["status"] = "in_space"
@@ -212,7 +222,7 @@ def read_ship_state(log_path: Path) -> ShipState:
                 event == "Music"
                 and log.get("MusicTrack") == "NoTrack"
                 and status_before_event == "in_undocking"
-            ) or (
+            ) or manual_launch_control_resumed or (
                 event in {"Location", "CarrierJump"} and log.get("Docked") is False
             ):
                 ship["station"] = None
