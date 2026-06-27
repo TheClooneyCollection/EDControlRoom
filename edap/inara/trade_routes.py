@@ -232,6 +232,22 @@ def _extract_repeated_field_values(lines: list[str], label: str) -> list[str]:
             if not _FIELD_LABEL_RE.fullmatch(next_line):
                 values.append(next_line)
         elif line.startswith(prefix):
+                values.append(line[len(prefix):].strip())
+    return values
+
+
+def _extract_trade_commodity_values(lines: list[str], label: str) -> list[str]:
+    values: list[str] = []
+    prefix = f"{label} "
+    metric_prefix = f"{label} PRICE "
+    for index, line in enumerate(lines):
+        if line == label and index + 1 < len(lines):
+            next_line = lines[index + 1]
+            if not _FIELD_LABEL_RE.fullmatch(next_line):
+                values.append(next_line)
+        elif line.startswith(metric_prefix):
+            continue
+        elif line.startswith(prefix):
             values.append(line[len(prefix):].strip())
     return values
 
@@ -244,7 +260,6 @@ def _row_to_route(row: dict[str, Any]) -> TradeRoute:
     from_system = "?"
     to_station = "?"
     to_system = "?"
-    to_index = len(lines)
     for index, line in enumerate(lines):
         match = _ENDPOINT_RE.match(line)
         if not match:
@@ -256,12 +271,7 @@ def _row_to_route(row: dict[str, Any]) -> TradeRoute:
         else:
             to_station = _clean_endpoint_part(station)
             to_system = _clean_endpoint_part(system)
-            to_index = index
-
-    left_lines = lines[:to_index]
-    right_lines = lines[to_index + 1 :] if to_index < len(lines) else []
-    left_buys = _extract_repeated_field_values(left_lines, "BUY")
-    right_buys = _extract_repeated_field_values(right_lines, "BUY")
+    buy_commodities = _extract_trade_commodity_values(lines, "BUY")
 
     return TradeRoute(
         index=int(row.get("index", 0) or 0),
@@ -269,8 +279,8 @@ def _row_to_route(row: dict[str, Any]) -> TradeRoute:
         from_system=from_system,
         to_station=to_station,
         to_system=to_system,
-        source_buy_commodity=left_buys[0] if left_buys else None,
-        target_buy_commodity=right_buys[-1] if right_buys else None,
+        source_buy_commodity=buy_commodities[0] if buy_commodities else None,
+        target_buy_commodity=buy_commodities[-1] if len(buy_commodities) > 1 else None,
         route_distance=fields.get("ROUTE DISTANCE"),
         profit_per_unit=fields.get("PROFIT PER UNIT"),
         profit_per_trip=fields.get("PROFIT PER TRIP"),
