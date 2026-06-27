@@ -145,6 +145,7 @@ _STARTUP_BINDING_WARNING_IGNORED_ACTIONS = frozenset({
 _DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul load | haul search [system] | haul search url <url> | haul route <n> | multi_leg_haul <route> | dest <system> | home | market ... | reload | q"
 _ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS = 10.0
 _JOURNAL_ARTIFACT_LOG_PATH = Path("artifacts/control-room.log")
+_DEBUG_ARTIFACT_LOG_PATH = Path("artifacts/control-room-debug.log")
 _JOURNAL_ARTIFACT_LOG_BUFFER_SIZE = 8192
 _JOURNAL_ARTIFACT_LOG_FLUSH_EVERY = 20
 _PROTOCOL_ANNOUNCEMENT_CACHE_LIMIT = 200
@@ -425,6 +426,7 @@ class ControlRoomApp(App[None]):
         self._journal_artifact_log_path = _JOURNAL_ARTIFACT_LOG_PATH
         self._journal_artifact_log_handle: IO[str] | None = None
         self._journal_artifact_log_pending_writes = 0
+        self._debug_artifact_log_path = _DEBUG_ARTIFACT_LOG_PATH
         self._protocol_activity_log: list[ActivityLogEntry] = []
         self._protocol_announcements: list[AnnouncementEvent] = []
         self._protocol_external_event_sink: ControlRoomEventSink | None = None
@@ -916,10 +918,20 @@ class ControlRoomApp(App[None]):
         except Exception:
             return
 
+        labels = [_rendering.trade_route_option_label(route) for route in self._trade_routes.routes]
         option_list.clear_options()
-        option_list.add_options(
-            [_rendering.trade_route_option_label(route) for route in self._trade_routes.routes]
-        )
+        option_list.add_options(labels)
+        if self._trade_routes.routes:
+            first_route = self._trade_routes.routes[0]
+            self._debug_log(
+                "trade_route_picker_refresh",
+                route_count=len(self._trade_routes.routes),
+                selected_trade_route_index=self._selected_trade_route_index,
+                first_route_index=first_route.index,
+                first_route_profit_per_trip=first_route.profit_per_trip,
+                first_route_profit_per_hour=first_route.profit_per_hour,
+                first_label=labels[0] if labels else "",
+            )
         selected_route = self._selected_trade_route()
         if self._trade_routes.routes:
             if selected_route is None:
@@ -1116,15 +1128,21 @@ class ControlRoomApp(App[None]):
         if route is None:
             detail.update(Text.from_markup("[dim]No trade route selected.[/]"))
             return
+        markup = _rendering.trade_route_detail_markup(
+            route,
+            system_name=self._trade_routes.system_name,
+            searched_at=self._trade_routes.searched_at,
+            route_count=len(self._trade_routes.routes),
+        )
+        self._debug_log(
+            "trade_route_detail_update",
+            route_index=route.index,
+            profit_per_trip=route.profit_per_trip,
+            profit_per_hour=route.profit_per_hour,
+            markup=markup,
+        )
         detail.update(
-            Text.from_markup(
-                _rendering.trade_route_detail_markup(
-                    route,
-                    system_name=self._trade_routes.system_name,
-                    searched_at=self._trade_routes.searched_at,
-                    route_count=len(self._trade_routes.routes),
-                )
-            )
+            Text.from_markup(markup)
         )
 
     def _apply_replay_browser_visibility(self) -> None:
@@ -1590,6 +1608,20 @@ class ControlRoomApp(App[None]):
         self._journal_artifact_log_pending_writes += 1
         if self._journal_artifact_log_pending_writes >= _JOURNAL_ARTIFACT_LOG_FLUSH_EVERY:
             self._flush_journal_artifact_log()
+
+    def _debug_log(self, event: str, /, **fields: object) -> None:
+        payload = {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "event": event,
+            **fields,
+        }
+        try:
+            self._debug_artifact_log_path.parent.mkdir(parents=True, exist_ok=True)
+            with self._debug_artifact_log_path.open("a", encoding="utf-8", buffering=1) as handle:
+                handle.write(json.dumps(payload, ensure_ascii=True))
+                handle.write("\n")
+        except OSError:
+            return
 
     def _ensure_journal_artifact_log_handle(self) -> IO[str] | None:
         if self._journal_artifact_log_handle is not None:

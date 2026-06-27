@@ -5,7 +5,7 @@ from datetime import datetime, UTC
 import re
 import urllib.parse
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -77,6 +77,15 @@ _FIELD_LABELS = (
     "BUY",
 )
 
+_FIELD_ALIASES = {
+    "PROFIT PER LOAD": "PROFIT PER TRIP",
+    "LOAD PROFIT": "PROFIT PER TRIP",
+    "TRIP PROFIT": "PROFIT PER TRIP",
+    "ROUTE PROFIT": "PROFIT PER TRIP",
+    "PROFIT/HOUR": "PROFIT PER HOUR",
+    "HOURLY PROFIT": "PROFIT PER HOUR",
+}
+
 
 @dataclass(frozen=True)
 class TradeRoute:
@@ -102,6 +111,9 @@ class TradeRouteSearchResult:
     query_url: str
     searched_at: str
     routes: tuple[TradeRoute, ...]
+
+
+DebugHook = Callable[..., None]
 
 
 def trade_route_search_defaults() -> dict[str, str]:
@@ -223,8 +235,9 @@ def _extract_key_value_pairs(lines: list[str]) -> dict[str, str]:
     idx = 0
     while idx + 1 < len(lines):
         label = lines[idx]
+        canonical_label = _FIELD_ALIASES.get(label, label)
         if _FIELD_LABEL_RE.fullmatch(label):
-            fields[label] = lines[idx + 1]
+            fields[canonical_label] = lines[idx + 1]
             idx += 2
             continue
         idx += 1
@@ -234,6 +247,12 @@ def _extract_key_value_pairs(lines: list[str]) -> dict[str, str]:
             if line.startswith(prefix):
                 fields[label] = line[len(prefix):].strip()
                 break
+        else:
+            for alias, canonical_label in _FIELD_ALIASES.items():
+                prefix = f"{alias} "
+                if line.startswith(prefix):
+                    fields[canonical_label] = line[len(prefix):].strip()
+                    break
     return fields
 
 
@@ -322,22 +341,45 @@ def _extract_rows(page: Any) -> list[dict[str, Any]]:
     )
 
 
+def _emit_debug(debug_hook: DebugHook | None, event: str, /, **fields: object) -> None:
+    if debug_hook is None:
+        return
+    debug_hook(event, **fields)
+
+
 def _challenge_present(page: Any) -> bool:
     text = page.locator("body").inner_text(timeout=1000)
     return "Access check required" in text or "Confirm and continue" in text
 
 
-def _wait_for_route_rows(page: Any, timeout_seconds: float, *, show_browser: bool) -> list[dict[str, Any]]:
+def _wait_for_route_rows(
+    page: Any,
+    timeout_seconds: float,
+    *,
+    show_browser: bool,
+    debug_hook: DebugHook | None = None,
+) -> list[dict[str, Any]]:
     import time
 
     deadline = time.monotonic() + max(timeout_seconds, 0.0)
     challenge_logged = False
+    attempt = 0
     while time.monotonic() < deadline:
+        attempt += 1
         rows = _extract_rows(page)
+        first_row = rows[0] if rows else None
+        _emit_debug(
+            debug_hook,
+            "inara_wait_rows_poll",
+            attempt=attempt,
+            row_count=len(rows),
+            first_row_text=(str(first_row.get("text", "")) if first_row is not None else ""),
+        )
         if rows:
             return rows
         if not challenge_logged and _challenge_present(page):
             challenge_logged = True
+            _emit_debug(debug_hook, "inara_wait_rows_challenge_detected", attempt=attempt)
             if show_browser:
                 print(
                     "Inara access check detected. Complete it in the opened browser window; "
@@ -369,10 +411,20 @@ def fetch_trade_routes(
     profile_dir: Path | None = None,
     show_browser: bool = False,
     browser_path: str | None = None,
+    debug_hook: DebugHook | None = None,
 ) -> tuple[TradeRoute, ...]:
     sync_playwright = _load_sync_playwright()
     resolved_profile_dir = profile_dir or _DEFAULT_PROFILE_DIR
     resolved_profile_dir.mkdir(parents=True, exist_ok=True)
+    _emit_debug(
+        debug_hook,
+        "inara_fetch_start",
+        query_url=query_url,
+        timeout_seconds=timeout_seconds,
+        profile_dir=str(resolved_profile_dir),
+        show_browser=show_browser,
+        browser_path=browser_path,
+    )
 
     with sync_playwright() as playwright:
         context = playwright.chromium.launch_persistent_context(
@@ -383,8 +435,33 @@ def fetch_trade_routes(
         try:
             page = context.pages[0] if context.pages else context.new_page()
             page.goto(query_url, wait_until="domcontentloaded")
-            rows = _wait_for_route_rows(page, timeout_seconds, show_browser=show_browser)
-            return tuple(_row_to_route(row) for row in rows)
+            rows = _wait_for_route_rows(
+                page,
+                timeout_seconds,
+                show_browser=show_browser,
+                debug_hook=debug_hook,
+            )
+            first_row = rows[0] if rows else None
+            _emit_debug(
+                debug_hook,
+                "inara_fetch_rows_ready",
+                row_count=len(rows),
+                first_row_text=(str(first_row.get("text", "")) if first_row is not None else ""),
+            )
+            routes: list[TradeRoute] = []
+            for row in rows:
+                route = _row_to_route(row)
+                routes.append(route)
+                _emit_debug(
+                    debug_hook,
+                    "inara_row_transformed",
+                    route_index=route.index,
+                    profit_per_unit=route.profit_per_unit,
+                    profit_per_trip=route.profit_per_trip,
+                    profit_per_hour=route.profit_per_hour,
+                    raw_text=route.raw_text,
+                )
+            return tuple(routes)
         finally:
             context.close()
 
@@ -397,6 +474,7 @@ def search_trade_routes(
     show_browser: bool = False,
     browser_path: str | None = None,
     query_params: dict[str, str] | None = None,
+    debug_hook: DebugHook | None = None,
 ) -> TradeRouteSearchResult:
     query_url = build_trade_routes_url(system_name, query_params=query_params)
     routes = fetch_trade_routes(
@@ -405,10 +483,26 @@ def search_trade_routes(
         profile_dir=profile_dir,
         show_browser=show_browser,
         browser_path=browser_path,
+        debug_hook=debug_hook,
     )
-    return TradeRouteSearchResult(
+    result = TradeRouteSearchResult(
         system_name=system_name,
         query_url=query_url,
         searched_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         routes=routes,
     )
+    first_route = routes[0] if routes else None
+    _emit_debug(
+        debug_hook,
+        "inara_search_complete",
+        system_name=system_name,
+        query_url=query_url,
+        route_count=len(routes),
+        first_route_profit_per_trip=(
+            first_route.profit_per_trip if first_route is not None else None
+        ),
+        first_route_profit_per_hour=(
+            first_route.profit_per_hour if first_route is not None else None
+        ),
+    )
+    return result

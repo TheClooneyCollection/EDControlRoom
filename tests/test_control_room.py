@@ -773,6 +773,10 @@ class ControlRoomCommandTests(unittest.TestCase):
                 "FuelLevel": 16.0,
                 "FuelCapacity": 32.0,
             }) + "\n" + json.dumps({
+                "event": "Loadout",
+                "Ship": "type6",
+                "CargoCapacity": 460,
+            }) + "\n" + json.dumps({
                 "event": "Location",
                 "Docked": True,
                 "StarSystem": "HIP 58412",
@@ -812,6 +816,7 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertEqual(self.app._ship.system, "HIP 58412")
         self.assertEqual(self.app._ship.credits, 123456789)
         self.assertEqual(self.app._ship.cargo_count, 24)
+        self.assertEqual(self.app._ship.cargo_capacity, 460)
         self.assertEqual(self.app._ship.destination_system, "Achenar")
         self.assertEqual(self.app._ship.destination_body, "Dawes Hub")
         self.assertEqual(self.app._ship.destination_name, "Dawes Hub")
@@ -2192,6 +2197,27 @@ on_land = true
         lines = log_path.read_text(encoding="utf-8").splitlines()
         self.assertEqual(len(lines), 1)
         self.assertEqual(json.loads(lines[0]), {"event": "SupercruiseExit", "Body": "Wells Terminal"})
+
+    def test_debug_log_writes_control_room_debug_artifact(self) -> None:
+        log_path = Path(self.tmpdir.name) / "control-room-debug.log"
+        self.app._debug_artifact_log_path = log_path
+
+        ControlRoomApp._debug_log(
+            self.app,
+            "trade_route_picker_refresh",
+            route_count=50,
+            first_label="[89.6m/h] 1. Fontana City -> Stronghold Carrier",
+        )
+
+        lines = log_path.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(lines), 1)
+        payload = json.loads(lines[0])
+        self.assertEqual(payload["event"], "trade_route_picker_refresh")
+        self.assertEqual(payload["route_count"], 50)
+        self.assertEqual(
+            payload["first_label"],
+            "[89.6m/h] 1. Fontana City -> Stronghold Carrier",
+        )
 
     def test_append_journal_event_defers_flush_until_batch_threshold(self) -> None:
         handle = _ArtifactLogHandleStub()

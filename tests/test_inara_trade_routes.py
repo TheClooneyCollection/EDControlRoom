@@ -4,6 +4,7 @@ import unittest
 
 from edap.inara.trade_routes import (
     _extract_key_value_pairs,
+    _emit_debug,
     _row_to_route,
     build_trade_routes_url,
     parse_trade_routes_url,
@@ -49,6 +50,30 @@ class InaraTradeRoutesTests(unittest.TestCase):
         self.assertEqual(fields["ROUTE DISTANCE"], "33.08 Ly")
         self.assertEqual(fields["UPDATED"], "3 hours ago")
         self.assertEqual(fields["PROFIT PER HOUR"], "88,323,553 Cr")
+
+    def test_extract_key_value_pairs_maps_profit_aliases(self) -> None:
+        fields = _extract_key_value_pairs(
+            [
+                "PROFIT PER LOAD 17,435,380 Cr",
+                "PROFIT/HOUR 88,323,553 Cr",
+            ]
+        )
+
+        self.assertEqual(fields["PROFIT PER TRIP"], "17,435,380 Cr")
+        self.assertEqual(fields["PROFIT PER HOUR"], "88,323,553 Cr")
+
+    def test_emit_debug_forwards_event_and_fields(self) -> None:
+        captured: list[tuple[str, dict[str, object]]] = []
+
+        def debug_hook(event: str, **fields: object) -> None:
+            captured.append((event, fields))
+
+        _emit_debug(debug_hook, "inara_fetch_start", timeout_seconds=20.0, row_count=0)
+
+        self.assertEqual(
+            captured,
+            [("inara_fetch_start", {"timeout_seconds": 20.0, "row_count": 0})],
+        )
 
     def test_row_to_route_parses_endpoints_and_metrics(self) -> None:
         route = _row_to_route(
@@ -124,6 +149,8 @@ class InaraTradeRoutesTests(unittest.TestCase):
                     "BUY PRICE\t2,022 Cr",
                     "SUPPLY\t7,025",
                     "ROUTE DISTANCE\t0 Ly",
+                    "PROFIT PER LOAD\t17,435,380 Cr",
+                    "PROFIT/HOUR\t88,323,553 Cr",
                     "UPDATED\t11 minutes ago",
                     "PROFIT PER UNIT\t37,903 Cr",
                 ],
@@ -134,7 +161,8 @@ class InaraTradeRoutesTests(unittest.TestCase):
         self.assertEqual(route.source_buy_commodity, "Silver")
         self.assertEqual(route.target_buy_commodity, "Robotics")
         self.assertEqual(route.profit_per_unit, "37,903 Cr")
-
+        self.assertEqual(route.profit_per_trip, "17,435,380 Cr")
+        self.assertEqual(route.profit_per_hour, "88,323,553 Cr")
 
 if __name__ == "__main__":
     unittest.main()

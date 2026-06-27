@@ -192,6 +192,22 @@ def _set_trade_routes_loading(app: HaulHost, *, system_name: str, query_url: str
 
 
 def _set_trade_routes_loaded(app: HaulHost, result) -> None:
+    debug_log = getattr(app, "_debug_log", None)
+    if callable(debug_log):
+        first_route = result.routes[0] if result.routes else None
+        debug_log(
+            "trade_routes_loaded",
+            system_name=result.system_name,
+            route_count=len(result.routes),
+            first_route_index=first_route.index if first_route is not None else None,
+            first_route_profit_per_trip=(
+                first_route.profit_per_trip if first_route is not None else None
+            ),
+            first_route_profit_per_hour=(
+                first_route.profit_per_hour if first_route is not None else None
+            ),
+            first_route_raw_text=(first_route.raw_text if first_route is not None else ""),
+        )
     app._trade_routes = TradeRoutesData(
         system_name=result.system_name,
         query_url=result.query_url,
@@ -254,7 +270,11 @@ def dispatch_haul_search(
 
     def run_search() -> None:
         try:
-            result = search_trade_routes(system_name, query_params=query_params)
+            result = search_trade_routes(
+                system_name,
+                query_params=query_params,
+                debug_hook=getattr(app, "_debug_log", None),
+            )
         except Exception as exc:
             app.call_from_thread(
                 _set_trade_routes_error,

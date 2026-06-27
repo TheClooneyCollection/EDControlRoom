@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `97`
-- Latest generated iteration number: `230`
+- Generated iteration count: `101`
+- Latest generated iteration number: `234`
 
 ## Iteration 134
 
@@ -2734,3 +2734,111 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-check the picker width in a real Control Room session to decide whether the detail box height should shrink now that the content is denser.
+
+## Iteration 231
+
+- When: `2026-06-27 15:06`
+- Area: `haul`
+- Title: `fix-live-route-profit-metrics`
+- Source: [2026-06-27-15-06_____haul_____fix-live-route-profit-metrics.md](iteration-logs/2026-06-27-15-06_____haul_____fix-live-route-profit-metrics.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `fix-live-route-profit-metrics`
+- Started: `2026-06-27 15:06`
+
+## Summary
+
+- Fixed live Inara route parsing so haul picker rows and the selected-route detail can show the missing trip/hour profit fields again.
+
+## Changes
+
+- Added profit-label alias handling in the Inara trade-route parser so live rows using `PROFIT PER LOAD` and `PROFIT/HOUR` still populate the canonical trip/hour fields.
+- Extended the live-layout parser fixture to assert `profit_per_trip` and `profit_per_hour` on the current Fontana City route shape, plus a direct alias extraction unit test.
+- Re-ran `uv run python3 -m unittest discover -s tests`; the suite passed in `0.318s`, then `tools/report_test_timing.py --top 10 --sort slowest` reported `suite_status=ok total_seconds=0.311` per repo policy.
+
+## Follow-ups
+
+- Re-check one real haul search session to confirm the live Inara DOM has not introduced any additional profit-label variants beyond the aliases now covered.
+
+## Iteration 232
+
+- When: `2026-06-27 15:15`
+- Area: `control-room`
+- Title: `escape-route-picker-profit-prefix`
+- Source: [2026-06-27-15-15_control-room_escape-route-picker-profit-prefix.md](iteration-logs/2026-06-27-15-15_control-room_escape-route-picker-profit-prefix.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `escape-route-picker-profit-prefix`
+- Started: `2026-06-27 15:15`
+
+## Summary
+
+- Escaped the haul route picker’s literal `[xx.xm/h]` prefix so markup-aware list rendering can show it instead of swallowing it.
+
+## Changes
+
+- Changed the route-row prefix formatter to emit `[[88.3m/h]]` in source text so the picker renders a literal `[88.3m/h]`.
+- Updated the Control Room route-label assertion to match the escaped prefix source form and re-ran the full unittest suite.
+- Full suite passed via `uv run python3 -m unittest discover -s tests` in `0.321s`; per repo policy, `tools/report_test_timing.py --top 10 --sort slowest` then reported `suite_status=ok total_seconds=0.327`.
+
+## Follow-ups
+
+- Re-check the live picker after restart; if the prefix still does not appear, inspect the exact running Control Room / serve process because the code and live scraper output now both contain the profit fields.
+
+## Iteration 233
+
+- When: `2026-06-27 15:37`
+- Area: `control-room`
+- Title: `trace-route-picker-modal-profit-path`
+- Source: [2026-06-27-15-37_control-room_trace-route-picker-modal-profit-path.md](iteration-logs/2026-06-27-15-37_control-room_trace-route-picker-modal-profit-path.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `trace-route-picker-modal-profit-path`
+- Started: `2026-06-27 15:37`
+
+## Summary
+
+- Added dedicated route-picker tracing so live Control Room runs can show whether trip/hour profit disappears at load time, label formatting time, or detail-markup time.
+
+## Changes
+
+- Added a separate `artifacts/control-room-debug.log` JSONL trace sink for Control Room UI diagnostics instead of mixing modal debug lines into the existing artifact event mirror.
+- Instrumented `_set_trade_routes_loaded`, `_refresh_trade_route_picker`, and `_update_trade_route_detail` to log the first route’s trip/hour profit plus the exact modal list label and detail markup being rendered.
+- Added a Control Room test for the debug artifact writer and re-ran the full unittest suite successfully in `0.241s`.
+
+## Follow-ups
+
+- Re-run `uv run control_room.py`, perform `haul search`, and inspect `artifacts/control-room-debug.log` to see where the route-picker modal still loses the profit fields in the live app path.
+
+## Iteration 234
+
+- When: `2026-06-27 18:20`
+- Area: `control-room`
+- Title: `bootstrap-cargo-capacity-for-haul-search`
+- Source: [2026-06-27-18-20_control-room_bootstrap-cargo-capacity-for-haul-search.md](iteration-logs/2026-06-27-18-20_control-room_bootstrap-cargo-capacity-for-haul-search.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `bootstrap-cargo-capacity-for-haul-search`
+- Started: `2026-06-27 18:20`
+
+## Summary
+
+- Fixed the restart-time gap where Control Room bootstrapped cargo count from `Status.json` but dropped total cargo capacity from the latest journal, causing `haul search` prefills to omit `cargo_capacity=` until a fresh live `Loadout` arrived.
+
+## Changes
+
+- Extended `edap.state.read_ship_state()` to retain `Loadout.CargoCapacity` in the lightweight journal bootstrap state.
+- Updated Control Room bootstrap to copy that restored `cargo_capacity` onto the live ship model before haul-search defaults are generated.
+- Expanded the bootstrap ship-state test to include a `Loadout` event and assert that cargo capacity survives startup alongside the `Status.json` cargo count.
+
+## Follow-ups
+
+- Keep `artifacts/control-room-debug.log` in place while live Inara behavior is still being validated, but the missing `cargo_capacity` root cause for blank search prefills is now covered by startup bootstrap and test coverage.

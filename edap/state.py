@@ -18,6 +18,7 @@ class ShipState:
     station: str | None
     star_class: str | None
     target: str | None
+    cargo_capacity: int | None
     fuel_capacity: float | None
     fuel_level: float | None
     fuel_percent: int
@@ -122,6 +123,7 @@ def read_ship_state(log_path: Path) -> ShipState:
         "station": None,
         "star_class": None,
         "target": None,
+        "cargo_capacity": None,
         "fuel_capacity": None,
         "fuel_level": None,
         "fuel_percent": 10,
@@ -175,6 +177,9 @@ def read_ship_state(log_path: Path) -> ShipState:
                 ship["ship_type"] = log.get("Ship")
             elif event == "Loadout":
                 ship["ship_type"] = log.get("Ship")
+                cargo_capacity = log.get("CargoCapacity")
+                if isinstance(cargo_capacity, (int, float)) and not isinstance(cargo_capacity, bool):
+                    ship["cargo_capacity"] = int(cargo_capacity)
 
             if "FuelLevel" in log and ship["ship_type"] != "TestBuggy":
                 ship["fuel_level"] = log["FuelLevel"]
