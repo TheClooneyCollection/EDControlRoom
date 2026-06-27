@@ -20,7 +20,11 @@ from edap.control_room.backend import ControlRoomBackend, LocalControlRoomBacken
 from edap.control_room.app import ControlRoomApp
 from edap.control_room.history import resume_detail, resume_label
 from edap.control_room.models import ReplaySelection
-from edap.control_room.protocol import ActivityLogEntry, snapshot_from_app
+from edap.control_room.protocol import (
+    ActivityLogEntry,
+    build_activity_log_entry,
+    snapshot_from_app,
+)
 from edap.control_room.protocol.events import ActivityLogAppendedEvent, AnnouncementEvent
 from edap.control_room.protocol.snapshot import (
     CommandHistoryEntrySnapshot,
@@ -365,6 +369,11 @@ class _SinkRecorder(ControlRoomEventSink):
 
 
 class ControlRoomProtocolSnapshotTests(unittest.TestCase):
+    def test_build_activity_log_entry_preserves_markup_for_remote_rendering(self) -> None:
+        entry = build_activity_log_entry("[green]Connected.[/]")
+
+        self.assertEqual(entry.message_text, "[green]Connected.[/]")
+
     def setUp(self) -> None:
         self.tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmpdir.cleanup)
@@ -575,11 +584,14 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
 
         self.assertEqual(len(self.app._protocol_activity_log), 1)
         entry = self.app._protocol_activity_log[0]
-        self.assertEqual(entry.message_text, "Docked at Jameson Memorial")
+        self.assertEqual(entry.message_text, "[yellow]Docked at Jameson Memorial[/]")
 
         snapshot = snapshot_from_app(self.app)
         self.assertEqual(len(snapshot.activity_log), 1)
-        self.assertEqual(snapshot.activity_log[0].message_text, "Docked at Jameson Memorial")
+        self.assertEqual(
+            snapshot.activity_log[0].message_text,
+            "[yellow]Docked at Jameson Memorial[/]",
+        )
 
     def test_announce_tts_records_protocol_announcement_event_even_when_local_tts_disabled(self) -> None:
         self.app._announce_tts(AnnouncementId.ARRIVAL, system_name="Sol")
@@ -612,7 +624,7 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.assertIsInstance(self.app.backend, LocalControlRoomBackend)
         self.assertEqual(len(received), 1)
         self.assertIsInstance(received[0], ActivityLogAppendedEvent)
-        self.assertEqual(received[0].entry.message_text, "Observer ready")
+        self.assertEqual(received[0].entry.message_text, "[green]Observer ready[/]")
 
     def test_local_backend_forwards_events_to_external_sink(self) -> None:
         recorder = _SinkRecorder()
@@ -621,7 +633,7 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.app._log("[green]Observer ready[/]")
         self.app._announce_tts(AnnouncementId.ARRIVAL, system_name="Sol")
 
-        self.assertEqual(recorder.activity_messages, ["Observer ready"])
+        self.assertEqual(recorder.activity_messages, ["[green]Observer ready[/]"])
         self.assertEqual(recorder.announcement_ids, ["arrival"])
 
     def test_handle_event_publishes_snapshot_to_external_sink(self) -> None:

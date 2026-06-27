@@ -338,6 +338,47 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertTrue(app._trade_route_picker_open)
         self.assertEqual(app._selected_trade_route_index, 1)
 
+    def test_observer_app_opens_trade_route_picker_when_loading_completes_same_second(self) -> None:
+        loading_snapshot = replace(
+            _snapshot(),
+            trade_routes=TradeRoutesSnapshot(
+                system_name="Praea Euq AK-A d25",
+                query_url="https://inara.cz/elite/market-traderoutes/?ps1=Praea+Euq+AK-A+d25",
+                searched_at="2026-06-27T18:20:00Z",
+                loading=True,
+                routes=[],
+            ),
+        )
+        loaded_snapshot = replace(
+            loading_snapshot,
+            trade_routes=TradeRoutesSnapshot(
+                system_name="Praea Euq AK-A d25",
+                query_url="https://inara.cz/elite/market-traderoutes/?ps1=Praea+Euq+AK-A+d25",
+                searched_at="2026-06-27T18:20:00Z",
+                loading=False,
+                routes=[
+                    TradeRouteSnapshot(
+                        index=1,
+                        from_station="Savitskaya Orbital",
+                        from_system="TSONGORIS",
+                        to_station="Scully-Power Station",
+                        to_system="IX",
+                    )
+                ],
+            ),
+        )
+        backend = self._backend(initial_snapshot=loading_snapshot)
+        app = self._app(backend=backend)
+
+        app._apply_view_snapshot_state()
+        self.assertFalse(app._trade_route_picker_open)
+
+        app._view_snapshot = loaded_snapshot
+        app._apply_view_snapshot_state()
+
+        self.assertTrue(app._trade_route_picker_open)
+        self.assertEqual(app._selected_trade_route_index, 1)
+
     def test_parse_target_defaults_to_http_and_default_port(self) -> None:
         target = parse_observer_server_target("192.168.1.44")
 

@@ -974,6 +974,7 @@ class ControlRoomApp(App[None]):
 
     def _apply_view_snapshot_state(self) -> None:
         snapshot = self._view_snapshot
+        previous_trade_routes = self._trade_routes
         self._runtime_state.routine_active = snapshot.ui_state.routine_active
         self._runtime_state.active_routine_name = snapshot.ui_state.active_routine_name
         self._runtime_state.haul_stop_requested = snapshot.ui_state.haul_stop_requested
@@ -1069,7 +1070,9 @@ class ControlRoomApp(App[None]):
                 for route in snapshot.trade_routes.routes
             ],
         )
-        self._sync_trade_route_picker_for_snapshot()
+        self._sync_trade_route_picker_for_snapshot(
+            previous_trade_routes=previous_trade_routes
+        )
         try:
             command_input = self.query_one("#cmd", Input)
         except Exception:
@@ -1090,7 +1093,11 @@ class ControlRoomApp(App[None]):
         self._apply_replay_browser_visibility()
         self._refresh_trade_route_picker()
 
-    def _sync_trade_route_picker_for_snapshot(self) -> None:
+    def _sync_trade_route_picker_for_snapshot(
+        self,
+        *,
+        previous_trade_routes: TradeRoutesData | None = None,
+    ) -> None:
         current_signature = (self._trade_routes.query_url, self._trade_routes.searched_at)
         presented_signature = (
             self._presented_trade_route_query_url,
@@ -1101,7 +1108,17 @@ class ControlRoomApp(App[None]):
             and not self._trade_routes.loading
             and self._trade_routes.error is None
         )
-        if has_loaded_routes and current_signature != presented_signature:
+        search_completed_since_last_snapshot = (
+            previous_trade_routes is not None
+            and previous_trade_routes.loading
+            and not self._trade_routes.loading
+            and self._trade_routes.error is None
+            and bool(self._trade_routes.routes)
+        )
+        if has_loaded_routes and (
+            current_signature != presented_signature
+            or search_completed_since_last_snapshot
+        ):
             self._presented_trade_route_query_url = self._trade_routes.query_url
             self._presented_trade_route_searched_at = self._trade_routes.searched_at
             self._selected_trade_route_index = self._trade_routes.routes[0].index

@@ -4,8 +4,6 @@ from datetime import UTC, datetime
 from itertools import count
 from typing import Any
 
-from rich.text import Text
-
 from .events import AnnouncementEvent
 from .snapshot import ActivityLogEntry
 
@@ -21,7 +19,7 @@ def build_activity_log_entry(message_markup: str) -> ActivityLogEntry:
     return ActivityLogEntry(
         entry_id=f"activity-{next(_activity_log_counter):06d}",
         timestamp=protocol_timestamp_now(),
-        message_text=Text.from_markup(message_markup).plain,
+        message_text=message_markup,
         severity=None,
     )
 

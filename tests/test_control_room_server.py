@@ -1254,7 +1254,7 @@ class ControlRoomServerTests(unittest.TestCase):
                 ActivityLogEntry(
                     entry_id="activity-000100",
                     timestamp="2026-06-19T12:20:00Z",
-                    message_text="Command accepted.",
+                    message_text="[green]Command accepted.[/]",
                     severity=None,
                 )
             )
