@@ -982,6 +982,30 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertIn("17,435,380 Cr", rendered.plain)
         self.assertIn("Per hour", rendered.plain)
         self.assertIn("88,323,553 Cr", rendered.plain)
+        self.assertIn("From Fontana City (HIP 17597)    To Stronghold Carrier (HIP 17597)", rendered.plain)
+        self.assertIn("Buy Silver    Return Robotics", rendered.plain)
+        self.assertIn("Route 12.4 Ly    Per unit 37,903 Cr", rendered.plain)
+        self.assertIn("Per trip 17,435,380 Cr    Per hour 88,323,553 Cr", rendered.plain)
+
+    def test_trade_route_option_label_prefixes_compact_per_hour_profit(self) -> None:
+        label = control_room_rendering.trade_route_option_label(
+            TradeRoute(
+                index=1,
+                from_station="Fontana City",
+                from_system="HIP 17597",
+                to_station="Stronghold Carrier",
+                to_system="HIP 17597",
+                source_buy_commodity="Silver",
+                target_buy_commodity="Robotics",
+                profit_per_unit="37,903 Cr",
+                profit_per_hour="88,323,553 Cr",
+            )
+        )
+
+        self.assertEqual(
+            label,
+            "[88.3m/h] 1. Fontana City -> Stronghold Carrier [buy Silver | return Robotics | ppu 37,903 Cr]",
+        )
 
     def test_load_market_json_seeds_ship_station_when_in_station(self) -> None:
         journal_dir = Path(self.tmpdir.name)

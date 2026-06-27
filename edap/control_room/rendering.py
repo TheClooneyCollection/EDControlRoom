@@ -83,6 +83,16 @@ def cargo_summary_lines(inventory: list[dict[str, Any]], *, limit: int = 3) -> l
     return result
 
 
+def _compact_trade_profit_per_hour(profit_per_hour: str | None) -> str | None:
+    if not profit_per_hour:
+        return None
+    digits = "".join(ch for ch in profit_per_hour if ch.isdigit())
+    if not digits:
+        return None
+    value = int(digits)
+    return f"{value / 1_000_000:.1f}m/h"
+
+
 def destination_summary(ship: ShipState) -> str | None:
     parts = [
         ship.destination_system or None,
@@ -266,6 +276,7 @@ def market_markup(market: MarketData, market_filter: str | None) -> str:
 
 
 def trade_route_option_label(route: TradeRoute) -> str:
+    prefix = _compact_trade_profit_per_hour(route.profit_per_hour)
     detail_bits: list[str] = []
     if route.source_buy_commodity:
         detail_bits.append(f"buy {route.source_buy_commodity}")
@@ -274,7 +285,8 @@ def trade_route_option_label(route: TradeRoute) -> str:
     if route.profit_per_unit:
         detail_bits.append(f"ppu {route.profit_per_unit}")
     tail = f" [{ ' | '.join(detail_bits) }]" if detail_bits else ""
-    return f"{route.index}. {route.from_station} -> {route.to_station}{tail}"
+    prefix_text = f"[{prefix}] " if prefix else ""
+    return f"{prefix_text}{route.index}. {route.from_station} -> {route.to_station}{tail}"
 
 
 def trade_route_detail_markup(
@@ -284,37 +296,46 @@ def trade_route_detail_markup(
     searched_at: str,
     route_count: int,
 ) -> str:
+    def join_columns(left: str | None, right: str | None) -> str | None:
+        parts = [part for part in (left, right) if part]
+        if not parts:
+            return None
+        if len(parts) == 1:
+            return parts[0]
+        return f"{parts[0]}    {parts[1]}"
+
     header = f"[bold]{escape(system_name or '?')}[/]  [dim]route #{route.index} of {route_count}[/]"
     if searched_at:
         header += f"  [dim]{escape(searched_at)}[/]"
-    lines = [
-        header,
-        f"[bold]From[/]  {escape(route.from_station)} [dim]({escape(route.from_system)})[/]",
-        f"[bold]To[/]    {escape(route.to_station)} [dim]({escape(route.to_system)})[/]",
-    ]
-    cargo_parts: list[str] = []
-    if route.source_buy_commodity:
-        cargo_parts.append(f"[bold]Buy[/] [cyan]{escape(route.source_buy_commodity)}[/]")
-    if route.target_buy_commodity:
-        cargo_parts.append(f"[bold]Return[/] [cyan]{escape(route.target_buy_commodity)}[/]")
-    if cargo_parts:
-        lines.append("  ".join(cargo_parts))
-
-    route_parts: list[str] = []
-    if route.route_distance:
-        route_parts.append(f"[bold]Route[/] {escape(route.route_distance)}")
-    if route.profit_per_unit:
-        route_parts.append(f"[bold]Per unit[/] {escape(route.profit_per_unit)}")
-    if route_parts:
-        lines.append("  ".join(route_parts))
-
-    profit_parts: list[str] = []
-    if route.profit_per_trip:
-        profit_parts.append(f"[bold]Per trip[/] {escape(route.profit_per_trip)}")
-    if route.profit_per_hour:
-        profit_parts.append(f"[bold]Per hour[/] {escape(route.profit_per_hour)}")
-    if profit_parts:
-        lines.append("  ".join(profit_parts))
+    lines = [header]
+    for line in (
+        join_columns(
+            f"[bold]From[/] {escape(route.from_station)} [dim]({escape(route.from_system)})[/]",
+            f"[bold]To[/] {escape(route.to_station)} [dim]({escape(route.to_system)})[/]",
+        ),
+        join_columns(
+            (
+                f"[bold]Buy[/] [cyan]{escape(route.source_buy_commodity)}[/]"
+                if route.source_buy_commodity
+                else None
+            ),
+            (
+                f"[bold]Return[/] [cyan]{escape(route.target_buy_commodity)}[/]"
+                if route.target_buy_commodity
+                else None
+            ),
+        ),
+        join_columns(
+            f"[bold]Route[/] {escape(route.route_distance)}" if route.route_distance else None,
+            f"[bold]Per unit[/] {escape(route.profit_per_unit)}" if route.profit_per_unit else None,
+        ),
+        join_columns(
+            f"[bold]Per trip[/] {escape(route.profit_per_trip)}" if route.profit_per_trip else None,
+            f"[bold]Per hour[/] {escape(route.profit_per_hour)}" if route.profit_per_hour else None,
+        ),
+    ):
+        if line:
+            lines.append(line)
 
     footer_parts: list[str] = []
     if route.updated:
