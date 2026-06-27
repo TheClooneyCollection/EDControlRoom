@@ -955,41 +955,6 @@ class ControlRoomCommandTests(unittest.TestCase):
 
         self.assertLess(markup.index("Food Cartridges"), markup.index("Gold"))
 
-    def test_trade_routes_markup_shows_top_routes(self) -> None:
-        markup = control_room_rendering.trade_routes_markup(
-            TradeRoutesData(
-                system_name="Praea Euq AK-A d25",
-                searched_at="2026-06-22T11:00:00Z",
-                routes=[
-                    TradeRoute(
-                    index=1,
-                    from_station="Savitskaya Orbital",
-                    from_system="TSONGORIS",
-                    to_station="Scully-Power Station",
-                    to_system="IX",
-                    source_buy_commodity="Silver",
-                    route_distance="33.08 Ly",
-                    profit_per_unit="45,485 Cr",
-                    profit_per_hour="88,275,035 Cr",
-                    updated="4 hours ago",
-                )
-                ],
-            )
-        )
-
-        self.assertIn("Praea Euq AK-A d25", markup)
-        self.assertIn("1 route(s) ready.", markup)
-        self.assertIn("Search results now open in the haul route picker.", markup)
-        self.assertIn("Top route", markup)
-        self.assertIn("haul route <n>", markup)
-
-    def test_trade_routes_markup_empty_state_escapes_system_placeholder(self) -> None:
-        markup = control_room_rendering.trade_routes_markup(TradeRoutesData())
-
-        rendered = Text.from_markup(markup)
-
-        self.assertIn("haul search <system>", rendered.plain)
-
     def test_trade_route_detail_markup_surfaces_trip_and_hour_profit(self) -> None:
         markup = control_room_rendering.trade_route_detail_markup(
             TradeRoute(

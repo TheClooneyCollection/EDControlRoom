@@ -339,11 +339,6 @@ class ControlRoomApp(App[None]):
         border: solid $primary;
         padding: 0 1;
     }
-    #trade-routes {
-        height: 1fr;
-        border: solid $primary;
-        padding: 0 1;
-    }
     #market {
         height: 1fr;
         border: solid $primary;
@@ -727,7 +722,6 @@ class ControlRoomApp(App[None]):
             with Vertical(id="right"):
                 yield Static(id="market")
                 yield Static(id="haul")
-                yield Static(id="trade-routes")
         with Vertical(id="trade-route-picker"):
             yield Static(
                 "Haul routes  |  Up/Down move  |  Enter load route  |  Esc/q close",
@@ -755,7 +749,6 @@ class ControlRoomApp(App[None]):
         self.query_one("#resume-browser", Vertical).border_title = "REPLAY HISTORY"
         self.query_one("#haul", Static).border_title = "HAUL"
         self.query_one("#market", Static).border_title = "MARKET"
-        self.query_one("#trade-routes", Static).border_title = "TRADE ROUTES"
         self.query_one("#trade-route-picker", Vertical).border_title = "HAUL ROUTES"
 
     def _mount_local_runtime(self) -> None:
@@ -912,9 +905,6 @@ class ControlRoomApp(App[None]):
         )
 
     def _refresh_trade_routes(self) -> None:
-        self.query_one("#trade-routes", Static).update(
-            Text.from_markup(_rendering.trade_routes_markup(self._trade_routes))
-        )
         self._refresh_trade_route_picker()
 
     def _refresh_trade_route_picker(self) -> None:

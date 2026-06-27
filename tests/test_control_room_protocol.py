@@ -191,7 +191,6 @@ class _RenderHarnessApp(_ProtocolHarnessApp):
         self._status_widget = _StaticWidgetStub()
         self._haul_widget = _StaticWidgetStub()
         self._market_widget = _StaticWidgetStub()
-        self._trade_routes_widget = _StaticWidgetStub()
         self._resume_help_widget = _StaticWidgetStub()
         self._resume_detail_widget = _StaticWidgetStub()
         self._resume_list_widget = _OptionListStub()
@@ -216,8 +215,6 @@ class _RenderHarnessApp(_ProtocolHarnessApp):
             return self._haul_widget
         if selector == "#market":
             return self._market_widget
-        if selector == "#trade-routes":
-            return self._trade_routes_widget
         if selector == "#resume-help":
             return self._resume_help_widget
         if selector == "#resume-detail":

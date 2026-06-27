@@ -265,59 +265,6 @@ def market_markup(market: MarketData, market_filter: str | None) -> str:
     return "\n".join(sections)
 
 
-def trade_routes_markup(data: TradeRoutesData) -> str:
-    if data.loading:
-        system = escape(data.system_name or "?")
-        return (
-            f"[dim]Searching Inara routes for[/] [bold]{system}[/]\n\n"
-            "[dim]Fetching live route cards...[/]"
-        )
-
-    if data.error:
-        lines = ["[red]Inara route search failed.[/]", "", escape(data.error)]
-        if data.system_name:
-            lines.extend(["", f"[dim]System[/]  [bold]{escape(data.system_name)}[/]"])
-        return "\n".join(lines)
-
-    if not data.routes:
-        return (
-            "[dim]No Inara route search yet.[/]\n\n"
-            "Run `haul search <system>`\n"
-            "to fetch live trade routes."
-        )
-
-    header = f"[bold]{escape(data.system_name)}[/]"
-    if data.searched_at:
-        header += f"\n[dim]{escape(data.searched_at)}[/]"
-    top_route = data.routes[0]
-    lines = [
-        header,
-        "",
-        f"[green]{len(data.routes)} route(s) ready.[/]",
-        "[dim]Search results now open in the haul route picker.[/]",
-        "[dim]Enter selects the highlighted route; Esc closes the picker.[/]",
-        "",
-        f"[bold]Top route[/]  {escape(top_route.from_station)} [dim]({escape(top_route.from_system)})[/]",
-        f"          -> {escape(top_route.to_station)} [dim]({escape(top_route.to_system)})[/]",
-    ]
-    details: list[str] = []
-    if top_route.source_buy_commodity:
-        details.append(f"buy {escape(top_route.source_buy_commodity)}")
-    if top_route.target_buy_commodity:
-        details.append(f"return {escape(top_route.target_buy_commodity)}")
-    if top_route.route_distance:
-        details.append(f"route {escape(top_route.route_distance)}")
-    if top_route.profit_per_unit:
-        details.append(f"ppu {escape(top_route.profit_per_unit)}")
-    if top_route.profit_per_hour:
-        details.append(f"hour {escape(top_route.profit_per_hour)}")
-    if details:
-        lines.append(f"[dim]{' | '.join(details)}[/]")
-    lines.append("")
-    lines.append("[dim]Fallback: `haul route <n>` still loads any shown route directly.[/]")
-    return "\n".join(lines)
-
-
 def trade_route_option_label(route: TradeRoute) -> str:
     detail_bits: list[str] = []
     if route.source_buy_commodity:

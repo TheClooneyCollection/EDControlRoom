@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `94`
-- Latest generated iteration number: `227`
+- Generated iteration count: `95`
+- Latest generated iteration number: `228`
 
 ## Iteration 134
 
@@ -2653,3 +2653,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-check the picker against real long commodity names and large tmux/font-size combinations to confirm the compact rows still hold up without awkward wrapping.
+
+## Iteration 228
+
+- When: `2026-06-27 14:44`
+- Area: `control-room`
+- Title: `remove-haul-search-summary-panel`
+- Source: [2026-06-27-14-44_control-room_remove-haul-search-summary-panel.md](iteration-logs/2026-06-27-14-44_control-room_remove-haul-search-summary-panel.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `remove-haul-search-summary-panel`
+- Started: `2026-06-27 14:44`
+
+## Summary
+
+- Removed the leftover haul-search summary panel so the `HAUL ROUTES` picker is the only operator-facing search-results surface.
+
+## Changes
+
+- Dropped the `TRADE ROUTES` widget from the main Control Room layout and stopped refreshing the redundant summary markup.
+- Removed the old summary renderer and its tests, while keeping the shared `TradeRoutesData` snapshot/model for picker state and remote route hydration.
+- Re-ran the full `uv run python3 -m unittest discover -s tests` suite after the UI cleanup.
+
+## Follow-ups
+
+- Live-check the reclaimed right-side space in a real session to decide whether the `MARKET` and `HAUL` panels should be rebalanced now that the extra summary panel is gone.
