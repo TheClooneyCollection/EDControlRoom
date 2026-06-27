@@ -468,6 +468,40 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
             "haul gold",
         )
 
+    def test_snapshot_from_app_prefers_live_command_input_during_prefill_prompt(self) -> None:
+        app = _RenderHarnessApp(_make_context(Path(self.tmpdir.name)))
+        app._prompt_state.command_input_prefill_active = True
+        app._prompt_state.command_input_placeholder = "stale placeholder"
+        app._prompt_state.command_input_value = "stale=value"
+        app._command_input_widget.placeholder = "edit Inara search params then press Enter..."
+        app._command_input_widget.value = "near_system=Sol cargo_capacity=512"
+
+        snapshot = snapshot_from_app(app)
+
+        self.assertTrue(snapshot.prompt_state.command_input_prefill_active)
+        self.assertEqual(
+            snapshot.prompt_state.command_input_placeholder,
+            "edit Inara search params then press Enter...",
+        )
+        self.assertEqual(
+            snapshot.prompt_state.command_input_value,
+            "near_system=Sol cargo_capacity=512",
+        )
+
+    def test_sync_view_snapshot_does_not_reset_cursor_for_unchanged_prefill(self) -> None:
+        app = _RenderHarnessApp(_make_context(Path(self.tmpdir.name)))
+        app._prompt_state.command_input_prefill_active = True
+        app._command_input_widget.placeholder = "edit Inara search params then press Enter..."
+        app._command_input_widget.value = "near_system=Sol cargo_capacity=512"
+        app._command_input_widget.cursor_position = 8
+        snapshot = snapshot_from_app(app)
+        app._backend = _SnapshotBackend(snapshot)
+
+        app._sync_view_snapshot()
+
+        self.assertEqual(app._command_input_widget.value, "near_system=Sol cargo_capacity=512")
+        self.assertEqual(app._command_input_widget.cursor_position, 8)
+
     def test_remote_snapshot_apply_syncs_resume_widget_from_selected_history_entry(self) -> None:
         entry = CommandHistoryEntry(
             raw="haul gold",

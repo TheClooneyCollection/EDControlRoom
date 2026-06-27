@@ -966,9 +966,11 @@ class ControlRoomApp(App[None]):
         except Exception:
             command_input = None
         if command_input is not None and self._prompt_state.command_input_prefill_active:
-            command_input.placeholder = self._prompt_state.command_input_placeholder
-            command_input.value = self._prompt_state.command_input_value
-            command_input.cursor_position = len(command_input.value)
+            if command_input.placeholder != self._prompt_state.command_input_placeholder:
+                command_input.placeholder = self._prompt_state.command_input_placeholder
+            if command_input.value != self._prompt_state.command_input_value:
+                command_input.value = self._prompt_state.command_input_value
+                command_input.cursor_position = len(command_input.value)
         try:
             option_list = self.query_one("#resume-list", OptionList)
             option_list.clear_options()

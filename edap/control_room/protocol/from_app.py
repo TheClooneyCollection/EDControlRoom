@@ -192,6 +192,20 @@ def _command_history_snapshot(app: SnapshotHost) -> CommandHistorySnapshot:
 
 def _prompt_state_snapshot(app: SnapshotHost) -> PromptStateSnapshot:
     state = app._prompt_state
+    command_input_placeholder = state.command_input_placeholder
+    command_input_value = state.command_input_value
+    if state.command_input_prefill_active:
+        try:
+            command_input = app.query_one("#cmd")
+        except Exception:
+            command_input = None
+        if command_input is not None:
+            command_input_placeholder = str(
+                getattr(command_input, "placeholder", command_input_placeholder)
+            )
+            command_input_value = str(
+                getattr(command_input, "value", command_input_value)
+            )
     return PromptStateSnapshot(
         haul_parameters=dict(state.haul_params),
         haul_search_parameters=dict(state.haul_search_params),
@@ -207,8 +221,8 @@ def _prompt_state_snapshot(app: SnapshotHost) -> PromptStateSnapshot:
         destination_prompt_raw_command=state.dest_prompt_raw_command,
         destination_prompt_skip_delay=state.dest_prompt_skip_delay,
         command_input_prefill_active=state.command_input_prefill_active,
-        command_input_placeholder=state.command_input_placeholder,
-        command_input_value=state.command_input_value,
+        command_input_placeholder=command_input_placeholder,
+        command_input_value=command_input_value,
     )
 
 
