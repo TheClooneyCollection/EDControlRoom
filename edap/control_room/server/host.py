@@ -133,8 +133,8 @@ class HeadlessControlRoomHost(ControlRoomApp):
         self._build_controls()
         self._load_saved_state()
         self._log_startup_modes()
-        self._announce_startup_greeting()
         self._bootstrap_ship_state()
+        self._announce_startup_greeting()
         self._load_market_json()
         self._start_watcher_loop()
 

@@ -51,7 +51,7 @@ from edap.control_room.protocol.snapshot import (
 from edap.control_room_state import CommandHistoryEntry
 from edap.routines import RoutineResult
 from edap.runtime import ResolvedPath, RuntimeContext
-from edap.tts import AnnouncementId
+from edap.tts import AnnouncementId, NullSpeechBackend, TTSAnnouncer
 from edap.control_room.workers import PendingRoutineCancelled, RoutineCancelled, run_routine_thread
 from edap.haul_config import DEFAULT_HAUL_CONFIG_PATH
 from edap.inara.trade_routes import TradeRoute, TradeRouteSearchResult
@@ -2567,6 +2567,58 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.app._announce_startup_greeting()
 
         self.assertIn((AnnouncementId.STARTUP_GREETING, {}), self.app._tts.calls)
+
+    def test_mount_local_runtime_bootstraps_commander_before_startup_greeting(self) -> None:
+        journal_dir = Path(self.tmpdir.name)
+        (journal_dir / "Journal.240101000000.01.log").write_text(
+            json.dumps({"event": "LoadGame", "Commander": "VRYAE"}) + "\n",
+            encoding="utf-8",
+        )
+        ctx = _make_context(journal_dir)
+        self.app = _HarnessApp(
+            RuntimeContext(
+                config=replace(
+                    ctx.config,
+                    tts=replace(
+                        ctx.config.tts,
+                        enabled=True,
+                        title_mode="commander_name",
+                        phrases={"startup_greeting": "Hello {title}"},
+                    ),
+                ),
+                game_paths=ctx.game_paths,
+                journal=ctx.journal,
+                bindings=ctx.bindings,
+                input_controller=ctx.input_controller,
+                screen_capture=ctx.screen_capture,
+                binding_lookup=ctx.binding_lookup,
+                config_path=ctx.config_path,
+                used_example_config_fallback=ctx.used_example_config_fallback,
+            )
+        )
+        self.app._tts = TTSAnnouncer(
+            self.app._config.tts,
+            platform_name=self.app._config.runtime.platform,
+            backend=NullSpeechBackend(),
+        )
+        self.app._build_controls = lambda: None
+        self.app._log_bindings_status = lambda: None
+        self.app._load_saved_state = lambda: None
+        self.app._log_startup_modes = lambda: None
+        self.app._start_update_check = lambda: None
+        self.app._load_market_json = lambda: None
+        self.app._refresh_status = lambda: None
+        self.app._refresh_haul_stats = lambda: None
+        self.app._refresh_market = lambda: None
+        self.app._refresh_trade_routes = lambda: None
+        self.app._start_watcher = lambda: None
+        self.app.set_interval = lambda *args, **kwargs: None
+        self.app.set_focus = lambda *args, **kwargs: None
+        self.app._update_resume_detail = lambda: None
+
+        self.app._mount_local_runtime()
+
+        self.assertEqual(self.app._protocol_announcements[0].message_text, "Hello VRYAE")
 
     def test_log_current_version_reports_current_version(self) -> None:
         self.app._current_version = "1.7.1"

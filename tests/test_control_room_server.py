@@ -147,6 +147,7 @@ def _make_context_with_tts(journal_dir: Path) -> RuntimeContext:
             tts=replace(
                 ctx.config.tts,
                 enabled=True,
+                title_mode="commander_name",
                 phrases={
                     "arrival": "Arrived in {system_name}",
                     "startup_greeting": "Hello {title}",
@@ -336,6 +337,20 @@ class ControlRoomServerTests(unittest.TestCase):
 
         self.assertEqual([event.announcement_id for event in sink.announcements], ["arrival"])
         self.assertIsNone(host._tts._speaker)
+
+    def test_headless_host_start_bootstraps_commander_before_startup_greeting(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            journal_dir = Path(temp_dir)
+            (journal_dir / "Journal.240101000000.01.log").write_text(
+                '{"event":"LoadGame","Commander":"VRYAE"}\n',
+                encoding="utf-8",
+            )
+            host = HeadlessControlRoomHost(_make_context_with_tts(journal_dir))
+            host._start_watcher_loop = lambda: None
+
+            host.start()
+
+        self.assertEqual(host._protocol_announcements[0].message_text, "Hello VRYAE")
 
     def test_headless_host_publishes_snapshot_after_remote_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
