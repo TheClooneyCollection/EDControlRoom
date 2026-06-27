@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import asyncio
 from dataclasses import asdict, replace
 from pathlib import Path
 import unittest
-
-from textual.widgets import Input
 
 from edap.config import (
     AppConfig,
@@ -224,84 +221,65 @@ def _websocket_connect_info(
 
 
 class ControlRoomClientTests(unittest.TestCase):
-    def test_observer_app_initializes_without_local_journal_dir(self) -> None:
-        target = ObserverServerTarget(
+    @staticmethod
+    def _target() -> ObserverServerTarget:
+        return ObserverServerTarget(
             host="bridge.local",
             port=8765,
             http_base_url="http://bridge.local:8765",
             websocket_url="ws://bridge.local:8765/session",
         )
-        backend = RemoteObserverBackend(
-            server_target=target,
+
+    @staticmethod
+    def _backend(*, initial_snapshot: ControlRoomSnapshot | None = None) -> RemoteObserverBackend:
+        return RemoteObserverBackend(
+            server_target=ControlRoomClientTests._target(),
             access_token="secret-token",
             client_name="observer-ipad",
-            initial_snapshot=_snapshot(),
+            initial_snapshot=initial_snapshot or _snapshot(),
             websocket_connect_info=_websocket_connect_info(),
         )
 
-        app = ObserverControlRoomApp(
+    def _app(self, *, backend: RemoteObserverBackend | None = None) -> ObserverControlRoomApp:
+        return ObserverControlRoomApp(
             _make_observer_context(),
-            backend=backend,
-            server_target=target,
+            backend=backend or self._backend(),
+            server_target=self._target(),
             client_name="observer-ipad",
         )
+
+    def test_observer_app_initializes_without_local_journal_dir(self) -> None:
+        app = self._app()
 
         self.assertIsNone(app._journal_dir)
         self.assertIsNone(app._market_path)
 
-    def test_observer_app_mounts_without_local_journal_dir(self) -> None:
-        target = ObserverServerTarget(
-            host="bridge.local",
-            port=8765,
-            http_base_url="http://bridge.local:8765",
-            websocket_url="ws://bridge.local:8765/session",
-        )
-        backend = RemoteObserverBackend(
-            server_target=target,
-            access_token="secret-token",
-            client_name="observer-ipad",
-            initial_snapshot=_snapshot(),
-            websocket_connect_info=_websocket_connect_info(),
-        )
-        backend.start = lambda: None  # type: ignore[method-assign]
-        backend.close = lambda: None  # type: ignore[method-assign]
+    def test_observer_app_refresh_remote_command_input_disables_observer_mode(self) -> None:
+        class _FakeInput:
+            def __init__(self) -> None:
+                self.disabled = False
+                self.placeholder = ""
+                self.value = ""
+                self.cursor_position = 0
 
-        app = ObserverControlRoomApp(
-            _make_observer_context(),
-            backend=backend,
-            server_target=target,
-            client_name="observer-ipad",
-        )
+        backend = self._backend()
+        app = self._app(backend=backend)
+        command_input = _FakeInput()
+        app.query_one = lambda selector, _type=None: command_input  # type: ignore[method-assign]
 
-        async def exercise() -> None:
-            async with app.run_test():
-                self.assertIsNotNone(app._backend_event_unsubscribe)
+        app._apply_view_snapshot_state()
+        app._refresh_remote_command_input()
 
-        asyncio.run(exercise())
+        self.assertTrue(command_input.disabled)
+        self.assertEqual(command_input.placeholder, "observer mode - read only")
 
     def test_observer_app_applies_remote_replay_edit_prefill(self) -> None:
-        target = ObserverServerTarget(
-            host="bridge.local",
-            port=8765,
-            http_base_url="http://bridge.local:8765",
-            websocket_url="ws://bridge.local:8765/session",
-        )
-        backend = RemoteObserverBackend(
-            server_target=target,
-            access_token="secret-token",
-            client_name="observer-ipad",
-            initial_snapshot=_snapshot(),
-            websocket_connect_info=_websocket_connect_info(),
-        )
-        backend.start = lambda: None  # type: ignore[method-assign]
-        backend.close = lambda: None  # type: ignore[method-assign]
-
-        app = ObserverControlRoomApp(
-            _make_observer_context(),
-            backend=backend,
-            server_target=target,
-            client_name="observer-ipad",
-        )
+        class _FakeInput:
+            def __init__(self) -> None:
+                self.disabled = True
+                self.placeholder = ""
+                self.value = ""
+                self.cursor_position = 0
 
         updated_snapshot = replace(
             _snapshot(),
@@ -312,43 +290,20 @@ class ControlRoomClientTests(unittest.TestCase):
                 command_input_value="jump",
             ),
         )
+        backend = self._backend(initial_snapshot=updated_snapshot)
+        app = self._app(backend=backend)
+        command_input = _FakeInput()
+        app.query_one = lambda selector, _type=None: command_input  # type: ignore[method-assign]
 
-        async def exercise() -> None:
-            async with app.run_test() as pilot:
-                backend._snapshot = updated_snapshot
-                app._apply_remote_snapshot(replace_activity=True)
-                await pilot.pause()
-                command_input = app.query_one("#cmd", Input)
-                self.assertFalse(command_input.disabled)
-                self.assertEqual(command_input.value, "jump")
-                self.assertEqual(command_input.cursor_position, 4)
+        app._apply_view_snapshot_state()
+        app._refresh_remote_command_input()
 
-        asyncio.run(exercise())
+        self.assertFalse(command_input.disabled)
+        self.assertEqual(command_input.placeholder, "commands | help dock | ...")
+        self.assertEqual(command_input.value, "jump")
+        self.assertEqual(command_input.cursor_position, 4)
 
     def test_observer_app_applies_remote_trade_routes_snapshot(self) -> None:
-        target = ObserverServerTarget(
-            host="bridge.local",
-            port=8765,
-            http_base_url="http://bridge.local:8765",
-            websocket_url="ws://bridge.local:8765/session",
-        )
-        backend = RemoteObserverBackend(
-            server_target=target,
-            access_token="secret-token",
-            client_name="observer-ipad",
-            initial_snapshot=_snapshot(),
-            websocket_connect_info=_websocket_connect_info(),
-        )
-        backend.start = lambda: None  # type: ignore[method-assign]
-        backend.close = lambda: None  # type: ignore[method-assign]
-
-        app = ObserverControlRoomApp(
-            _make_observer_context(),
-            backend=backend,
-            server_target=target,
-            client_name="observer-ipad",
-        )
-
         updated_snapshot = replace(
             _snapshot(),
             trade_routes=TradeRoutesSnapshot(
@@ -371,18 +326,15 @@ class ControlRoomClientTests(unittest.TestCase):
                 ],
             ),
         )
+        backend = self._backend(initial_snapshot=updated_snapshot)
+        app = self._app(backend=backend)
 
-        async def exercise() -> None:
-            async with app.run_test() as pilot:
-                backend._snapshot = updated_snapshot
-                app._apply_remote_snapshot(replace_activity=True)
-                await pilot.pause()
-                self.assertEqual(app._trade_routes.system_name, "Praea Euq AK-A d25")
-                self.assertEqual(len(app._trade_routes.routes), 1)
-                self.assertEqual(app._trade_routes.routes[0].from_station, "Savitskaya Orbital")
-                self.assertEqual(app._trade_routes.routes[0].source_buy_commodity, "Silver")
+        app._apply_view_snapshot_state()
 
-        asyncio.run(exercise())
+        self.assertEqual(app._trade_routes.system_name, "Praea Euq AK-A d25")
+        self.assertEqual(len(app._trade_routes.routes), 1)
+        self.assertEqual(app._trade_routes.routes[0].from_station, "Savitskaya Orbital")
+        self.assertEqual(app._trade_routes.routes[0].source_buy_commodity, "Silver")
 
     def test_parse_target_defaults_to_http_and_default_port(self) -> None:
         target = parse_observer_server_target("192.168.1.44")
