@@ -289,32 +289,79 @@ def trade_routes_markup(data: TradeRoutesData) -> str:
     header = f"[bold]{escape(data.system_name)}[/]"
     if data.searched_at:
         header += f"\n[dim]{escape(data.searched_at)}[/]"
-    lines = [header]
-    for route in data.routes[:5]:
-        lines.append(
-            "\n"
-            f"[bold]{route.index}.[/] "
-            f"{escape(route.from_station)} [dim]({escape(route.from_system)})[/]\n"
-            f"   -> {escape(route.to_station)} [dim]({escape(route.to_system)})[/]"
-        )
-        details: list[str] = []
-        if route.source_buy_commodity:
-            details.append(f"buy {escape(route.source_buy_commodity)}")
-        if route.target_buy_commodity:
-            details.append(f"return {escape(route.target_buy_commodity)}")
-        if route.route_distance:
-            details.append(f"route {escape(route.route_distance)}")
-        if route.profit_per_unit:
-            details.append(f"ppu {escape(route.profit_per_unit)}")
-        if route.profit_per_hour:
-            details.append(f"hour {escape(route.profit_per_hour)}")
-        if route.updated:
-            details.append(f"updated {escape(route.updated)}")
-        if details:
-            lines.append(f"   [dim]{' | '.join(details)}[/]")
-    if len(data.routes) > 5:
-        lines.append(f"\n[dim]{len(data.routes) - 5} more route(s) not shown.[/]")
-    lines.append("\n[dim]Run `haul route <n>` to load a shown route into the haul prompt.[/]")
+    top_route = data.routes[0]
+    lines = [
+        header,
+        "",
+        f"[green]{len(data.routes)} route(s) ready.[/]",
+        "[dim]Search results now open in the haul route picker.[/]",
+        "[dim]Enter selects the highlighted route; Esc closes the picker.[/]",
+        "",
+        f"[bold]Top route[/]  {escape(top_route.from_station)} [dim]({escape(top_route.from_system)})[/]",
+        f"          -> {escape(top_route.to_station)} [dim]({escape(top_route.to_system)})[/]",
+    ]
+    details: list[str] = []
+    if top_route.source_buy_commodity:
+        details.append(f"buy {escape(top_route.source_buy_commodity)}")
+    if top_route.target_buy_commodity:
+        details.append(f"return {escape(top_route.target_buy_commodity)}")
+    if top_route.route_distance:
+        details.append(f"route {escape(top_route.route_distance)}")
+    if top_route.profit_per_unit:
+        details.append(f"ppu {escape(top_route.profit_per_unit)}")
+    if top_route.profit_per_hour:
+        details.append(f"hour {escape(top_route.profit_per_hour)}")
+    if details:
+        lines.append(f"[dim]{' | '.join(details)}[/]")
+    lines.append("")
+    lines.append("[dim]Fallback: `haul route <n>` still loads any shown route directly.[/]")
+    return "\n".join(lines)
+
+
+def trade_route_option_label(route: TradeRoute) -> str:
+    detail_bits: list[str] = []
+    if route.source_buy_commodity:
+        detail_bits.append(f"buy {route.source_buy_commodity}")
+    if route.target_buy_commodity:
+        detail_bits.append(f"return {route.target_buy_commodity}")
+    if route.profit_per_unit:
+        detail_bits.append(f"ppu {route.profit_per_unit}")
+    tail = f" [{ ' | '.join(detail_bits) }]" if detail_bits else ""
+    return f"{route.index}. {route.from_station} -> {route.to_station}{tail}"
+
+
+def trade_route_detail_markup(
+    route: TradeRoute,
+    *,
+    system_name: str,
+    searched_at: str,
+    route_count: int,
+) -> str:
+    header = f"[bold]{escape(system_name or '?')}[/]  [dim]route #{route.index} of {route_count}[/]"
+    if searched_at:
+        header += f"\n[dim]{escape(searched_at)}[/]"
+    lines = [
+        header,
+        "",
+        f"[bold]From[/]  {escape(route.from_station)} [dim]({escape(route.from_system)})[/]",
+        f"[bold]To[/]    {escape(route.to_station)} [dim]({escape(route.to_system)})[/]",
+    ]
+    if route.source_buy_commodity:
+        lines.append(f"[bold]Buy[/]   [cyan]{escape(route.source_buy_commodity)}[/]")
+    if route.target_buy_commodity:
+        lines.append(f"[bold]Return[/] [cyan]{escape(route.target_buy_commodity)}[/]")
+    if route.route_distance:
+        lines.append(f"[bold]Route[/]  {escape(route.route_distance)}")
+    if route.profit_per_unit:
+        lines.append(f"[bold]PPU[/]    {escape(route.profit_per_unit)}")
+    if route.profit_per_trip:
+        lines.append(f"[bold]Trip[/]   {escape(route.profit_per_trip)}")
+    if route.profit_per_hour:
+        lines.append(f"[bold]Hour[/]   {escape(route.profit_per_hour)}")
+    if route.updated:
+        lines.append(f"[bold]Seen[/]   {escape(route.updated)}")
+    lines.append("")
+    lines.append("[dim]Enter loads this route into the haul prompt. Esc closes the picker.[/]")
     return "\n".join(lines)
 
 

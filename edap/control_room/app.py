@@ -85,6 +85,7 @@ from edap.control_room.models import (
     ReplaySelection,
     RuntimeUIState,
     ShipState,
+    TradeRoutePickerState,
     TradeRoutesData,
 )
 from edap.control_room.protocol.adapters import (
@@ -348,6 +349,26 @@ class ControlRoomApp(App[None]):
         border: solid $primary;
         padding: 0 1;
     }
+    #trade-route-picker {
+        display: none;
+        height: 1fr;
+        border: heavy $primary;
+        padding: 1;
+    }
+    #trade-route-help {
+        height: auto;
+        padding: 0 0 1 0;
+    }
+    #trade-route-list {
+        height: 1fr;
+        border: solid $accent;
+    }
+    #trade-route-detail {
+        height: 8;
+        border: solid $primary;
+        padding: 0 1;
+        margin: 1 0 0 0;
+    }
     #cmd { height: 3; }
     #resume-browser {
         display: none;
@@ -414,6 +435,7 @@ class ControlRoomApp(App[None]):
         self._protocol_external_event_sink: ControlRoomEventSink | None = None
         self._saved_state = ControlRoomState()
         self._replay_state = ReplayBrowserState()
+        self._trade_route_picker_state = TradeRoutePickerState()
         self._watcher_worker: Any | None = None
         self._routine_worker: Any | None = None
         self._time_fn: Callable[[], float] = time.monotonic
@@ -587,6 +609,38 @@ class ControlRoomApp(App[None]):
         self._replay_state.selected_history_entry = value
 
     @property
+    def _trade_route_picker_open(self) -> bool:
+        return self._trade_route_picker_state.open
+
+    @_trade_route_picker_open.setter
+    def _trade_route_picker_open(self, value: bool) -> None:
+        self._trade_route_picker_state.open = value
+
+    @property
+    def _selected_trade_route_index(self) -> int | None:
+        return self._trade_route_picker_state.selected_route_index
+
+    @_selected_trade_route_index.setter
+    def _selected_trade_route_index(self, value: int | None) -> None:
+        self._trade_route_picker_state.selected_route_index = value
+
+    @property
+    def _presented_trade_route_query_url(self) -> str:
+        return self._trade_route_picker_state.presented_query_url
+
+    @_presented_trade_route_query_url.setter
+    def _presented_trade_route_query_url(self, value: str) -> None:
+        self._trade_route_picker_state.presented_query_url = value
+
+    @property
+    def _presented_trade_route_searched_at(self) -> str:
+        return self._trade_route_picker_state.presented_searched_at
+
+    @_presented_trade_route_searched_at.setter
+    def _presented_trade_route_searched_at(self, value: str) -> None:
+        self._trade_route_picker_state.presented_searched_at = value
+
+    @property
     def _routine_active(self) -> bool:
         return self._runtime_state.routine_active
 
@@ -674,6 +728,13 @@ class ControlRoomApp(App[None]):
                 yield Static(id="market")
                 yield Static(id="haul")
                 yield Static(id="trade-routes")
+        with Vertical(id="trade-route-picker"):
+            yield Static(
+                "Haul routes  |  Up/Down move  |  Enter load route  |  Esc/q close",
+                id="trade-route-help",
+            )
+            yield OptionList(id="trade-route-list")
+            yield Static(id="trade-route-detail")
         yield Input(placeholder=_DEFAULT_COMMAND_PLACEHOLDER, id="cmd")
         yield Footer()
 
@@ -695,6 +756,7 @@ class ControlRoomApp(App[None]):
         self.query_one("#haul", Static).border_title = "HAUL"
         self.query_one("#market", Static).border_title = "MARKET"
         self.query_one("#trade-routes", Static).border_title = "TRADE ROUTES"
+        self.query_one("#trade-route-picker", Vertical).border_title = "HAUL ROUTES"
 
     def _mount_local_runtime(self) -> None:
         if self._journal_dir is None or self._market_path is None:
@@ -853,6 +915,50 @@ class ControlRoomApp(App[None]):
         self.query_one("#trade-routes", Static).update(
             Text.from_markup(_rendering.trade_routes_markup(self._trade_routes))
         )
+        self._refresh_trade_route_picker()
+
+    def _refresh_trade_route_picker(self) -> None:
+        try:
+            picker = self.query_one("#trade-route-picker", Vertical)
+            option_list = self.query_one("#trade-route-list", OptionList)
+            detail = self.query_one("#trade-route-detail", Static)
+            main = self.query_one("#main", Horizontal)
+        except Exception:
+            return
+
+        option_list.clear_options()
+        option_list.add_options(
+            [_rendering.trade_route_option_label(route) for route in self._trade_routes.routes]
+        )
+        selected_route = self._selected_trade_route()
+        if self._trade_routes.routes:
+            if selected_route is None:
+                self._selected_trade_route_index = self._trade_routes.routes[0].index
+                selected_route = self._trade_routes.routes[0]
+            highlighted = next(
+                (
+                    index
+                    for index, route in enumerate(self._trade_routes.routes)
+                    if route.index == self._selected_trade_route_index
+                ),
+                0,
+            )
+            option_list.highlighted = highlighted
+            self._update_trade_route_detail(selected_route)
+        else:
+            option_list.highlighted = None
+            detail.update(Text.from_markup("[dim]No trade routes loaded.[/]"))
+
+        if self._trade_route_picker_open and self._trade_routes.routes:
+            main.styles.display = "none"
+            picker.styles.display = "block"
+            try:
+                self.set_focus(option_list)
+            except ScreenStackError:
+                return
+            return
+        picker.styles.display = "none"
+        main.styles.display = "block"
 
     def _activity_auto_follow_paused(self) -> bool:
         try:
@@ -961,6 +1067,7 @@ class ControlRoomApp(App[None]):
                 for route in snapshot.trade_routes.routes
             ],
         )
+        self._sync_trade_route_picker_for_snapshot()
         try:
             command_input = self.query_one("#cmd", Input)
         except Exception:
@@ -979,6 +1086,56 @@ class ControlRoomApp(App[None]):
         except Exception:
             return
         self._apply_replay_browser_visibility()
+        self._refresh_trade_route_picker()
+
+    def _sync_trade_route_picker_for_snapshot(self) -> None:
+        current_signature = (self._trade_routes.query_url, self._trade_routes.searched_at)
+        presented_signature = (
+            self._presented_trade_route_query_url,
+            self._presented_trade_route_searched_at,
+        )
+        has_loaded_routes = (
+            bool(self._trade_routes.routes)
+            and not self._trade_routes.loading
+            and self._trade_routes.error is None
+        )
+        if has_loaded_routes and current_signature != presented_signature:
+            self._presented_trade_route_query_url = self._trade_routes.query_url
+            self._presented_trade_route_searched_at = self._trade_routes.searched_at
+            self._selected_trade_route_index = self._trade_routes.routes[0].index
+            self._trade_route_picker_open = True
+            return
+        if not has_loaded_routes:
+            self._trade_route_picker_open = False
+            self._selected_trade_route_index = None
+            if not self._trade_routes.loading:
+                self._presented_trade_route_query_url = self._trade_routes.query_url
+                self._presented_trade_route_searched_at = self._trade_routes.searched_at
+
+    def _selected_trade_route(self) -> TradeRoute | None:
+        selected_index = self._selected_trade_route_index
+        if selected_index is None:
+            return None
+        return next((route for route in self._trade_routes.routes if route.index == selected_index), None)
+
+    def _update_trade_route_detail(self, route: TradeRoute | None) -> None:
+        try:
+            detail = self.query_one("#trade-route-detail", Static)
+        except Exception:
+            return
+        if route is None:
+            detail.update(Text.from_markup("[dim]No trade route selected.[/]"))
+            return
+        detail.update(
+            Text.from_markup(
+                _rendering.trade_route_detail_markup(
+                    route,
+                    system_name=self._trade_routes.system_name,
+                    searched_at=self._trade_routes.searched_at,
+                    route_count=len(self._trade_routes.routes),
+                )
+            )
+        )
 
     def _apply_replay_browser_visibility(self) -> None:
         try:
@@ -1212,6 +1369,31 @@ class ControlRoomApp(App[None]):
         if entry is None:
             return
         self._backend.toggle_replay_default_haul(entry)
+
+    def _close_trade_route_picker(self) -> None:
+        self._trade_route_picker_open = False
+        self._refresh_trade_route_picker()
+        try:
+            self.set_focus(self.query_one("#cmd", Input))
+        except ScreenStackError:
+            return
+
+    def _move_trade_route_selection(self, offset: int) -> None:
+        if not self._trade_routes.routes or offset == 0:
+            return
+        route_indices = [route.index for route in self._trade_routes.routes]
+        selected_index = self._selected_trade_route_index
+        current_position = route_indices.index(selected_index) if selected_index in route_indices else 0
+        next_position = max(0, min(len(route_indices) - 1, current_position + offset))
+        self._selected_trade_route_index = route_indices[next_position]
+        self._refresh_trade_route_picker()
+
+    def _load_selected_trade_route(self) -> None:
+        route = self._selected_trade_route()
+        if route is None:
+            return
+        self._close_trade_route_picker()
+        self._dispatch_command(f"haul route {route.index}")
 
     def _update_resume_detail(self) -> None:
         _replay.update_resume_detail(self)
@@ -1484,6 +1666,20 @@ class ControlRoomApp(App[None]):
             event.prevent_default()
             self.action_request_interrupt()
             return
+        if self._trade_route_picker_open:
+            if event.key == "escape" or event.key == "q":
+                event.prevent_default()
+                self._close_trade_route_picker()
+            elif event.key == "up":
+                event.prevent_default()
+                self._move_trade_route_selection(-1)
+            elif event.key == "down":
+                event.prevent_default()
+                self._move_trade_route_selection(1)
+            elif event.key == "enter":
+                event.prevent_default()
+                self._load_selected_trade_route()
+            return
         if self._resume_open:
             if event.key != "enter":
                 self._suppress_replay_enter_until = 0.0
@@ -1627,10 +1823,19 @@ class ControlRoomApp(App[None]):
         if message.option_list.id == "resume-list":
             _replay.sync_selected_resume_entry_from_widget(self)
             self._update_resume_detail()
+        elif message.option_list.id == "trade-route-list":
+            highlighted = message.option_list.highlighted
+            if highlighted is None or highlighted < 0 or highlighted >= len(self._trade_routes.routes):
+                return
+            route = self._trade_routes.routes[highlighted]
+            self._selected_trade_route_index = route.index
+            self._update_trade_route_detail(route)
 
     def on_option_list_option_selected(self, message: OptionList.OptionSelected) -> None:
         if message.option_list.id == "resume-list":
             self._resume_execute_selected()
+        elif message.option_list.id == "trade-route-list":
+            self._load_selected_trade_route()
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────

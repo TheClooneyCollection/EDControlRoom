@@ -66,6 +66,7 @@ class _OptionListWidgetStub:
 
 class _ContainerWidgetStub:
     def __init__(self) -> None:
+        self.border_title = ""
         self.styles = _StylesStub()
 
 
@@ -83,6 +84,11 @@ class HeadlessControlRoomHost(ControlRoomApp):
         self._resume_detail_widget = _StaticWidgetStub()
         self._resume_list_widget = _OptionListWidgetStub()
         self._resume_browser_widget = _ContainerWidgetStub()
+        self._trade_route_help_widget = _StaticWidgetStub()
+        self._trade_route_detail_widget = _StaticWidgetStub()
+        self._trade_route_list_widget = _OptionListWidgetStub()
+        self._trade_route_picker_widget = _ContainerWidgetStub()
+        self._main_widget = _ContainerWidgetStub()
         self._server_state = server_state
         super().__init__(ctx, market_filter=market_filter)
         self._tts = TTSAnnouncer(
@@ -106,6 +112,16 @@ class HeadlessControlRoomHost(ControlRoomApp):
             return self._resume_list_widget
         if selector == "#resume-browser":
             return self._resume_browser_widget
+        if selector == "#trade-route-help":
+            return self._trade_route_help_widget
+        if selector == "#trade-route-detail":
+            return self._trade_route_detail_widget
+        if selector == "#trade-route-list":
+            return self._trade_route_list_widget
+        if selector == "#trade-route-picker":
+            return self._trade_route_picker_widget
+        if selector == "#main":
+            return self._main_widget
         raise LookupError(selector)
 
     def set_focus(self, widget: object) -> None:  # type: ignore[override]

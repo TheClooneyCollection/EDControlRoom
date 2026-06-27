@@ -978,10 +978,9 @@ class ControlRoomCommandTests(unittest.TestCase):
         )
 
         self.assertIn("Praea Euq AK-A d25", markup)
-        self.assertIn("Savitskaya Orbital", markup)
-        self.assertIn("Scully-Power Station", markup)
-        self.assertIn("buy Silver", markup)
-        self.assertIn("route 33.08 Ly", markup)
+        self.assertIn("1 route(s) ready.", markup)
+        self.assertIn("Search results now open in the haul route picker.", markup)
+        self.assertIn("Top route", markup)
         self.assertIn("haul route <n>", markup)
 
     def test_trade_routes_markup_empty_state_escapes_system_placeholder(self) -> None:
@@ -1554,6 +1553,8 @@ on_land = true
         self.assertEqual(len(self.app._trade_routes.routes), 1)
         self.assertFalse(self.app._trade_routes.loading)
         self.assertIsNone(self.app._trade_routes.error)
+        self.assertTrue(self.app._trade_route_picker_open)
+        self.assertEqual(self.app._selected_trade_route_index, 1)
         self.assertEqual(self.app._saved_state.history[-1].params["mode"], "search")
         self.assertEqual(self.app._saved_state.history[-1].params["near_system"], "Praea Euq AK-A d25")
         self.assertEqual(self.app._saved_state.history[-1].params["cargo_capacity"], "460")
@@ -1626,6 +1627,7 @@ on_land = true
             self.app._cmd_haul(f"search url {url}", raw_command=f"haul search url {url}")
 
         self.assertEqual(self.app._trade_routes.system_name, "Praea Euq AK-A d25")
+        self.assertTrue(self.app._trade_route_picker_open)
         self.assertEqual(self.app._saved_state.history[-1].params["mode"], "search")
         self.assertEqual(self.app._saved_state.history[-1].params["near_system"], "Praea Euq AK-A d25")
         self.assertEqual(self.app._saved_state.history[-1].params["order_by"], "best_profit_per_hour_estimate")

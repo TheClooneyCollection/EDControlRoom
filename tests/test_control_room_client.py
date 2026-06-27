@@ -335,6 +335,8 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(len(app._trade_routes.routes), 1)
         self.assertEqual(app._trade_routes.routes[0].from_station, "Savitskaya Orbital")
         self.assertEqual(app._trade_routes.routes[0].source_buy_commodity, "Silver")
+        self.assertTrue(app._trade_route_picker_open)
+        self.assertEqual(app._selected_trade_route_index, 1)
 
     def test_parse_target_defaults_to_http_and_default_port(self) -> None:
         target = parse_observer_server_target("192.168.1.44")

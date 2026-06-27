@@ -30,6 +30,7 @@ from edap.control_room.protocol.snapshot import (
 )
 from edap.control_room.protocol.sink import ControlRoomEventSink
 from edap.control_room_state import CommandHistoryEntry, ControlRoomState
+from edap.inara.trade_routes import TradeRoute
 from edap.runtime import ResolvedPath, RuntimeContext
 from edap.tts import AnnouncementId
 
@@ -171,6 +172,7 @@ class _OptionListStub:
 
 class _ContainerStub:
     def __init__(self) -> None:
+        self.border_title = ""
         self.styles = type("Styles", (), {"display": "none"})()
 
 
@@ -194,6 +196,11 @@ class _RenderHarnessApp(_ProtocolHarnessApp):
         self._resume_detail_widget = _StaticWidgetStub()
         self._resume_list_widget = _OptionListStub()
         self._resume_browser_widget = _ContainerStub()
+        self._trade_route_help_widget = _StaticWidgetStub()
+        self._trade_route_detail_widget = _StaticWidgetStub()
+        self._trade_route_list_widget = _OptionListStub()
+        self._trade_route_picker_widget = _ContainerStub()
+        self._main_widget = _ContainerStub()
         self._command_input_widget = _InputStub()
         super().__init__(ctx) if backend is None else ControlRoomApp.__init__(self, ctx, backend=backend)
         self._activity_widget = _ActivityLogStub()
@@ -219,6 +226,16 @@ class _RenderHarnessApp(_ProtocolHarnessApp):
             return self._resume_list_widget
         if selector == "#resume-browser":
             return self._resume_browser_widget
+        if selector == "#trade-route-help":
+            return self._trade_route_help_widget
+        if selector == "#trade-route-detail":
+            return self._trade_route_detail_widget
+        if selector == "#trade-route-list":
+            return self._trade_route_list_widget
+        if selector == "#trade-route-picker":
+            return self._trade_route_picker_widget
+        if selector == "#main":
+            return self._main_widget
         raise AssertionError(f"Unexpected selector: {selector}")
 
 
@@ -681,6 +698,53 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
 
         self.assertEqual(backend.closed_replay_browser, 1)
         self.assertEqual(backend.replayed_entries, [("jump", False, False)])
+
+    def test_trade_route_picker_enter_dispatches_haul_route_command(self) -> None:
+        snapshot = snapshot_from_app(self.app)
+        backend = _IntentRecorderBackend(snapshot)
+        app = _RenderHarnessApp(
+            _make_context(Path(self.tmpdir.name)),
+            backend=backend,
+        )
+        app._trade_routes.routes = [
+            TradeRoute(
+                index=2,
+                from_station="Savitskaya Orbital",
+                from_system="TSONGORIS",
+                to_station="Nyberg Vision",
+                to_system="NJOKUJINUN",
+                source_buy_commodity="Beryllium",
+            )
+        ]
+        app._selected_trade_route_index = 2
+        app._trade_route_picker_open = True
+
+        event = _KeyEventStub("enter")
+        app.on_key(event)
+
+        self.assertTrue(event.prevented)
+        self.assertFalse(app._trade_route_picker_open)
+        self.assertEqual(backend.dispatched_commands, [("haul route 2", None)])
+
+    def test_trade_route_picker_escape_closes_without_dispatch(self) -> None:
+        snapshot = snapshot_from_app(self.app)
+        backend = _IntentRecorderBackend(snapshot)
+        app = _RenderHarnessApp(
+            _make_context(Path(self.tmpdir.name)),
+            backend=backend,
+        )
+        app._trade_routes.routes = [
+            TradeRoute(index=1, from_station="A", from_system="B", to_station="C", to_system="D")
+        ]
+        app._selected_trade_route_index = 1
+        app._trade_route_picker_open = True
+
+        event = _KeyEventStub("escape")
+        app.on_key(event)
+
+        self.assertTrue(event.prevented)
+        self.assertFalse(app._trade_route_picker_open)
+        self.assertEqual(backend.dispatched_commands, [])
 
     def test_replay_open_arrow_keys_route_selection_through_backend(self) -> None:
         snapshot = snapshot_from_app(self.app)

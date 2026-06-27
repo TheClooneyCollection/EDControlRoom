@@ -121,6 +121,10 @@ class TradeHost(RoutineHost, Protocol):
 
 class HaulHost(RoutineHost, Protocol):
     _haul_params: dict[str, str]
+    _trade_route_picker_open: bool
+    _selected_trade_route_index: int | None
+    _presented_trade_route_query_url: str
+    _presented_trade_route_searched_at: str
 
     def _record_history_entry(self, entry: CommandHistoryEntry) -> None: ...
     def _start_haul_search_prompt(

@@ -66,6 +66,14 @@ class TradeRoutesData:
     routes: list[TradeRoute] = field(default_factory=list)
 
 
+@dataclass
+class TradeRoutePickerState:
+    open: bool = False
+    selected_route_index: int | None = None
+    presented_query_url: str = ""
+    presented_searched_at: str = ""
+
+
 @dataclass(frozen=True)
 class CommandHelp:
     name: str

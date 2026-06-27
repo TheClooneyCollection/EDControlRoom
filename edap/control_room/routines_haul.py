@@ -158,6 +158,22 @@ def load_haul_from_trade_route(
     )
 
 
+def open_trade_route_picker(app: HaulHost) -> None:
+    if not app._trade_routes.routes:
+        return
+    app._trade_route_picker_open = True
+    if app._selected_trade_route_index not in {route.index for route in app._trade_routes.routes}:
+        app._selected_trade_route_index = app._trade_routes.routes[0].index
+    app._refresh_trade_routes()
+
+
+def close_trade_route_picker(app: HaulHost) -> None:
+    if not app._trade_route_picker_open:
+        return
+    app._trade_route_picker_open = False
+    app._refresh_trade_routes()
+
+
 def _set_trade_routes_loading(app: HaulHost, *, system_name: str, query_url: str) -> None:
     app._trade_routes = TradeRoutesData(
         system_name=system_name,
@@ -167,6 +183,10 @@ def _set_trade_routes_loading(app: HaulHost, *, system_name: str, query_url: str
         error=None,
         routes=[],
     )
+    app._trade_route_picker_open = False
+    app._selected_trade_route_index = None
+    app._presented_trade_route_query_url = query_url
+    app._presented_trade_route_searched_at = app._trade_routes.searched_at
     app._refresh_trade_routes()
     app._publish_protocol_snapshot()
 
@@ -180,6 +200,10 @@ def _set_trade_routes_loaded(app: HaulHost, result) -> None:
         error=None,
         routes=list(result.routes),
     )
+    app._selected_trade_route_index = app._trade_routes.routes[0].index if app._trade_routes.routes else None
+    app._trade_route_picker_open = bool(app._trade_routes.routes)
+    app._presented_trade_route_query_url = result.query_url
+    app._presented_trade_route_searched_at = result.searched_at
     app._refresh_trade_routes()
     app._publish_protocol_snapshot()
 
@@ -193,6 +217,10 @@ def _set_trade_routes_error(app: HaulHost, *, system_name: str, query_url: str, 
         error=message,
         routes=[],
     )
+    app._trade_route_picker_open = False
+    app._selected_trade_route_index = None
+    app._presented_trade_route_query_url = query_url
+    app._presented_trade_route_searched_at = app._trade_routes.searched_at
     app._refresh_trade_routes()
     app._publish_protocol_snapshot()
 
