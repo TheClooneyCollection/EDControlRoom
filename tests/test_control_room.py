@@ -990,6 +990,34 @@ class ControlRoomCommandTests(unittest.TestCase):
 
         self.assertIn("haul search <system>", rendered.plain)
 
+    def test_trade_route_detail_markup_surfaces_trip_and_hour_profit(self) -> None:
+        markup = control_room_rendering.trade_route_detail_markup(
+            TradeRoute(
+                index=1,
+                from_station="Fontana City",
+                from_system="HIP 17597",
+                to_station="Stronghold Carrier",
+                to_system="HIP 17597",
+                source_buy_commodity="Silver",
+                target_buy_commodity="Robotics",
+                route_distance="12.4 Ly",
+                profit_per_unit="37,903 Cr",
+                profit_per_trip="17,435,380 Cr",
+                profit_per_hour="88,323,553 Cr",
+                updated="4 minutes ago",
+            ),
+            system_name="HIP 17597",
+            searched_at="2026-06-27T13:35:53Z",
+            route_count=50,
+        )
+
+        rendered = Text.from_markup(markup)
+
+        self.assertIn("Per trip", rendered.plain)
+        self.assertIn("17,435,380 Cr", rendered.plain)
+        self.assertIn("Per hour", rendered.plain)
+        self.assertIn("88,323,553 Cr", rendered.plain)
+
     def test_load_market_json_seeds_ship_station_when_in_station(self) -> None:
         journal_dir = Path(self.tmpdir.name)
         (journal_dir / "Journal.240101000000.01.log").write_text(

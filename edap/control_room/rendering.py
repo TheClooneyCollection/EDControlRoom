@@ -339,29 +339,41 @@ def trade_route_detail_markup(
 ) -> str:
     header = f"[bold]{escape(system_name or '?')}[/]  [dim]route #{route.index} of {route_count}[/]"
     if searched_at:
-        header += f"\n[dim]{escape(searched_at)}[/]"
+        header += f"  [dim]{escape(searched_at)}[/]"
     lines = [
         header,
-        "",
         f"[bold]From[/]  {escape(route.from_station)} [dim]({escape(route.from_system)})[/]",
         f"[bold]To[/]    {escape(route.to_station)} [dim]({escape(route.to_system)})[/]",
     ]
+    cargo_parts: list[str] = []
     if route.source_buy_commodity:
-        lines.append(f"[bold]Buy[/]   [cyan]{escape(route.source_buy_commodity)}[/]")
+        cargo_parts.append(f"[bold]Buy[/] [cyan]{escape(route.source_buy_commodity)}[/]")
     if route.target_buy_commodity:
-        lines.append(f"[bold]Return[/] [cyan]{escape(route.target_buy_commodity)}[/]")
+        cargo_parts.append(f"[bold]Return[/] [cyan]{escape(route.target_buy_commodity)}[/]")
+    if cargo_parts:
+        lines.append("  ".join(cargo_parts))
+
+    route_parts: list[str] = []
     if route.route_distance:
-        lines.append(f"[bold]Route[/]  {escape(route.route_distance)}")
+        route_parts.append(f"[bold]Route[/] {escape(route.route_distance)}")
     if route.profit_per_unit:
-        lines.append(f"[bold]PPU[/]    {escape(route.profit_per_unit)}")
+        route_parts.append(f"[bold]Per unit[/] {escape(route.profit_per_unit)}")
+    if route_parts:
+        lines.append("  ".join(route_parts))
+
+    profit_parts: list[str] = []
     if route.profit_per_trip:
-        lines.append(f"[bold]Trip[/]   {escape(route.profit_per_trip)}")
+        profit_parts.append(f"[bold]Per trip[/] {escape(route.profit_per_trip)}")
     if route.profit_per_hour:
-        lines.append(f"[bold]Hour[/]   {escape(route.profit_per_hour)}")
+        profit_parts.append(f"[bold]Per hour[/] {escape(route.profit_per_hour)}")
+    if profit_parts:
+        lines.append("  ".join(profit_parts))
+
+    footer_parts: list[str] = []
     if route.updated:
-        lines.append(f"[bold]Seen[/]   {escape(route.updated)}")
-    lines.append("")
-    lines.append("[dim]Enter loads this route into the haul prompt. Esc closes the picker.[/]")
+        footer_parts.append(f"[bold]Seen[/] {escape(route.updated)}")
+    footer_parts.append("[dim]Enter loads this route. Esc closes.[/]")
+    lines.append("  ".join(footer_parts))
     return "\n".join(lines)
 
 
