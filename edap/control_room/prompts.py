@@ -451,6 +451,8 @@ def _format_search_param_value(key: str, value: str) -> str:
         return _search_choice_label(value, _ORDER_BY_LABELS)
     if key == "include_round_trips":
         return "Yes" if value.strip().lower() == "true" else "No"
+    if key == "max_station_distance_ls" and value.strip().lower() in {"0", "any"}:
+        return "Any"
     return value
 
 
@@ -1104,7 +1106,7 @@ def advance_haul_search_prompt(
     )
     if max_price_age is None:
         return HaulSearchPromptTransition()
-    max_station_distance = parse_optional_nonnegative_int(
+    max_station_distance = parse_max_station_distance_ls(
         app,
         parsed.get("max_station_distance_ls", ""),
         default=defaults.get("max_station_distance_ls", ""),
@@ -1243,3 +1245,23 @@ def parse_optional_nonnegative_int(
         )
         return None
     return str(parsed)
+
+
+def parse_max_station_distance_ls(
+    app: PromptHost,
+    raw: str,
+    *,
+    default: str,
+    label: str,
+) -> str | None:
+    value = raw.strip()
+    if value.lower() == "any":
+        return "any"
+    if default.strip().lower() == "0":
+        default = "any"
+    return parse_optional_nonnegative_int(
+        app,
+        value,
+        default=default,
+        label=label,
+    )

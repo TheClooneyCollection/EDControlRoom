@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `90`
-- Latest generated iteration number: `223`
+- Generated iteration count: `92`
+- Latest generated iteration number: `225`
 
 ## Iteration 134
 
@@ -2544,3 +2544,57 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Leave the remaining bindings/path/server/haul timing outliers alone unless the suite regresses again; none of them individually dominates runtime now.
+
+## Iteration 224
+
+- When: `2026-06-27 13:58`
+- Area: `control-room`
+- Title: `fix-haul-search-command-bar-refresh`
+- Source: [2026-06-27-13-58_control-room_fix-haul-search-command-bar-refresh.md](iteration-logs/2026-06-27-13-58_control-room_fix-haul-search-command-bar-refresh.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `fix-haul-search-command-bar-refresh`
+- Started: `2026-06-27 13:58`
+
+## Summary
+
+- Fixed a Control Room prompt-refresh regression where active command-bar prefills could snap back to stale or blank text during periodic snapshot refreshes, making `haul search` editing unusable in local mode.
+
+## Changes
+
+- Updated prompt-state snapshot serialization to prefer the live `#cmd` widget placeholder/value whenever prompt-owned prefill is active, so periodic UI refreshes keep the operator's in-progress text instead of replaying stale prompt-state fields.
+- Added protocol coverage proving snapshot generation preserves live command-bar edits during an active prefill session.
+- Re-ran the full `uv run python3 -m unittest discover -s tests` suite and the required slow-test timing report because suite runtime stayed above the repo's `0.3s` target.
+
+## Follow-ups
+
+- Live-check `haul search` editing in the real local TUI to confirm the command bar now stays stable while the periodic status refresh loop is running.
+
+## Iteration 225
+
+- When: `2026-06-27 14:17`
+- Area: `haul`
+- Title: `allow-any-station-distance`
+- Source: [2026-06-27-14-17_____haul_____allow-any-station-distance.md](iteration-logs/2026-06-27-14-17_____haul_____allow-any-station-distance.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `allow-any-station-distance`
+- Started: `2026-06-27 14:17`
+
+## Summary
+
+- Added operator-facing `any` support for Inara haul-search max station distance so Control Room no longer requires raw `0` for the "Any" INARA option.
+
+## Changes
+
+- Updated the haul search prompt parser to accept `max_station_distance_ls=any` and keep the saved/replayed value as `any`.
+- Normalized Inara trade-route query handling so Control Room emits `pi9=0` for `any` and maps pasted `pi9=0` URLs back to `any`.
+- Added unit coverage for prompt submission and INARA URL build/parse behavior, then reran the full unittest suite successfully in `0.289s`.
+
+## Follow-ups
+
+- Live-validate the `any` station-distance path against a fresh INARA fetch in the operator UI when the next CrossOver trading session runs.

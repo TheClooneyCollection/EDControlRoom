@@ -1564,6 +1564,34 @@ on_land = true
         self.assertEqual(len(snapshot.trade_routes.routes), 1)
         self.assertEqual(snapshot.trade_routes.routes[0].from_station, "Savitskaya Orbital")
 
+    def test_haul_search_accepts_any_for_max_station_distance(self) -> None:
+        self.app._ship.system = "Ix"
+        self.app._ship.cargo_capacity = 460
+        self.app._controls = object()
+        self.app._run_in_thread = lambda fn: fn()
+
+        result = TradeRouteSearchResult(
+            system_name="Ix",
+            query_url="https://inara.cz/elite/market-traderoutes/?ps1=Ix&pi9=0",
+            searched_at="2026-06-27T14:00:00Z",
+            routes=(),
+        )
+
+        with patch("edap.control_room.routines_haul.search_trade_routes", return_value=result):
+            self.app._cmd_haul("search", raw_command="haul search")
+            self.app._handle_haul_prompt(
+                "near_system=Ix cargo_capacity=460 max_route_distance_ly=60 "
+                "max_price_age_hours=8 min_landing_pad=large max_station_distance_ls=any "
+                "use_surface_stations=no min_supply=5000 min_demand=5000 "
+                "include_round_trips=true order_by=best_profit_per_hour_estimate"
+            )
+
+        self.assertEqual(
+            self.app._saved_state.history[-1].params["max_station_distance_ls"],
+            "any",
+        )
+        self.assertIn("Max. station distance (Ls): [cyan]Any[/]", "\n".join(self.app.logged))
+
     def test_haul_search_reports_missing_system_when_current_unknown(self) -> None:
         self.app._controls = object()
 

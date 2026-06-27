@@ -112,6 +112,15 @@ def _as_bool_string(value: str) -> str:
     return "true" if value.strip().lower() in {"1", "true", "y", "yes"} else "false"
 
 
+def _normalize_max_station_distance_ls(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized == "any":
+        return "0"
+    if normalized == "0":
+        return "any"
+    return value.strip()
+
+
 def _clean_search_params(params: Mapping[str, str] | None) -> dict[str, str]:
     cleaned = trade_route_search_defaults()
     if params is None:
@@ -121,6 +130,9 @@ def _clean_search_params(params: Mapping[str, str] | None) -> dict[str, str]:
             continue
         cleaned[str(key)] = str(value).strip()
     cleaned["include_round_trips"] = _as_bool_string(cleaned.get("include_round_trips", "true"))
+    cleaned["max_station_distance_ls"] = _normalize_max_station_distance_ls(
+        cleaned.get("max_station_distance_ls", "")
+    )
     return cleaned
 
 
@@ -165,7 +177,9 @@ def parse_trade_routes_url(query_url: str) -> tuple[str, dict[str, str]]:
             (query.get("pi3", [""])[0] or "").strip(),
             DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["min_landing_pad"],
         ),
-        "max_station_distance_ls": (query.get("pi9", [""])[0] or DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["max_station_distance_ls"]).strip(),
+        "max_station_distance_ls": _normalize_max_station_distance_ls(
+            (query.get("pi9", [""])[0] or DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["max_station_distance_ls"]).strip()
+        ),
         "use_surface_stations": _SURFACE_STATIONS_FROM_QUERY.get(
             (query.get("pi4", [""])[0] or "").strip(),
             DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["use_surface_stations"],

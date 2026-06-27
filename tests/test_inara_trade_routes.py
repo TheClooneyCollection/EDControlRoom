@@ -6,6 +6,7 @@ from edap.inara.trade_routes import (
     _extract_key_value_pairs,
     _row_to_route,
     build_trade_routes_url,
+    parse_trade_routes_url,
 )
 
 
@@ -16,6 +17,23 @@ class InaraTradeRoutesTests(unittest.TestCase):
         self.assertIn("ps1=Praea+Euq+AK-A+d25", url)
         self.assertIn("pi10=460", url)
         self.assertIn("pi2=60", url)
+
+    def test_build_trade_routes_url_maps_any_station_distance_to_inara_zero(self) -> None:
+        url = build_trade_routes_url(
+            "Ix",
+            query_params={"max_station_distance_ls": "any"},
+        )
+
+        self.assertIn("ps1=Ix", url)
+        self.assertIn("pi9=0", url)
+
+    def test_parse_trade_routes_url_maps_inara_zero_station_distance_to_any(self) -> None:
+        system_name, params = parse_trade_routes_url(
+            "https://inara.cz/elite/market-traderoutes/?ps1=Ix&pi9=0"
+        )
+
+        self.assertEqual(system_name, "Ix")
+        self.assertEqual(params["max_station_distance_ls"], "any")
 
     def test_extract_key_value_pairs_reads_inline_metric_rows(self) -> None:
         fields = _extract_key_value_pairs(
