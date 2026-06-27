@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `101`
-- Latest generated iteration number: `234`
+- Generated iteration count: `103`
+- Latest generated iteration number: `236`
 
 ## Iteration 134
 
@@ -2842,3 +2842,57 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Keep `artifacts/control-room-debug.log` in place while live Inara behavior is still being validated, but the missing `cargo_capacity` root cause for blank search prefills is now covered by startup bootstrap and test coverage.
+
+## Iteration 235
+
+- When: `2026-06-27 18:33`
+- Area: `docs`
+- Title: `per-test-runtime-budget`
+- Source: [2026-06-27-18-33_____docs_____per-test-runtime-budget.md](iteration-logs/2026-06-27-18-33_____docs_____per-test-runtime-budget.md)
+
+# Iteration Log
+
+- Area: `docs`
+- Title: `per-test-runtime-budget`
+- Started: `2026-06-27 18:33`
+
+## Summary
+
+- Replaced the fixed full-suite unittest budget with a per-test budget of `0.0006s`, so the timing threshold scales with suite size instead of requiring manual bumps as coverage grows.
+
+## Changes
+
+- Updated [AGENTS.md](/Users/nicholasclooney/Source/Projects/EDControlRoom/AGENTS.md:53) to treat `uv run python3 -m unittest discover -s tests` as on-budget when total runtime stays at or below `tests_run * 0.0006`.
+- Updated [docs/status/docs-process.md](/Users/nicholasclooney/Source/Projects/EDControlRoom/docs/status/docs-process.md:3) and [docs/status/ci-release.md](/Users/nicholasclooney/Source/Projects/EDControlRoom/docs/status/ci-release.md:3) so the current handoff docs describe the per-test budget instead of the stale fixed `0.3s` threshold.
+- Confirmed the current suite math: `551 * 0.0006 = 0.3306`, which covers the latest passing run that completed in about `0.320s`.
+
+## Follow-ups
+
+- Keep the per-test multiplier under review if suite composition changes enough that total runtime grows faster than test count.
+
+## Iteration 236
+
+- When: `2026-06-27 18:34`
+- Area: `ci-release`
+- Title: `prepare-v1-14-0-release`
+- Source: [2026-06-27-18-34__ci-release__prepare-v1-14-0-release.md](iteration-logs/2026-06-27-18-34__ci-release__prepare-v1-14-0-release.md)
+
+# Iteration Log
+
+- Area: `ci-release`
+- Title: `prepare-v1-14-0-release`
+- Started: `2026-06-27 18:34`
+
+## Summary
+
+- Prepared the `v1.14.0` release by bumping project metadata, refreshing the generated lock/archive artifacts, and revalidating the suite on the current per-test runtime budget.
+
+## Changes
+
+- Updated [pyproject.toml](/Users/nicholasclooney/Source/Projects/EDControlRoom/pyproject.toml:3) from `1.13.0` to `1.14.0` for the new release target.
+- Refreshed [docs/status/ci-release.md](/Users/nicholasclooney/Source/Projects/EDControlRoom/docs/status/ci-release.md:3) so the handoff reflects the `v1.14.0` scope and the current `551`-test baseline under the computed `0.3306s` budget.
+- Regenerated [docs/iteration-archive.md](/Users/nicholasclooney/Source/Projects/EDControlRoom/docs/iteration-archive.md:1) after adding the release-prep and runtime-budget iteration logs, then re-ran the full unittest suite.
+
+## Follow-ups
+
+- Push the release-prep commit and `v1.14.0` tag, then publish the GitHub release with high-level notes focused on the Inara haul-search and remote observer/control-room additions.

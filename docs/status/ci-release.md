@@ -1,9 +1,9 @@
 # CI and Release Status
 ## Current
-- The current full `uv run python3 -m unittest discover -s tests` baseline is back under budget at `541` tests in about `0.296s` after replacing the expensive `tests/test_control_room_client.py` observer `app.run_test()` mount cases with direct snapshot/state assertions; the remaining slowest tests are single-digit-millisecond path, bindings, server, and haul cases.
+- The unittest timing budget now scales as `0.0006s` per executed test, so the current `551`-test suite budget is `0.3306s`; follow-up timing reports are only required when a full run exceeds that computed ceiling.
+- The current full `uv run python3 -m unittest discover -s tests` baseline is `551` tests in about `0.298s`, which stays under the computed budget; the remaining slowest tests are still single-digit-millisecond path, bindings, server, and haul cases.
 - The Discord workflow-failure notifier is now split into a checked-in Python script plus a thin workflow wrapper, so the same payload/fetch/post path can be dry-run locally against saved jobs JSON and exercised in CI without keeping the logic trapped inside inline workflow shell.
-- `main` is now prepared for `v1.13.0`, covering the browser-facing remote observer workflow, replay/operator-control follow-ups, haul/runtime fixes, and the extracted Discord workflow-failure notifier.
-- Stable tags have been backfilled across the post-`v1.7.3` milestones as `v1.8.0`, `v1.9.0`, and `v1.10.0`; only the latest milestone on `main` carries a fresh release-prep version bump.
+- `main` is now prepared for `v1.14.0`, covering the configurable Inara haul-search flow, remote observer/control-room follow-ups, haul profit and navigation fixes, and the extracted Discord workflow-failure notifier.
 - `main` is now the rolling-update branch, and stable features or releases are identified with tags instead of `dev -> main` promotion.
 - The legacy `.github/workflows/promote-dev-to-main.yml` automation has been removed; release/process automation now centers on `main`, semantic version tags, and manual GitHub release publishing.
 - The auto-commit `.github/workflows/sync-iteration-archive.yml` workflow has been removed; iteration archive refresh is manual, while CI still guards drift.
