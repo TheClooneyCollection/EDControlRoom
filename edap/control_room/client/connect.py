@@ -167,8 +167,10 @@ class ObserverControlRoomApp(ControlRoomApp):
 
         def on_start() -> None:
             self._log(f"Searching Inara trade routes for [cyan]{system_name}[/]...")
-            _set_trade_routes_loading(self, system_name=system_name, query_url=query_url)
-            self._capture_local_trade_route_state()
+            self._apply_local_trade_routes_loading(
+                system_name=system_name,
+                query_url=query_url,
+            )
 
         def run_search() -> None:
             try:
@@ -179,20 +181,17 @@ class ObserverControlRoomApp(ControlRoomApp):
                 )
             except Exception as exc:
                 self.call_from_thread(
-                    _set_trade_routes_error,
-                    self,
+                    self._apply_local_trade_routes_error,
                     system_name=system_name,
                     query_url=query_url,
                     message=str(exc),
                 )
-                self.call_from_thread(self._capture_local_trade_route_state)
                 self.call_from_thread(
                     self._log,
                     f"[red]Failed to load Inara routes for {system_name}: {exc}[/]",
                 )
                 return None
-            self.call_from_thread(_set_trade_routes_loaded, self, result)
-            self.call_from_thread(self._capture_local_trade_route_state)
+            self.call_from_thread(self._apply_local_trade_routes_loaded, result)
             self.call_from_thread(
                 self._log,
                 f"[green]Loaded {len(result.routes)} Inara route(s) for [cyan]{system_name}[/].[/]",
@@ -277,6 +276,29 @@ class ObserverControlRoomApp(ControlRoomApp):
             presented_query_url=self._presented_trade_route_query_url,
             presented_searched_at=self._presented_trade_route_searched_at,
         )
+
+    def _apply_local_trade_routes_loading(self, *, system_name: str, query_url: str) -> None:
+        _set_trade_routes_loading(self, system_name=system_name, query_url=query_url)
+        self._capture_local_trade_route_state()
+
+    def _apply_local_trade_routes_loaded(self, result) -> None:
+        _set_trade_routes_loaded(self, result)
+        self._capture_local_trade_route_state()
+
+    def _apply_local_trade_routes_error(
+        self,
+        *,
+        system_name: str,
+        query_url: str,
+        message: str,
+    ) -> None:
+        _set_trade_routes_error(
+            self,
+            system_name=system_name,
+            query_url=query_url,
+            message=message,
+        )
+        self._capture_local_trade_route_state()
 
     def _play_local_announcement(self, event: AnnouncementEvent) -> None:
         parsed_id = parse_announcement_id(event.announcement_id)
