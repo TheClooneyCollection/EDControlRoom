@@ -72,6 +72,7 @@ Use [docs/iteration-logs/](docs/iteration-logs/) for concise per-iteration notes
 - Make incremental changes that are easy to validate.
 - Treat `main` as the active rolling-update branch. Do not assume or document a long-lived `dev` branch workflow; use tags to mark stable features and releases.
 - Never use `git reset --hard` as a first option. Always consider safer alternatives first, and if a hard reset truly seems necessary, consult the user before doing it.
+- Keep mutating git operations strictly sequential. Do not run `git add`, `git commit`, `git push`, `git amend`, `git rebase`, `git checkout`, or similar write operations in parallel tool calls, because `.git/index` lock races can corrupt or block the workflow; parallelize only read-only inspection commands.
 - Prefer strong non-optional types when production/runtime callers always provide a value. Do not widen production APIs to `Optional[...]` just because tests want to omit an argument.
 - When tests need silent progress/announcement-style hooks, pass an explicit no-op helper or lambda from the test instead of relying on `None` in the runtime signature.
 - Do not give production code default no-op callback parameters. Production-facing APIs must require explicit callbacks; shared no-op callbacks are allowed only in tests or test-local wrappers/helpers.

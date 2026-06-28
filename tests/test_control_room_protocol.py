@@ -755,6 +755,33 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.assertFalse(app._trade_route_picker_open)
         self.assertEqual(backend.dispatched_commands, [])
 
+    def test_trade_route_picker_d_sets_destination_to_first_station_system(self) -> None:
+        snapshot = snapshot_from_app(self.app)
+        backend = _IntentRecorderBackend(snapshot)
+        app = _RenderHarnessApp(
+            _make_context(Path(self.tmpdir.name)),
+            backend=backend,
+        )
+        app._trade_routes.routes = [
+            TradeRoute(
+                index=2,
+                from_station="Savitskaya Orbital",
+                from_system="TSONGORIS",
+                to_station="Nyberg Vision",
+                to_system="NJOKUJINUN",
+                source_buy_commodity="Beryllium",
+            )
+        ]
+        app._selected_trade_route_index = 2
+        app._trade_route_picker_open = True
+
+        event = _KeyEventStub("d")
+        app.on_key(event)
+
+        self.assertTrue(event.prevented)
+        self.assertFalse(app._trade_route_picker_open)
+        self.assertEqual(backend.dispatched_commands, [("dest TSONGORIS", None)])
+
     def test_replay_open_arrow_keys_route_selection_through_backend(self) -> None:
         snapshot = snapshot_from_app(self.app)
         backend = _IntentRecorderBackend(snapshot)

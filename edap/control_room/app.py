@@ -728,7 +728,7 @@ class ControlRoomApp(App[None]):
                 yield Static(id="haul")
         with Vertical(id="trade-route-picker"):
             yield Static(
-                "Haul routes  |  Up/Down move  |  Enter load route  |  Esc/q close",
+                "Haul routes  |  Up/Down move  |  Enter load route  |  d set destination  |  Esc/q close",
                 id="trade-route-help",
             )
             yield OptionList(id="trade-route-list")
@@ -1472,6 +1472,13 @@ class ControlRoomApp(App[None]):
         self._close_trade_route_picker()
         self._dispatch_command(f"haul route {route.index}")
 
+    def _set_destination_for_selected_trade_route(self) -> None:
+        route = self._selected_trade_route()
+        if route is None or not route.from_system:
+            return
+        self._close_trade_route_picker()
+        self._dispatch_command(f"dest {route.from_system}")
+
     def _update_resume_detail(self) -> None:
         _replay.update_resume_detail(self)
 
@@ -1767,6 +1774,9 @@ class ControlRoomApp(App[None]):
             elif event.key == "down":
                 event.prevent_default()
                 self._move_trade_route_selection(1)
+            elif event.key == "d":
+                event.prevent_default()
+                self._set_destination_for_selected_trade_route()
             elif event.key == "enter":
                 event.prevent_default()
                 self._load_selected_trade_route()
