@@ -1,5 +1,6 @@
 # Runtime Status
 ## Current
+- The macOS input backend now lazily builds its pid-targeted Quartz poster, so non-macOS test runners can still construct the controller for injected-unit-test paths without failing before any pid-targeted dispatch is attempted.
 - macOS `set_pid` auto-detect now falls back from `ps ... comm` to the full `ps ... command` line, so CrossOver/Wine launches that only expose `EliteDangerous64.exe` in their arguments can still resolve the game pid.
 - Input backends now keep a shared foreground-by-default target model across macOS, Windows, and Linux; macOS can switch to pid-targeted Quartz posting, Windows can switch to pid/hwnd-targeted window-message dispatch, and the default auto-detect filter is `EliteDangerous64.exe`.
 - `Status.json` parsing currently matches the documented ship `Flags` set; the reference docs do not define auto-docking or auto-launch bits there, so docking-computer state still has to be inferred from journal/music events rather than the status snapshot.

@@ -237,7 +237,7 @@ class MacOSInputController(InputController):
         sleeper: SleeperFn | None = None,
     ) -> None:
         self._poster = poster if poster is not None else _make_default_poster()
-        self._pid_poster = pid_poster if pid_poster is not None else _make_default_pid_poster()
+        self._pid_poster = pid_poster
         self._pid_finder = pid_finder if pid_finder is not None else _find_pid_by_process_name
         self._sleeper = sleeper if sleeper is not None else _default_sleep
         self._target = InputTargetState(platform="macos", mode="foreground")
@@ -322,7 +322,11 @@ class MacOSInputController(InputController):
         if target.mode == "pid":
             if target.pid is None:
                 raise RuntimeError("Targeted macOS input requires a pid.")
-            self._pid_poster(target.pid, keycode, down, flags, unicode_char)
+            pid_poster = self._pid_poster
+            if pid_poster is None:
+                pid_poster = _make_default_pid_poster()
+                self._pid_poster = pid_poster
+            pid_poster(target.pid, keycode, down, flags, unicode_char)
             return
         self._poster(keycode, down, flags, unicode_char)
 
