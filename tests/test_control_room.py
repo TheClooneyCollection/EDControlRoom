@@ -1039,6 +1039,7 @@ class ControlRoomCommandTests(unittest.TestCase):
                 to_system="HIP 17597",
                 source_buy_commodity="Silver",
                 target_buy_commodity="Robotics",
+                distance_from_system="~167 Ly",
                 route_distance="12.4 Ly",
                 profit_per_unit="37,903 Cr",
                 profit_per_trip="17,435,380 Cr",
@@ -1058,7 +1059,8 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertIn("88,323,553 Cr", rendered.plain)
         self.assertIn("From Fontana City (HIP 17597)    To Stronghold Carrier (HIP 17597)", rendered.plain)
         self.assertIn("Buy Silver    Return Robotics", rendered.plain)
-        self.assertIn("Route 12.4 Ly    Per unit 37,903 Cr", rendered.plain)
+        self.assertIn("Distance ~167 Ly    Route 12.4 Ly", rendered.plain)
+        self.assertIn("Per unit 37,903 Cr", rendered.plain)
         self.assertIn("Per trip 17,435,380 Cr    Per hour 88,323,553 Cr", rendered.plain)
 
     def test_trade_route_option_label_prefixes_compact_per_hour_profit(self) -> None:
@@ -1071,6 +1073,7 @@ class ControlRoomCommandTests(unittest.TestCase):
                 to_system="HIP 17597",
                 source_buy_commodity="Silver",
                 target_buy_commodity="Robotics",
+                distance_from_system="~167 Ly",
                 profit_per_unit="37,903 Cr",
                 profit_per_hour="88,323,553 Cr",
             )
@@ -1078,7 +1081,7 @@ class ControlRoomCommandTests(unittest.TestCase):
 
         self.assertEqual(
             label,
-            "[88.3m/h] 1. Fontana City -> Stronghold Carrier [buy Silver | return Robotics | ppu 37,903 Cr]",
+            "[88.3m/h] 1. Fontana City -> Stronghold Carrier [dist ~167 Ly | buy Silver | return Robotics | ppu 37,903 Cr]",
         )
 
     def test_load_market_json_seeds_ship_station_when_in_station(self) -> None:
@@ -1672,7 +1675,7 @@ on_land = true
         with patch("edap.control_room.routines_haul.search_trade_routes", return_value=result):
             self.app._cmd_haul("search", raw_command="haul search")
             self.app._handle_haul_prompt(
-                "near_system=Ix cargo_capacity=460 max_route_distance_ly=60 "
+                "near_system=Ix cargo_capacity=460 max_route_distance_ly=500 "
                 "max_price_age_hours=8 min_landing_pad=large max_station_distance_ls=any "
                 "use_surface_stations=no min_supply=5000 min_demand=5000 "
                 "include_round_trips=true order_by=best_profit_per_hour_estimate"
@@ -1711,7 +1714,7 @@ on_land = true
         )
         url = (
             "https://inara.cz/elite/market-traderoutes/?ps1=Praea+Euq+AK-A+d25"
-            "&pi10=460&pi2=60&pi5=8&pi3=3&pi9=500&pi4=1&pi7=5000&pi12=5000&pi8=1&pi14=0&pi15=0&pi1=4"
+            "&pi10=460&pi2=500&pi5=8&pi3=3&pi9=500&pi4=1&pi7=5000&pi12=5000&pi8=1&pi14=0&pi15=0&pi1=4"
         )
 
         with patch("edap.control_room.routines_haul.search_trade_routes", return_value=result):

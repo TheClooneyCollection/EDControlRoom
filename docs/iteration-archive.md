@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `112`
-- Latest generated iteration number: `245`
+- Generated iteration count: `113`
+- Latest generated iteration number: `246`
 
 ## Iteration 134
 
@@ -3144,3 +3144,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-check whether operators also want a direct shortcut for the destination-side system, or whether origin-system targeting covers the useful case.
+
+## Iteration 246
+
+- When: `2026-06-28 21:02`
+- Area: `haul`
+- Title: `add-inara-distance-and-500-route-default`
+- Source: [2026-06-28-21-02_____haul_____add-inara-distance-and-500-route-default.md](iteration-logs/2026-06-28-21-02_____haul_____add-inara-distance-and-500-route-default.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `add-inara-distance-and-500-route-default`
+- Started: `2026-06-28 21:02`
+
+## Summary
+
+- Added Inara `DISTANCE` parsing to haul route data and surfaced it in the Control Room route picker.
+- Raised the default Inara max route distance from `60` to `500` Ly for generated haul searches and pasted-URL expectations.
+
+## Changes
+
+- Extended `TradeRoute` plus snapshot serialization/deserialization to carry `distance_from_system`.
+- Updated route-picker label/detail rendering so operators can see current-system distance separately from route distance.
+- Refreshed Inara and Control Room tests for the extra field and the new default search parameter.
+
+## Follow-ups
+
+- Live-validate that the Inara scraper still captures `DISTANCE` consistently across alternate route-card layouts and no-location searches.

@@ -303,6 +303,8 @@ def market_markup(market: MarketData, market_filter: str | None) -> str:
 def trade_route_option_label(route: TradeRoute) -> str:
     prefix = _compact_trade_profit_per_hour(route.profit_per_hour)
     detail_bits: list[str] = []
+    if route.distance_from_system:
+        detail_bits.append(f"dist {route.distance_from_system}")
     if route.source_buy_commodity:
         detail_bits.append(f"buy {route.source_buy_commodity}")
     if route.target_buy_commodity:
@@ -351,8 +353,12 @@ def trade_route_detail_markup(
             ),
         ),
         join_columns(
+            f"[bold]Distance[/] {escape(route.distance_from_system)}" if route.distance_from_system else None,
             f"[bold]Route[/] {escape(route.route_distance)}" if route.route_distance else None,
+        ),
+        join_columns(
             f"[bold]Per unit[/] {escape(route.profit_per_unit)}" if route.profit_per_unit else None,
+            None,
         ),
         join_columns(
             f"[bold]Per trip[/] {escape(route.profit_per_trip)}" if route.profit_per_trip else None,

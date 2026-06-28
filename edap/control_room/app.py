@@ -1108,6 +1108,7 @@ class ControlRoomApp(App[None]):
                     to_system=route.to_system,
                     source_buy_commodity=route.source_buy_commodity,
                     target_buy_commodity=route.target_buy_commodity,
+                    distance_from_system=route.distance_from_system,
                     route_distance=route.route_distance,
                     profit_per_unit=route.profit_per_unit,
                     profit_per_trip=route.profit_per_trip,

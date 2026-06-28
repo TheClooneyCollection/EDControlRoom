@@ -17,7 +17,7 @@ class InaraTradeRoutesTests(unittest.TestCase):
 
         self.assertIn("ps1=Praea+Euq+AK-A+d25", url)
         self.assertIn("pi10=460", url)
-        self.assertIn("pi2=60", url)
+        self.assertIn("pi2=500", url)
 
     def test_build_trade_routes_url_maps_any_station_distance_to_inara_zero(self) -> None:
         url = build_trade_routes_url(
@@ -42,12 +42,14 @@ class InaraTradeRoutesTests(unittest.TestCase):
                 "FROM Savitskaya Orbital | TSONGORIS",
                 "TO Scully-Power Station | IX",
                 "ROUTE DISTANCE 33.08 Ly",
+                "DISTANCE ~167 Ly",
                 "UPDATED 3 hours ago",
                 "PROFIT PER HOUR 88,323,553 Cr",
             ]
         )
 
         self.assertEqual(fields["ROUTE DISTANCE"], "33.08 Ly")
+        self.assertEqual(fields["DISTANCE"], "~167 Ly")
         self.assertEqual(fields["UPDATED"], "3 hours ago")
         self.assertEqual(fields["PROFIT PER HOUR"], "88,323,553 Cr")
 
@@ -86,6 +88,7 @@ class InaraTradeRoutesTests(unittest.TestCase):
                     "Silver",
                     "TO Scully-Power Station | IX\ue81d\ufe0e",
                     "ROUTE DISTANCE 33.08 Ly",
+                    "DISTANCE ~167 Ly",
                     "UPDATED 3 hours ago",
                     "PROFIT PER UNIT 45,510 Cr",
                 ],
@@ -97,6 +100,7 @@ class InaraTradeRoutesTests(unittest.TestCase):
         self.assertEqual(route.from_system, "TSONGORIS")
         self.assertEqual(route.to_station, "Scully-Power Station")
         self.assertEqual(route.to_system, "IX")
+        self.assertEqual(route.distance_from_system, "~167 Ly")
         self.assertEqual(route.route_distance, "33.08 Ly")
         self.assertEqual(route.updated, "3 hours ago")
         self.assertEqual(route.profit_per_unit, "45,510 Cr")
@@ -149,6 +153,7 @@ class InaraTradeRoutesTests(unittest.TestCase):
                     "BUY PRICE\t2,022 Cr",
                     "SUPPLY\t7,025",
                     "ROUTE DISTANCE\t0 Ly",
+                    "DISTANCE\t~167 Ly",
                     "PROFIT PER LOAD\t17,435,380 Cr",
                     "PROFIT/HOUR\t88,323,553 Cr",
                     "UPDATED\t11 minutes ago",
@@ -160,6 +165,7 @@ class InaraTradeRoutesTests(unittest.TestCase):
 
         self.assertEqual(route.source_buy_commodity, "Silver")
         self.assertEqual(route.target_buy_commodity, "Robotics")
+        self.assertEqual(route.distance_from_system, "~167 Ly")
         self.assertEqual(route.profit_per_unit, "37,903 Cr")
         self.assertEqual(route.profit_per_trip, "17,435,380 Cr")
         self.assertEqual(route.profit_per_hour, "88,323,553 Cr")

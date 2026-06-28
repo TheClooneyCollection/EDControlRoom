@@ -22,7 +22,7 @@ DEFAULT_TRADE_ROUTE_QUERY_PARAMS: dict[str, str] = {
 
 DEFAULT_TRADE_ROUTE_SEARCH_PARAMS: dict[str, str] = {
     "cargo_capacity": "460",
-    "max_route_distance_ly": "60",
+    "max_route_distance_ly": "500",
     "max_price_age_hours": "8",
     "min_landing_pad": "large",
     "max_station_distance_ls": "500",
@@ -96,6 +96,7 @@ class TradeRoute:
     to_system: str
     source_buy_commodity: str | None = None
     target_buy_commodity: str | None = None
+    distance_from_system: str | None = None
     route_distance: str | None = None
     profit_per_unit: str | None = None
     profit_per_trip: str | None = None
@@ -314,6 +315,7 @@ def _row_to_route(row: dict[str, Any]) -> TradeRoute:
         to_system=to_system,
         source_buy_commodity=buy_commodities[0] if buy_commodities else None,
         target_buy_commodity=buy_commodities[-1] if len(buy_commodities) > 1 else None,
+        distance_from_system=fields.get("DISTANCE"),
         route_distance=fields.get("ROUTE DISTANCE"),
         profit_per_unit=fields.get("PROFIT PER UNIT"),
         profit_per_trip=fields.get("PROFIT PER TRIP"),
