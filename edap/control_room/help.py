@@ -98,6 +98,18 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
         aliases=("clear",),
     ),
     CommandHelp(
+        name="set_pid",
+        usage="set_pid [pid|process-name|foreground]",
+        summary="Keep using the foreground app, or target a specific process id for input dispatch.",
+        detail="With no argument, control room tries to find `EliteDangerous64.exe` automatically and targets that pid. `set_pid <number>` stores an explicit pid. `set_pid <process-name>` auto-detects by executable name. `set_pid foreground` clears any pid or hwnd target and returns to normal foreground input.",
+    ),
+    CommandHelp(
+        name="set_hwnd",
+        usage="set_hwnd [hwnd|process-name|foreground]",
+        summary="On Windows, target a specific top-level game window handle for input dispatch.",
+        detail="With no argument, control room tries to find the main window for `EliteDangerous64.exe` automatically. `set_hwnd <number>` stores an explicit hwnd, and hex forms like `0x123456` are accepted. `set_hwnd <process-name>` auto-detects by executable name. `set_hwnd foreground` clears any pid or hwnd target and returns to normal foreground input. On macOS this command reports that hwnd targeting is unsupported.",
+    ),
+    CommandHelp(
         name="commands",
         usage="commands",
         summary="List every supported control-room command.",

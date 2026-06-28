@@ -12,6 +12,9 @@ class FakeBackend:
     def post(self, keycode: int, down: bool, flags: int, unicode_char: str | None) -> None:
         self.events.append(("down" if down else "up", keycode, flags, unicode_char))
 
+    def post_to_pid(self, pid: int, keycode: int, down: bool, flags: int, unicode_char: str | None) -> None:
+        self.events.append(("pid", pid, "down" if down else "up", keycode, flags, unicode_char))
+
     def sleep(self, duration: float) -> None:
         self.events.append(("sleep", duration))
 
@@ -19,7 +22,12 @@ class FakeBackend:
 def _build() -> tuple[MacOSInputController, FakeBackend]:
     backend = FakeBackend()
     return (
-        MacOSInputController(poster=backend.post, sleeper=backend.sleep),
+        MacOSInputController(
+            poster=backend.post,
+            pid_poster=backend.post_to_pid,
+            pid_finder=lambda process_name: 4242 if process_name == "EliteDangerous64.exe" else None,
+            sleeper=backend.sleep,
+        ),
         backend,
     )
 
@@ -178,3 +186,26 @@ class MacOSInputControllerTests(unittest.TestCase):
                 ("up", KEY_CODES["1"], 0, "1"),
             ],
         )
+
+    def test_set_pid_target_routes_events_via_pid_poster(self) -> None:
+        controller, backend = _build()
+
+        state = controller.set_pid_target(4242)
+        controller.tap_key("a")
+
+        self.assertEqual(state.summary(), "pid 4242")
+        self.assertEqual(
+            backend.events,
+            [
+                ("pid", 4242, "down", KEY_CODES["a"], 0, "a"),
+                ("pid", 4242, "up", KEY_CODES["a"], 0, "a"),
+            ],
+        )
+
+    def test_auto_target_uses_default_process_name(self) -> None:
+        controller, _ = _build()
+
+        state = controller.auto_target()
+
+        self.assertEqual(state.pid, 4242)
+        self.assertEqual(state.process_name, "EliteDangerous64.exe")

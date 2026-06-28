@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
+from subprocess import run
 from time import sleep as _default_sleep
 
 try:
@@ -8,6 +10,7 @@ try:
         CGEventCreateKeyboardEvent,
         CGEventKeyboardSetUnicodeString,
         CGEventPost,
+        CGEventPostToPid,
         CGEventSetFlags,
         CGEventSourceCreate,
         kCGEventFlagMaskAlternate,
@@ -21,6 +24,7 @@ except ImportError:  # pragma: no cover - exercised implicitly on non-macOS CI r
     CGEventCreateKeyboardEvent = None
     CGEventKeyboardSetUnicodeString = None
     CGEventPost = None
+    CGEventPostToPid = None
     CGEventSetFlags = None
     CGEventSourceCreate = None
     kCGEventFlagMaskAlternate = 1 << 19
@@ -30,7 +34,11 @@ except ImportError:  # pragma: no cover - exercised implicitly on non-macOS CI r
     kCGEventSourceStateHIDSystemState = None
     kCGHIDEventTap = None
 
-from .base import InputController
+from .base import (
+    DEFAULT_AUTO_TARGET_PROCESS_NAME,
+    InputController,
+    InputTargetState,
+)
 
 
 KEY_CODES: dict[str, int] = {
@@ -122,7 +130,9 @@ MODIFIER_KEYCODES: dict[str, int] = {
 
 
 PosterFn = Callable[[int, bool, int, "str | None"], None]
+PidPosterFn = Callable[[int, int, bool, int, "str | None"], None]
 SleeperFn = Callable[[float], None]
+PidFinderFn = Callable[[str], int | None]
 
 
 def _make_default_poster() -> PosterFn:
@@ -141,35 +151,80 @@ def _make_default_poster() -> PosterFn:
     return poster
 
 
+def _make_default_pid_poster() -> PidPosterFn:
+    if CGEventSourceCreate is None or CGEventCreateKeyboardEvent is None or CGEventPostToPid is None:
+        raise RuntimeError("Quartz pid-targeted posting is unavailable on this macOS runtime.")
+    source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState)
+
+    def poster(pid: int, keycode: int, down: bool, flags: int, unicode_char: str | None) -> None:
+        event = CGEventCreateKeyboardEvent(source, keycode, down)
+        if flags and CGEventSetFlags is not None:
+            CGEventSetFlags(event, flags)
+        if unicode_char is not None and CGEventKeyboardSetUnicodeString is not None:
+            CGEventKeyboardSetUnicodeString(event, 1, unicode_char)
+        CGEventPostToPid(pid, event)
+
+    return poster
+
+
+def _find_pid_by_process_name(process_name: str) -> int | None:
+    result = run(
+        ["ps", "-axo", "pid=,comm="],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    wanted = process_name.strip().lower()
+    for line in result.stdout.splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) != 2:
+            continue
+        pid_raw, command = parts
+        if Path(command).name.lower() != wanted:
+            continue
+        try:
+            return int(pid_raw)
+        except ValueError:
+            continue
+    return None
+
+
 class MacOSInputController(InputController):
     def __init__(
         self,
         *,
         poster: PosterFn | None = None,
+        pid_poster: PidPosterFn | None = None,
+        pid_finder: PidFinderFn | None = None,
         sleeper: SleeperFn | None = None,
     ) -> None:
         self._poster = poster if poster is not None else _make_default_poster()
+        self._pid_poster = pid_poster if pid_poster is not None else _make_default_pid_poster()
+        self._pid_finder = pid_finder if pid_finder is not None else _find_pid_by_process_name
         self._sleeper = sleeper if sleeper is not None else _default_sleep
+        self._target = InputTargetState(platform="macos", mode="foreground")
 
     def press_key(self, key: str, modifier: str | None = None) -> None:
         keycode, flags, unicode_char = self._resolve(key, modifier)
-        self._poster(keycode, True, flags, unicode_char)
+        self._dispatch_event(keycode, True, flags, unicode_char)
 
     def release_key(self, key: str, modifier: str | None = None) -> None:
         keycode, flags, unicode_char = self._resolve(key, modifier)
-        self._poster(keycode, False, flags, unicode_char)
+        self._dispatch_event(keycode, False, flags, unicode_char)
 
     def tap_key(self, key: str, modifier: str | None = None, hold_s: float = 0.0) -> None:
         keycode, flags, unicode_char = self._resolve(key, modifier)
         mod_keycode = MODIFIER_KEYCODES.get(modifier.lower()) if modifier else None
         if mod_keycode is not None:
-            self._poster(mod_keycode, True, flags, None)
-        self._poster(keycode, True, flags, unicode_char)
+            self._dispatch_event(mod_keycode, True, flags, None)
+        self._dispatch_event(keycode, True, flags, unicode_char)
         if hold_s > 0:
             self._sleeper(hold_s)
-        self._poster(keycode, False, flags, unicode_char)
+        self._dispatch_event(keycode, False, flags, unicode_char)
         if mod_keycode is not None:
-            self._poster(mod_keycode, False, 0, None)
+            self._dispatch_event(mod_keycode, False, 0, None)
 
     def type_text(self, text: str, char_delay_s: float = 0.05) -> None:
         _SPECIAL: dict[str, str] = {"\n": "enter", "\r": "return", "\t": "tab", "\x1b": "esc"}
@@ -189,8 +244,51 @@ class MacOSInputController(InputController):
                 self.tap_key(char.lower(), modifier="left_shift" if char.isupper() else None)
             elif char in _SHIFTED:
                 self.tap_key(_SHIFTED[char], modifier="left_shift")
+            else:
+                raise ValueError(f"Unsupported character for macOS input: {char!r}")
             if char_delay_s > 0:
                 self._sleeper(char_delay_s)
+
+    def current_target(self) -> InputTargetState:
+        return self._target
+
+    def set_foreground_target(self) -> InputTargetState:
+        self._target = InputTargetState(platform="macos", mode="foreground")
+        return self._target
+
+    def set_pid_target(self, pid: int) -> InputTargetState:
+        if pid <= 0:
+            raise ValueError("pid must be a positive integer")
+        self._target = InputTargetState(platform="macos", mode="pid", pid=pid)
+        return self._target
+
+    def auto_target(
+        self,
+        process_name: str = DEFAULT_AUTO_TARGET_PROCESS_NAME,
+        *,
+        prefer: str = "pid",
+    ) -> InputTargetState:
+        if prefer != "pid":
+            raise RuntimeError("macOS targeted input supports pid targeting, not hwnd targeting.")
+        pid = self._pid_finder(process_name)
+        if pid is None:
+            raise RuntimeError(f"No process matched {process_name!r}.")
+        self._target = InputTargetState(
+            platform="macos",
+            mode="pid",
+            pid=pid,
+            process_name=process_name,
+        )
+        return self._target
+
+    def _dispatch_event(self, keycode: int, down: bool, flags: int, unicode_char: str | None) -> None:
+        target = self._target
+        if target.mode == "pid":
+            if target.pid is None:
+                raise RuntimeError("Targeted macOS input requires a pid.")
+            self._pid_poster(target.pid, keycode, down, flags, unicode_char)
+            return
+        self._poster(keycode, down, flags, unicode_char)
 
     def _resolve(self, key: str, modifier: str | None) -> tuple[int, int, str | None]:
         normalized = key.lower()

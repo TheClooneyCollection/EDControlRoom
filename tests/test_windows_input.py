@@ -12,6 +12,9 @@ class FakeBackend:
     def send(self, scan_code: int, down: bool) -> None:
         self.events.append(("down" if down else "up", scan_code))
 
+    def send_to_hwnd(self, hwnd: int, scan_code: int, down: bool) -> None:
+        self.events.append(("hwnd", hwnd, "down" if down else "up", scan_code))
+
     def sleep(self, duration: float) -> None:
         self.events.append(("sleep", duration))
 
@@ -19,7 +22,13 @@ class FakeBackend:
 def _build() -> tuple[WindowsInputController, FakeBackend]:
     backend = FakeBackend()
     return (
-        WindowsInputController(sender=backend.send, sleeper=backend.sleep),
+        WindowsInputController(
+            sender=backend.send,
+            window_sender=backend.send_to_hwnd,
+            pid_finder=lambda process_name: 5150 if process_name == "EliteDangerous64.exe" else None,
+            pid_window_finder=lambda pid: 0xBEEF if pid == 5150 else None,
+            sleeper=backend.sleep,
+        ),
         backend,
     )
 
@@ -122,3 +131,41 @@ class WindowsInputControllerTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             controller.type_text("\u00e9", char_delay_s=0.0)
+
+    def test_set_hwnd_target_routes_events_via_window_sender(self) -> None:
+        controller, backend = _build()
+
+        state = controller.set_hwnd_target(0x1234)
+        controller.tap_key("a")
+
+        self.assertEqual(state.summary(), "hwnd 0x1234")
+        self.assertEqual(
+            backend.events,
+            [
+                ("hwnd", 0x1234, "down", KEY_CODES["a"]),
+                ("hwnd", 0x1234, "up", KEY_CODES["a"]),
+            ],
+        )
+
+    def test_set_pid_target_resolves_window_for_dispatch(self) -> None:
+        controller, backend = _build()
+
+        controller.set_pid_target(5150)
+        controller.tap_key("a")
+
+        self.assertEqual(
+            backend.events,
+            [
+                ("hwnd", 0xBEEF, "down", KEY_CODES["a"]),
+                ("hwnd", 0xBEEF, "up", KEY_CODES["a"]),
+            ],
+        )
+
+    def test_auto_target_prefers_hwnd_when_requested(self) -> None:
+        controller, _ = _build()
+
+        state = controller.auto_target(prefer="hwnd")
+
+        self.assertEqual(state.pid, 5150)
+        self.assertEqual(state.hwnd, 0xBEEF)
+        self.assertEqual(state.process_name, "EliteDangerous64.exe")

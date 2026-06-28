@@ -11,6 +11,7 @@ from edap.control_room.help import CONTROL_ROOM_COMMAND_INDEX, CONTROL_ROOM_COMM
 from edap.control_room.history import now_iso
 from edap.control_room.interfaces import CommandHost
 from edap.control_room_state import CommandHistoryEntry
+from edap.platform.input.base import DEFAULT_AUTO_TARGET_PROCESS_NAME
 
 def dispatch(app: CommandHost, raw: str, *, skip_delay_override: bool | None = None) -> None:
     app._log(f"[dim]Command: {escape(raw)}[/]")
@@ -95,6 +96,16 @@ def dispatch(app: CommandHost, raw: str, *, skip_delay_override: bool | None = N
             CommandHistoryEntry(raw=raw, command="new_session", timestamp=now_iso())
         )
         cmd_new_session(app)
+    elif verb == "set_pid":
+        app._record_history_entry(
+            CommandHistoryEntry(raw=raw, command="set_pid", params={"value": raw_rest}, timestamp=now_iso())
+        )
+        cmd_set_pid(app, raw_rest)
+    elif verb == "set_hwnd":
+        app._record_history_entry(
+            CommandHistoryEntry(raw=raw, command="set_hwnd", params={"value": raw_rest}, timestamp=now_iso())
+        )
+        cmd_set_hwnd(app, raw_rest)
     elif verb == "commands":
         app._record_history_entry(CommandHistoryEntry(raw=raw, command="commands", timestamp=now_iso()))
         cmd_commands(app)
@@ -225,6 +236,44 @@ def cmd_instant(app: CommandHost, rest: str) -> None:
     app._save_saved_state()
 
 
+def cmd_set_pid(app: CommandHost, rest: str) -> None:
+    value = rest.strip()
+    try:
+        if _is_foreground_target_value(value):
+            summary = app._set_foreground_input_target()
+        elif value:
+            parsed_pid = _parse_int_target(value)
+            if parsed_pid is not None:
+                summary = app._set_pid_input_target(parsed_pid)
+            else:
+                summary = app._auto_target_input(value, prefer="pid")
+        else:
+            summary = app._auto_target_input(DEFAULT_AUTO_TARGET_PROCESS_NAME, prefer="pid")
+    except (RuntimeError, ValueError) as exc:
+        app._log(f"[red]{escape(str(exc))}[/]")
+        return
+    app._log(f"[dim]Input target: {escape(summary)}[/]")
+
+
+def cmd_set_hwnd(app: CommandHost, rest: str) -> None:
+    value = rest.strip()
+    try:
+        if _is_foreground_target_value(value):
+            summary = app._set_foreground_input_target()
+        elif value:
+            parsed_hwnd = _parse_int_target(value)
+            if parsed_hwnd is not None:
+                summary = app._set_hwnd_input_target(parsed_hwnd)
+            else:
+                summary = app._auto_target_input(value, prefer="hwnd")
+        else:
+            summary = app._auto_target_input(DEFAULT_AUTO_TARGET_PROCESS_NAME, prefer="hwnd")
+    except (RuntimeError, ValueError) as exc:
+        app._log(f"[red]{escape(str(exc))}[/]")
+        return
+    app._log(f"[dim]Input target: {escape(summary)}[/]")
+
+
 def cmd_market(app: CommandHost, rest: str) -> None:
     rest_lower = rest.lower()
     if rest_lower == "lock":
@@ -253,3 +302,17 @@ def cmd_market(app: CommandHost, rest: str) -> None:
 def cmd_new_session(app: CommandHost) -> None:
     app._clear_session_stats()
     app._log("[dim]Started a new persisted haul session.[/]")
+
+
+def _is_foreground_target_value(value: str) -> bool:
+    return value.lower() in {"foreground", "clear", "off", "none"}
+
+
+def _parse_int_target(value: str) -> int | None:
+    try:
+        parsed = int(value, 0)
+    except ValueError:
+        return None
+    if parsed <= 0:
+        raise ValueError("Target identifiers must be positive integers.")
+    return parsed

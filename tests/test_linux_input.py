@@ -94,3 +94,14 @@ class LinuxInputControllerTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             controller.tap_key("a", modifier="weird")
+
+    def test_current_target_defaults_to_foreground(self) -> None:
+        controller, _ = _build()
+
+        self.assertEqual(controller.current_target().summary(), "foreground window")
+
+    def test_pid_targeting_is_not_supported(self) -> None:
+        controller, _ = _build()
+
+        with self.assertRaisesRegex(RuntimeError, "pid-targeted"):
+            controller.set_pid_target(1234)

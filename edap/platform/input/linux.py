@@ -5,7 +5,7 @@ from shutil import which
 from subprocess import CalledProcessError, run
 from time import sleep as _default_sleep
 
-from .base import InputController
+from .base import InputController, InputTargetState
 
 
 KEY_NAMES: dict[str, str] = {
@@ -163,6 +163,7 @@ class LinuxInputController(InputController):
     ) -> None:
         self._runner = runner if runner is not None else _make_default_runner()
         self._sleeper = sleeper if sleeper is not None else _default_sleep
+        self._target = InputTargetState(platform="linux", mode="foreground")
 
     def press_key(self, key: str, modifier: str | None = None) -> None:
         key_name, modifier_name = self._resolve(key, modifier)
@@ -190,6 +191,13 @@ class LinuxInputController(InputController):
     def type_text(self, text: str, char_delay_s: float = 0.05) -> None:
         delay_ms = max(0, round(char_delay_s * 1000))
         self._runner(["xdotool", "type", "--delay", str(delay_ms), text])
+
+    def current_target(self) -> InputTargetState:
+        return self._target
+
+    def set_foreground_target(self) -> InputTargetState:
+        self._target = InputTargetState(platform="linux", mode="foreground")
+        return self._target
 
     def _resolve(self, key: str, modifier: str | None) -> tuple[str, str | None]:
         normalized = key.lower()

@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `108`
-- Latest generated iteration number: `241`
+- Generated iteration count: `109`
+- Latest generated iteration number: `242`
 
 ## Iteration 134
 
@@ -3009,6 +3009,34 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - Live-check the panel in both embedded and `control_room connect` sessions to confirm the new compact billion format reads well during long-haul runs.
 
 ## Iteration 241
+
+- When: `2026-06-28 18:47`
+- Area: `control-room`
+- Title: `targeted-input-targeting`
+- Source: [2026-06-28-18-47_control-room_targeted-input-targeting.md](iteration-logs/2026-06-28-18-47_control-room_targeted-input-targeting.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `targeted-input-targeting`
+- Started: `2026-06-28 18:47`
+
+## Summary
+
+- Added foreground-by-default targeted-input controls so operators can switch Control Room between normal foreground dispatch and explicit pid/hwnd targeting from the command bar.
+
+## Changes
+
+- Extended the shared input-controller interface with target-state reporting plus `set_foreground`, `set_pid`, `set_hwnd`, and auto-detect hooks keyed by `EliteDangerous64.exe`.
+- Implemented macOS pid-targeted Quartz posting and Windows hwnd/pid-targeted message dispatch while keeping the existing foreground path as the default on both platforms.
+- Added Control Room `set_pid` and `set_hwnd` commands, startup/status logging, command/help discoverability updates, and regression coverage for the new backend and command flows.
+
+## Follow-ups
+
+- Live-validate the macOS CrossOver pid-targeted path against a backgrounded Elite window.
+- Live-validate the Windows hwnd/pid path against native Elite to see whether `PostMessageW` is sufficient or whether another fallback is needed.
+
+## Iteration 242
 
 - When: `2026-06-28 18:48`
 - Area: `control-room`

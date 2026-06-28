@@ -143,7 +143,7 @@ _STARTUP_BINDING_WARNING_IGNORED_ACTIONS = frozenset({
     "YawRightButton",
 })
 
-_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul load | haul search [system] | haul search url <url> | haul route <n> | multi_leg_haul <route> | dest <system> | home | market ... | instant | new_session | reload | q"
+_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul load | haul search [system] | haul search url <url> | haul route <n> | multi_leg_haul <route> | dest <system> | home | set_pid | set_hwnd | market ... | instant | new_session | reload | q"
 _ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS = 10.0
 _JOURNAL_ARTIFACT_LOG_PATH = Path("artifacts/control-room.log")
 _DEBUG_ARTIFACT_LOG_PATH = Path("artifacts/control-room-debug.log")
@@ -844,6 +844,43 @@ class ControlRoomApp(App[None]):
     def _log_startup_modes(self) -> None:
         state = "on" if self._instant_mode else "off"
         self._log(f"[dim]Instant mode {state} — control with: instant[/]")
+        if self._ctx.input_controller is not None:
+            self._log(
+                f"[dim]Input target {escape(self._describe_input_target())} "
+                "— control with: set_pid | set_hwnd[/]"
+            )
+
+    def _describe_input_target(self) -> str:
+        controller = self._ctx.input_controller
+        if controller is None:
+            return "unavailable"
+        return controller.current_target().summary()
+
+    def _set_foreground_input_target(self) -> str:
+        controller = self._require_input_controller()
+        target = controller.set_foreground_target()
+        return target.summary()
+
+    def _set_pid_input_target(self, pid: int) -> str:
+        controller = self._require_input_controller()
+        target = controller.set_pid_target(pid)
+        return target.summary()
+
+    def _set_hwnd_input_target(self, hwnd: int) -> str:
+        controller = self._require_input_controller()
+        target = controller.set_hwnd_target(hwnd)
+        return target.summary()
+
+    def _auto_target_input(self, process_name: str, *, prefer: str) -> str:
+        controller = self._require_input_controller()
+        target = controller.auto_target(process_name, prefer=prefer)
+        return target.summary()
+
+    def _require_input_controller(self):
+        controller = self._ctx.input_controller
+        if controller is None:
+            raise RuntimeError("No local input backend is available for this runtime.")
+        return controller
 
     def _announce_startup_greeting(self) -> None:
         self._announce_tts(AnnouncementId.STARTUP_GREETING)

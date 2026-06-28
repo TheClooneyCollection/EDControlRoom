@@ -55,6 +55,7 @@ from edap.tts import AnnouncementId, NullSpeechBackend, TTSAnnouncer
 from edap.control_room.workers import PendingRoutineCancelled, RoutineCancelled, run_routine_thread
 from edap.haul_config import DEFAULT_HAUL_CONFIG_PATH
 from edap.inara.trade_routes import TradeRoute, TradeRouteSearchResult
+from edap.platform.input.base import InputTargetState
 from edap.version import GitHubRelease
 from rich.text import Text
 
@@ -120,6 +121,7 @@ def _make_context(
     activity_log_max_lines: int = 2000,
     config_path: Path | None = None,
     used_example_config_fallback: bool = False,
+    input_controller=None,
 ) -> RuntimeContext:
     resolved = ResolvedPath(
         configured={"path": str(journal_dir), "status": "ok", "reason": "test journal dir"},
@@ -134,7 +136,7 @@ def _make_context(
         game_paths=None,
         journal=resolved,
         bindings=resolved,
-        input_controller=None,
+        input_controller=input_controller,
         screen_capture=None,
         binding_lookup=None,
         config_path=config_path or journal_dir / "config.toml",
@@ -148,6 +150,31 @@ class _FakeWorker:
 
     def cancel(self) -> None:
         self.cancelled = True
+
+
+class _InputControllerStub:
+    def __init__(self) -> None:
+        self._target = InputTargetState(platform="macos", mode="foreground")
+
+    def current_target(self) -> InputTargetState:
+        return self._target
+
+    def set_foreground_target(self) -> InputTargetState:
+        self._target = InputTargetState(platform="macos", mode="foreground")
+        return self._target
+
+    def set_pid_target(self, pid: int) -> InputTargetState:
+        self._target = InputTargetState(platform="macos", mode="pid", pid=pid)
+        return self._target
+
+    def set_hwnd_target(self, hwnd: int) -> InputTargetState:
+        raise RuntimeError("macOS does not support hwnd-targeted input.")
+
+    def auto_target(self, process_name: str = "EliteDangerous64.exe", *, prefer: str = "pid") -> InputTargetState:
+        if prefer == "hwnd":
+            raise RuntimeError("macOS does not support hwnd-targeted input.")
+        self._target = InputTargetState(platform="macos", mode="pid", pid=4242, process_name=process_name)
+        return self._target
 
 
 class _FakeVersionSource:
@@ -2683,6 +2710,32 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertFalse(self.app._saved_state.instant_mode)
         self.assertIn("Instant mode off", "\n".join(self.app.logged))
 
+    def test_set_pid_auto_targets_default_process_name(self) -> None:
+        self.app = _HarnessApp(_make_context(Path(self.tmpdir.name), input_controller=_InputControllerStub()))
+
+        self.app._dispatch_command("set_pid")
+
+        self.assertIn("Input target: pid 4242 (EliteDangerous64.exe)", "\n".join(self.app.logged))
+        entry = self._last_history()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.command, "set_pid")
+
+    def test_set_pid_foreground_clears_target(self) -> None:
+        controller = _InputControllerStub()
+        controller.set_pid_target(999)
+        self.app = _HarnessApp(_make_context(Path(self.tmpdir.name), input_controller=controller))
+
+        self.app._dispatch_command("set_pid foreground")
+
+        self.assertIn("Input target: foreground window", "\n".join(self.app.logged))
+
+    def test_set_hwnd_reports_platform_unsupported_error(self) -> None:
+        self.app = _HarnessApp(_make_context(Path(self.tmpdir.name), input_controller=_InputControllerStub()))
+
+        self.app._dispatch_command("set_hwnd")
+
+        self.assertIn("does not support hwnd-targeted input", "\n".join(self.app.logged))
+
     def test_load_saved_state_restores_persisted_instant_mode(self) -> None:
         self.app._instant_mode = True
         self.app._save_saved_state()
@@ -2785,7 +2838,12 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertEqual(self.app._haul_stats.session_started_at, 300.0)
         entry = self._last_history()
         self.assertEqual(entry.command, "new_session")
+    def test_log_startup_modes_reports_input_target_when_backend_exists(self) -> None:
+        self.app = _HarnessApp(_make_context(Path(self.tmpdir.name), input_controller=_InputControllerStub()))
 
+        self.app._log_startup_modes()
+
+        self.assertIn("Input target foreground window — control with: set_pid | set_hwnd", "\n".join(self.app.logged))
     def test_announce_startup_greeting_emits_tts_announcement(self) -> None:
         self.app._tts = _FakeTTS()
 
