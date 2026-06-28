@@ -330,6 +330,12 @@ def trade_route_detail_markup(
     searched_at: str,
     route_count: int,
 ) -> str:
+    def endpoint_text(label: str, station: str, system: str, station_distance: str | None) -> str:
+        station_label = escape(station)
+        if station_distance:
+            station_label += f" [dim]({escape(station_distance)})[/]"
+        return f"[bold]{label}[/] {station_label} [dim]({escape(system)})[/]"
+
     def join_columns(left: str | None, right: str | None) -> str | None:
         parts = [part for part in (left, right) if part]
         if not parts:
@@ -344,8 +350,8 @@ def trade_route_detail_markup(
     lines = [header]
     for line in (
         join_columns(
-            f"[bold]From[/] {escape(route.from_station)} [dim]({escape(route.from_system)})[/]",
-            f"[bold]To[/] {escape(route.to_station)} [dim]({escape(route.to_system)})[/]",
+            endpoint_text("From", route.from_station, route.from_system, route.from_station_distance),
+            endpoint_text("To", route.to_station, route.to_system, route.to_station_distance),
         ),
         join_columns(
             (
@@ -356,18 +362,6 @@ def trade_route_detail_markup(
             (
                 f"[bold]Return[/] [cyan]{escape(route.target_buy_commodity)}[/]"
                 if route.target_buy_commodity
-                else None
-            ),
-        ),
-        join_columns(
-            (
-                f"[bold]From station[/] {escape(route.from_station_distance)}"
-                if route.from_station_distance
-                else None
-            ),
-            (
-                f"[bold]To station[/] {escape(route.to_station_distance)}"
-                if route.to_station_distance
                 else None
             ),
         ),
