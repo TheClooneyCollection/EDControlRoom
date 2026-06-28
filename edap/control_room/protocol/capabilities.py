@@ -14,6 +14,7 @@ SUPPORTED_COMMAND_MESSAGE_TYPES = [
     "command.request_snapshot",
     "command.request_active_operator",
     "command.submit_input",
+    "command.load_trade_route",
     "command.open_replay_browser",
     "command.close_replay_browser",
     "command.set_replay_filter",

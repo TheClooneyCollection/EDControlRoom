@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, replace
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 from edap.config import (
     AppConfig,
@@ -22,6 +23,7 @@ from edap.control_room.client.backend import (
     _validate_remote_observer_capabilities,
 )
 from edap.control_room.client.target import ObserverServerTarget, parse_observer_server_target
+from edap.control_room.models import TradeRoutePickerState, TradeRoutesData
 from edap.control_room.protocol import (
     ACCESS_TOKEN_QUERY_PARAMETER,
     ActivityLogAppendedEvent,
@@ -33,6 +35,7 @@ from edap.control_room.protocol import (
     build_remote_observer_websocket_connect_info,
     event_from_message,
 )
+from edap.inara.trade_routes import TradeRoute, TradeRouteSearchResult
 from edap.control_room.protocol.snapshot import (
     ActivityLogEntry,
     ActiveOperatorSnapshot,
@@ -50,6 +53,91 @@ from edap.control_room.protocol.snapshot import (
     UiStateSnapshot,
 )
 from edap.runtime import ResolvedPath, RuntimeContext
+
+
+class _WidgetStyles:
+    def __init__(self) -> None:
+        self.display = "block"
+
+
+class _FakeInputWidget:
+    def __init__(self) -> None:
+        self.disabled = False
+        self.placeholder = ""
+        self.value = ""
+        self.cursor_position = 0
+
+
+class _FakeStaticWidget:
+    def __init__(self) -> None:
+        self.updated = None
+        self.styles = _WidgetStyles()
+
+    def update(self, value) -> None:
+        self.updated = value
+
+
+class _FakeOptionListWidget:
+    def __init__(self) -> None:
+        self.highlighted = 0
+        self.options: list[object] = []
+
+    def clear_options(self) -> None:
+        self.options = []
+
+    def add_options(self, options: list[object]) -> None:
+        self.options.extend(options)
+
+
+class _FakeActivityWidget:
+    def __init__(self) -> None:
+        self.styles = _WidgetStyles()
+        self.border_title = "ACTIVITY"
+        self.auto_scroll = True
+
+    @property
+    def auto_follow_paused(self) -> bool:
+        return not self.auto_scroll
+
+    def write(self, *_args, **_kwargs) -> None:
+        return None
+
+
+class _FakeContainerWidget:
+    def __init__(self) -> None:
+        self.styles = _WidgetStyles()
+        self.border_title = ""
+
+
+def _bind_observer_widgets(app: ObserverControlRoomApp, command_input: _FakeInputWidget) -> None:
+    activity = _FakeActivityWidget()
+    trade_route_list = _FakeOptionListWidget()
+    trade_route_help = _FakeStaticWidget()
+    trade_route_detail = _FakeStaticWidget()
+    trade_route_picker = _FakeContainerWidget()
+    main = _FakeContainerWidget()
+    resume_detail = _FakeStaticWidget()
+    resume_list = _FakeOptionListWidget()
+    resume_browser = _FakeContainerWidget()
+    resume_help = _FakeStaticWidget()
+
+    def _query_one(selector, _type=None):
+        widgets = {
+            "#cmd": command_input,
+            "#activity": activity,
+            "#trade-route-list": trade_route_list,
+            "#trade-route-help": trade_route_help,
+            "#trade-route-detail": trade_route_detail,
+            "#trade-route-picker": trade_route_picker,
+            "#main": main,
+            "#resume-detail": resume_detail,
+            "#resume-list": resume_list,
+            "#resume-browser": resume_browser,
+            "#resume-help": resume_help,
+        }
+        return widgets[selector]
+
+    app.query_one = _query_one  # type: ignore[method-assign]
 
 
 def _make_observer_context() -> RuntimeContext:
@@ -258,17 +346,10 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertIsNone(app._market_path)
 
     def test_observer_app_refresh_remote_command_input_disables_observer_mode(self) -> None:
-        class _FakeInput:
-            def __init__(self) -> None:
-                self.disabled = False
-                self.placeholder = ""
-                self.value = ""
-                self.cursor_position = 0
-
         backend = self._backend()
         app = self._app(backend=backend)
-        command_input = _FakeInput()
-        app.query_one = lambda selector, _type=None: command_input  # type: ignore[method-assign]
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
 
         app._apply_view_snapshot_state()
         app._refresh_remote_command_input()
@@ -277,13 +358,6 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(command_input.placeholder, "observer mode - read only")
 
     def test_observer_app_applies_remote_replay_edit_prefill(self) -> None:
-        class _FakeInput:
-            def __init__(self) -> None:
-                self.disabled = True
-                self.placeholder = ""
-                self.value = ""
-                self.cursor_position = 0
-
         updated_snapshot = replace(
             _snapshot(),
             session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
@@ -295,8 +369,9 @@ class ControlRoomClientTests(unittest.TestCase):
         )
         backend = self._backend(initial_snapshot=updated_snapshot)
         app = self._app(backend=backend)
-        command_input = _FakeInput()
-        app.query_one = lambda selector, _type=None: command_input  # type: ignore[method-assign]
+        command_input = _FakeInputWidget()
+        command_input.disabled = True
+        _bind_observer_widgets(app, command_input)
 
         app._apply_view_snapshot_state()
         app._refresh_remote_command_input()
@@ -306,7 +381,7 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(command_input.value, "jump")
         self.assertEqual(command_input.cursor_position, 4)
 
-    def test_observer_app_applies_remote_trade_routes_snapshot(self) -> None:
+    def test_observer_app_ignores_remote_trade_routes_snapshot(self) -> None:
         updated_snapshot = replace(
             _snapshot(),
             trade_routes=TradeRoutesSnapshot(
@@ -337,56 +412,131 @@ class ControlRoomClientTests(unittest.TestCase):
 
         app._apply_view_snapshot_state()
 
+        self.assertEqual(app._trade_routes.system_name, "")
+        self.assertEqual(app._trade_routes.routes, [])
+        self.assertFalse(app._trade_route_picker_open)
+        self.assertIsNone(app._selected_trade_route_index)
+
+    def test_observer_app_keeps_local_trade_routes_across_remote_snapshot_updates(self) -> None:
+        backend = self._backend()
+        app = self._app(backend=backend)
+        app._local_trade_routes = TradeRoutesData(
+            system_name="Praea Euq AK-A d25",
+            query_url="https://inara.cz/elite/market-traderoutes/?ps1=Praea+Euq+AK-A+d25",
+            searched_at="2026-06-28T21:00:00Z",
+            routes=[
+                TradeRoute(
+                    index=1,
+                    from_station="Savitskaya Orbital",
+                    from_system="TSONGORIS",
+                    to_station="Scully-Power Station",
+                    to_system="IX",
+                    source_buy_commodity="Silver",
+                )
+            ],
+        )
+        app._local_trade_route_picker = TradeRoutePickerState(
+            open=True,
+            selected_route_index=1,
+            presented_query_url=app._local_trade_routes.query_url,
+            presented_searched_at=app._local_trade_routes.searched_at,
+        )
+
+        app._apply_view_snapshot_state()
+        self.assertEqual(app._trade_routes.system_name, "Praea Euq AK-A d25")
+
+        app._view_snapshot = replace(
+            _snapshot(),
+            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+        )
+        app._apply_view_snapshot_state()
+
         self.assertEqual(app._trade_routes.system_name, "Praea Euq AK-A d25")
         self.assertEqual(len(app._trade_routes.routes), 1)
-        self.assertEqual(app._trade_routes.routes[0].from_station, "Savitskaya Orbital")
-        self.assertEqual(app._trade_routes.routes[0].source_buy_commodity, "Silver")
-        self.assertEqual(app._trade_routes.routes[0].from_station_distance, "82 Ls")
-        self.assertEqual(app._trade_routes.routes[0].to_station_distance, "5 Ls")
-        self.assertEqual(app._trade_routes.routes[0].distance_from_system, "~167 Ly")
         self.assertTrue(app._trade_route_picker_open)
         self.assertEqual(app._selected_trade_route_index, 1)
 
-    def test_observer_app_opens_trade_route_picker_when_loading_completes_same_second(self) -> None:
-        loading_snapshot = replace(
-            _snapshot(),
-            trade_routes=TradeRoutesSnapshot(
-                system_name="Praea Euq AK-A d25",
-                query_url="https://inara.cz/elite/market-traderoutes/?ps1=Praea+Euq+AK-A+d25",
-                searched_at="2026-06-27T18:20:00Z",
-                loading=True,
-                routes=[],
-            ),
+    def test_observer_app_handles_haul_search_locally(self) -> None:
+        backend = self._backend(
+            initial_snapshot=replace(
+                _snapshot(),
+                session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+            )
         )
-        loaded_snapshot = replace(
-            loading_snapshot,
-            trade_routes=TradeRoutesSnapshot(
-                system_name="Praea Euq AK-A d25",
-                query_url="https://inara.cz/elite/market-traderoutes/?ps1=Praea+Euq+AK-A+d25",
-                searched_at="2026-06-27T18:20:00Z",
-                loading=False,
-                routes=[
-                    TradeRouteSnapshot(
-                        index=1,
-                        from_station="Savitskaya Orbital",
-                        from_system="TSONGORIS",
-                        to_station="Scully-Power Station",
-                        to_system="IX",
-                    )
-                ],
-            ),
-        )
-        backend = self._backend(initial_snapshot=loading_snapshot)
         app = self._app(backend=backend)
+        _bind_observer_widgets(app, _FakeInputWidget())
+        app._ship.system = "Praea Euq AK-A d25"
+        app._ship.cargo_capacity = 460
+        app._controls = object()
+        app._run_in_thread = lambda fn: fn()
+        app.call_from_thread = lambda callback, *args, **kwargs: callback(*args, **kwargs)  # type: ignore[method-assign]
 
-        app._apply_view_snapshot_state()
-        self.assertFalse(app._trade_route_picker_open)
+        result = TradeRouteSearchResult(
+            system_name="Praea Euq AK-A d25",
+            query_url="https://inara.cz/elite/market-traderoutes/?ps1=Praea+Euq+AK-A+d25",
+            searched_at="2026-06-28T22:00:00Z",
+            routes=(
+                TradeRoute(
+                    index=1,
+                    from_station="Savitskaya Orbital",
+                    from_system="TSONGORIS",
+                    to_station="Scully-Power Station",
+                    to_system="IX",
+                    source_buy_commodity="Silver",
+                ),
+            ),
+        )
 
-        app._view_snapshot = loaded_snapshot
-        app._apply_view_snapshot_state()
+        class _Submitted:
+            def __init__(self, value: str) -> None:
+                self.value = value
+                self.input = type("_Input", (), {"value": value})()
 
+        with patch("edap.control_room.client.connect.search_trade_routes", return_value=result):
+            app.on_input_submitted(_Submitted("haul search Praea Euq AK-A d25"))
+            self.assertEqual(app._prompt_state.haul_prompt_mode, "search")
+            self.assertEqual(app._haul_prompt_step, "search_edit")
+            app.on_input_submitted(_Submitted(app._prompt_state.command_input_value))
+
+        self.assertEqual(app._trade_routes.system_name, "Praea Euq AK-A d25")
+        self.assertEqual(len(app._trade_routes.routes), 1)
         self.assertTrue(app._trade_route_picker_open)
         self.assertEqual(app._selected_trade_route_index, 1)
+
+    def test_observer_app_submits_selected_local_trade_route_to_remote(self) -> None:
+        backend = self._backend(
+            initial_snapshot=replace(
+                _snapshot(),
+                session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+            )
+        )
+        app = self._app(backend=backend)
+        app._local_trade_routes = TradeRoutesData(
+            system_name="Praea Euq AK-A d25",
+            routes=[
+                TradeRoute(
+                    index=2,
+                    from_station="Savitskaya Orbital",
+                    from_system="TSONGORIS",
+                    to_station="Nyberg Vision",
+                    to_system="NJOKUJINUN",
+                    source_buy_commodity="Beryllium",
+                )
+            ],
+        )
+        app._local_trade_route_picker = TradeRoutePickerState(open=True, selected_route_index=2)
+        app._apply_view_snapshot_state()
+
+        app._load_selected_trade_route()
+
+        message = backend._outgoing_messages.get_nowait()
+        self.assertEqual(message["message_type"], "command.load_trade_route")
+        self.assertEqual(message["payload"]["route"]["from_station"], "Savitskaya Orbital")
+        self.assertEqual(message["payload"]["route"]["source_buy_commodity"], "Beryllium")
+        self.assertEqual(
+            message["payload"]["raw_command"],
+            "haul route Savitskaya Orbital -> Nyberg Vision",
+        )
 
     def test_parse_target_defaults_to_http_and_default_port(self) -> None:
         target = parse_observer_server_target("192.168.1.44")
@@ -507,6 +657,30 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(first["message_type"], "command.request_snapshot")
         self.assertEqual(second["message_type"], "command.submit_input")
         self.assertEqual(second["payload"]["raw_input"], "dock")
+
+    def test_remote_backend_enqueues_trade_route_load(self) -> None:
+        backend = self._backend()
+
+        backend.load_trade_route(
+            TradeRoute(
+                index=2,
+                from_station="Savitskaya Orbital",
+                from_system="TSONGORIS",
+                to_station="Nyberg Vision",
+                to_system="NJOKUJINUN",
+                source_buy_commodity="Beryllium",
+            ),
+            raw_command="haul route Savitskaya Orbital -> Nyberg Vision",
+        )
+
+        message = backend._outgoing_messages.get_nowait()
+        self.assertEqual(message["message_type"], "command.load_trade_route")
+        self.assertEqual(message["payload"]["route"]["index"], 2)
+        self.assertEqual(message["payload"]["route"]["to_system"], "NJOKUJINUN")
+        self.assertEqual(
+            message["payload"]["raw_command"],
+            "haul route Savitskaya Orbital -> Nyberg Vision",
+        )
 
     def test_remote_backend_enqueues_replay_commands(self) -> None:
         target = ObserverServerTarget(

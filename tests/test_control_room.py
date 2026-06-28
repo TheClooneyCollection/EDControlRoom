@@ -406,6 +406,9 @@ class _RemoteBackendStub:
     def handle_haul_confirm_prompt(self, value: str) -> None:
         return None
 
+    def load_trade_route(self, route, *, raw_command: str | None = None) -> None:
+        return None
+
     def open_replay_browser(self) -> None:
         return None
 

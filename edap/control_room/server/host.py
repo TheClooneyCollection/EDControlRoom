@@ -9,7 +9,9 @@ from edap.control_room import bootstrap as _bootstrap
 from edap.control_room.app import ControlRoomApp
 from edap.control_room.protocol import snapshot_from_app
 from edap.control_room.protocol.snapshot import ControlRoomSnapshot
+from edap.control_room.routines_haul import load_haul_from_trade_route_entry
 from edap.control_room.server.state import ControlRoomServerState
+from edap.inara.trade_routes import TradeRoute
 from edap.runtime import RuntimeContext
 from edap.state import JournalWatcher
 from edap.tts import NullSpeechBackend, TTSAnnouncer
@@ -175,6 +177,14 @@ class HeadlessControlRoomHost(ControlRoomApp):
         if skip_delay is True and not raw_input.startswith("!"):
             resolved = f"!{raw_input}"
         self._backend.submit_input(resolved)
+        self._publish_snapshot()
+
+    def load_trade_route(self, route: TradeRoute, *, raw_command: str | None = None) -> None:
+        load_haul_from_trade_route_entry(
+            self,
+            route=route,
+            raw_command=raw_command,
+        )
         self._publish_snapshot()
 
     def open_replay_browser(self) -> None:

@@ -12,6 +12,7 @@ from edap.control_room.models import TradeRoutesData
 from edap.control_room_state import CommandHistoryEntry
 from edap.haul_config import DEFAULT_HAUL_CONFIG_PATH, HaulConfigError, load_haul_config
 from edap.inara.trade_routes import (
+    TradeRoute,
     build_trade_routes_url,
     parse_trade_routes_url,
     search_trade_routes,
@@ -130,14 +131,29 @@ def load_haul_from_trade_route(
     if route is None:
         app._log(f"[red]No trade-route result #{route_index} is loaded.[/]")
         return
+    load_haul_from_trade_route_entry(
+        app,
+        route=route,
+        skip_delay=skip_delay,
+        raw_command=raw_command,
+    )
+
+
+def load_haul_from_trade_route_entry(
+    app: HaulHost,
+    *,
+    route: TradeRoute,
+    skip_delay: bool = False,
+    raw_command: str | None = None,
+) -> None:
     if not route.source_buy_commodity:
         app._log(
-            f"[red]Route #{route_index} does not expose a source buy commodity, so it cannot prefill haul.[/]"
+            "[red]The selected route does not expose a source buy commodity, so it cannot prefill haul.[/]"
         )
         return
 
     app._log(
-        f"Loading haul from route #{route_index}: [cyan]{escape(route.from_station)}[/] -> "
+        f"Loading haul from route [cyan]{escape(route.from_station)}[/] -> "
         f"[cyan]{escape(route.to_station)}[/]"
     )
     app._start_haul_prompt(

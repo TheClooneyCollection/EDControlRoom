@@ -22,6 +22,7 @@
         "command.request_snapshot",
         "command.request_active_operator",
         "command.submit_input",
+        "command.load_trade_route",
         "command.open_replay_browser",
         "command.close_replay_browser",
         "command.set_replay_filter",
@@ -83,6 +84,18 @@
       "then": {
         "properties": {
           "payload": { "$ref": "#/$defs/command_submit_input_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "command.load_trade_route" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/command_load_trade_route_payload" }
         }
       }
     },
@@ -314,6 +327,26 @@
       "properties": {
         "raw_input": { "type": "string" },
         "skip_delay": { "type": ["boolean", "null"] }
+      }
+    },
+    "command_load_trade_route_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route"],
+      "properties": {
+        "route": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["index", "from_station", "from_system", "to_station", "to_system"],
+          "properties": {
+            "index": { "type": "integer" },
+            "from_station": { "type": "string", "minLength": 1 },
+            "from_system": { "type": "string", "minLength": 1 },
+            "to_station": { "type": "string", "minLength": 1 },
+            "to_system": { "type": "string", "minLength": 1 }
+          }
+        },
+        "raw_command": { "type": ["string", "null"] }
       }
     },
     "command_open_replay_browser_payload": {

@@ -18,6 +18,7 @@ from edap.control_room.protocol import (
 )
 from edap.control_room.protocol.snapshot import ActivityLogEntry
 from edap.control_room_state import CommandHistoryEntry
+from edap.inara.trade_routes import TradeRoute
 
 
 ControlRoomBackendEvent: TypeAlias = (
@@ -55,6 +56,13 @@ class ControlRoomBackend(ControlRoomEventSink, Protocol):
         self,
         *,
         skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None: ...
+
+    def load_trade_route(
+        self,
+        route: TradeRoute,
+        *,
         raw_command: str | None = None,
     ) -> None: ...
 
@@ -238,6 +246,17 @@ class LocalControlRoomBackend(ControlRoomEventSink):
     ) -> None:
         self._host._facade.dispatch_haul_loop(
             skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+
+    def load_trade_route(
+        self,
+        route: TradeRoute,
+        *,
+        raw_command: str | None = None,
+    ) -> None:
+        self._host._facade.load_trade_route(
+            route,
             raw_command=raw_command,
         )
 

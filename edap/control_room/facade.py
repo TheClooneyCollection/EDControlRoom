@@ -20,6 +20,7 @@ from edap.control_room import (
 )
 from edap.control_room_state import CommandHistoryEntry
 from edap.progress_controls import ProgressShipControls
+from edap.inara.trade_routes import TradeRoute
 
 if TYPE_CHECKING:
     from edap.control_room.app import ControlRoomApp
@@ -290,6 +291,18 @@ class ControlRoomFacade:
             raw_command=raw_command,
         )
 
+    def load_trade_route(
+        self,
+        route: TradeRoute,
+        *,
+        raw_command: str | None = None,
+    ) -> None:
+        routines_haul.load_haul_from_trade_route_entry(
+            self._app,
+            route=route,
+            raw_command=raw_command,
+        )
+
     def cmd_reload(self) -> None:
         reloaded: list[str] = []
         for module in self._reloadable_modules:
@@ -348,6 +361,7 @@ FACADE_METHOD_MAP = {
     "_handle_haul_prompt": "handle_haul_prompt",
     "_dispatch_haul_loop": "dispatch_haul_loop",
     "_dispatch_haul_search": "dispatch_haul_search",
+    "_load_trade_route": "load_trade_route",
     "_cmd_reload": "cmd_reload",
     "_dispatch_command": "dispatch_command",
 }

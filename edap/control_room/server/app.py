@@ -296,6 +296,42 @@ def _handle_session_message(
             correlation_message_id=correlation_message_id,
         )
 
+    if message_type == "command.load_trade_route":
+        if client_role != "active_operator":
+            return _observer_read_only_error(correlation_message_id)
+        if command_handler is None:
+            return _transport_unavailable_error(correlation_message_id)
+        route = None
+        try:
+            from edap.control_room.server.commands import trade_route_from_payload
+
+            route = trade_route_from_payload(payload.get("route"))
+            raw_command_value = payload.get("raw_command")
+            raw_command = raw_command_value if isinstance(raw_command_value, str) else None
+            if route is None:
+                return protocol_message(
+                    "response.error",
+                    {
+                        "error_code": "invalid_command",
+                        "error_message": "Trade-route load commands must include a valid route payload.",
+                        "recommended_action": "Send a route with station, system, and commodity fields.",
+                        "retryable": True,
+                    },
+                    correlation_message_id=correlation_message_id,
+                )
+            command_handler.load_trade_route(route, raw_command=raw_command)
+        except Exception as exc:
+            return _command_execution_failed_error(exc, correlation_message_id)
+        return protocol_message(
+            "response.success",
+            {
+                "accepted": True,
+                "message_text": "Trade route accepted.",
+                "result": {"from_station": route.from_station, "to_station": route.to_station},
+            },
+            correlation_message_id=correlation_message_id,
+        )
+
     if message_type == "command.open_replay_browser":
         if client_role != "active_operator":
             return _observer_read_only_error(correlation_message_id)

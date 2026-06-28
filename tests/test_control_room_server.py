@@ -267,6 +267,7 @@ class _SnapshotRecorder(ControlRoomEventSink):
 class _CommandHandlerRecorder(ObserverSessionCommandHandler):
     def __init__(self) -> None:
         self.submitted_inputs: list[tuple[str, bool | None]] = []
+        self.loaded_trade_routes: list[tuple[object, str | None]] = []
         self.cancel_calls = 0
         self.opened_replay_browser = 0
         self.closed_replay_browser = 0
@@ -277,6 +278,9 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
 
     def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None:
         self.submitted_inputs.append((raw_input, skip_delay))
+
+    def load_trade_route(self, route, *, raw_command: str | None = None) -> None:
+        self.loaded_trade_routes.append((route, raw_command))
 
     def cancel_active_routine(self) -> None:
         self.cancel_calls += 1
@@ -971,6 +975,40 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(command_handler.submitted_inputs, [("", None)])
         self.assertEqual(response["message_type"], "response.success")
         self.assertEqual(response["correlation_message_id"], "message-blank")
+
+    def test_active_operator_load_trade_route_calls_handler(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        command_handler = _CommandHandlerRecorder()
+
+        response = _handle_session_message(
+            {
+                "message_type": "command.load_trade_route",
+                "message_id": "message-route",
+                "payload": {
+                    "route": {
+                        "index": 2,
+                        "from_station": "Savitskaya Orbital",
+                        "from_system": "TSONGORIS",
+                        "to_station": "Nyberg Vision",
+                        "to_system": "NJOKUJINUN",
+                        "source_buy_commodity": "Beryllium",
+                    },
+                    "raw_command": "haul route Savitskaya Orbital -> Nyberg Vision",
+                },
+            },
+            session_id="observer-route",
+            client_role="active_operator",
+            snapshot_provider=_base_snapshot,
+            command_handler=command_handler,
+            broker=broker,
+        )
+
+        self.assertEqual(response["message_type"], "response.success")
+        self.assertEqual(len(command_handler.loaded_trade_routes), 1)
+        route, raw_command = command_handler.loaded_trade_routes[0]
+        self.assertEqual(route.from_station, "Savitskaya Orbital")
+        self.assertEqual(route.to_system, "NJOKUJINUN")
+        self.assertEqual(raw_command, "haul route Savitskaya Orbital -> Nyberg Vision")
 
     def test_active_operator_replay_commands_call_handler(self) -> None:
         broker = InMemoryObserverSessionBroker()

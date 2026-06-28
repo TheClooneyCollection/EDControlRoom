@@ -26,6 +26,7 @@ from edap.control_room.protocol import (
     validate_remote_observer_capabilities_payload,
 )
 from edap.control_room_state import CommandHistoryEntry
+from edap.inara.trade_routes import TradeRoute
 
 from .target import ObserverServerTarget
 
@@ -148,6 +149,38 @@ class RemoteObserverBackend(ControlRoomBackend):
 
     def handle_haul_confirm_prompt(self, value: str) -> None:
         self._emit_local_message("Observer session is read-only.")
+
+    def load_trade_route(
+        self,
+        route: TradeRoute,
+        *,
+        raw_command: str | None = None,
+    ) -> None:
+        self._send_command(
+            "command.load_trade_route",
+            {
+                "route": {
+                    "index": route.index,
+                    "from_station": route.from_station,
+                    "from_system": route.from_system,
+                    "to_station": route.to_station,
+                    "to_system": route.to_system,
+                    "source_buy_commodity": route.source_buy_commodity,
+                    "target_buy_commodity": route.target_buy_commodity,
+                    "from_station_distance": route.from_station_distance,
+                    "to_station_distance": route.to_station_distance,
+                    "distance_from_system": route.distance_from_system,
+                    "route_distance": route.route_distance,
+                    "profit_per_unit": route.profit_per_unit,
+                    "profit_per_trip": route.profit_per_trip,
+                    "profit_per_hour": route.profit_per_hour,
+                    "updated": route.updated,
+                    "raw_text": route.raw_text,
+                    "url_links": list(route.url_links),
+                },
+                "raw_command": raw_command,
+            },
+        )
 
     def open_replay_browser(self) -> None:
         self._send_command("command.open_replay_browser", {})

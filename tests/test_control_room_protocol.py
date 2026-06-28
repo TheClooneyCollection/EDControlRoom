@@ -289,6 +289,9 @@ class _SnapshotBackend(ControlRoomBackend):
     def handle_haul_confirm_prompt(self, value: str) -> None:
         return None
 
+    def load_trade_route(self, route: TradeRoute, *, raw_command: str | None = None) -> None:
+        return None
+
     def open_replay_browser(self) -> None:
         return None
 
@@ -326,12 +329,16 @@ class _IntentRecorderBackend(_SnapshotBackend):
         self.closed_replay_browser = 0
         self.replay_selection_offsets: list[int] = []
         self.replayed_entries: list[tuple[str, bool, bool]] = []
+        self.loaded_trade_routes: list[tuple[TradeRoute, str | None]] = []
 
     def submit_input(self, raw: str) -> None:
         self.submitted_inputs.append(raw)
 
     def dispatch_command(self, raw: str, *, skip_delay: bool | None = None) -> None:
         self.dispatched_commands.append((raw, skip_delay))
+
+    def load_trade_route(self, route: TradeRoute, *, raw_command: str | None = None) -> None:
+        self.loaded_trade_routes.append((route, raw_command))
 
     def open_replay_browser(self) -> None:
         self.opened_replay_browser += 1
