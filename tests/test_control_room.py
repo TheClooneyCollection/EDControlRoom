@@ -35,7 +35,7 @@ from edap.control_room.backend import ControlRoomBackendEventHandler
 from edap.control_room.failure_messages import describe_routine_failure
 from edap.control_room.events import apply_ship_event
 from edap.control_room import rendering as control_room_rendering
-from edap.control_room.models import MarketData, PromptState, ShipState, TradeRoutesData
+from edap.control_room.models import HaulStats, MarketData, PromptState, ShipState, TradeRoutesData
 from edap.control_room.protocol.snapshot import (
     CommandHistorySnapshot,
     ControlRoomSnapshot,
@@ -437,6 +437,7 @@ def _remote_snapshot(
             station_2_buying="",
             station_1="",
             station_2="",
+            session_started_at=None,
             active=False,
             clean_run_active=False,
             waiting_for_station_1_departure=False,
@@ -959,6 +960,45 @@ class ControlRoomCommandTests(unittest.TestCase):
         markup = control_room_rendering.market_markup(market, None)
 
         self.assertLess(markup.index("Food Cartridges"), markup.index("Gold"))
+
+    def test_fmt_cr_uses_billions_and_remaining_millions(self) -> None:
+        self.assertEqual(
+            control_room_rendering.fmt_cr(1_234_567_890),
+            "1b 234.57M CR",
+        )
+
+    def test_haul_stats_markup_shows_session_and_live_profit(self) -> None:
+        stats = HaulStats(
+            station_1_buying="Aluminium",
+            station_2_buying="Bertrandite",
+            station_1="Pawelczyk Dock",
+            station_2="Hutton Orbital",
+            session_started_at=100.0,
+            active=True,
+            clean_run_active=True,
+            current_run_started_at=160.0,
+            current_run_profit=12_500_000,
+            completed_runs=2,
+            accumulated_profit=987_654_321,
+            last_run_profit=300_000,
+            last_run_elapsed_s=240.0,
+            total_run_elapsed_s=600.0,
+        )
+
+        markup = control_room_rendering.haul_stats_markup(
+            stats,
+            current_balance=1_234_567_890,
+            now_fn=lambda: 400.0,
+        )
+
+        rendered = Text.from_markup(markup).plain
+
+        self.assertIn("Session", rendered)
+        self.assertIn("05:00", rendered)
+        self.assertIn("Profit", rendered)
+        self.assertIn("1b 000.15M CR", rendered)
+        self.assertIn("Balance", rendered)
+        self.assertIn("1b 234.57M CR", rendered)
 
     def test_trade_route_detail_markup_surfaces_trip_and_hour_profit(self) -> None:
         markup = control_room_rendering.trade_route_detail_markup(
@@ -1989,6 +2029,31 @@ on_land = true
         self.assertEqual(self.app._haul_stats.current_run_started_at, 320.0)
         self.assertEqual(self.app._haul_stats.current_run_profit, -125_000)
 
+    def test_start_haul_stats_preserves_persisted_session_totals(self) -> None:
+        self.app._ship.status = "in_station"
+        self.app._ship.station = "Pawelczyk Dock"
+        self.app._haul_stats.session_started_at = 25.0
+        self.app._haul_stats.accumulated_profit = 1_500_000
+        self.app._haul_stats.completed_runs = 4
+        self.app._haul_stats.total_run_elapsed_s = 1200.0
+        self.app._haul_stats.last_run_profit = 350_000
+        self.app._haul_stats.last_run_elapsed_s = 180.0
+        self.app._time_fn = lambda: 100.0
+
+        self.app._start_haul_stats(
+            station_1_buying="Aluminium",
+            station_2_buying="Bertrandite",
+            station_1="Pawelczyk Dock",
+            station_2="Hutton Orbital",
+        )
+
+        self.assertEqual(self.app._haul_stats.session_started_at, 25.0)
+        self.assertEqual(self.app._haul_stats.accumulated_profit, 1_500_000)
+        self.assertEqual(self.app._haul_stats.completed_runs, 4)
+        self.assertEqual(self.app._haul_stats.total_run_elapsed_s, 1200.0)
+        self.assertEqual(self.app._haul_stats.last_run_profit, 350_000)
+        self.assertEqual(self.app._haul_stats.last_run_elapsed_s, 180.0)
+
     def test_haul_stats_log_ignored_station_1_sell_before_clean_departure(self) -> None:
         self.app._ship.status = "in_station"
         self.app._ship.station = "Pawelczyk Dock"
@@ -2627,12 +2692,99 @@ class ControlRoomDispatchTests(unittest.TestCase):
 
         self.assertTrue(self.app._instant_mode)
 
+    def test_load_saved_state_restores_persisted_session_summary(self) -> None:
+        self.app._haul_stats.session_started_at = 100.0
+        self.app._haul_stats.accumulated_profit = 1_250_000
+        self.app._haul_stats.completed_runs = 3
+        self.app._haul_stats.total_run_elapsed_s = 900.0
+        self.app._haul_stats.last_run_profit = 400_000
+        self.app._haul_stats.last_run_elapsed_s = 240.0
+        self.app._time_fn = lambda: 460.0
+        self.app._save_saved_state()
+
+        self.app._haul_stats = HaulStats()
+        self.app._time_fn = lambda: 500.0
+
+        self.app._load_saved_state()
+
+        self.assertEqual(self.app._haul_stats.accumulated_profit, 1_250_000)
+        self.assertEqual(self.app._haul_stats.completed_runs, 3)
+        self.assertEqual(self.app._haul_stats.total_run_elapsed_s, 900.0)
+        self.assertEqual(self.app._haul_stats.last_run_profit, 400_000)
+        self.assertEqual(self.app._haul_stats.last_run_elapsed_s, 240.0)
+        self.assertEqual(self.app._haul_stats.session_started_at, 140.0)
+
+    def test_load_saved_state_clears_persisted_session_when_configured(self) -> None:
+        self.app._haul_stats.session_started_at = 50.0
+        self.app._haul_stats.accumulated_profit = 999_000
+        self.app._time_fn = lambda: 200.0
+        self.app._save_saved_state()
+        self.app._haul_stats = HaulStats()
+        self.app._config = replace(
+            self.app._config,
+            control_room=replace(
+                self.app._config.control_room,
+                clear_session_on_launch=True,
+            ),
+        )
+        self.app._time_fn = lambda: 300.0
+
+        self.app._load_saved_state()
+
+        self.assertEqual(self.app._haul_stats.accumulated_profit, 0)
+        self.assertEqual(self.app._haul_stats.completed_runs, 0)
+        self.assertIsNone(self.app._haul_stats.last_run_profit)
+        self.assertEqual(self.app._haul_stats.session_started_at, 300.0)
+        self.assertIn("Cleared persisted haul session on launch.", "\n".join(self.app.logged))
+
     def test_log_startup_modes_reports_instant_mode_state(self) -> None:
         self.app._instant_mode = True
 
         self.app._log_startup_modes()
 
         self.assertIn("Instant mode on — control with: instant", "\n".join(self.app.logged))
+
+    def test_new_session_clears_persisted_session_and_records_history(self) -> None:
+        self.app._haul_stats.station_1_buying = "Aluminium"
+        self.app._haul_stats.station_2_buying = "Bertrandite"
+        self.app._haul_stats.station_1 = "Pawelczyk Dock"
+        self.app._haul_stats.station_2 = "Hutton Orbital"
+        self.app._haul_stats.active = True
+        self.app._haul_stats.clean_run_active = True
+        self.app._haul_stats.current_run_started_at = 100.0
+        self.app._haul_stats.current_run_profit = 250_000
+        self.app._haul_stats.session_started_at = 50.0
+        self.app._haul_stats.accumulated_profit = 900_000
+        self.app._haul_stats.completed_runs = 2
+        self.app._haul_stats.total_run_elapsed_s = 600.0
+        self.app._haul_stats.last_run_profit = 450_000
+        self.app._haul_stats.last_run_elapsed_s = 200.0
+        self.app._time_fn = lambda: 300.0
+
+        self.app._dispatch_command("new_session")
+
+        self.assertEqual(self.app._haul_stats.session_started_at, 300.0)
+        self.assertEqual(self.app._haul_stats.accumulated_profit, 0)
+        self.assertEqual(self.app._haul_stats.current_run_profit, 0)
+        self.assertEqual(self.app._haul_stats.completed_runs, 0)
+        self.assertEqual(self.app._haul_stats.total_run_elapsed_s, 0.0)
+        self.assertIsNone(self.app._haul_stats.last_run_profit)
+        self.assertEqual(self.app._saved_state.session_profit, 0)
+        self.assertIn("Started a new persisted haul session.", "\n".join(self.app.logged))
+        entry = self._last_history()
+        self.assertEqual(entry.command, "new_session")
+
+    def test_clear_alias_clears_persisted_session_and_records_history(self) -> None:
+        self.app._haul_stats.accumulated_profit = 123_000
+        self.app._haul_stats.session_started_at = 50.0
+        self.app._time_fn = lambda: 300.0
+
+        self.app._dispatch_command("clear")
+
+        self.assertEqual(self.app._haul_stats.accumulated_profit, 0)
+        self.assertEqual(self.app._haul_stats.session_started_at, 300.0)
+        entry = self._last_history()
+        self.assertEqual(entry.command, "new_session")
 
     def test_announce_startup_greeting_emits_tts_announcement(self) -> None:
         self.app._tts = _FakeTTS()

@@ -90,6 +90,11 @@ def dispatch(app: CommandHost, raw: str, *, skip_delay_override: bool | None = N
     elif verb == "instant":
         app._record_history_entry(CommandHistoryEntry(raw=raw, command="instant", params={"value": rest}, timestamp=now_iso()))
         cmd_instant(app, rest)
+    elif verb in {"new_session", "clear"}:
+        app._record_history_entry(
+            CommandHistoryEntry(raw=raw, command="new_session", timestamp=now_iso())
+        )
+        cmd_new_session(app)
     elif verb == "commands":
         app._record_history_entry(CommandHistoryEntry(raw=raw, command="commands", timestamp=now_iso()))
         cmd_commands(app)
@@ -243,3 +248,8 @@ def cmd_market(app: CommandHost, rest: str) -> None:
         app._market_filter = None
         app._log("[dim]Market filter cleared.[/]")
         app._refresh_market()
+
+
+def cmd_new_session(app: CommandHost) -> None:
+    app._clear_session_stats()
+    app._log("[dim]Started a new persisted haul session.[/]")

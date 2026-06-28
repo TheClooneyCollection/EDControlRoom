@@ -41,6 +41,7 @@ class HaulStats:
     station_2_buying: str = ""
     station_1: str = ""
     station_2: str = ""
+    session_started_at: float | None = None
     active: bool = False
     clean_run_active: bool = False
     waiting_for_station_1_departure: bool = False

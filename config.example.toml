@@ -22,6 +22,8 @@ status_refresh_seconds = 2.0
 check_for_updates = true
 # Optional reusable destination for the `home` command and `home set <system>` updates.
 home_system = ""
+# When true, launch starts a fresh persisted haul session instead of restoring the previous one.
+clear_session_on_launch = false
 
 [tts]
 enabled = true

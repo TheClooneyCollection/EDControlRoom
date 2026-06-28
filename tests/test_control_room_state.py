@@ -20,6 +20,8 @@ class ControlRoomStateTests(unittest.TestCase):
         self.assertEqual(state.default_haul, {})
         self.assertEqual(state.history, [])
         self.assertFalse(state.instant_mode)
+        self.assertEqual(state.session_profit, 0)
+        self.assertEqual(state.session_elapsed_seconds, 0.0)
 
     def test_save_and_load_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -27,6 +29,12 @@ class ControlRoomStateTests(unittest.TestCase):
             original = ControlRoomState(
                 default_haul={"station_1_buying": "Aluminium", "station_2": "Hutton Orbital"},
                 instant_mode=True,
+                session_profit=12_345_678,
+                session_elapsed_seconds=321.0,
+                session_completed_runs=4,
+                session_total_run_elapsed_seconds=600.0,
+                session_last_run_profit=456_000,
+                session_last_run_elapsed_seconds=150.0,
                 history=[
                     CommandHistoryEntry(
                         raw="haul Aluminium",
@@ -42,6 +50,12 @@ class ControlRoomStateTests(unittest.TestCase):
 
         self.assertEqual(loaded.default_haul["station_1_buying"], "Aluminium")
         self.assertTrue(loaded.instant_mode)
+        self.assertEqual(loaded.session_profit, 12_345_678)
+        self.assertEqual(loaded.session_elapsed_seconds, 321.0)
+        self.assertEqual(loaded.session_completed_runs, 4)
+        self.assertEqual(loaded.session_total_run_elapsed_seconds, 600.0)
+        self.assertEqual(loaded.session_last_run_profit, 456_000)
+        self.assertEqual(loaded.session_last_run_elapsed_seconds, 150.0)
         self.assertEqual(len(loaded.history), 1)
         self.assertEqual(loaded.history[0].raw, "haul Aluminium")
         self.assertEqual(loaded.history[0].params["dock_timeout"], "600.0")

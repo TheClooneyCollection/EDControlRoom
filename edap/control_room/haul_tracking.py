@@ -13,6 +13,7 @@ class HaulTrackingHost(Protocol):
 
     def _log(self, msg: str) -> None: ...
     def _refresh_haul_stats(self) -> None: ...
+    def _save_saved_state(self) -> None: ...
     def _announce_tts(self, message_id: AnnouncementId, /, **values: object) -> None: ...
 
 
@@ -30,17 +31,26 @@ def start_haul_stats(
         and app._ship.station
         and app._ship.station.lower() == station_1.lower()
     )
+    previous = app._haul_stats
+    started_at = app._time_fn()
     app._haul_stats = HaulStats(
         station_1_buying=station_1_buying,
         station_2_buying=station_2_buying,
         station_1=station_1,
         station_2=station_2,
+        session_started_at=previous.session_started_at or started_at,
         active=True,
-        current_run_started_at=app._time_fn(),
+        current_run_started_at=started_at,
         waiting_for_station_1_departure=at_station_1,
         resumed_mid_run=not at_station_1,
+        accumulated_profit=previous.accumulated_profit,
+        completed_runs=previous.completed_runs,
+        last_run_profit=previous.last_run_profit,
+        last_run_elapsed_s=previous.last_run_elapsed_s,
+        total_run_elapsed_s=previous.total_run_elapsed_s,
     )
     app._refresh_haul_stats()
+    app._save_saved_state()
 
 
 def stop_haul_stats(app: HaulTrackingHost) -> None:
@@ -54,6 +64,7 @@ def stop_haul_stats(app: HaulTrackingHost) -> None:
         )
     app._haul_stats.active = False
     app._refresh_haul_stats()
+    app._save_saved_state()
 
 
 def finalize_completed_haul_run(app: HaulTrackingHost) -> None:
@@ -82,6 +93,7 @@ def finalize_completed_haul_run(app: HaulTrackingHost) -> None:
         cycle_count=stats.completed_runs,
         total_profit_short=format_credits_short(stats.accumulated_profit),
     )
+    app._save_saved_state()
 
 
 def handle_haul_event(
@@ -144,3 +156,4 @@ def handle_haul_event(
             )
 
     app._refresh_haul_stats()
+    app._save_saved_state()

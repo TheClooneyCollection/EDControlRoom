@@ -134,7 +134,7 @@ class HeadlessControlRoomHost(ControlRoomApp):
         return None
 
     def _refresh_haul_stats(self) -> None:  # type: ignore[override]
-        return None
+        self._publish_snapshot()
 
     def _refresh_trade_routes(self) -> None:  # type: ignore[override]
         return None

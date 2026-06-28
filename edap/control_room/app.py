@@ -32,6 +32,7 @@ Other:
     commands           list supported commands
     help [command]     explain a command in plain English
     replay             open the replay history browser
+    new_session        clear persisted haul session time/profit and start a fresh session now
     q / quit           cancel active work if needed, then exit
 """
 from __future__ import annotations
@@ -142,7 +143,7 @@ _STARTUP_BINDING_WARNING_IGNORED_ACTIONS = frozenset({
     "YawRightButton",
 })
 
-_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul load | haul search [system] | haul search url <url> | haul route <n> | multi_leg_haul <route> | dest <system> | home | market ... | reload | q"
+_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul load | haul search [system] | haul search url <url> | haul route <n> | multi_leg_haul <route> | dest <system> | home | market ... | instant | new_session | reload | q"
 _ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS = 10.0
 _JOURNAL_ARTIFACT_LOG_PATH = Path("artifacts/control-room.log")
 _DEBUG_ARTIFACT_LOG_PATH = Path("artifacts/control-room-debug.log")
@@ -835,6 +836,11 @@ class ControlRoomApp(App[None]):
     def _save_saved_state(self) -> None:
         _persistence.save_saved_state(self)
 
+    def _clear_session_stats(self) -> None:
+        _persistence.clear_session_stats(self)
+        self._refresh_haul_stats()
+        self._publish_protocol_snapshot()
+
     def _log_startup_modes(self) -> None:
         state = "on" if self._instant_mode else "off"
         self._log(f"[dim]Instant mode {state} — control with: instant[/]")
@@ -1219,6 +1225,7 @@ class ControlRoomApp(App[None]):
             station_2_buying=haul.station_2_buying,
             station_1=haul.station_1,
             station_2=haul.station_2,
+            session_started_at=haul.session_started_at,
             active=haul.active,
             clean_run_active=haul.clean_run_active,
             waiting_for_station_1_departure=haul.waiting_for_station_1_departure,

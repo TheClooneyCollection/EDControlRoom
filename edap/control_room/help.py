@@ -91,6 +91,13 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
         detail="With no argument it toggles instant mode. When instant mode is on, executable commands launch immediately without the configured control-room start delay until you turn it off again. The ! prefix still works for one-off immediate launches.",
     ),
     CommandHelp(
+        name="new_session",
+        usage="new_session",
+        summary="Clear persisted haul session time and profit, then start a fresh session now.",
+        detail="Resets the haul session totals that survive control-room restarts, including session profit, session duration, completed-run totals, and last-run summary fields. If a haul is active, the routine keeps running and the session counters restart from the moment you issue the command.",
+        aliases=("clear",),
+    ),
+    CommandHelp(
         name="commands",
         usage="commands",
         summary="List every supported control-room command.",

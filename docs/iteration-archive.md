@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `106`
-- Latest generated iteration number: `239`
+- Generated iteration count: `108`
+- Latest generated iteration number: `241`
 
 ## Iteration 134
 
@@ -2979,3 +2979,59 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-check one real `control_room serve` plus `control_room connect` session to confirm the restored colors and route-picker modal behave correctly under real Inara latency.
+
+## Iteration 240
+
+- When: `2026-06-28 18:34`
+- Area: `control-room`
+- Title: `haul-panel-session-profit-refresh`
+- Source: [2026-06-28-18-34_control-room_haul-panel-session-profit-refresh.md](iteration-logs/2026-06-28-18-34_control-room_haul-panel-session-profit-refresh.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `haul-panel-session-profit-refresh`
+- Started: `2026-06-28 18:34`
+
+## Summary
+
+- Restored live-feeling haul panel updates after the client/server split and expanded the panel to show session duration, net session profit, and clearer billion-scale credit formatting.
+
+## Changes
+
+- Added `session_started_at` to haul runtime state and the observer snapshot contract so local and remote Control Room views can render session duration consistently.
+- Updated haul-panel rendering to show `Session` and net `Profit`, and changed compact credit formatting to display billion-plus values as `1b xxx.xxM CR`.
+- Updated the headless observer host so periodic haul refreshes publish snapshots, allowing remote clients to keep elapsed/profit rows moving even when no new journal event has arrived.
+- Added focused coverage for billion-format rendering/TTS and for the haul panel session/profit rows, then verified the full suite passed.
+
+## Follow-ups
+
+- Live-check the panel in both embedded and `control_room connect` sessions to confirm the new compact billion format reads well during long-haul runs.
+
+## Iteration 241
+
+- When: `2026-06-28 18:48`
+- Area: `control-room`
+- Title: `persist-haul-session-and-clear-command`
+- Source: [2026-06-28-18-48_control-room_persist-haul-session-and-clear-command.md](iteration-logs/2026-06-28-18-48_control-room_persist-haul-session-and-clear-command.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `persist-haul-session-and-clear-command`
+- Started: `2026-06-28 18:48`
+
+## Summary
+
+- Added persisted haul-session totals plus an explicit reset command/config path so session profit and time survive relaunches until the operator clears them.
+
+## Changes
+
+- Added persisted haul-session fields to control-room saved state, restoring session elapsed time/profit and related summary fields on launch instead of dropping them on app restart.
+- Added `new_session` with `clear` alias, wired it through command help/dispatch, and made it reset persisted session counters without interrupting an active haul routine.
+- Added `defaults/control_room.toml` with `clear_session_on_launch = false`, threaded that config through parsing and `config.example.toml`, and made startup optionally clear the saved session automatically.
+- Updated haul-session tracking so state saves happen as haul metrics change and starting a new haul preserves any restored persisted session totals until the operator explicitly resets them.
+
+## Follow-ups
+
+- Live-check whether operators want the no-active-haul panel to always show the persisted session block, or only when the session has non-zero time/profit.

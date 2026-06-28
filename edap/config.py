@@ -11,6 +11,7 @@ import yaml
 
 DEFAULT_CONFIG_PATH = Path("config.toml")
 EXAMPLE_CONFIG_PATH = Path("config.example.toml")
+DEFAULT_CONTROL_ROOM_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "control_room.toml"
 DEFAULT_TTS_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "tts.toml"
 DEFAULT_ERROR_MESSAGES_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "error_messages.yaml"
 DEFAULT_MESSAGES_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "messages.yaml"
@@ -116,6 +117,7 @@ class ControlRoomConfig:
     status_refresh_seconds: float = 2.0
     check_for_updates: bool = True
     home_system: str = ""
+    clear_session_on_launch: bool = False
 
 
 @dataclass(frozen=True)
@@ -159,6 +161,18 @@ class AppConfig:
 
 class ConfigError(ValueError):
     """Raised when config parsing or validation fails."""
+
+
+@lru_cache(maxsize=1)
+def _load_default_control_room_table() -> dict[str, object]:
+    with DEFAULT_CONTROL_ROOM_CONFIG_PATH.open("rb") as handle:
+        raw = tomllib.load(handle)
+    if not isinstance(raw, dict):
+        raise ConfigError("Default control-room config root must be a TOML table.")
+    value = raw.get("control_room", {})
+    if not isinstance(value, dict):
+        raise ConfigError("Default control-room config section `control_room` must be a table.")
+    return value
 
 
 @lru_cache(maxsize=1)
@@ -612,6 +626,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     messages = _optional_table(raw, "messages")
     error_messages = _optional_table(raw, "error_messages")
     default_tts = _load_default_tts_table()
+    default_control_room = _load_default_control_room_table()
     default_messages = _load_default_messages_table()
     default_error_messages = _load_default_error_messages_table()
 
@@ -788,6 +803,11 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             status_refresh_seconds=_float(control_room, "status_refresh_seconds", 2.0),
             check_for_updates=_boolean(control_room, "check_for_updates", True),
             home_system=_string(control_room, "home_system", ""),
+            clear_session_on_launch=_boolean(
+                control_room,
+                "clear_session_on_launch",
+                _boolean(default_control_room, "clear_session_on_launch", False),
+            ),
         ),
         tts=TTSConfig(
             enabled=_boolean(tts, "enabled", _boolean(default_tts, "enabled", True)),

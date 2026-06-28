@@ -61,6 +61,7 @@ class HaulSessionSnapshot:
     station_2_buying: str
     station_1: str
     station_2: str
+    session_started_at: float | None
     active: bool
     clean_run_active: bool
     waiting_for_station_1_departure: bool

@@ -71,6 +71,7 @@ class LoadConfigTests(unittest.TestCase):
             self.assertEqual(config.control_room.status_refresh_seconds, 2.0)
             self.assertTrue(config.control_room.check_for_updates)
             self.assertEqual(config.control_room.home_system, "")
+            self.assertFalse(config.control_room.clear_session_on_launch)
             self.assertTrue(config.tts.enabled)
             self.assertEqual(config.tts.title_mode, "commander")
             self.assertEqual(config.tts.title, "commander")
@@ -174,6 +175,29 @@ home_system = "Achenar"
             config = load_config(config_path)
 
             self.assertEqual(config.control_room.home_system, "Achenar")
+
+    def test_loads_control_room_clear_session_on_launch_override(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            _write_config(
+                config_path,
+                """
+[paths]
+
+[controls]
+
+[screen]
+
+[runtime]
+
+[control_room]
+clear_session_on_launch = true
+""".strip(),
+            )
+
+            config = load_config(config_path)
+
+            self.assertTrue(config.control_room.clear_session_on_launch)
 
     def test_save_home_system_updates_existing_control_room_section(self) -> None:
         with TemporaryDirectory() as temp_dir:

@@ -66,6 +66,10 @@ class TTSHelpersTests(unittest.TestCase):
     def test_format_credits_short_humanizes_thousands_and_millions(self) -> None:
         self.assertEqual(format_credits_short(84_200), "84 thousand credits")
         self.assertEqual(format_credits_short(1_250_000), "1.2 million credits")
+        self.assertEqual(
+            format_credits_short(1_234_567_890),
+            "1 billion 234.6 million credits",
+        )
 
     def test_normalize_tts_value_spells_three_plus_digits_in_system_and_station_names(self) -> None:
         self.assertEqual(normalize_tts_value("system_name", "HIP 58412"), "HIP 5 8 4 1 2")

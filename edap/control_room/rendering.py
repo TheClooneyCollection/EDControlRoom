@@ -13,10 +13,16 @@ from edap.routines.market import _is_sell_market_item
 
 
 def fmt_cr(n: int) -> str:
-    if n >= 1_000_000:
-        return f"{n / 1_000_000:.2f}M CR"
-    if n >= 1_000:
-        return f"{n / 1_000:.1f}K CR"
+    abs_n = abs(n)
+    prefix = "-" if n < 0 else ""
+    if abs_n >= 1_000_000_000:
+        billions = abs_n // 1_000_000_000
+        millions = (abs_n % 1_000_000_000) / 1_000_000
+        return f"{prefix}{billions}b {millions:06.2f}M CR"
+    if abs_n >= 1_000_000:
+        return f"{prefix}{abs_n / 1_000_000:.2f}M CR"
+    if abs_n >= 1_000:
+        return f"{prefix}{abs_n / 1_000:.1f}K CR"
     return f"{n:,} CR"
 
 
@@ -164,12 +170,24 @@ def haul_stats_markup(
     now_fn: Callable[[], float],
 ) -> str:
     if not stats.station_1_buying:
+        session_elapsed = (
+            now_fn() - stats.session_started_at
+            if stats.session_started_at is not None
+            else None
+        )
+        session_profit = stats.accumulated_profit + stats.current_run_profit
         lines = [
             "[dim]No haul session active.[/]",
             "",
             "Start `haul` to track cycle time,",
             "average time, and session profit.",
         ]
+        if session_elapsed is not None or session_profit != 0:
+            lines.extend([
+                "",
+                f"[dim]Session[/]  {escape(fmt_duration(session_elapsed))}",
+                f"[dim]Profit[/]   [green]{fmt_cr(session_profit)}[/]",
+            ])
         if current_balance is not None:
             lines.extend(["", f"[dim]Balance[/]  [green]{fmt_cr(current_balance)}[/]"])
         return "\n".join(lines)
@@ -195,12 +213,20 @@ def haul_stats_markup(
         stats.total_run_elapsed_s / stats.completed_runs
         if stats.completed_runs > 0 else None
     )
+    session_elapsed = (
+        now_fn() - stats.session_started_at
+        if stats.session_started_at is not None
+        else None
+    )
+    session_profit = stats.accumulated_profit + stats.current_run_profit
 
     row("Status", escape(status))
     row("St1 buy", f"[cyan]{escape(stats.station_1_buying)}[/]")
     row("St2 buy", f"[cyan]{escape(stats.station_2_buying)}[/]")
     row("Station 1", f"[bold cyan]{escape(stats.station_1 or '—')}[/]")
     row("Station 2", escape(stats.station_2 or "—"))
+    row("Session", escape(fmt_duration(session_elapsed)))
+    row("Profit", f"[green]{fmt_cr(session_profit)}[/]")
     if current_balance is not None:
         row("Balance", f"[green]{fmt_cr(current_balance)}[/]")
     row(
@@ -211,7 +237,6 @@ def haul_stats_markup(
     row("Elapsed", escape(fmt_duration(current_elapsed)))
     row("Avg time", escape(fmt_duration(avg_elapsed)))
     row("Runs", str(stats.completed_runs))
-    row("Accum", f"[green]{fmt_cr(stats.accumulated_profit)}[/]")
     row(
         "Last run",
         f"[green]{fmt_cr(stats.last_run_profit)}[/]"

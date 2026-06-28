@@ -146,6 +146,7 @@ def _haul_session_snapshot(app: SnapshotHost) -> HaulSessionSnapshot:
         station_2_buying=stats.station_2_buying,
         station_1=stats.station_1,
         station_2=stats.station_2,
+        session_started_at=stats.session_started_at,
         active=stats.active,
         clean_run_active=stats.clean_run_active,
         waiting_for_station_1_departure=stats.waiting_for_station_1_departure,

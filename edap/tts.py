@@ -46,13 +46,16 @@ def parse_announcement_id(value: str) -> AnnouncementId | None:
 
 def format_credits_short(value: int) -> str:
     abs_value = abs(int(value))
+    prefix = "-" if value < 0 else ""
+    if abs_value >= 1_000_000_000:
+        billions = abs_value // 1_000_000_000
+        millions = (abs_value % 1_000_000_000) / 1_000_000
+        return f"{prefix}{billions} billion {millions:.1f} million credits"
     if abs_value >= 1_000_000:
         amount = f"{abs_value / 1_000_000:.1f}".rstrip("0").rstrip(".")
-        prefix = "-" if value < 0 else ""
         return f"{prefix}{amount} million credits"
     if abs_value >= 1_000:
         amount = int(round(abs_value / 1_000))
-        prefix = "-" if value < 0 else ""
         return f"{prefix}{amount} thousand credits"
     return f"{value} credits"
 

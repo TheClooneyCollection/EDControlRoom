@@ -20,6 +20,12 @@ class ControlRoomState:
     default_haul: dict[str, str] = field(default_factory=dict)
     history: list[CommandHistoryEntry] = field(default_factory=list)
     instant_mode: bool = False
+    session_profit: int = 0
+    session_elapsed_seconds: float = 0.0
+    session_completed_runs: int = 0
+    session_total_run_elapsed_seconds: float = 0.0
+    session_last_run_profit: int | None = None
+    session_last_run_elapsed_seconds: float | None = None
 
 
 _LEGACY_HAUL_KEYS = frozenset({"commodity", "buy_station", "sell_station", "buy_system", "sell_system"})
@@ -84,10 +90,39 @@ def load_control_room_state(path: Path) -> ControlRoomState:
     if not isinstance(instant_mode, bool):
         instant_mode = False
 
+    session_profit = raw.get("session_profit", 0)
+    if not isinstance(session_profit, int):
+        session_profit = 0
+    session_elapsed_seconds = raw.get("session_elapsed_seconds", 0.0)
+    if not isinstance(session_elapsed_seconds, (int, float)):
+        session_elapsed_seconds = 0.0
+    session_completed_runs = raw.get("session_completed_runs", 0)
+    if not isinstance(session_completed_runs, int):
+        session_completed_runs = 0
+    session_total_run_elapsed_seconds = raw.get("session_total_run_elapsed_seconds", 0.0)
+    if not isinstance(session_total_run_elapsed_seconds, (int, float)):
+        session_total_run_elapsed_seconds = 0.0
+    session_last_run_profit = raw.get("session_last_run_profit")
+    if not isinstance(session_last_run_profit, int):
+        session_last_run_profit = None
+    session_last_run_elapsed_seconds = raw.get("session_last_run_elapsed_seconds")
+    if not isinstance(session_last_run_elapsed_seconds, (int, float)):
+        session_last_run_elapsed_seconds = None
+
     return ControlRoomState(
         default_haul={str(key): str(value) for key, value in default_haul.items()},
         history=history,
         instant_mode=instant_mode,
+        session_profit=session_profit,
+        session_elapsed_seconds=float(session_elapsed_seconds),
+        session_completed_runs=session_completed_runs,
+        session_total_run_elapsed_seconds=float(session_total_run_elapsed_seconds),
+        session_last_run_profit=session_last_run_profit,
+        session_last_run_elapsed_seconds=(
+            float(session_last_run_elapsed_seconds)
+            if session_last_run_elapsed_seconds is not None
+            else None
+        ),
     )
 
 
@@ -96,6 +131,12 @@ def save_control_room_state(path: Path, state: ControlRoomState) -> None:
     payload = {
         "default_haul": state.default_haul,
         "instant_mode": state.instant_mode,
+        "session_profit": state.session_profit,
+        "session_elapsed_seconds": state.session_elapsed_seconds,
+        "session_completed_runs": state.session_completed_runs,
+        "session_total_run_elapsed_seconds": state.session_total_run_elapsed_seconds,
+        "session_last_run_profit": state.session_last_run_profit,
+        "session_last_run_elapsed_seconds": state.session_last_run_elapsed_seconds,
         "history": [
             {
                 "raw": entry.raw,

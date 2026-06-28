@@ -157,6 +157,7 @@ def _snapshot() -> ControlRoomSnapshot:
             station_2_buying="",
             station_1="",
             station_2="",
+            session_started_at=None,
             active=False,
             clean_run_active=False,
             waiting_for_station_1_departure=False,

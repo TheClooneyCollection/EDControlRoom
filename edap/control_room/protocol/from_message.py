@@ -117,6 +117,7 @@ def _haul_session_snapshot(payload: dict[str, object]) -> HaulSessionSnapshot:
         station_2_buying=str(payload.get("station_2_buying", "")),
         station_1=str(payload.get("station_1", "")),
         station_2=str(payload.get("station_2", "")),
+        session_started_at=_optional_float(payload.get("session_started_at")),
         active=bool(payload.get("active", False)),
         clean_run_active=bool(payload.get("clean_run_active", False)),
         waiting_for_station_1_departure=bool(payload.get("waiting_for_station_1_departure", False)),
