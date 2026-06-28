@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import unittest
 
-from edap.platform.input.macos import KEY_CODES, MODIFIER_FLAGS, MacOSInputController
+from edap.platform.input.macos import (
+    KEY_CODES,
+    MODIFIER_FLAGS,
+    MacOSInputController,
+    _find_pid_in_ps_output,
+)
 
 
 class FakeBackend:
@@ -33,6 +38,36 @@ def _build() -> tuple[MacOSInputController, FakeBackend]:
 
 
 class MacOSInputControllerTests(unittest.TestCase):
+    def test_find_pid_in_ps_output_prefers_exact_command_name(self) -> None:
+        pid = _find_pid_in_ps_output(
+            "EliteDangerous64.exe",
+            comm_output=" 111 /tmp/EliteDangerous64.exe\n 222 wine64-preloader\n",
+            command_output=" 222 wine64-preloader C:\\\\Games\\\\EliteDangerous64.exe\n",
+        )
+
+        self.assertEqual(pid, 111)
+
+    def test_find_pid_in_ps_output_falls_back_to_full_command_line(self) -> None:
+        pid = _find_pid_in_ps_output(
+            "EliteDangerous64.exe",
+            comm_output=" 222 wine64-preloader\n 333 CrossOver\n",
+            command_output=(
+                " 222 /Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine64-preloader "
+                "C:\\\\Program Files (x86)\\\\Steam\\\\steamapps\\\\common\\\\Elite Dangerous\\\\EliteDangerous64.exe\n"
+            ),
+        )
+
+        self.assertEqual(pid, 222)
+
+    def test_find_pid_in_ps_output_returns_none_when_no_match_exists(self) -> None:
+        pid = _find_pid_in_ps_output(
+            "EliteDangerous64.exe",
+            comm_output=" 222 wine64-preloader\n",
+            command_output=" 222 wine64-preloader C:\\\\Program Files\\\\OtherGame.exe\n",
+        )
+
+        self.assertIsNone(pid)
+
     def test_tap_letter_with_hold(self) -> None:
         controller, backend = _build()
 

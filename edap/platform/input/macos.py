@@ -167,17 +167,17 @@ def _make_default_pid_poster() -> PidPosterFn:
     return poster
 
 
-def _find_pid_by_process_name(process_name: str) -> int | None:
-    result = run(
-        ["ps", "-axo", "pid=,comm="],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
+def _find_pid_in_ps_output(
+    process_name: str,
+    *,
+    comm_output: str,
+    command_output: str,
+) -> int | None:
+    wanted = Path(process_name.strip()).name.lower()
+    if not wanted:
         return None
-    wanted = process_name.strip().lower()
-    for line in result.stdout.splitlines():
+
+    for line in comm_output.splitlines():
         parts = line.strip().split(None, 1)
         if len(parts) != 2:
             continue
@@ -188,7 +188,43 @@ def _find_pid_by_process_name(process_name: str) -> int | None:
             return int(pid_raw)
         except ValueError:
             continue
+
+    for line in command_output.splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) != 2:
+            continue
+        pid_raw, command = parts
+        if wanted not in command.lower():
+            continue
+        try:
+            return int(pid_raw)
+        except ValueError:
+            continue
+
     return None
+
+
+def _find_pid_by_process_name(process_name: str) -> int | None:
+    comm_result = run(
+        ["ps", "-axo", "pid=,comm="],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if comm_result.returncode != 0:
+        return None
+    command_result = run(
+        ["ps", "-axo", "pid=,command="],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    command_output = command_result.stdout if command_result.returncode == 0 else ""
+    return _find_pid_in_ps_output(
+        process_name,
+        comm_output=comm_result.stdout,
+        command_output=command_output,
+    )
 
 
 class MacOSInputController(InputController):
