@@ -321,6 +321,9 @@ class ControlRoomClientTests(unittest.TestCase):
                         to_station="Scully-Power Station",
                         to_system="IX",
                         source_buy_commodity="Silver",
+                        from_station_distance="82 Ls",
+                        to_station_distance="5 Ls",
+                        distance_from_system="~167 Ly",
                         route_distance="33.08 Ly",
                         profit_per_unit="45,510 Cr",
                         profit_per_hour="88,323,553 Cr",
@@ -338,6 +341,9 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(len(app._trade_routes.routes), 1)
         self.assertEqual(app._trade_routes.routes[0].from_station, "Savitskaya Orbital")
         self.assertEqual(app._trade_routes.routes[0].source_buy_commodity, "Silver")
+        self.assertEqual(app._trade_routes.routes[0].from_station_distance, "82 Ls")
+        self.assertEqual(app._trade_routes.routes[0].to_station_distance, "5 Ls")
+        self.assertEqual(app._trade_routes.routes[0].distance_from_system, "~167 Ly")
         self.assertTrue(app._trade_route_picker_open)
         self.assertEqual(app._selected_trade_route_index, 1)
 

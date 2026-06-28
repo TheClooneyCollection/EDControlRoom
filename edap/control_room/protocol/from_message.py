@@ -236,6 +236,8 @@ def _trade_routes_snapshot(payload: dict[str, object]) -> TradeRoutesSnapshot:
                 to_system=str(entry.get("to_system", "")),
                 source_buy_commodity=_optional_str(entry.get("source_buy_commodity")),
                 target_buy_commodity=_optional_str(entry.get("target_buy_commodity")),
+                from_station_distance=_optional_str(entry.get("from_station_distance")),
+                to_station_distance=_optional_str(entry.get("to_station_distance")),
                 distance_from_system=_optional_str(entry.get("distance_from_system")),
                 route_distance=_optional_str(entry.get("route_distance")),
                 profit_per_unit=_optional_str(entry.get("profit_per_unit")),

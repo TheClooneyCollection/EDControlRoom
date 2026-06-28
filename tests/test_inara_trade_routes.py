@@ -101,6 +101,8 @@ class InaraTradeRoutesTests(unittest.TestCase):
         self.assertEqual(route.to_station, "Scully-Power Station")
         self.assertEqual(route.to_system, "IX")
         self.assertEqual(route.distance_from_system, "~167 Ly")
+        self.assertIsNone(route.from_station_distance)
+        self.assertIsNone(route.to_station_distance)
         self.assertEqual(route.route_distance, "33.08 Ly")
         self.assertEqual(route.updated, "3 hours ago")
         self.assertEqual(route.profit_per_unit, "45,510 Cr")
@@ -165,6 +167,8 @@ class InaraTradeRoutesTests(unittest.TestCase):
 
         self.assertEqual(route.source_buy_commodity, "Silver")
         self.assertEqual(route.target_buy_commodity, "Robotics")
+        self.assertEqual(route.from_station_distance, "148 Ls")
+        self.assertEqual(route.to_station_distance, "215 Ls")
         self.assertEqual(route.distance_from_system, "~167 Ly")
         self.assertEqual(route.profit_per_unit, "37,903 Cr")
         self.assertEqual(route.profit_per_trip, "17,435,380 Cr")

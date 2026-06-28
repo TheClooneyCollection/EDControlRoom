@@ -1039,6 +1039,8 @@ class ControlRoomCommandTests(unittest.TestCase):
                 to_system="HIP 17597",
                 source_buy_commodity="Silver",
                 target_buy_commodity="Robotics",
+                from_station_distance="148 Ls",
+                to_station_distance="215 Ls",
                 distance_from_system="~167 Ly",
                 route_distance="12.4 Ly",
                 profit_per_unit="37,903 Cr",
@@ -1059,6 +1061,7 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertIn("88,323,553 Cr", rendered.plain)
         self.assertIn("From Fontana City (HIP 17597)    To Stronghold Carrier (HIP 17597)", rendered.plain)
         self.assertIn("Buy Silver    Return Robotics", rendered.plain)
+        self.assertIn("From station 148 Ls    To station 215 Ls", rendered.plain)
         self.assertIn("Distance ~167 Ly    Route 12.4 Ly", rendered.plain)
         self.assertIn("Per unit 37,903 Cr", rendered.plain)
         self.assertIn("Per trip 17,435,380 Cr    Per hour 88,323,553 Cr", rendered.plain)
@@ -1073,6 +1076,8 @@ class ControlRoomCommandTests(unittest.TestCase):
                 to_system="HIP 17597",
                 source_buy_commodity="Silver",
                 target_buy_commodity="Robotics",
+                from_station_distance="148 Ls",
+                to_station_distance="215 Ls",
                 distance_from_system="~167 Ly",
                 profit_per_unit="37,903 Cr",
                 profit_per_hour="88,323,553 Cr",
@@ -1081,7 +1086,7 @@ class ControlRoomCommandTests(unittest.TestCase):
 
         self.assertEqual(
             label,
-            "[88.3m/h] 1. Fontana City -> Stronghold Carrier [dist ~167 Ly | buy Silver | return Robotics | ppu 37,903 Cr]",
+            "[88.3m/h] 1. Fontana City -> Stronghold Carrier [stn 148 Ls/215 Ls | dist ~167 Ly | buy Silver | return Robotics | ppu 37,903 Cr]",
         )
 
     def test_load_market_json_seeds_ship_station_when_in_station(self) -> None:

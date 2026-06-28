@@ -138,6 +138,8 @@ class TradeRouteSnapshot:
     to_system: str
     source_buy_commodity: str | None = None
     target_buy_commodity: str | None = None
+    from_station_distance: str | None = None
+    to_station_distance: str | None = None
     distance_from_system: str | None = None
     route_distance: str | None = None
     profit_per_unit: str | None = None

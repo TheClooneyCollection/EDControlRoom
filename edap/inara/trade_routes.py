@@ -96,6 +96,8 @@ class TradeRoute:
     to_system: str
     source_buy_commodity: str | None = None
     target_buy_commodity: str | None = None
+    from_station_distance: str | None = None
+    to_station_distance: str | None = None
     distance_from_system: str | None = None
     route_distance: str | None = None
     profit_per_unit: str | None = None
@@ -306,6 +308,7 @@ def _row_to_route(row: dict[str, Any]) -> TradeRoute:
             to_station = _clean_endpoint_part(station)
             to_system = _clean_endpoint_part(system)
     buy_commodities = _extract_trade_commodity_values(lines, "BUY")
+    station_distances = _extract_repeated_field_values(lines, "STATION DISTANCE")
 
     return TradeRoute(
         index=int(row.get("index", 0) or 0),
@@ -315,6 +318,8 @@ def _row_to_route(row: dict[str, Any]) -> TradeRoute:
         to_system=to_system,
         source_buy_commodity=buy_commodities[0] if buy_commodities else None,
         target_buy_commodity=buy_commodities[-1] if len(buy_commodities) > 1 else None,
+        from_station_distance=station_distances[0] if station_distances else None,
+        to_station_distance=station_distances[1] if len(station_distances) > 1 else None,
         distance_from_system=fields.get("DISTANCE"),
         route_distance=fields.get("ROUTE DISTANCE"),
         profit_per_unit=fields.get("PROFIT PER UNIT"),

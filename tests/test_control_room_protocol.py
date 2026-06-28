@@ -413,6 +413,22 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.app._runtime_state.routine_active = True
         self.app._runtime_state.active_routine_name = "haul"
         self.app._runtime_state.instant_mode = True
+        self.app._trade_routes.system_name = "Sol"
+        self.app._trade_routes.routes = [
+            TradeRoute(
+                index=1,
+                from_station="Jameson Memorial",
+                from_system="Sol",
+                to_station="Galileo",
+                to_system="Sol",
+                source_buy_commodity="gold",
+                target_buy_commodity="silver",
+                from_station_distance="82 Ls",
+                to_station_distance="5 Ls",
+                distance_from_system="~167 Ly",
+                route_distance="12.4 Ly",
+            )
+        ]
         self.app._prompt_state.haul_params = {"commodity": "gold"}
         self.app._prompt_state.dest_prompt_destination = "Achenar"
         self.app._saved_state = ControlRoomState(
@@ -461,6 +477,9 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot.command_history.history_entries[0].raw_command, "haul gold")
         self.assertEqual(snapshot.command_history.draft_command, "sell gold")
         self.assertEqual(snapshot.prompt_state.destination_prompt_destination, "Achenar")
+        self.assertEqual(snapshot.trade_routes.routes[0].from_station_distance, "82 Ls")
+        self.assertEqual(snapshot.trade_routes.routes[0].to_station_distance, "5 Ls")
+        self.assertEqual(snapshot.trade_routes.routes[0].distance_from_system, "~167 Ly")
         self.assertTrue(snapshot.replay_browser.open)
         self.assertEqual(snapshot.replay_browser.visible_entries[0].history_entry.command_name, "haul")
         self.assertEqual(snapshot.activity_log[0].message_text, "Docked at Jameson Memorial")
