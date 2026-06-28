@@ -98,6 +98,12 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
         aliases=("clear",),
     ),
     CommandHelp(
+        name="stop",
+        usage="stop",
+        summary="Freeze persisted haul session time and profit without clearing totals.",
+        detail="Stops the persisted haul session clock so relaunches and idle time do not keep extending the current session. The saved totals remain visible, and the next haul resumes from those totals without counting the stopped downtime. This command refuses to run while a haul routine is still active.",
+    ),
+    CommandHelp(
         name="set_pid",
         usage="set_pid [pid|process-name|foreground]",
         summary="Keep using the foreground app, or target a specific process id for input dispatch.",

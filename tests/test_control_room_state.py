@@ -31,6 +31,7 @@ class ControlRoomStateTests(unittest.TestCase):
                 instant_mode=True,
                 session_profit=12_345_678,
                 session_elapsed_seconds=321.0,
+                session_active=True,
                 session_completed_runs=4,
                 session_total_run_elapsed_seconds=600.0,
                 session_last_run_profit=456_000,
@@ -52,6 +53,7 @@ class ControlRoomStateTests(unittest.TestCase):
         self.assertTrue(loaded.instant_mode)
         self.assertEqual(loaded.session_profit, 12_345_678)
         self.assertEqual(loaded.session_elapsed_seconds, 321.0)
+        self.assertTrue(loaded.session_active)
         self.assertEqual(loaded.session_completed_runs, 4)
         self.assertEqual(loaded.session_total_run_elapsed_seconds, 600.0)
         self.assertEqual(loaded.session_last_run_profit, 456_000)

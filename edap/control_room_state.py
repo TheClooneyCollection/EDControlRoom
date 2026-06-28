@@ -22,6 +22,7 @@ class ControlRoomState:
     instant_mode: bool = False
     session_profit: int = 0
     session_elapsed_seconds: float = 0.0
+    session_active: bool = False
     session_completed_runs: int = 0
     session_total_run_elapsed_seconds: float = 0.0
     session_last_run_profit: int | None = None
@@ -96,6 +97,9 @@ def load_control_room_state(path: Path) -> ControlRoomState:
     session_elapsed_seconds = raw.get("session_elapsed_seconds", 0.0)
     if not isinstance(session_elapsed_seconds, (int, float)):
         session_elapsed_seconds = 0.0
+    session_active = raw.get("session_active", False)
+    if not isinstance(session_active, bool):
+        session_active = False
     session_completed_runs = raw.get("session_completed_runs", 0)
     if not isinstance(session_completed_runs, int):
         session_completed_runs = 0
@@ -115,6 +119,7 @@ def load_control_room_state(path: Path) -> ControlRoomState:
         instant_mode=instant_mode,
         session_profit=session_profit,
         session_elapsed_seconds=float(session_elapsed_seconds),
+        session_active=session_active,
         session_completed_runs=session_completed_runs,
         session_total_run_elapsed_seconds=float(session_total_run_elapsed_seconds),
         session_last_run_profit=session_last_run_profit,
@@ -133,6 +138,7 @@ def save_control_room_state(path: Path, state: ControlRoomState) -> None:
         "instant_mode": state.instant_mode,
         "session_profit": state.session_profit,
         "session_elapsed_seconds": state.session_elapsed_seconds,
+        "session_active": state.session_active,
         "session_completed_runs": state.session_completed_runs,
         "session_total_run_elapsed_seconds": state.session_total_run_elapsed_seconds,
         "session_last_run_profit": state.session_last_run_profit,

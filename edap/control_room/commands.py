@@ -96,6 +96,11 @@ def dispatch(app: CommandHost, raw: str, *, skip_delay_override: bool | None = N
             CommandHistoryEntry(raw=raw, command="new_session", timestamp=now_iso())
         )
         cmd_new_session(app)
+    elif verb == "stop":
+        app._record_history_entry(
+            CommandHistoryEntry(raw=raw, command="stop", timestamp=now_iso())
+        )
+        cmd_stop_session(app)
     elif verb == "set_pid":
         app._record_history_entry(
             CommandHistoryEntry(raw=raw, command="set_pid", params={"value": raw_rest}, timestamp=now_iso())
@@ -302,6 +307,15 @@ def cmd_market(app: CommandHost, rest: str) -> None:
 def cmd_new_session(app: CommandHost) -> None:
     app._clear_session_stats()
     app._log("[dim]Started a new persisted haul session.[/]")
+
+
+def cmd_stop_session(app: CommandHost) -> None:
+    try:
+        app._stop_session_stats()
+    except ValueError as exc:
+        app._log(f"[yellow]{escape(str(exc))}[/]")
+        return
+    app._log("[dim]Stopped the persisted haul session.[/]")
 
 
 def _is_foreground_target_value(value: str) -> bool:

@@ -62,6 +62,8 @@ class HaulSessionSnapshot:
     station_1: str
     station_2: str
     session_started_at: float | None
+    session_elapsed_seconds: float
+    session_active: bool
     active: bool
     clean_run_active: bool
     waiting_for_station_1_departure: bool

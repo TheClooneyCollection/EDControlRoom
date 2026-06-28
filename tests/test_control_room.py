@@ -465,6 +465,8 @@ def _remote_snapshot(
             station_1="",
             station_2="",
             session_started_at=None,
+            session_elapsed_seconds=0.0,
+            session_active=False,
             active=False,
             clean_run_active=False,
             waiting_for_station_1_departure=False,
@@ -2747,6 +2749,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
 
     def test_load_saved_state_restores_persisted_session_summary(self) -> None:
         self.app._haul_stats.session_started_at = 100.0
+        self.app._haul_stats.session_active = True
         self.app._haul_stats.accumulated_profit = 1_250_000
         self.app._haul_stats.completed_runs = 3
         self.app._haul_stats.total_run_elapsed_s = 900.0
@@ -2838,6 +2841,37 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertEqual(self.app._haul_stats.session_started_at, 300.0)
         entry = self._last_history()
         self.assertEqual(entry.command, "new_session")
+
+    def test_stop_freezes_persisted_session_elapsed_time(self) -> None:
+        self.app._haul_stats.session_started_at = 50.0
+        self.app._haul_stats.session_active = True
+        self.app._haul_stats.accumulated_profit = 123_000
+        self.app._time_fn = lambda: 300.0
+
+        self.app._dispatch_command("stop")
+
+        self.assertIsNone(self.app._haul_stats.session_started_at)
+        self.assertFalse(self.app._haul_stats.session_active)
+        self.assertEqual(self.app._haul_stats.session_elapsed_s, 250.0)
+        self.assertEqual(self.app._saved_state.session_elapsed_seconds, 250.0)
+        self.assertFalse(self.app._saved_state.session_active)
+        self.assertIn("Stopped the persisted haul session.", "\n".join(self.app.logged))
+        entry = self._last_history()
+        self.assertEqual(entry.command, "stop")
+
+    def test_stop_refuses_while_haul_session_is_active(self) -> None:
+        self.app._haul_stats.active = True
+        self.app._haul_stats.session_started_at = 50.0
+        self.app._haul_stats.session_active = True
+
+        self.app._dispatch_command("stop")
+
+        self.assertEqual(
+            self.app._haul_stats.session_started_at,
+            50.0,
+        )
+        self.assertTrue(self.app._haul_stats.session_active)
+        self.assertIn("Stop the active haul before stopping the persisted session.", "\n".join(self.app.logged))
     def test_log_startup_modes_reports_input_target_when_backend_exists(self) -> None:
         self.app = _HarnessApp(_make_context(Path(self.tmpdir.name), input_controller=_InputControllerStub()))
 

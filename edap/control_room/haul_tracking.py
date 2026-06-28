@@ -39,6 +39,8 @@ def start_haul_stats(
         station_1=station_1,
         station_2=station_2,
         session_started_at=previous.session_started_at or started_at,
+        session_elapsed_s=previous.session_elapsed_s,
+        session_active=True,
         active=True,
         current_run_started_at=started_at,
         waiting_for_station_1_departure=at_station_1,

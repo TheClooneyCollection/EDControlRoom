@@ -173,7 +173,7 @@ def haul_stats_markup(
         session_elapsed = (
             now_fn() - stats.session_started_at
             if stats.session_started_at is not None
-            else None
+            else (stats.session_elapsed_s if stats.session_elapsed_s > 0 else None)
         )
         session_profit = stats.accumulated_profit + stats.current_run_profit
         lines = [
@@ -216,7 +216,7 @@ def haul_stats_markup(
     session_elapsed = (
         now_fn() - stats.session_started_at
         if stats.session_started_at is not None
-        else None
+        else (stats.session_elapsed_s if stats.session_elapsed_s > 0 else None)
     )
     session_profit = stats.accumulated_profit + stats.current_run_profit
 

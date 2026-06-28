@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `110`
-- Latest generated iteration number: `243`
+- Generated iteration count: `111`
+- Latest generated iteration number: `244`
 
 ## Iteration 134
 
@@ -3090,3 +3090,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Re-test bare `set_pid` against a live CrossOver Elite session and confirm the resolved pid now receives targeted Quartz events while the game is backgrounded.
+
+## Iteration 244
+
+- When: `2026-06-28 20:41`
+- Area: `control-room`
+- Title: `add-session-stop-command`
+- Source: [2026-06-28-20-41_control-room_add-session-stop-command.md](iteration-logs/2026-06-28-20-41_control-room_add-session-stop-command.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `add-session-stop-command`
+- Started: `2026-06-28 20:41`
+
+## Summary
+
+- Added a dedicated `stop` command for persisted haul sessions so operators can freeze session time/profit without clearing totals.
+
+## Changes
+
+- Added persisted session-active/session-elapsed state so a stopped session can keep its frozen duration across saves and remote snapshots instead of resuming wall-clock growth on the next launch.
+- Added `stop` command help/dispatch plus persistence plumbing that refuses to stop while a haul is actively running, freezes the current session totals, and resumes from those totals on the next haul without counting the stopped downtime.
+- Extended haul/session tests and verified the full suite still passes after the new command and snapshot fields.
+
+## Follow-ups
+
+- Live-check whether operators want the frozen-session state called out explicitly in the haul-panel status line, or whether the current no-ticking time display is clear enough on its own.

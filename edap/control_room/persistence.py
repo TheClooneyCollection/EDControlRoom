@@ -84,6 +84,8 @@ def clear_session_stats(app: PersistenceHost) -> None:
     now_fn = app._time_fn
     now = now_fn() if callable(now_fn) else 0.0
     stats.session_started_at = now
+    stats.session_elapsed_s = 0.0
+    stats.session_active = True
     stats.accumulated_profit = 0
     stats.completed_runs = 0
     stats.total_run_elapsed_s = 0.0
@@ -100,16 +102,30 @@ def clear_session_stats(app: PersistenceHost) -> None:
     save_saved_state(app)
 
 
+def stop_session_stats(app: PersistenceHost) -> None:
+    stats = app._haul_stats
+    if stats.active:
+        raise ValueError("Stop the active haul before stopping the persisted session.")
+    now_fn = app._time_fn
+    now = now_fn() if callable(now_fn) else 0.0
+    if stats.session_started_at is not None:
+        stats.session_elapsed_s = max(0.0, now - stats.session_started_at)
+    stats.session_started_at = None
+    stats.session_active = False
+    save_saved_state(app)
+
+
 def _restore_persisted_session(app: PersistenceHost) -> None:
     saved = app._saved_state
     stats = app._haul_stats
     now_fn = app._time_fn
     now = now_fn() if callable(now_fn) else 0.0
-    stats.session_started_at = (
-        max(0.0, now - saved.session_elapsed_seconds)
-        if saved.session_elapsed_seconds > 0
-        else None
-    )
+    stats.session_elapsed_s = saved.session_elapsed_seconds
+    stats.session_active = saved.session_active
+    if saved.session_active:
+        stats.session_started_at = max(0.0, now - saved.session_elapsed_seconds)
+    else:
+        stats.session_started_at = None
     stats.accumulated_profit = saved.session_profit
     stats.completed_runs = saved.session_completed_runs
     stats.total_run_elapsed_s = saved.session_total_run_elapsed_seconds
@@ -122,11 +138,12 @@ def _capture_persisted_session(app: PersistenceHost) -> None:
     stats = app._haul_stats
     now_fn = app._time_fn
     now = now_fn() if callable(now_fn) else 0.0
-    session_elapsed = 0.0
+    session_elapsed = stats.session_elapsed_s
     if stats.session_started_at is not None:
         session_elapsed = max(0.0, now - stats.session_started_at)
     saved.session_profit = stats.accumulated_profit + stats.current_run_profit
     saved.session_elapsed_seconds = session_elapsed
+    saved.session_active = stats.session_active
     saved.session_completed_runs = stats.completed_runs
     saved.session_total_run_elapsed_seconds = stats.total_run_elapsed_s
     saved.session_last_run_profit = stats.last_run_profit
