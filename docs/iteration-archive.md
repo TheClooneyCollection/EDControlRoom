@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `118`
-- Latest generated iteration number: `251`
+- Generated iteration count: `119`
+- Latest generated iteration number: `252`
 
 ## Iteration 134
 
@@ -3282,6 +3282,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - Live-check `control_room connect` during a real operator session to confirm local Inara latency, picker ergonomics, and remote haul-prefill timing all feel correct end to end.
 
 ## Iteration 251
+
+- When: `2026-06-28 22:51`
+- Area: `control-room`
+- Title: `fix-local-haul-picker-race`
+- Source: [2026-06-28-22-51_control-room_fix-local-haul-picker-race.md](iteration-logs/2026-06-28-22-51_control-room_fix-local-haul-picker-race.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `fix-local-haul-picker-race`
+- Started: `2026-06-28 22:51`
+
+## Summary
+
+-
+
+## Changes
+
+-
+
+## Follow-ups
+
+-
+
+## Iteration 252
 
 - When: `2026-06-29 08:24`
 - Area: `runtime`
