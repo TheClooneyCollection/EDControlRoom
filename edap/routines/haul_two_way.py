@@ -354,7 +354,7 @@ def _detect_start_phase(
     station_1: StationLeg,
     station_2: StationLeg,
     progress_fn: ProgressCallback,
-) -> Phase:
+) -> Phase | RoutineResult:
     ship_status = "unknown"
     current_station = ""
     current_system = ""
@@ -433,7 +433,7 @@ def _detect_start_phase(
             if not station_2.buy_commodity:
                 return Phase.UNDOCK_STATION_2
             return Phase.AT_STATION_2_BUY
-        raise RuntimeError(
+        return _error_routine_result(
             f"Docked at unknown station {current_station!r}, expected {station_1.station!r} or {station_2.station!r}"
         )
 
@@ -582,6 +582,17 @@ def _stopped_routine_result(reason: str) -> RoutineResult:
         dispatch=ActionDispatchResult(
             action="haul_loop",
             status="ok",
+            reason=reason,
+        ),
+    )
+
+
+def _error_routine_result(reason: str) -> RoutineResult:
+    return RoutineResult(
+        action="haul_loop",
+        dispatch=ActionDispatchResult(
+            action="haul_loop",
+            status="error",
             reason=reason,
         ),
     )

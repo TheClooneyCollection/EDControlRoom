@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import socket
 
+from rich.markup import escape
 from textual.widgets import Input
 
 from edap.control_room.app import ActivityLog, ControlRoomApp, _ALL_ROUTINE_ACTIONS, _build_log_text
-from edap.control_room import commands as _commands
 from edap.control_room import prompts as _prompts
 from edap.control_room.backend import ControlRoomBackendEvent
 from edap.control_room.client.backend import RemoteObserverBackend, fetch_remote_observer_snapshot
 from edap.control_room.client.target import ObserverServerTarget, parse_observer_server_target
+from edap.control_room.history import now_iso
 from edap.control_room.models import PromptState, TradeRoutePickerState, TradeRoutesData
 from edap.control_room.protocol import (
     ActivityLogAppendedEvent,
@@ -24,7 +25,8 @@ from edap.control_room.routines_haul import (
     _set_trade_routes_loaded,
     _set_trade_routes_loading,
 )
-from edap.inara.trade_routes import search_trade_routes
+from edap.control_room_state import CommandHistoryEntry
+from edap.inara.trade_routes import parse_trade_routes_url, search_trade_routes
 
 
 class ObserverControlRoomApp(ControlRoomApp):
@@ -79,6 +81,18 @@ class ObserverControlRoomApp(ControlRoomApp):
             self._play_local_announcement(event)
 
     def _apply_remote_snapshot(self, *, replace_activity: bool) -> None:
+        self._debug_log(
+            "observer_remote_snapshot_apply_start",
+            replace_activity=replace_activity,
+            remote_trade_route_count=len(self._view_snapshot.trade_routes.routes),
+            remote_trade_routes_loading=self._view_snapshot.trade_routes.loading,
+            local_trade_route_count=len(self._local_trade_routes.routes),
+            local_picker_open=self._local_trade_route_picker.open,
+            local_selected_trade_route_index=self._local_trade_route_picker.selected_route_index,
+            local_prompt_step=self._local_search_prompt_state.haul_prompt_step
+            if self._local_search_prompt_state is not None
+            else "",
+        )
         self._sync_view_snapshot()
         self._tts.set_commander_name(self._view_snapshot.ship.commander_name)
         if replace_activity:
@@ -89,9 +103,28 @@ class ObserverControlRoomApp(ControlRoomApp):
         self._refresh_trade_routes()
         self._update_resume_detail()
         self._refresh_remote_command_input()
+        self._debug_log(
+            "observer_remote_snapshot_apply_done",
+            visible_trade_route_count=len(self._trade_routes.routes),
+            visible_picker_open=self._trade_route_picker_open,
+            visible_selected_trade_route_index=self._selected_trade_route_index,
+            visible_prompt_step=self._prompt_state.haul_prompt_step,
+        )
+
+    def _publish_protocol_snapshot(self) -> None:
+        # Observer-local haul search state should not be fed back through the
+        # remote snapshot backend; it is rendered locally and the remote side
+        # remains authoritative only for server-originated snapshots.
+        return None
 
     def _apply_view_snapshot_state(self) -> None:
         super()._apply_view_snapshot_state()
+        self._debug_log(
+            "observer_apply_view_snapshot_state_after_super",
+            remote_trade_route_count=len(self._trade_routes.routes),
+            remote_picker_open=self._trade_route_picker_open,
+            remote_selected_trade_route_index=self._selected_trade_route_index,
+        )
         self._trade_routes = TradeRoutesData(
             system_name=self._local_trade_routes.system_name,
             query_url=self._local_trade_routes.query_url,
@@ -125,33 +158,67 @@ class ObserverControlRoomApp(ControlRoomApp):
                 command_input_placeholder=self._local_search_prompt_state.command_input_placeholder,
                 command_input_value=self._local_search_prompt_state.command_input_value,
             )
+        self._debug_log(
+            "observer_apply_view_snapshot_state_local_override",
+            local_trade_route_count=len(self._trade_routes.routes),
+            local_trade_routes_loading=self._trade_routes.loading,
+            local_picker_open=self._trade_route_picker_open,
+            local_selected_trade_route_index=self._selected_trade_route_index,
+            local_prompt_step=self._prompt_state.haul_prompt_step,
+        )
         self._refresh_trade_routes()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         raw = event.value
         event.input.value = ""
+        self._debug_log(
+            "observer_input_submitted",
+            raw=raw,
+            has_local_search_prompt=self._local_search_prompt_state is not None,
+            haul_prompt_step=self._haul_prompt_step,
+            haul_confirm_buy_station=self._haul_confirm_buy_station,
+            dest_prompt_destination=self._dest_prompt_destination,
+        )
 
         if self._exit_prompt_active:
+            self._debug_log("observer_input_branch_exit_prompt")
             self._handle_exit_prompt_input(raw)
             return
 
         if self._local_search_prompt_state is not None and self._haul_prompt_step:
+            self._debug_log(
+                "observer_input_branch_local_search_prompt",
+                raw=raw,
+                haul_prompt_step=self._haul_prompt_step,
+            )
             self._handle_local_haul_search_prompt(raw)
             return
 
         if self._haul_prompt_step or self._haul_confirm_buy_station or self._dest_prompt_destination:
+            self._debug_log(
+                "observer_input_branch_remote_prompt_submit",
+                raw=raw,
+                haul_prompt_step=self._haul_prompt_step,
+                haul_confirm_buy_station=self._haul_confirm_buy_station,
+                dest_prompt_destination=self._dest_prompt_destination,
+            )
             self._backend.submit_input(raw)
             return
 
         raw = raw.strip()
         if not raw:
+            self._debug_log("observer_input_branch_blank_after_strip")
             return
 
         if self._try_handle_local_haul_search_command(raw):
+            self._debug_log("observer_input_branch_local_search_command_handled", raw=raw)
             return
 
         if raw.lower() in {"replay", "history"}:
             self._suppress_replay_enter_until = self._time_fn() + 0.1
+            self._debug_log("observer_input_branch_replay_history_submit", raw=raw)
+        else:
+            self._debug_log("observer_input_branch_remote_plain_submit", raw=raw)
         self._backend.submit_input(raw)
 
     def _dispatch_haul_search(
@@ -163,7 +230,20 @@ class ObserverControlRoomApp(ControlRoomApp):
         raw_command: str | None = None,
     ) -> None:
         query_url = self._build_local_query_url(system_name, query_params)
-        self._local_search_prompt_state = None
+        self._clear_local_search_prompt_state()
+        history_params = {
+            "mode": "search",
+            "near_system": system_name,
+            **{str(key): str(value) for key, value in query_params.items()},
+        }
+        self._record_history_entry(
+            CommandHistoryEntry(
+                raw=raw_command or f"{'!' if skip_delay else ''}haul search {system_name}".strip(),
+                command="haul",
+                params=history_params,
+                timestamp=now_iso(),
+            )
+        )
 
         def on_start() -> None:
             self._log(f"Searching Inara trade routes for [cyan]{system_name}[/]...")
@@ -217,7 +297,40 @@ class ObserverControlRoomApp(ControlRoomApp):
             raw_command=f"haul route {route.from_station} -> {route.to_station}",
         )
 
+    def _close_trade_route_picker(self) -> None:
+        self._debug_log(
+            "observer_close_trade_route_picker_start",
+            local_picker_open=self._local_trade_route_picker.open,
+            local_selected_trade_route_index=self._local_trade_route_picker.selected_route_index,
+            visible_picker_open=self._trade_route_picker_open,
+            visible_selected_trade_route_index=self._selected_trade_route_index,
+        )
+        self._trade_route_picker_open = False
+        self._local_trade_route_picker = TradeRoutePickerState(
+            open=False,
+            selected_route_index=self._selected_trade_route_index,
+            presented_query_url=self._presented_trade_route_query_url,
+            presented_searched_at=self._presented_trade_route_searched_at,
+        )
+        self._refresh_trade_route_picker()
+        self._debug_log(
+            "observer_close_trade_route_picker_done",
+            local_picker_open=self._local_trade_route_picker.open,
+            local_selected_trade_route_index=self._local_trade_route_picker.selected_route_index,
+            visible_picker_open=self._trade_route_picker_open,
+            visible_selected_trade_route_index=self._selected_trade_route_index,
+        )
+        try:
+            self.set_focus(self.query_one("#cmd", Input))
+        except Exception:
+            return
+
     def _handle_local_haul_search_prompt(self, value: str) -> None:
+        self._debug_log(
+            "observer_handle_local_haul_search_prompt_start",
+            value=value,
+            haul_prompt_step=self._haul_prompt_step,
+        )
         _prompts.handle_haul_prompt(
             self,
             value,
@@ -225,16 +338,96 @@ class ObserverControlRoomApp(ControlRoomApp):
         )
         if self._haul_prompt_step:
             self._capture_local_search_prompt_state()
+            self._debug_log(
+                "observer_handle_local_haul_search_prompt_continue",
+                next_haul_prompt_step=self._haul_prompt_step,
+                command_input_prefill_active=self._prompt_state.command_input_prefill_active,
+            )
+            return
+        self._debug_log("observer_handle_local_haul_search_prompt_dispatched_search")
 
     def _try_handle_local_haul_search_command(self, raw: str) -> bool:
         command_raw = raw[1:].lstrip() if raw.startswith("!") else raw
         lowered = command_raw.lower()
+        self._debug_log(
+            "observer_try_local_haul_search_command",
+            raw=raw,
+            command_raw=command_raw,
+            lowered=lowered,
+        )
         if lowered == "haul search" or lowered.startswith("haul search "):
-            _commands.dispatch(self, raw)
-            if self._prompt_state.haul_prompt_mode == "search" and self._haul_prompt_step:
-                self._capture_local_search_prompt_state()
+            self._start_or_dispatch_local_haul_search(raw=raw, command_raw=command_raw)
             return True
+        self._debug_log("observer_try_local_haul_search_command_not_matched", raw=raw)
         return False
+
+    def _start_or_dispatch_local_haul_search(self, *, raw: str, command_raw: str) -> None:
+        skip_delay = raw.startswith("!")
+        search_rest = command_raw[len("haul search") :].strip()
+        if search_rest.lower().startswith("url "):
+            query_url = search_rest[4:].strip()
+            if not query_url:
+                self._log("[red]Usage: haul search url <inara-url>[/]")
+                return
+            try:
+                system_name, query_params = parse_trade_routes_url(query_url)
+            except ValueError as exc:
+                self._log(f"[red]{escape(str(exc))}[/]")
+                return
+            self._debug_log(
+                "observer_try_local_haul_search_command_dispatch_url",
+                system_name=system_name,
+                query_url=query_url,
+            )
+            self._dispatch_haul_search(
+                system_name=system_name,
+                query_params=query_params,
+                skip_delay=skip_delay,
+                raw_command=raw,
+            )
+            return
+
+        system_name = search_rest or self._observer_ship_system()
+        if not system_name:
+            self._log(
+                "[red]haul search needs a system name, or the current ship system must be known.[/]"
+            )
+            self._debug_log("observer_try_local_haul_search_command_no_prompt")
+            return
+        self._sync_local_ship_context_from_snapshot()
+        defaults = _prompts.saved_haul_search_defaults(
+            self,
+            system_name=system_name,
+            seed=None,
+        )
+        query_params = {
+            str(key): str(value)
+            for key, value in defaults.items()
+            if key != "near_system"
+        }
+        self._clear_local_search_prompt_state()
+        self._debug_log(
+            "observer_try_local_haul_search_command_dispatch_defaults",
+            system_name=system_name,
+            cargo_capacity=self._ship.cargo_capacity,
+            query_params=query_params,
+        )
+        self._dispatch_haul_search(
+            system_name=system_name,
+            query_params=query_params,
+            skip_delay=skip_delay,
+            raw_command=raw,
+        )
+
+    def _observer_ship_system(self) -> str:
+        snapshot_system = getattr(self._view_snapshot.ship, "system_name", "") or ""
+        return snapshot_system.strip() or (self._ship.system or "").strip()
+
+    def _sync_local_ship_context_from_snapshot(self) -> None:
+        ship = self._view_snapshot.ship
+        self._ship.system = ship.system_name
+        self._ship.station = ship.station_name
+        self._ship.cargo_capacity = ship.cargo_capacity
 
     def _build_local_query_url(self, system_name: str, query_params: dict[str, str]) -> str:
         from edap.inara.trade_routes import build_trade_routes_url
@@ -261,6 +454,17 @@ class ObserverControlRoomApp(ControlRoomApp):
             command_input_value=self._prompt_state.command_input_value,
         )
 
+    def _clear_local_search_prompt_state(self) -> None:
+        self._local_search_prompt_state = None
+        _prompts.clear_haul_prompt(self._prompt_state)
+        try:
+            command_input = self.query_one("#cmd", Input)
+        except Exception:
+            return
+        command_input.placeholder = self._default_command_placeholder
+        command_input.value = ""
+        command_input.cursor_position = 0
+
     def _capture_local_trade_route_state(self) -> None:
         self._local_trade_routes = TradeRoutesData(
             system_name=self._trade_routes.system_name,
@@ -276,12 +480,34 @@ class ObserverControlRoomApp(ControlRoomApp):
             presented_query_url=self._presented_trade_route_query_url,
             presented_searched_at=self._presented_trade_route_searched_at,
         )
+        self._debug_log(
+            "observer_capture_local_trade_route_state",
+            local_trade_route_count=len(self._local_trade_routes.routes),
+            local_trade_routes_loading=self._local_trade_routes.loading,
+            local_trade_routes_error=self._local_trade_routes.error,
+            local_picker_open=self._local_trade_route_picker.open,
+            local_selected_trade_route_index=self._local_trade_route_picker.selected_route_index,
+            local_presented_query_url=self._local_trade_route_picker.presented_query_url,
+            local_presented_searched_at=self._local_trade_route_picker.presented_searched_at,
+        )
 
     def _apply_local_trade_routes_loading(self, *, system_name: str, query_url: str) -> None:
+        self._debug_log(
+            "observer_local_trade_routes_loading_start",
+            system_name=system_name,
+            query_url=query_url,
+        )
         _set_trade_routes_loading(self, system_name=system_name, query_url=query_url)
         self._capture_local_trade_route_state()
 
     def _apply_local_trade_routes_loaded(self, result) -> None:
+        self._debug_log(
+            "observer_local_trade_routes_loaded_start",
+            system_name=result.system_name,
+            query_url=result.query_url,
+            route_count=len(result.routes),
+            first_route_index=result.routes[0].index if result.routes else None,
+        )
         _set_trade_routes_loaded(self, result)
         self._capture_local_trade_route_state()
 
@@ -292,6 +518,12 @@ class ObserverControlRoomApp(ControlRoomApp):
         query_url: str,
         message: str,
     ) -> None:
+        self._debug_log(
+            "observer_local_trade_routes_error_start",
+            system_name=system_name,
+            query_url=query_url,
+            message=message,
+        )
         _set_trade_routes_error(
             self,
             system_name=system_name,

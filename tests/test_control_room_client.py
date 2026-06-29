@@ -464,7 +464,6 @@ class ControlRoomClientTests(unittest.TestCase):
             )
         )
         app = self._app(backend=backend)
-        _bind_observer_widgets(app, _FakeInputWidget())
         app._ship.system = "Praea Euq AK-A d25"
         app._ship.cargo_capacity = 460
         app._controls = object()
@@ -492,16 +491,67 @@ class ControlRoomClientTests(unittest.TestCase):
                 self.value = value
                 self.input = type("_Input", (), {"value": value})()
 
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
         with patch("edap.control_room.client.connect.search_trade_routes", return_value=result):
             app.on_input_submitted(_Submitted("haul search Praea Euq AK-A d25"))
-            self.assertEqual(app._prompt_state.haul_prompt_mode, "search")
-            self.assertEqual(app._haul_prompt_step, "search_edit")
-            app.on_input_submitted(_Submitted(app._prompt_state.command_input_value))
 
         self.assertEqual(app._trade_routes.system_name, "Praea Euq AK-A d25")
         self.assertEqual(len(app._trade_routes.routes), 1)
         self.assertTrue(app._trade_route_picker_open)
         self.assertEqual(app._selected_trade_route_index, 1)
+        self.assertEqual(app._prompt_state.haul_prompt_mode, "")
+        self.assertEqual(app._haul_prompt_step, "")
+        self.assertEqual(command_input.value, "")
+        self.assertEqual(command_input.placeholder, app._default_command_placeholder)
+
+    def test_observer_app_uses_remote_snapshot_context_for_bare_haul_search(self) -> None:
+        backend = self._backend(
+            initial_snapshot=replace(
+                _snapshot(),
+                session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+                ship=replace(_snapshot().ship, system_name="Zeta Trianguli Australis", cargo_capacity=461),
+            )
+        )
+        app = self._app(backend=backend)
+        app._controls = object()
+        app._run_in_thread = lambda fn: fn()
+        app.call_from_thread = lambda callback, *args, **kwargs: callback(*args, **kwargs)  # type: ignore[method-assign]
+
+        result = TradeRouteSearchResult(
+            system_name="Zeta Trianguli Australis",
+            query_url="https://inara.cz/elite/market-traderoutes/?ps1=Zeta+Trianguli+Australis",
+            searched_at="2026-06-29T07:00:00Z",
+            routes=(
+                TradeRoute(
+                    index=1,
+                    from_station="Savitskaya Orbital",
+                    from_system="TSONGORIS",
+                    to_station="Scully-Power Station",
+                    to_system="IX",
+                    source_buy_commodity="Silver",
+                ),
+            ),
+        )
+
+        class _Submitted:
+            def __init__(self, value: str) -> None:
+                self.value = value
+                self.input = type("_Input", (), {"value": value})()
+
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
+        with patch("edap.control_room.client.connect.search_trade_routes", return_value=result):
+            app.on_input_submitted(_Submitted("haul search"))
+
+        self.assertEqual(app._trade_routes.system_name, "Zeta Trianguli Australis")
+        self.assertEqual(len(app._trade_routes.routes), 1)
+        self.assertTrue(app._trade_route_picker_open)
+        self.assertEqual(app._selected_trade_route_index, 1)
+        self.assertEqual(app._prompt_state.haul_prompt_mode, "")
+        self.assertEqual(app._haul_prompt_step, "")
+        self.assertEqual(command_input.value, "")
+        self.assertEqual(command_input.placeholder, app._default_command_placeholder)
 
     def test_observer_app_submits_selected_local_trade_route_to_remote(self) -> None:
         backend = self._backend(
@@ -537,6 +587,8 @@ class ControlRoomClientTests(unittest.TestCase):
             message["payload"]["raw_command"],
             "haul route Savitskaya Orbital -> Nyberg Vision",
         )
+        self.assertFalse(app._local_trade_route_picker.open)
+        self.assertFalse(app._trade_route_picker_open)
 
     def test_parse_target_defaults_to_http_and_default_port(self) -> None:
         target = parse_observer_server_target("192.168.1.44")

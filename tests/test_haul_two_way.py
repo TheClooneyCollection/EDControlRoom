@@ -169,6 +169,34 @@ class TwoWayHaulLoopTests(unittest.TestCase):
 
         self.assertEqual(phase, Phase.UNDOCK_STATION_2)
 
+    def test_detect_start_phase_docked_at_unknown_station_returns_error_result(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_journal(
+                journal_dir,
+                {
+                    "event": "Docked",
+                    "StationName": "Jameson Memorial",
+                    "StarSystem": "Shinrarta Dezhra",
+                    "CargoCapacity": 64,
+                },
+            )
+            _write_cargo(journal_dir, [])
+
+            result = _detect_start_phase(
+                journal_dir,
+                station_1=_station_1_leg(),
+                station_2=_station_2_leg(),
+                progress_fn=noop_progress,
+            )
+
+        self.assertIsInstance(result, RoutineResult)
+        assert isinstance(result, RoutineResult)
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertIn("Docked at unknown station", result.dispatch.reason)
+        self.assertIn(_STATION_1, result.dispatch.reason)
+        self.assertIn(_STATION_2, result.dispatch.reason)
+
     def test_one_iteration_happy_path(self) -> None:
         controls = FakeShipControls()
         market_calls: list[tuple[str, str]] = []
