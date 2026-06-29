@@ -9,6 +9,7 @@ from unittest.mock import patch
 from tools import ship_controls
 from edap.config import load_config
 from edap.runtime import LoadedConfig
+from edap.timing import TimingSampler
 
 
 class _FakeControls:
@@ -80,6 +81,7 @@ class ShipControlsCliTests(unittest.TestCase):
                 )(),
                 "input_controller": object(),
                 "binding_lookup": object(),
+                "timing_sampler": TimingSampler(loaded.config.timing),
             },
         )()
 
@@ -126,6 +128,7 @@ class ShipControlsCliTests(unittest.TestCase):
                 )(),
                 "input_controller": object(),
                 "binding_lookup": object(),
+                "timing_sampler": TimingSampler(loaded.config.timing),
             },
         )()
 
@@ -170,6 +173,7 @@ class ShipControlsCliTests(unittest.TestCase):
                 )(),
                 "input_controller": object(),
                 "binding_lookup": object(),
+                "timing_sampler": TimingSampler(loaded.config.timing),
             },
         )()
 
@@ -234,6 +238,7 @@ class ShipControlsCliTests(unittest.TestCase):
                 )(),
                 "input_controller": object(),
                 "binding_lookup": object(),
+                "timing_sampler": TimingSampler(loaded.config.timing),
             },
         )()
 

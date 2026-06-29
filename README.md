@@ -146,6 +146,8 @@ Note: `apply-default` is implemented and covered by unit tests, but it has not y
   Main operator workflow, haul behavior, replay/history, and interrupt semantics.
 - [docs/operators/bindings-files.md](docs/operators/bindings-files.md)
   `.binds` backup, restore, and shipped preset apply flows.
+- [docs/operators/input-timing.md](docs/operators/input-timing.md)
+  Human-style delay, hold, and typing randomization settings.
 - [docs/operators/market-timing.md](docs/operators/market-timing.md)
   Market `buy ... max` hold tuning and sell `MAX` rapid-tap configuration.
 - [docs/operators/manual-journal-routine-testing.md](docs/operators/manual-journal-routine-testing.md)

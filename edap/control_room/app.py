@@ -791,6 +791,7 @@ class ControlRoomApp(App[None]):
             self._ctx.input_controller,
             minimum_action_hold_s=self._config.controls.minimum_action_hold_seconds,
             continuous_action_hold_s=self._config.controls.continuous_action_hold_seconds,
+            sleeper=self._make_sleeper(),
         )
 
     def _load_saved_state(self) -> None:

@@ -1,5 +1,6 @@
 # Runtime Status
 ## Current
+- Runtime timing now flows through a shared config-backed sampler: delays, repeat gaps, command-launch waits, key holds, and typing cadence can all use a clamped log-normal distribution from `defaults/timing.toml` / `[timing]`, while non-human infrastructure timing like journal polling stays deterministic.
 - The macOS input backend now lazily builds its pid-targeted Quartz poster, so non-macOS test runners can still construct the controller for injected-unit-test paths without failing before any pid-targeted dispatch is attempted.
 - macOS `set_pid` auto-detect now falls back from `ps ... comm` to the full `ps ... command` line, so CrossOver/Wine launches that only expose `EliteDangerous64.exe` in their arguments can still resolve the game pid.
 - Input backends now keep a shared foreground-by-default target model across macOS, Windows, and Linux; macOS can switch to pid-targeted Quartz posting, Windows can switch to pid/hwnd-targeted window-message dispatch, and the default auto-detect filter is `EliteDangerous64.exe`.
@@ -12,6 +13,7 @@
 - Windows background targeting currently uses `PostMessageW` against a resolved top-level window, so native support exists in code but still needs live validation against Elite's real input path.
 - The legacy CV-driven align loop is still not ported into the active runtime.
 ## Next
+- Live-tune the default timing distribution against real CrossOver sessions now that input delay/hold/typing jitter is centralized and operator-configurable.
 - Live-check `set_pid` against a real backgrounded CrossOver Elite session now that the macOS finder also scans full process arguments.
 - Live-validate the new targeted-input path on both CrossOver/macOS and native Windows, then decide whether Windows needs a stronger background-input fallback than hwnd message posting.
 - Continue the portability follow-up work: CV capture/performance measurement, journal latency measurement, diagnostics/dashboard work, and broader Windows validation.

@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from edap.platform.input.linux import KEY_NAMES, LinuxInputController
+from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler, no_jitter_timing_sampler
 
 
 class FakeBackend:
@@ -19,12 +20,31 @@ class FakeBackend:
 def _build() -> tuple[LinuxInputController, FakeBackend]:
     backend = FakeBackend()
     return (
-        LinuxInputController(runner=backend.run, sleeper=backend.sleep),
+        LinuxInputController(runner=backend.run, sleeper=backend.sleep, timing_sampler=no_jitter_timing_sampler()),
         backend,
     )
 
 
 class LinuxInputControllerTests(unittest.TestCase):
+    def test_hold_and_typing_delay_use_timing_sampler(self) -> None:
+        backend = FakeBackend()
+        timing_sampler = TimingSampler(
+            TimingConfig(
+                enabled=True,
+                distribution="log_normal",
+                delay=TimingChannelConfig(sigma=0.0, min_factor=1.0, max_factor=1.0),
+                hold=TimingChannelConfig(sigma=0.0, min_factor=1.0, max_factor=1.0, min_seconds=0.04),
+                typing=TimingChannelConfig(sigma=0.0, min_factor=1.0, max_factor=1.0, min_seconds=0.03),
+            )
+        )
+        controller = LinuxInputController(runner=backend.run, sleeper=backend.sleep, timing_sampler=timing_sampler)
+
+        controller.tap_key("a", hold_s=0.01)
+        controller.type_text("a", char_delay_s=0.01)
+
+        self.assertIn(("sleep", "0.04"), backend.commands)
+        self.assertIn(("xdotool", "type", "--delay", "30", "a"), backend.commands)
+
     def test_tap_letter_with_hold(self) -> None:
         controller, backend = _build()
 

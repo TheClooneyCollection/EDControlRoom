@@ -9,6 +9,34 @@ bindings_file = ""
 # Set this explicitly only when you need to override or make the mode obvious in shared configs.
 debug = true
 
+[timing]
+# Human-facing waits and input dwell use a clamped log-normal distribution so the
+# randomization stays positive and slightly long-tailed instead of mechanically uniform.
+enabled = true
+distribution = "log_normal"
+
+[timing.delay]
+# Used for routine sleeps, repeat gaps, command delays, and similar non-polling pauses.
+sigma = 0.18
+min_factor = 0.85
+max_factor = 1.35
+min_seconds = 0.0
+
+[timing.hold]
+# Used for per-key hold durations when taps intentionally dwell before release.
+sigma = 0.12
+min_factor = 0.9
+max_factor = 1.2
+min_seconds = 0.02
+
+[timing.typing]
+# Used for inter-character typing cadence. The wider spread keeps text entry from
+# looking metronomic while still respecting a minimum practical delay.
+sigma = 0.28
+min_factor = 0.65
+max_factor = 1.75
+min_seconds = 0.02
+
 [control_room]
 state_file = ".control_room_state.json"
 history_limit = 20

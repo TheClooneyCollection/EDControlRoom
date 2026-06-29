@@ -14,6 +14,7 @@ from edap.routines import auto_zero_throttle_on_arrival, dock, haul_loop_two_way
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.ship_controls import ShipControls
 from edap.state import JournalWatcher
+from edap.timing import TimingSampler
 
 
 ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL = "auto_zero_throttle_on_arrival"
@@ -44,10 +45,11 @@ def _progress(message: str) -> None:
     sys.stderr.flush()
 
 
-def _make_logging_sleeper(progress_fn):
+def _make_logging_sleeper(progress_fn, timing_sampler: TimingSampler):
     def _sleeper(s: float) -> None:
-        progress_fn(f"  pause {s:g}s")
-        sleep(s)
+        sampled_s = timing_sampler.sample_delay(s)
+        progress_fn(f"  pause {sampled_s:g}s")
+        sleep(sampled_s)
     return _sleeper
 
 
@@ -525,9 +527,10 @@ def main() -> int:
         runtime.input_controller,
         minimum_action_hold_s=loaded.config.controls.minimum_action_hold_seconds,
         continuous_action_hold_s=loaded.config.controls.continuous_action_hold_seconds,
+        sleeper=runtime.timing_sampler.make_sleep_sleeper(),
     )
     logging_controls = ProgressShipControls(controls, _progress, verbose=True)
-    logging_sleeper = _make_logging_sleeper(_progress)
+    logging_sleeper = _make_logging_sleeper(_progress, runtime.timing_sampler)
 
     if args.delay_seconds > 0:
         _sleep_with_countdown(args.routine, args.delay_seconds)

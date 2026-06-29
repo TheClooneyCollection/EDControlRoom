@@ -53,6 +53,12 @@ from edap.control_room.protocol.snapshot import (
     UiStateSnapshot,
 )
 from edap.runtime import ResolvedPath, RuntimeContext
+from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler
+
+
+def _make_timing_config() -> TimingConfig:
+    channel = TimingChannelConfig(sigma=0.0, min_factor=1.0, max_factor=1.0, min_seconds=0.0)
+    return TimingConfig(enabled=False, distribution="log_normal", delay=channel, hold=channel, typing=channel)
 
 
 class _WidgetStyles:
@@ -195,6 +201,7 @@ def _make_observer_context() -> RuntimeContext:
                 ),
             ),
             runtime=RuntimeConfig(platform="macos", debug=False),
+            timing=_make_timing_config(),
             control_room=ControlRoomConfig(
                 state_file=Path("/tmp/control-room-state.json"),
                 history_limit=20,
@@ -208,6 +215,7 @@ def _make_observer_context() -> RuntimeContext:
         bindings=bindings,
         input_controller=None,
         screen_capture=None,
+        timing_sampler=TimingSampler(_make_timing_config()),
         binding_lookup=None,
         config_path=Path("/tmp/config.toml"),
         used_example_config_fallback=False,

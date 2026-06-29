@@ -6,6 +6,7 @@ from edap.actions import ActionDispatchResult, ActionDispatcher
 from edap.binding_lookup import build_binding_lookup
 from edap.bindings import Binding
 from edap.platform.input.macos import MODIFIER_FLAGS, MacOSInputController
+from edap.timing import no_jitter_timing_sampler
 
 
 class FakeInputController:
@@ -100,6 +101,7 @@ class ActionDispatcherTests(unittest.TestCase):
                 ("down" if down else "up", flags)
             ),
             sleeper=lambda _duration: None,
+            timing_sampler=no_jitter_timing_sampler(),
         )
 
         input_controller.tap_key("a", modifier="left_shift")

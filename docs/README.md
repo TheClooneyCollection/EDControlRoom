@@ -8,6 +8,7 @@
 
 ## Operator Guides
 
+- [operators/input-timing.md](operators/input-timing.md): human-style delay, hold, and typing randomization settings
 - [operators/market-timing.md](operators/market-timing.md): market buy-hold tuning and sell max rapid-tap settings
 - [operators/manual-journal-routine-testing.md](operators/manual-journal-routine-testing.md): low-level manual validation outside Control Room
 

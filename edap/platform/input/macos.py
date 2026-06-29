@@ -5,6 +5,8 @@ from pathlib import Path
 from subprocess import run
 from time import sleep as _default_sleep
 
+from edap.timing import TimingSampler
+
 try:
     from Quartz import (
         CGEventCreateKeyboardEvent,
@@ -235,11 +237,13 @@ class MacOSInputController(InputController):
         pid_poster: PidPosterFn | None = None,
         pid_finder: PidFinderFn | None = None,
         sleeper: SleeperFn | None = None,
+        timing_sampler: TimingSampler,
     ) -> None:
         self._poster = poster if poster is not None else _make_default_poster()
         self._pid_poster = pid_poster
         self._pid_finder = pid_finder if pid_finder is not None else _find_pid_by_process_name
         self._sleeper = sleeper if sleeper is not None else _default_sleep
+        self._timing_sampler = timing_sampler
         self._target = InputTargetState(platform="macos", mode="foreground")
 
     def press_key(self, key: str, modifier: str | None = None) -> None:
@@ -257,7 +261,8 @@ class MacOSInputController(InputController):
             self._dispatch_event(mod_keycode, True, flags, None)
         self._dispatch_event(keycode, True, flags, unicode_char)
         if hold_s > 0:
-            self._sleeper(hold_s)
+            sampled_hold_s = self._timing_sampler.sample_hold(hold_s)
+            self._sleeper(sampled_hold_s)
         self._dispatch_event(keycode, False, flags, unicode_char)
         if mod_keycode is not None:
             self._dispatch_event(mod_keycode, False, 0, None)
@@ -283,7 +288,8 @@ class MacOSInputController(InputController):
             else:
                 raise ValueError(f"Unsupported character for macOS input: {char!r}")
             if char_delay_s > 0:
-                self._sleeper(char_delay_s)
+                sampled_delay_s = self._timing_sampler.sample_typing_delay(char_delay_s)
+                self._sleeper(sampled_delay_s)
 
     def current_target(self) -> InputTargetState:
         return self._target

@@ -5,6 +5,8 @@ from shutil import which
 from subprocess import CalledProcessError, run
 from time import sleep as _default_sleep
 
+from edap.timing import TimingSampler
+
 from .base import InputController, InputTargetState
 
 
@@ -160,9 +162,11 @@ class LinuxInputController(InputController):
         *,
         runner: RunnerFn | None = None,
         sleeper: SleeperFn | None = None,
+        timing_sampler: TimingSampler,
     ) -> None:
         self._runner = runner if runner is not None else _make_default_runner()
         self._sleeper = sleeper if sleeper is not None else _default_sleep
+        self._timing_sampler = timing_sampler
         self._target = InputTargetState(platform="linux", mode="foreground")
 
     def press_key(self, key: str, modifier: str | None = None) -> None:
@@ -183,13 +187,15 @@ class LinuxInputController(InputController):
             self._runner(["xdotool", "keydown", modifier_name])
         self._runner(["xdotool", "keydown", key_name])
         if hold_s > 0:
-            self._sleeper(hold_s)
+            sampled_hold_s = self._timing_sampler.sample_hold(hold_s)
+            self._sleeper(sampled_hold_s)
         self._runner(["xdotool", "keyup", key_name])
         if modifier_name is not None:
             self._runner(["xdotool", "keyup", modifier_name])
 
     def type_text(self, text: str, char_delay_s: float = 0.05) -> None:
-        delay_ms = max(0, round(char_delay_s * 1000))
+        sampled_delay_s = self._timing_sampler.sample_typing_delay(char_delay_s)
+        delay_ms = max(0, round(sampled_delay_s * 1000))
         self._runner(["xdotool", "type", "--delay", str(delay_ms), text])
 
     def current_target(self) -> InputTargetState:

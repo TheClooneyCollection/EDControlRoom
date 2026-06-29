@@ -51,6 +51,7 @@ from edap.control_room.protocol.snapshot import (
 from edap.control_room_state import CommandHistoryEntry
 from edap.routines import RoutineResult
 from edap.runtime import ResolvedPath, RuntimeContext
+from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler
 from edap.tts import AnnouncementId, NullSpeechBackend, TTSAnnouncer
 from edap.control_room.workers import PendingRoutineCancelled, RoutineCancelled, run_routine_thread
 from edap.haul_config import DEFAULT_HAUL_CONFIG_PATH
@@ -58,6 +59,11 @@ from edap.inara.trade_routes import TradeRoute, TradeRouteSearchResult
 from edap.platform.input.base import InputTargetState
 from edap.version import GitHubRelease
 from rich.text import Text
+
+
+def _make_timing_config() -> TimingConfig:
+    channel = TimingChannelConfig(sigma=0.0, min_factor=1.0, max_factor=1.0, min_seconds=0.0)
+    return TimingConfig(enabled=False, distribution="log_normal", delay=channel, hold=channel, typing=channel)
 
 
 def _make_config(journal_dir: Path, *, activity_log_max_lines: int = 2000) -> AppConfig:
@@ -104,6 +110,7 @@ def _make_config(journal_dir: Path, *, activity_log_max_lines: int = 2000) -> Ap
             ),
         ),
         runtime=RuntimeConfig(platform="macos", debug=False),
+        timing=_make_timing_config(),
         control_room=ControlRoomConfig(
             state_file=journal_dir / ".control_room_state.json",
             history_limit=20,
@@ -138,6 +145,7 @@ def _make_context(
         bindings=resolved,
         input_controller=input_controller,
         screen_capture=None,
+        timing_sampler=TimingSampler(_make_timing_config()),
         binding_lookup=None,
         config_path=config_path or journal_dir / "config.toml",
         used_example_config_fallback=used_example_config_fallback,
@@ -1847,6 +1855,7 @@ on_land = true
             controls=self.app._config.controls,
             screen=self.app._config.screen,
             runtime=self.app._config.runtime,
+            timing=self.app._config.timing,
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 history_limit=2,
@@ -2918,6 +2927,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
                 bindings=ctx.bindings,
                 input_controller=ctx.input_controller,
                 screen_capture=ctx.screen_capture,
+                timing_sampler=ctx.timing_sampler,
                 binding_lookup=ctx.binding_lookup,
                 config_path=ctx.config_path,
                 used_example_config_fallback=ctx.used_example_config_fallback,
@@ -2970,6 +2980,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             controls=self.app._config.controls,
             screen=self.app._config.screen,
             runtime=self.app._config.runtime,
+            timing=self.app._config.timing,
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 history_limit=self.app._config.control_room.history_limit,
@@ -3026,6 +3037,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             bindings=resolved,
             input_controller=None,
             screen_capture=None,
+            timing_sampler=self.app._ctx.timing_sampler,
             binding_lookup=build_binding_lookup(bindings={}, actions=[]),
             config_path=self.app._ctx.config_path,
             used_example_config_fallback=self.app._ctx.used_example_config_fallback,
@@ -3057,6 +3069,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             bindings=resolved,
             input_controller=None,
             screen_capture=None,
+            timing_sampler=self.app._ctx.timing_sampler,
             binding_lookup=lookup,
             config_path=self.app._ctx.config_path,
             used_example_config_fallback=self.app._ctx.used_example_config_fallback,
@@ -3098,6 +3111,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             bindings=resolved,
             input_controller=None,
             screen_capture=None,
+            timing_sampler=self.app._ctx.timing_sampler,
             binding_lookup=lookup,
             config_path=self.app._ctx.config_path,
             used_example_config_fallback=self.app._ctx.used_example_config_fallback,
@@ -3135,6 +3149,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             bindings=resolved,
             input_controller=None,
             screen_capture=None,
+            timing_sampler=self.app._ctx.timing_sampler,
             binding_lookup=lookup,
             config_path=self.app._ctx.config_path,
             used_example_config_fallback=self.app._ctx.used_example_config_fallback,
@@ -3166,6 +3181,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             controls=self.app._config.controls,
             screen=self.app._config.screen,
             runtime=self.app._config.runtime,
+            timing=self.app._config.timing,
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 history_limit=self.app._config.control_room.history_limit,
@@ -3201,6 +3217,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             controls=self.app._config.controls,
             screen=self.app._config.screen,
             runtime=self.app._config.runtime,
+            timing=self.app._config.timing,
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 history_limit=self.app._config.control_room.history_limit,
@@ -3237,6 +3254,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             controls=self.app._config.controls,
             screen=self.app._config.screen,
             runtime=self.app._config.runtime,
+            timing=self.app._config.timing,
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 history_limit=self.app._config.control_room.history_limit,
@@ -3271,6 +3289,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             controls=self.app._config.controls,
             screen=self.app._config.screen,
             runtime=self.app._config.runtime,
+            timing=self.app._config.timing,
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 history_limit=self.app._config.control_room.history_limit,
@@ -3307,6 +3326,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             controls=self.app._config.controls,
             screen=self.app._config.screen,
             runtime=self.app._config.runtime,
+            timing=self.app._config.timing,
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 history_limit=self.app._config.control_room.history_limit,
@@ -3345,6 +3365,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             controls=self.app._config.controls,
             screen=self.app._config.screen,
             runtime=self.app._config.runtime,
+            timing=self.app._config.timing,
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 history_limit=self.app._config.control_room.history_limit,
@@ -3376,6 +3397,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             controls=self.app._config.controls,
             screen=self.app._config.screen,
             runtime=self.app._config.runtime,
+            timing=self.app._config.timing,
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 history_limit=self.app._config.control_room.history_limit,
@@ -3399,6 +3421,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             controls=self.app._config.controls,
             screen=self.app._config.screen,
             runtime=self.app._config.runtime,
+            timing=self.app._config.timing,
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 history_limit=self.app._config.control_room.history_limit,

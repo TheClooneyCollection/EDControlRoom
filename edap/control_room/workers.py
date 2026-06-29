@@ -10,6 +10,7 @@ from edap.control_room import error_text
 from edap.control_room.failure_messages import describe_routine_exception, describe_routine_failure
 from edap.progress_controls import ProgressShipControls
 from edap.state import JournalWatcher
+from edap.timing import TimingSampler
 
 
 class RoutineCancelled(Exception):
@@ -114,9 +115,10 @@ def make_watcher(app: WorkerHost) -> Any:
     return CancellationProxy(watcher, raise_if_worker_cancelled)
 
 
-def make_sleeper() -> Callable[[float], None]:
+def make_sleeper(timing_sampler: TimingSampler) -> Callable[[float], None]:
     def sleeper(delay_s: float) -> None:
-        deadline = time.monotonic() + max(0.0, delay_s)
+        sampled_delay_s = timing_sampler.sample_delay(delay_s)
+        deadline = time.monotonic() + max(0.0, sampled_delay_s)
         while True:
             raise_if_worker_cancelled()
             remaining = deadline - time.monotonic()

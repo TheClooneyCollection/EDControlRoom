@@ -12,6 +12,7 @@ from edap.binding_lookup import build_binding_lookup
 from edap.bindings import Binding
 from edap.config import load_config
 from edap.runtime import LoadedConfig
+from edap.timing import TimingSampler
 
 
 class _FakeControls:
@@ -111,6 +112,7 @@ class RunRoutineCliTests(unittest.TestCase):
                     bindings={"SetSpeedZero": Binding(key="X")},
                     actions=["SetSpeedZero"],
                 ),
+                "timing_sampler": TimingSampler(loaded.config.timing),
             },
         )()
         fake_result = type(
@@ -192,6 +194,7 @@ class RunRoutineCliTests(unittest.TestCase):
                     },
                     actions=["SetSpeedZero", "HyperSuperCombination"],
                 ),
+                "timing_sampler": TimingSampler(loaded.config.timing),
             },
         )()
         fake_result = type(
@@ -271,6 +274,7 @@ class RunRoutineCliTests(unittest.TestCase):
                     },
                     actions=["UI_Up", "UI_Select", "UI_Down"],
                 ),
+                "timing_sampler": TimingSampler(loaded.config.timing),
             },
         )()
         fake_result = type(
@@ -365,6 +369,7 @@ class RunRoutineCliTests(unittest.TestCase):
                         "UI_Down",
                     ],
                 ),
+                "timing_sampler": TimingSampler(loaded.config.timing),
             },
         )()
         fake_result = type(
@@ -463,6 +468,7 @@ class RunRoutineCliTests(unittest.TestCase):
                     bindings={"SetSpeedZero": Binding(key="X")},
                     actions=["SetSpeedZero"],
                 ),
+                "timing_sampler": TimingSampler(loaded.config.timing),
             },
         )()
         fake_result = type(
@@ -555,6 +561,7 @@ class RunRoutineCliTests(unittest.TestCase):
                     bindings={"SetSpeedZero": Binding(key="X")},
                     actions=["SetSpeedZero"],
                 ),
+                "timing_sampler": TimingSampler(loaded.config.timing),
             },
         )()
 
@@ -602,6 +609,7 @@ class RunRoutineCliTests(unittest.TestCase):
                     bindings={"SetSpeedZero": Binding(key="X")},
                     actions=["SetSpeedZero"],
                 ),
+                "timing_sampler": TimingSampler(loaded.config.timing),
             },
         )()
 

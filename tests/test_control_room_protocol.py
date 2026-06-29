@@ -36,7 +36,13 @@ from edap.control_room.protocol.sink import ControlRoomEventSink
 from edap.control_room_state import CommandHistoryEntry, ControlRoomState
 from edap.inara.trade_routes import TradeRoute
 from edap.runtime import ResolvedPath, RuntimeContext
+from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler
 from edap.tts import AnnouncementId
+
+
+def _make_timing_config() -> TimingConfig:
+    channel = TimingChannelConfig(sigma=0.0, min_factor=1.0, max_factor=1.0, min_seconds=0.0)
+    return TimingConfig(enabled=False, distribution="log_normal", delay=channel, hold=channel, typing=channel)
 
 
 def _make_config(journal_dir: Path) -> AppConfig:
@@ -83,6 +89,7 @@ def _make_config(journal_dir: Path) -> AppConfig:
             ),
         ),
         runtime=RuntimeConfig(platform="macos", debug=False),
+        timing=_make_timing_config(),
         control_room=ControlRoomConfig(
             state_file=journal_dir / ".control_room_state.json",
             history_limit=20,
@@ -112,6 +119,7 @@ def _make_context(journal_dir: Path) -> RuntimeContext:
         bindings=resolved,
         input_controller=None,
         screen_capture=None,
+        timing_sampler=TimingSampler(_make_timing_config()),
         binding_lookup=None,
         config_path=journal_dir / "config.toml",
         used_example_config_fallback=False,

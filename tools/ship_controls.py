@@ -187,6 +187,7 @@ def main() -> int:
         runtime.input_controller,
         minimum_action_hold_s=loaded.config.controls.minimum_action_hold_seconds,
         continuous_action_hold_s=loaded.config.controls.continuous_action_hold_seconds,
+        sleeper=runtime.timing_sampler.make_sleep_sleeper(),
     )
     if args.delay_seconds > 0:
         _sleep_with_countdown(sequence_steps[0].action, args.delay_seconds)

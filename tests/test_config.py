@@ -64,6 +64,13 @@ class LoadConfigTests(unittest.TestCase):
             self.assertEqual(config.screen.capture.mode, "fullscreen")
             self.assertIn("center", config.screen.capture.regions)
             self.assertEqual(config.runtime.platform, "macos")
+            self.assertTrue(config.timing.enabled)
+            self.assertEqual(config.timing.distribution, "log_normal")
+            self.assertEqual(config.timing.delay.sigma, 0.18)
+            self.assertEqual(config.timing.delay.min_factor, 0.85)
+            self.assertEqual(config.timing.delay.max_factor, 1.35)
+            self.assertEqual(config.timing.hold.min_seconds, 0.02)
+            self.assertEqual(config.timing.typing.max_factor, 1.75)
             self.assertEqual(config.control_room.state_file, Path(".control_room_state.json"))
             self.assertEqual(config.control_room.history_limit, 20)
             self.assertEqual(config.control_room.activity_log_max_lines, 2000)
@@ -175,6 +182,40 @@ home_system = "Achenar"
             config = load_config(config_path)
 
             self.assertEqual(config.control_room.home_system, "Achenar")
+
+    def test_loads_timing_override(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            _write_config(
+                config_path,
+                """
+[paths]
+
+[controls]
+
+[screen]
+
+[runtime]
+
+[timing]
+enabled = false
+
+[timing.hold]
+sigma = 0.25
+min_factor = 0.95
+max_factor = 1.4
+min_seconds = 0.03
+""".strip(),
+            )
+
+            config = load_config(config_path)
+
+            self.assertFalse(config.timing.enabled)
+            self.assertEqual(config.timing.hold.sigma, 0.25)
+            self.assertEqual(config.timing.hold.min_factor, 0.95)
+            self.assertEqual(config.timing.hold.max_factor, 1.4)
+            self.assertEqual(config.timing.hold.min_seconds, 0.03)
+            self.assertEqual(config.timing.delay.sigma, 0.18)
 
     def test_loads_control_room_clear_session_on_launch_override(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -595,6 +636,51 @@ command_delay_seconds = -0.1
             )
 
             with self.assertRaisesRegex(ConfigError, "control_room.command_delay_seconds"):
+                load_config(config_path)
+
+    def test_rejects_unknown_timing_distribution(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            _write_config(
+                config_path,
+                """
+[paths]
+
+[controls]
+
+[screen]
+
+[runtime]
+
+[timing]
+distribution = "uniform"
+""".strip(),
+            )
+
+            with self.assertRaisesRegex(ConfigError, "timing.distribution"):
+                load_config(config_path)
+
+    def test_rejects_invalid_timing_factor_range(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            _write_config(
+                config_path,
+                """
+[paths]
+
+[controls]
+
+[screen]
+
+[runtime]
+
+[timing.delay]
+min_factor = 1.2
+max_factor = 1.1
+""".strip(),
+            )
+
+            with self.assertRaisesRegex(ConfigError, "timing.delay.max_factor"):
                 load_config(config_path)
 
     def test_rejects_negative_control_room_status_refresh(self) -> None:

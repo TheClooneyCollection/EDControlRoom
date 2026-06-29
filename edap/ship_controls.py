@@ -4,6 +4,7 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 from time import sleep
+from typing import Callable
 
 from edap.actions import ActionDispatchResult, ActionDispatcher
 from edap.binding_lookup import BindingLookup, load_binding_lookup
@@ -76,13 +77,14 @@ class ShipControls:
         *,
         minimum_action_hold_s: float = 0.1,
         continuous_action_hold_s: float = 0.2,
+        sleeper: Callable[[float], None] = sleep,
     ) -> ShipControls:
         return cls(
             ActionDispatcher(
                 binding_lookup,
                 input_controller,
                 repeat_delay_s=minimum_action_hold_s,
-                sleeper=sleep,
+                sleeper=sleeper,
             ),
             minimum_action_hold_s=minimum_action_hold_s,
             continuous_action_hold_s=continuous_action_hold_s,
@@ -97,6 +99,7 @@ class ShipControls:
         *,
         minimum_action_hold_s: float = 0.1,
         continuous_action_hold_s: float = 0.2,
+        sleeper: Callable[[float], None] = sleep,
     ) -> ShipControls:
         binding_lookup = load_binding_lookup(bindings_file, actions=actions or DEFAULT_SHIP_CONTROL_ACTIONS)
         return cls.from_binding_lookup(
@@ -104,6 +107,7 @@ class ShipControls:
             input_controller,
             minimum_action_hold_s=minimum_action_hold_s,
             continuous_action_hold_s=continuous_action_hold_s,
+            sleeper=sleeper,
         )
 
     def plan_action(

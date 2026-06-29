@@ -83,7 +83,7 @@ class ControlRoomFacade:
         return _workers.make_watcher(self._app)
 
     def make_sleeper(self) -> Callable[[float], None]:
-        return _workers.make_sleeper()
+        return _workers.make_sleeper(self._app._ctx.timing_sampler)
 
     def start_delayed_routine(
         self,

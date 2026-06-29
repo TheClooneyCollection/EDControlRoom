@@ -8,10 +8,17 @@ import sys
 import tomllib
 import yaml
 
+from edap.timing import (
+    TimingChannelConfig,
+    TimingConfig,
+    VALID_TIMING_DISTRIBUTIONS,
+)
+
 
 DEFAULT_CONFIG_PATH = Path("config.toml")
 EXAMPLE_CONFIG_PATH = Path("config.example.toml")
 DEFAULT_CONTROL_ROOM_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "control_room.toml"
+DEFAULT_TIMING_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "timing.toml"
 DEFAULT_TTS_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "tts.toml"
 DEFAULT_ERROR_MESSAGES_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "error_messages.yaml"
 DEFAULT_MESSAGES_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "messages.yaml"
@@ -153,6 +160,7 @@ class AppConfig:
     controls: ControlsConfig
     screen: ScreenConfig
     runtime: RuntimeConfig
+    timing: "TimingConfig"
     control_room: ControlRoomConfig
     tts: TTSConfig = field(default_factory=TTSConfig)
     messages: MessagesConfig = field(default_factory=default_messages_config)
@@ -184,6 +192,18 @@ def _load_default_tts_table() -> dict[str, object]:
     value = raw.get("tts", {})
     if not isinstance(value, dict):
         raise ConfigError("Default TTS config section `tts` must be a table.")
+    return value
+
+
+@lru_cache(maxsize=1)
+def _load_default_timing_table() -> dict[str, object]:
+    with DEFAULT_TIMING_CONFIG_PATH.open("rb") as handle:
+        raw = tomllib.load(handle)
+    if not isinstance(raw, dict):
+        raise ConfigError("Default timing config root must be a TOML table.")
+    value = raw.get("timing", {})
+    if not isinstance(value, dict):
+        raise ConfigError("Default timing config section `timing` must be a table.")
     return value
 
 
@@ -407,7 +427,19 @@ def _validate_capture_region(region: CaptureRegionConfig, *, key: str) -> None:
     if region.left >= region.right:
         raise ConfigError(f"Config region `{key}` must have left < right.")
     if region.top >= region.bottom:
-        raise ConfigError(f"Config region `{key}` must have top < bottom.")
+            raise ConfigError(f"Config region `{key}` must have top < bottom.")
+
+
+def _timing_channel(
+    raw: dict[str, object],
+    defaults: dict[str, object],
+) -> TimingChannelConfig:
+    return TimingChannelConfig(
+        sigma=_float(raw, "sigma", _float(defaults, "sigma", 0.0)),
+        min_factor=_float(raw, "min_factor", _float(defaults, "min_factor", 1.0)),
+        max_factor=_float(raw, "max_factor", _float(defaults, "max_factor", 1.0)),
+        min_seconds=_float(raw, "min_seconds", _float(defaults, "min_seconds", 0.0)),
+    )
 
 
 def validate_config(config: AppConfig) -> AppConfig:
@@ -500,6 +532,24 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError(
             f"Config value `runtime.platform` must be one of: {supported}."
         )
+    if config.timing.distribution not in VALID_TIMING_DISTRIBUTIONS:
+        supported = ", ".join(sorted(VALID_TIMING_DISTRIBUTIONS))
+        raise ConfigError(f"Config value `timing.distribution` must be one of: {supported}.")
+    for name, channel in (
+        ("delay", config.timing.delay),
+        ("hold", config.timing.hold),
+        ("typing", config.timing.typing),
+    ):
+        if channel.sigma < 0:
+            raise ConfigError(f"Config value `timing.{name}.sigma` must be non-negative.")
+        if channel.min_factor <= 0:
+            raise ConfigError(f"Config value `timing.{name}.min_factor` must be greater than 0.")
+        if channel.max_factor < channel.min_factor:
+            raise ConfigError(
+                f"Config value `timing.{name}.max_factor` must be greater than or equal to `timing.{name}.min_factor`."
+            )
+        if channel.min_seconds < 0:
+            raise ConfigError(f"Config value `timing.{name}.min_seconds` must be non-negative.")
     if config.control_room.history_limit <= 0:
         raise ConfigError("Config value `control_room.history_limit` must be greater than 0.")
     if config.control_room.activity_log_max_lines <= 0:
@@ -625,8 +675,16 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     tts = _optional_table(raw, "tts")
     messages = _optional_table(raw, "messages")
     error_messages = _optional_table(raw, "error_messages")
+    timing = _optional_table(raw, "timing")
+    timing_delay = _optional_table(timing, "delay")
+    timing_hold = _optional_table(timing, "hold")
+    timing_typing = _optional_table(timing, "typing")
     default_tts = _load_default_tts_table()
     default_control_room = _load_default_control_room_table()
+    default_timing = _load_default_timing_table()
+    default_timing_delay = _optional_table(default_timing, "delay")
+    default_timing_hold = _optional_table(default_timing, "hold")
+    default_timing_typing = _optional_table(default_timing, "typing")
     default_messages = _load_default_messages_table()
     default_error_messages = _load_default_error_messages_table()
 
@@ -794,6 +852,17 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
         runtime=RuntimeConfig(
             platform=_string(runtime, "platform", default_runtime_platform()),
             debug=_boolean(runtime, "debug", True),
+        ),
+        timing=TimingConfig(
+            enabled=_boolean(timing, "enabled", _boolean(default_timing, "enabled", True)),
+            distribution=_string(
+                timing,
+                "distribution",
+                _string(default_timing, "distribution", "log_normal"),
+            ),
+            delay=_timing_channel(timing_delay, default_timing_delay),
+            hold=_timing_channel(timing_hold, default_timing_hold),
+            typing=_timing_channel(timing_typing, default_timing_typing),
         ),
         control_room=ControlRoomConfig(
             state_file=Path(_string(control_room, "state_file", ".control_room_state.json")).expanduser(),

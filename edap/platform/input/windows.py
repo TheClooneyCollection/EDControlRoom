@@ -5,6 +5,8 @@ import ctypes
 from ctypes import wintypes
 from time import sleep as _default_sleep
 
+from edap.timing import TimingSampler
+
 from .base import (
     DEFAULT_AUTO_TARGET_PROCESS_NAME,
     InputController,
@@ -373,12 +375,14 @@ class WindowsInputController(InputController):
         pid_finder: PidFinderFn | None = None,
         pid_window_finder: PidWindowFinderFn | None = None,
         sleeper: SleeperFn | None = None,
+        timing_sampler: TimingSampler,
     ) -> None:
         self._sender = sender if sender is not None else _make_default_sender()
         self._window_sender = window_sender if window_sender is not None else _make_default_window_sender()
         self._pid_finder = pid_finder if pid_finder is not None else _find_pid_by_process_name
         self._pid_window_finder = pid_window_finder if pid_window_finder is not None else _find_hwnd_for_pid
         self._sleeper = sleeper if sleeper is not None else _default_sleep
+        self._timing_sampler = timing_sampler
         self._target = InputTargetState(platform="windows", mode="foreground")
 
     def press_key(self, key: str, modifier: str | None = None) -> None:
@@ -399,7 +403,8 @@ class WindowsInputController(InputController):
             self._dispatch_scan_code(mod_keycode, True)
         self._dispatch_scan_code(keycode, True)
         if hold_s > 0:
-            self._sleeper(hold_s)
+            sampled_hold_s = self._timing_sampler.sample_hold(hold_s)
+            self._sleeper(sampled_hold_s)
         self._dispatch_scan_code(keycode, False)
         if mod_keycode is not None:
             self._dispatch_scan_code(mod_keycode, False)
@@ -441,7 +446,8 @@ class WindowsInputController(InputController):
             else:
                 raise ValueError(f"Unsupported character for Windows input: {char!r}")
             if char_delay_s > 0:
-                self._sleeper(char_delay_s)
+                sampled_delay_s = self._timing_sampler.sample_typing_delay(char_delay_s)
+                self._sleeper(sampled_delay_s)
 
     def current_target(self) -> InputTargetState:
         return self._target

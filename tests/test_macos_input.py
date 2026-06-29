@@ -8,6 +8,7 @@ from edap.platform.input.macos import (
     MacOSInputController,
     _find_pid_in_ps_output,
 )
+from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler, no_jitter_timing_sampler
 
 
 class FakeBackend:
@@ -32,12 +33,38 @@ def _build() -> tuple[MacOSInputController, FakeBackend]:
             pid_poster=backend.post_to_pid,
             pid_finder=lambda process_name: 4242 if process_name == "EliteDangerous64.exe" else None,
             sleeper=backend.sleep,
+            timing_sampler=no_jitter_timing_sampler(),
         ),
         backend,
     )
 
 
 class MacOSInputControllerTests(unittest.TestCase):
+    def test_hold_and_typing_delay_use_timing_sampler(self) -> None:
+        backend = FakeBackend()
+        timing_sampler = TimingSampler(
+            TimingConfig(
+                enabled=True,
+                distribution="log_normal",
+                delay=TimingChannelConfig(sigma=0.0, min_factor=1.0, max_factor=1.0),
+                hold=TimingChannelConfig(sigma=0.0, min_factor=1.0, max_factor=1.0, min_seconds=0.04),
+                typing=TimingChannelConfig(sigma=0.0, min_factor=1.0, max_factor=1.0, min_seconds=0.03),
+            )
+        )
+        controller = MacOSInputController(
+            poster=backend.post,
+            pid_poster=backend.post_to_pid,
+            pid_finder=lambda _process_name: None,
+            sleeper=backend.sleep,
+            timing_sampler=timing_sampler,
+        )
+
+        controller.tap_key("a", hold_s=0.01)
+        controller.type_text("a", char_delay_s=0.01)
+
+        self.assertIn(("sleep", 0.04), backend.events)
+        self.assertIn(("sleep", 0.03), backend.events)
+
     def test_find_pid_in_ps_output_prefers_exact_command_name(self) -> None:
         pid = _find_pid_in_ps_output(
             "EliteDangerous64.exe",
