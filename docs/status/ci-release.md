@@ -1,9 +1,9 @@
 # CI and Release Status
 ## Current
-- The unittest timing budget now scales as `0.0006s` per executed test, so the current `551`-test suite budget is `0.3306s`; when a release-prep or CI run exceeds that computed ceiling, capture a timing report before wrapping up.
-- The latest full `uv run python3 -m unittest discover -s tests` release-prep run was `551` tests in `1.030s`, which is over budget; the follow-up `tools/report_test_timing.py --top 10 --sort slowest` report still points at the same server, path, and bindings cases, with the slowest individual test at about `0.040s`.
+- `main` is being prepared for `v1.16.0`, covering the local-observer haul search migration, randomized human-facing input timing with config/docs coverage, market-panel route scrolling, compact route distance display, and the lazy macOS Quartz PID-targeted setup fix.
+- The unittest timing budget now scales as `0.0006s` per executed test, so the current `599`-test suite budget is `0.3594s`; when a release-prep or CI run exceeds that computed ceiling, capture a timing report before wrapping up.
+- The latest full `uv run python3 -m unittest discover -s tests` release-prep run passed `599` tests in `0.291s`, so the current suite is back under the timing gate without needing a slow-test follow-up.
 - The Discord workflow-failure notifier is now split into a checked-in Python script plus a thin workflow wrapper, so the same payload/fetch/post path can be dry-run locally against saved jobs JSON and exercised in CI without keeping the logic trapped inside inline workflow shell.
-- `main` is now prepared for `v1.14.1`, covering the configurable Inara haul-search flow, remote observer/control-room follow-ups, haul profit and navigation fixes, the extracted Discord workflow-failure notifier, and Playwright promoted into the base runtime dependency set so released installs no longer need a separate browsing extra.
 - `main` is now the rolling-update branch, and stable features or releases are identified with tags instead of `dev -> main` promotion.
 - The legacy `.github/workflows/promote-dev-to-main.yml` automation has been removed; release/process automation now centers on `main`, semantic version tags, and manual GitHub release publishing.
 - The auto-commit `.github/workflows/sync-iteration-archive.yml` workflow has been removed; iteration archive refresh is manual, while CI still guards drift.
