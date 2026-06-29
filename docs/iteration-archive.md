@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `119`
-- Latest generated iteration number: `252`
+- Generated iteration count: `120`
+- Latest generated iteration number: `253`
 
 ## Iteration 134
 
@@ -3334,3 +3334,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-tune the default delay/hold/typing distribution against real CrossOver sessions so the human-like jitter remains believable without destabilizing menus.
+
+## Iteration 253
+
+- When: `2026-06-29 08:53`
+- Area: `control-room`
+- Title: `market-panel-scrollbar`
+- Source: [2026-06-29-08-53_control-room_market-panel-scrollbar.md](iteration-logs/2026-06-29-08-53_control-room_market-panel-scrollbar.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `market-panel-scrollbar`
+- Started: `2026-06-29 08:53`
+
+## Summary
+
+- Added vertical overflow scrolling to the Control Room market panel so long station commodity lists expose a scrollbar instead of clipping in place.
+
+## Changes
+
+- Set `#market` to `overflow-y: auto` in the Textual app CSS so the existing market widget can scroll when content exceeds panel height.
+- Added a mounted-app regression test that renders an oversized remote market snapshot and asserts the market panel both enables vertical scrolling and reports overflow.
+- Rechecked the focused control-room test file and the full unittest suite; both passed.
+
+## Follow-ups
+
+- Live-check the market panel in a real terminal session to confirm the scrollbar feel is acceptable alongside the existing activity-log and haul-panel layout.

@@ -346,6 +346,7 @@ class ControlRoomApp(App[None]):
         height: 1fr;
         border: solid $primary;
         padding: 0 1;
+        overflow-y: auto;
     }
     #trade-route-picker {
         display: none;
