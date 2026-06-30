@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from .events import ActivityLogAppendedEvent, AnnouncementEvent
-from .snapshot import ActivityLogEntry
+from .events import ActivityLogAppendedEvent, ActivityLogEntry, AnnouncementEvent
 
 
 def event_from_message(

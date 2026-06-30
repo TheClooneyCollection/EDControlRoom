@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from edap.control_room.protocol.events import AnnouncementEvent
-from edap.control_room.protocol.snapshot import ActivityLogEntry
+from edap.control_room.protocol.events import ActivityLogEntry, AnnouncementEvent
 
 
 class ControlRoomServerState:

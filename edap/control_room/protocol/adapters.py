@@ -4,8 +4,7 @@ from datetime import UTC, datetime
 from itertools import count
 from typing import Any
 
-from .events import AnnouncementEvent
-from .snapshot import ActivityLogEntry
+from .events import ActivityLogEntry, AnnouncementEvent
 
 
 _activity_log_counter = count(1)

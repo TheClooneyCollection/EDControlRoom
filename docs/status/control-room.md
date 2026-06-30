@@ -1,8 +1,8 @@
 # Control Room Status
 ## Current
 - Plan 0008 is the active Control Room architecture target: one local-first `ControlRoomApp` composed with data sources, view models, view actions, and execution dependencies; `connect` now bootstraps that same app with remote data/execution dependencies rather than using an observer subclass, and `serve` exposes authenticated no-snapshot HTTP/websocket hydrate messages on initial load and live data changes.
-- Snapshot is removed from the remote/server path: `serve` no longer advertises or serves `/snapshot`, websocket `state.snapshot`, or `command.request_snapshot`, the remote message parser no longer accepts snapshot messages, and server refresh fanout uses data-source hydrate messages instead of retained snapshots.
-- `ControlRoomApp` no longer stores/applies backend snapshots, the backend contract no longer exposes `current_snapshot()`, and `ControlRoomEventSink` uses explicit `publish_data_refresh()`; remaining snapshot helpers are legacy protocol/test fixtures pending prune.
+- Snapshot protocol support is removed: `serve` no longer advertises or serves `/snapshot`, websocket `state.snapshot`, or `command.request_snapshot`; snapshot dataclasses, `snapshot_from_app`, snapshot schema defs, and backend/server retained snapshot paths are gone.
+- `ControlRoomApp` no longer stores/applies backend snapshots, the backend contract no longer exposes `current_snapshot()`, and `ControlRoomEventSink` uses explicit `publish_data_refresh()` to fan out data-source hydrate messages.
 - Replay browser actions are app-local, not backend-owned: backend replay open/close/filter/move/replay/default-haul methods were removed after the connect single-app collapse.
 - `connect` currently intercepts prompt-owning commands like `haul`, `haul route`, `haul search`, `dest`, `home`, `help`, `history`, and `market` locally, then sends finalized `command.dispatch_haul_loop` / `command.dispatch_destination` payloads to the headless server.
 - Market panel lock semantics are aligned across embedded and `connect`: market data keeps ingesting continuously, while lock/unlock freezes or unfreezes only the displayed panel.
@@ -15,4 +15,4 @@
 - Routine-heavy live sessions still need validation, especially targeted input with `set_pid` / `set_hwnd` under CrossOver and Windows.
 - Shared LAN token auth remains acceptable for current remote work; per-user or internet-facing identity is not implemented.
 ## Next
-- Continue plan 0008 by pruning legacy snapshot dataclasses/conversion helpers and moving more panels behind explicit ViewModel/action seams.
+- Continue plan 0008 by moving more panels behind explicit ViewModel/action seams.

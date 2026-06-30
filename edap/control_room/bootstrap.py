@@ -32,7 +32,7 @@ def sync_cargo_manifest(app: BootstrapHost, *, update_count: bool = True) -> boo
     return True
 
 
-def sync_status_snapshot(app: BootstrapHost) -> None:
+def sync_status_state(app: BootstrapHost) -> None:
     try:
         status = read_status(app._journal_dir)
     except Exception:
@@ -67,7 +67,7 @@ def bootstrap_ship_state(app: BootstrapHost) -> None:
         except Exception:
             pass
 
-    sync_status_snapshot(app)
+    sync_status_state(app)
     if not sync_cargo_manifest(app, update_count=False):
         app._ship.cargo_inventory = _rendering.read_cargo_inventory(app._journal_dir)
 

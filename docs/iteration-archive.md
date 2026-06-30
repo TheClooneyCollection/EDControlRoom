@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `167`
-- Latest generated iteration number: `300`
+- Generated iteration count: `168`
+- Latest generated iteration number: `301`
 
 ## Iteration 134
 
@@ -4656,3 +4656,32 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Prune remaining legacy protocol snapshot dataclasses/conversion helpers once local tests no longer need them as fixtures.
+
+## Iteration 301
+
+- When: `2026-06-30 22:08`
+- Area: `control-room`
+- Title: `prune-snapshot-protocol`
+- Source: [2026-06-30-22-08_control-room_prune-snapshot-protocol.md](iteration-logs/2026-06-30-22-08_control-room_prune-snapshot-protocol.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `prune-snapshot-protocol`
+- Started: `2026-06-30 22:08`
+
+## Summary
+
+- Deleted legacy Control Room snapshot protocol modules and schema definitions after replacing server/client refresh with data-source hydration.
+
+## Changes
+
+- Moved `ActivityLogEntry` into protocol events so event streaming no longer depends on `protocol.snapshot`.
+- Deleted `edap/control_room/protocol/snapshot.py` and `protocol/from_app.py`.
+- Removed snapshot exports from `edap.control_room.protocol`.
+- Removed snapshot `$defs` from `docs/schemas/control_room_message.schema.json`.
+- Renamed internal status/market sync helpers away from snapshot-era terminology.
+
+## Follow-ups
+
+- Continue extracting explicit ViewModel/action seams for panels that still read app state directly.

@@ -9,8 +9,8 @@ from edap.control_room.protocol import (
     AnnouncementEvent,
     ControlRoomEventSink,
     DataUpdatedEvent,
+    ActivityLogEntry,
 )
-from edap.control_room.protocol.snapshot import ActivityLogEntry
 from edap.inara.trade_routes import TradeRoute
 
 

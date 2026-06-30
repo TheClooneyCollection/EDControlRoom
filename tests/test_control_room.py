@@ -38,16 +38,7 @@ from edap.control_room.failure_messages import describe_routine_failure
 from edap.control_room.events import apply_ship_event
 from edap.control_room import rendering as control_room_rendering
 from edap.control_room.models import HaulStats, MarketData, PromptState, ShipState, TradeRoutesData
-from edap.control_room.protocol.snapshot import (
-    CommandHistorySnapshot,
-    ControlRoomSnapshot,
-    HaulSessionSnapshot,
-    MarketSnapshot,
-    ServerStatusSnapshot,
-    SessionSnapshot,
-    ShipSnapshot,
-    UiStateSnapshot,
-)
+from edap.control_room.protocol import ActivityLogEntry
 from edap.control_room_state import CommandHistoryEntry
 from edap.routines import RoutineResult
 from edap.runtime import ResolvedPath, RuntimeContext
@@ -358,8 +349,7 @@ class _FakeTTS:
 
 
 class _RemoteBackendStub:
-    def __init__(self, snapshot: ControlRoomSnapshot) -> None:
-        self._snapshot = snapshot
+    def __init__(self) -> None:
         self.interrupt_calls = 0
 
     def subscribe_events(self, handler: ControlRoomBackendEventHandler):
@@ -416,81 +406,6 @@ class _RemoteBackendStub:
 
     def load_trade_route(self, route, *, raw_command: str | None = None) -> None:
         return None
-
-
-def _remote_snapshot(
-    *,
-    client_role: str = "active_operator",
-    routine_active: bool = True,
-) -> ControlRoomSnapshot:
-    return ControlRoomSnapshot(
-        session=SessionSnapshot(session_id="observer-1", client_role=client_role),
-        connected_clients=[],
-        active_operator=None,
-        ship=ShipSnapshot(
-            commander_name="CMDR TEST",
-            ship_type="Type-9",
-            system_name="Sol",
-            station_name="Jameson Memorial",
-            status="in_station",
-            fuel_level=10.0,
-            fuel_capacity=32.0,
-            credits=1000,
-            cargo_count=2,
-            cargo_capacity=100,
-            cargo_inventory=[],
-        ),
-        market=MarketSnapshot(
-            station_name="Jameson Memorial",
-            system_name="Sol",
-            market_timestamp="2026-06-18T13:00:00Z",
-            items=[],
-        ),
-        haul_session=HaulSessionSnapshot(
-            station_1_buying="",
-            station_2_buying="",
-            station_1="",
-            station_2="",
-            session_started_at=None,
-            session_elapsed_seconds=0.0,
-            session_active=False,
-            active=False,
-            clean_run_active=False,
-            waiting_for_station_1_departure=False,
-            resumed_mid_run=False,
-            docked_back_at_station_1=False,
-            current_run_started_at=None,
-            current_run_elapsed_seconds=None,
-            current_run_profit=0,
-            completed_runs=0,
-            accumulated_profit=0,
-            last_run_profit=None,
-            last_run_elapsed_seconds=None,
-            total_run_elapsed_seconds=0.0,
-        ),
-        ui_state=UiStateSnapshot(
-            routine_active=routine_active,
-            active_routine_name="haul" if routine_active else None,
-            haul_stop_requested=False,
-            verbose_controls=False,
-            instant_mode=False,
-            activity_auto_follow_paused=False,
-            shutdown_requested=False,
-            shutdown_finalized=False,
-        ),
-        command_history=CommandHistorySnapshot(history_limit=20),
-        activity_log=[],
-        server_status=ServerStatusSnapshot(
-            server_name="ED Control Room",
-            server_version="1.2.3",
-            runtime_platform="macos",
-            journal_source_status="configured",
-            bindings_source_status="configured",
-            bindings_loaded=False,
-            capability_names=[],
-            operator_mode="observer_only",
-        ),
-    )
 
 
 class _ArtifactLogHandleStub:
@@ -708,7 +623,7 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertEqual(self.app.exit_calls, 1)
 
     def test_remote_exit_prompt_defaults_to_detach_without_cancelling(self) -> None:
-        backend = _RemoteBackendStub(_remote_snapshot())
+        backend = _RemoteBackendStub()
         app = _HarnessApp(_make_context(Path(self.tmpdir.name)))
         app._backend = backend
         app._routine_active = True
@@ -729,7 +644,7 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertEqual(app.exit_calls, 1)
 
     def test_remote_exit_prompt_can_cancel_remote_routine_before_exit(self) -> None:
-        backend = _RemoteBackendStub(_remote_snapshot())
+        backend = _RemoteBackendStub()
         app = _HarnessApp(_make_context(Path(self.tmpdir.name)))
         app._backend = backend
         app._routine_active = True
@@ -743,7 +658,7 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertEqual(app.exit_calls, 1)
 
     def test_remote_exit_prompt_can_be_aborted(self) -> None:
-        backend = _RemoteBackendStub(_remote_snapshot())
+        backend = _RemoteBackendStub()
         app = _HarnessApp(_make_context(Path(self.tmpdir.name)))
         app._backend = backend
         app._routine_active = True
@@ -839,7 +754,7 @@ class ControlRoomCommandTests(unittest.TestCase):
 
         self.assertEqual(self.app._ship.commander, "VRYAE")
 
-    def test_sync_status_snapshot_refreshes_destination_without_journal_event(self) -> None:
+    def test_sync_status_state_refreshes_destination_without_journal_event(self) -> None:
         journal_dir = Path(self.tmpdir.name)
         (journal_dir / "Status.json").write_text(
             json.dumps({
@@ -853,13 +768,13 @@ class ControlRoomCommandTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-        self.app._sync_status_snapshot()
+        self.app._sync_status_state()
 
         self.assertEqual(self.app._ship.destination_system, "Shinrarta Dezhra")
         self.assertEqual(self.app._ship.destination_body, "Jameson Memorial")
         self.assertEqual(self.app._ship.destination_name, "Jameson Memorial")
 
-    def test_sync_status_snapshot_refreshes_cargo_manifest_without_journal_event(self) -> None:
+    def test_sync_status_state_refreshes_cargo_manifest_without_journal_event(self) -> None:
         journal_dir = Path(self.tmpdir.name)
         self.app._ship.cargo_count = 461
         self.app._ship.cargo_inventory = []
@@ -878,7 +793,7 @@ class ControlRoomCommandTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-        self.app._sync_status_snapshot()
+        self.app._sync_status_state()
 
         self.assertEqual(self.app._ship.cargo_count, 461)
         self.assertEqual(
@@ -3169,7 +3084,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.app._load_market_json()
-        self.app._sync_presented_market_from_snapshot(force=True)
+        self.app._sync_presented_market_from_current_data(force=True)
 
         self.assertEqual(self.app._market.station, "Jameson Memorial")
         self.assertEqual(self.app._presented_market.station, "Jameson Memorial")
@@ -3197,7 +3112,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertEqual(self.app._presented_market.items[0]["Name"], "gold")
 
         self.app._dispatch_command("market unlock")
-        self.app._sync_presented_market_from_snapshot()
+        self.app._sync_presented_market_from_current_data()
 
         self.assertFalse(self.app._market.locked)
         self.assertEqual(self.app._presented_market.station, "Galileo")
@@ -3421,7 +3336,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertTrue(self.app._prompt_state.command_input_prefill_active)
         self.assertEqual(self.app._prompt_state.command_input_value, "jump")
 
-    def test_prompt_draft_survives_local_snapshot_refresh_after_input_change(self) -> None:
+    def test_prompt_draft_survives_local_data_refresh_after_input_change(self) -> None:
         self.app._prompt_state.command_input_prefill_active = True
         self.app._prompt_state.command_input_placeholder = (
             "edit Inara search params then press Enter..."

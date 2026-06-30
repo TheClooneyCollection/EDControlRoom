@@ -37,7 +37,7 @@ from edap.control_room.dependencies import (
     SessionReadModel,
 )
 from edap.control_room.models import HaulStats, MarketData, ShipState
-from edap.control_room.protocol.snapshot import ActivityLogEntry
+from edap.control_room.protocol import ActivityLogEntry
 from edap.control_room.server.app import (
     BROWSER_PROBE_URL_PATH,
     CONTROL_ROOM_MESSAGE_SCHEMA,
@@ -205,7 +205,7 @@ def _base_data_read_model() -> ControlRoomDataReadModel:
     )
 
 
-class _SnapshotRecorder(ControlRoomEventSink):
+class _EventSinkRecorder(ControlRoomEventSink):
     def __init__(self) -> None:
         self.activity_entries: list[ActivityLogEntry] = []
         self.announcements: list[AnnouncementEvent] = []
@@ -292,7 +292,7 @@ class ControlRoomServerTests(unittest.TestCase):
     def test_headless_host_emits_announcement_events_without_local_speech(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             host = HeadlessControlRoomHost(_make_context_with_tts(Path(temp_dir)))
-            sink = _SnapshotRecorder()
+            sink = _EventSinkRecorder()
             host._protocol_event_sink = sink
 
             host._announce_tts(AnnouncementId.ARRIVAL, system_name="Sol")
@@ -317,7 +317,7 @@ class ControlRoomServerTests(unittest.TestCase):
     def test_headless_host_publishes_data_refresh_after_remote_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
-            sink = _SnapshotRecorder()
+            sink = _EventSinkRecorder()
             host._protocol_event_sink = sink
 
             host.handle_remote_input("market filter gold")
@@ -328,7 +328,7 @@ class ControlRoomServerTests(unittest.TestCase):
     def test_headless_host_remote_ctrl_c_cancels_prompt_flow_and_publishes_data_refresh(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
-            sink = _SnapshotRecorder()
+            sink = _EventSinkRecorder()
             host._protocol_event_sink = sink
             host._start_dest_prompt("Achenar")
 
@@ -704,12 +704,12 @@ class ControlRoomServerTests(unittest.TestCase):
         )
 
         with TestClient(app) as client:
-            snapshot = client.get(
+            response = client.get(
                 "/snapshot",
                 headers={"Authorization": "Bearer secret-token"},
             )
 
-        self.assertEqual(snapshot.status_code, 404)
+        self.assertEqual(response.status_code, 404)
 
     def test_observer_submit_input_command_is_rejected(self) -> None:
         broker = InMemoryObserverSessionBroker()
@@ -925,8 +925,8 @@ class ControlRoomServerTests(unittest.TestCase):
             capabilities = client.get("/capabilities")
             self.assertEqual(capabilities.status_code, 401)
 
-            snapshot = client.get("/snapshot")
-            self.assertEqual(snapshot.status_code, 404)
+            response = client.get("/snapshot")
+            self.assertEqual(response.status_code, 404)
 
     def test_server_activity_log_sink_mirrors_activity_messages(self) -> None:
         logger = logging.getLogger("tests.control_room.server.activity")

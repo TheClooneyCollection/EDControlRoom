@@ -8,7 +8,7 @@ from rich.text import Text
 from edap.control_room.protocol.events import AnnouncementEvent
 from edap.control_room.protocol import hydrate_message
 from edap.control_room.protocol.sink import ControlRoomEventSink
-from edap.control_room.protocol.snapshot import ActivityLogEntry
+from edap.control_room.protocol import ActivityLogEntry
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
 
 

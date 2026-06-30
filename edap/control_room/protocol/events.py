@@ -4,7 +4,14 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from edap.control_room.dependencies import ControlRoomDataReadModel
-from .snapshot import ActivityLogEntry
+
+
+@dataclass(frozen=True)
+class ActivityLogEntry:
+    entry_id: str
+    timestamp: str
+    message_text: str
+    severity: str | None = None
 
 
 @dataclass(frozen=True)

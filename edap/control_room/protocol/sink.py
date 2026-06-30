@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from .events import AnnouncementEvent
-from .snapshot import ActivityLogEntry
+from .events import ActivityLogEntry, AnnouncementEvent
 
 
 class ControlRoomEventSink(Protocol):

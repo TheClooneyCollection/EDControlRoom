@@ -7,11 +7,15 @@ from uuid import uuid4
 
 from edap.control_room.protocol.events import AnnouncementEvent
 from edap.control_room.protocol.sink import ControlRoomEventSink
-from edap.control_room.protocol.snapshot import (
-    ActivityLogEntry,
-    ConnectedClientSnapshot,
-)
+from edap.control_room.protocol import ActivityLogEntry
 from edap.control_room.server.state import ControlRoomServerState
+
+
+@dataclass(frozen=True)
+class ConnectedClient:
+    session_id: str
+    client_name: str
+    client_role: str
 
 
 @dataclass
@@ -59,9 +63,9 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
                     reason="active_operator_disconnected",
                 )
 
-    def connected_clients(self) -> list[ConnectedClientSnapshot]:
+    def connected_clients(self) -> list[ConnectedClient]:
         return [
-            ConnectedClientSnapshot(
+            ConnectedClient(
                 session_id=session.session_id,
                 client_name=session.client_name,
                 client_role=self._resolved_session_role(session.session_id),

@@ -39,6 +39,7 @@ from edap.control_room.client.target import ObserverServerTarget, parse_observer
 from edap.control_room.models import HaulStats, MarketData, ShipState
 from edap.control_room.protocol import (
     ACCESS_TOKEN_QUERY_PARAMETER,
+    ActivityLogEntry,
     ActivityLogAppendedEvent,
     AUTHENTICATION_SCHEME_BEARER_TOKEN,
     DataUpdatedEvent,
@@ -50,22 +51,6 @@ from edap.control_room.protocol import (
     hydrate_message,
 )
 from edap.inara.trade_routes import TradeRoute, TradeRouteSearchResult
-from edap.control_room.protocol.snapshot import (
-    ActivityLogEntry,
-    ActiveOperatorSnapshot,
-    CommandHistoryEntrySnapshot,
-    CommandHistorySnapshot,
-    ControlRoomSnapshot,
-    HaulSessionSnapshot,
-    MarketSnapshot,
-    PromptStateSnapshot,
-    ReplayBrowserSnapshot,
-    ServerStatusSnapshot,
-    SessionSnapshot,
-    ShipSnapshot,
-    TradeRoutesSnapshot,
-    UiStateSnapshot,
-)
 from edap.runtime import ResolvedPath, RuntimeContext
 from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler
 
@@ -256,83 +241,6 @@ def _make_observer_context() -> RuntimeContext:
     )
 
 
-def _snapshot() -> ControlRoomSnapshot:
-    return ControlRoomSnapshot(
-        session=SessionSnapshot(session_id="observer-1", client_role="observer"),
-        connected_clients=[],
-        active_operator=ActiveOperatorSnapshot(session_id="local-server", client_name="local-server"),
-        ship=ShipSnapshot(
-            commander_name="CMDR TEST",
-            ship_type="Type-9",
-            system_name="Sol",
-            station_name="Jameson Memorial",
-            status="in_station",
-            fuel_level=10.0,
-            fuel_capacity=32.0,
-            credits=1000,
-            cargo_count=2,
-            cargo_capacity=100,
-            cargo_inventory=[],
-        ),
-        market=MarketSnapshot(
-            station_name="Jameson Memorial",
-            system_name="Sol",
-            market_timestamp="2026-06-18T13:00:00Z",
-            items=[],
-        ),
-        haul_session=HaulSessionSnapshot(
-            station_1_buying="",
-            station_2_buying="",
-            station_1="",
-            station_2="",
-            session_started_at=None,
-            session_elapsed_seconds=0.0,
-            session_active=False,
-            active=False,
-            clean_run_active=False,
-            waiting_for_station_1_departure=False,
-            resumed_mid_run=False,
-            docked_back_at_station_1=False,
-            current_run_started_at=None,
-            current_run_elapsed_seconds=None,
-            current_run_profit=0,
-            completed_runs=0,
-            accumulated_profit=0,
-            last_run_profit=None,
-            last_run_elapsed_seconds=None,
-            total_run_elapsed_seconds=0.0,
-        ),
-        ui_state=UiStateSnapshot(
-            routine_active=False,
-            active_routine_name=None,
-            haul_stop_requested=False,
-            verbose_controls=False,
-            instant_mode=False,
-            activity_auto_follow_paused=False,
-            shutdown_requested=False,
-            shutdown_finalized=False,
-        ),
-        command_history=CommandHistorySnapshot(history_limit=20),
-        activity_log=[
-            ActivityLogEntry(
-                entry_id="activity-1",
-                timestamp="2026-06-18T13:00:00Z",
-                message_text="Observer ready",
-            )
-        ],
-        server_status=ServerStatusSnapshot(
-            server_name="ED Control Room",
-            server_version="1.2.3",
-            runtime_platform="macos",
-            journal_source_status="configured",
-            bindings_source_status="configured",
-            bindings_loaded=False,
-            capability_names=["observer_http", "observer_websocket", "announcement_stream"],
-            operator_mode="observer_only",
-        ),
-    )
-
-
 def _data_read_model(
     *,
     system_name: str = "Sol",
@@ -434,33 +342,25 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertIsNone(app._journal_dir)
         self.assertIsNone(app._market_path)
 
-    def test_observer_app_preserves_local_activity_entries_across_snapshot_refresh(self) -> None:
-        updated_snapshot = replace(
-            _snapshot(),
-            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-            activity_log=[
-                ActivityLogEntry(
-                    entry_id="remote-1",
-                    timestamp="2026-06-30T13:54:34Z",
-                    message_text="[dim]Unknown command: dest sol[/]",
-                )
-            ],
-        )
+    def test_observer_app_preserves_local_activity_entries_across_activity_refresh(self) -> None:
+        remote_activity = [
+            ActivityLogEntry(
+                entry_id="remote-1",
+                timestamp="2026-06-30T13:54:34Z",
+                message_text="[dim]Unknown command: dest sol[/]",
+            )
+        ]
         backend = self._backend()
         app = self._app(backend=backend)
         command_input = _FakeInputWidget()
         _bind_observer_widgets(app, command_input)
         activity = app.query_one("#activity")
 
-        app._replace_activity_log(updated_snapshot.activity_log)
+        app._replace_activity_log(remote_activity)
         app._log("[bold]dest[/] - dest <system>")
         self.assertEqual(len(activity.writes), 2)
 
-        refreshed_snapshot = replace(
-            updated_snapshot,
-            ship=replace(updated_snapshot.ship, system_name="Achenar"),
-        )
-        app._replace_activity_log(refreshed_snapshot.activity_log)
+        app._replace_activity_log(remote_activity)
 
         rendered_messages = [segment.plain for segment in activity.writes]
         self.assertTrue(
@@ -471,27 +371,23 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertIn("dest - dest <system>", rendered_messages[-1])
 
     def test_observer_app_sorts_local_and_remote_activity_by_timestamp_on_refresh(self) -> None:
-        updated_snapshot = replace(
-            _snapshot(),
-            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-            activity_log=[
-                ActivityLogEntry(
-                    entry_id="remote-1",
-                    timestamp="2026-06-30T15:57:35Z",
-                    message_text="[dim]Executing dest sol in 5.0s...[/]",
-                ),
-                ActivityLogEntry(
-                    entry_id="remote-2",
-                    timestamp="2026-06-30T15:57:38Z",
-                    message_text="[yellow]Remote Ctrl-C received — cancelling active routine.[/]",
-                ),
-                ActivityLogEntry(
-                    entry_id="remote-3",
-                    timestamp="2026-06-30T15:57:38Z",
-                    message_text="[yellow]Cancelled pending dest sol before execution.[/]",
-                ),
-            ],
-        )
+        remote_activity = [
+            ActivityLogEntry(
+                entry_id="remote-1",
+                timestamp="2026-06-30T15:57:35Z",
+                message_text="[dim]Executing dest sol in 5.0s...[/]",
+            ),
+            ActivityLogEntry(
+                entry_id="remote-2",
+                timestamp="2026-06-30T15:57:38Z",
+                message_text="[yellow]Remote Ctrl-C received — cancelling active routine.[/]",
+            ),
+            ActivityLogEntry(
+                entry_id="remote-3",
+                timestamp="2026-06-30T15:57:38Z",
+                message_text="[yellow]Cancelled pending dest sol before execution.[/]",
+            ),
+        ]
         backend = self._backend()
         app = self._app(backend=backend)
         command_input = _FakeInputWidget()
@@ -516,7 +412,7 @@ class ControlRoomClientTests(unittest.TestCase):
             ),
         ]
 
-        app._replace_activity_log(updated_snapshot.activity_log)
+        app._replace_activity_log(remote_activity)
 
         rendered_messages = [segment.plain for segment in activity.writes]
         self.assertEqual(
@@ -668,7 +564,7 @@ class ControlRoomClientTests(unittest.TestCase):
                 self.input = type("_Input", (), {"value": value})()
 
         app._apply_data_state(data_source.current(), replace_activity=False)
-        app._sync_presented_market_from_snapshot(force=True)
+        app._sync_presented_market_from_current_data(force=True)
         self.assertEqual(app._view_market_data().station, "Jameson Memorial")
 
         app.on_input_submitted(_Submitted("market lock"))

@@ -274,7 +274,7 @@ class HeadlessControlRoomHost(ControlRoomApp):
                     self._handle_event(ev)
                 now = time.monotonic()
                 if now - last_market_check > refresh_interval_s:
-                    self._sync_status_snapshot()
+                    self._sync_status_state()
                     self._load_market_json()
                     self._refresh_haul_stats()
                     last_market_check = now

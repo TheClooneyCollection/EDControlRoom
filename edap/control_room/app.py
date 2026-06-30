@@ -105,11 +105,11 @@ from edap.control_room.protocol.adapters import (
 )
 from edap.control_room.protocol.events import (
     ActivityLogAppendedEvent,
+    ActivityLogEntry,
     AnnouncementEvent,
     DataUpdatedEvent,
 )
 from edap.control_room.protocol.sink import ControlRoomEventSink
-from edap.control_room.protocol.snapshot import ActivityLogEntry
 from edap.inara.trade_routes import TradeRoute
 
 # Modules eligible for in-place hot reload via the `reload` command.
@@ -1070,8 +1070,8 @@ class ControlRoomApp(App[None]):
         _bootstrap.bootstrap_ship_state(self)
         self._tts.set_commander_name(self._ship.commander)
 
-    def _sync_status_snapshot(self) -> None:
-        _bootstrap.sync_status_snapshot(self)
+    def _sync_status_state(self) -> None:
+        _bootstrap.sync_status_state(self)
         _bootstrap.sync_cargo_manifest(self, update_count=False)
 
     # ── Rendering ──────────────────────────────────────────────────────────────
@@ -1091,7 +1091,7 @@ class ControlRoomApp(App[None]):
         ))
 
     def _refresh_market(self) -> None:
-        self._sync_presented_market_from_snapshot()
+        self._sync_presented_market_from_current_data()
         view_model = self._market_panel_view_model()
         self.query_one("#market-content", Static).update(
             Text.from_markup(
@@ -1187,44 +1187,6 @@ class ControlRoomApp(App[None]):
             return self.query_one("#activity", ActivityLog).auto_follow_paused
         except ScreenStackError:
             return False
-
-    def _sync_trade_route_picker_for_snapshot(
-        self,
-        *,
-        previous_trade_routes: TradeRoutesData | None = None,
-    ) -> None:
-        current_signature = (self._trade_routes.query_url, self._trade_routes.searched_at)
-        presented_signature = (
-            self._presented_trade_route_query_url,
-            self._presented_trade_route_searched_at,
-        )
-        has_loaded_routes = (
-            bool(self._trade_routes.routes)
-            and not self._trade_routes.loading
-            and self._trade_routes.error is None
-        )
-        search_completed_since_last_snapshot = (
-            previous_trade_routes is not None
-            and previous_trade_routes.loading
-            and not self._trade_routes.loading
-            and self._trade_routes.error is None
-            and bool(self._trade_routes.routes)
-        )
-        if has_loaded_routes and (
-            current_signature != presented_signature
-            or search_completed_since_last_snapshot
-        ):
-            self._presented_trade_route_query_url = self._trade_routes.query_url
-            self._presented_trade_route_searched_at = self._trade_routes.searched_at
-            self._selected_trade_route_index = self._trade_routes.routes[0].index
-            self._trade_route_picker_open = True
-            return
-        if not has_loaded_routes:
-            self._trade_route_picker_open = False
-            self._selected_trade_route_index = None
-            if not self._trade_routes.loading:
-                self._presented_trade_route_query_url = self._trade_routes.query_url
-                self._presented_trade_route_searched_at = self._trade_routes.searched_at
 
     def _selected_trade_route(self) -> TradeRoute | None:
         selected_index = self._selected_trade_route_index
@@ -1338,7 +1300,7 @@ class ControlRoomApp(App[None]):
             locked=self._presented_market.locked,
         )
 
-    def _sync_presented_market_from_snapshot(self, *, force: bool = False) -> None:
+    def _sync_presented_market_from_current_data(self, *, force: bool = False) -> None:
         market = self._dependencies.data_source.current().market
         if not self._market.locked or force:
             self._presented_market = MarketData(
@@ -1594,7 +1556,7 @@ class ControlRoomApp(App[None]):
         station_before = self._ship.station
         _events.apply_ship_event(self._ship, ev)
         self._tts.set_commander_name(self._ship.commander)
-        self._sync_status_snapshot()
+        self._sync_status_state()
         if event in {"Cargo", "MarketBuy", "MarketSell"}:
             _bootstrap.sync_cargo_manifest(self)
 

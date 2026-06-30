@@ -20,22 +20,14 @@ from edap.config import (
 from edap.control_room.backend import ControlRoomBackend, LocalControlRoomBackend
 from edap.control_room.app import ControlRoomApp
 from edap.control_room.dependencies import LocalControlRoomDataSource
-from edap.control_room.history import resume_detail, resume_label
 from edap.control_room.models import ReplaySelection
 from edap.control_room.protocol import (
     ActivityLogEntry,
     build_activity_log_entry,
-    snapshot_from_app,
 )
 from edap.control_room.protocol.events import ActivityLogAppendedEvent, AnnouncementEvent
-from edap.control_room.protocol.snapshot import (
-    CommandHistoryEntrySnapshot,
-    ControlRoomSnapshot,
-    ReplayBrowserSnapshot,
-    ReplayEntrySnapshot,
-)
 from edap.control_room.protocol.sink import ControlRoomEventSink
-from edap.control_room_state import CommandHistoryEntry, ControlRoomState
+from edap.control_room_state import CommandHistoryEntry
 from edap.inara.trade_routes import TradeRoute
 from edap.runtime import ResolvedPath, RuntimeContext
 from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler
@@ -250,10 +242,7 @@ class _RenderHarnessApp(_ProtocolHarnessApp):
         raise AssertionError(f"Unexpected selector: {selector}")
 
 
-class _SnapshotBackend(ControlRoomBackend):
-    def __init__(self, snapshot: ControlRoomSnapshot) -> None:
-        self.snapshot = snapshot
-
+class _BackendStub(ControlRoomBackend):
     def subscribe_events(self, handler):
         return lambda: None
 
@@ -301,9 +290,8 @@ class _SnapshotBackend(ControlRoomBackend):
         return None
 
 
-class _IntentRecorderBackend(_SnapshotBackend):
-    def __init__(self, snapshot: ControlRoomSnapshot) -> None:
-        super().__init__(snapshot)
+class _IntentRecorderBackend(_BackendStub):
+    def __init__(self) -> None:
         self.dispatched_commands: list[tuple[str, bool | None]] = []
         self.dispatched_hauls: list[tuple[dict[str, str] | None, bool, str | None]] = []
         self.submitted_inputs: list[str] = []
@@ -398,116 +386,12 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.addCleanup(self.tmpdir.cleanup)
         self.app = _ProtocolHarnessApp(_make_context(Path(self.tmpdir.name)))
 
-    def test_snapshot_from_app_maps_current_state(self) -> None:
-        history_entry = CommandHistoryEntry(
-            raw="haul gold",
-            command="haul",
-            params={"commodity": "gold"},
-            timestamp="2026-06-15T15:00:00Z",
-        )
-        self.app._ship.commander = "CMDR TEST"
-        self.app._ship.ship_type = "Type-9"
-        self.app._ship.system = "Sol"
-        self.app._ship.station = "Jameson Memorial"
-        self.app._ship.status = "in_station"
-        self.app._ship.credits = 123456
-        self.app._ship.cargo_count = 32
-        self.app._ship.cargo_capacity = 128
-        self.app._ship.cargo_inventory = [{"Name": "gold", "Count": 32}]
-        self.app._ship.destination_system = "Achenar"
-        self.app._market.station = "Jameson Memorial"
-        self.app._market.system = "Sol"
-        self.app._market.timestamp = "2026-06-15T15:01:00Z"
-        self.app._market.items = [{"Name": "gold", "Stock": 42}]
-        self.app._haul_stats.station_1_buying = "gold"
-        self.app._haul_stats.station_2_buying = "silver"
-        self.app._haul_stats.station_1 = "Jameson Memorial"
-        self.app._haul_stats.station_2 = "Galileo"
-        self.app._haul_stats.active = True
-        self.app._haul_stats.current_run_profit = 5000
-        self.app._haul_stats.completed_runs = 2
-        self.app._haul_stats.accumulated_profit = 9000
-        self.app._runtime_state.routine_active = True
-        self.app._runtime_state.active_routine_name = "haul"
-        self.app._runtime_state.instant_mode = True
-        self.app._trade_routes.system_name = "Sol"
-        self.app._trade_routes.routes = [
-            TradeRoute(
-                index=1,
-                from_station="Jameson Memorial",
-                from_system="Sol",
-                to_station="Galileo",
-                to_system="Sol",
-                source_buy_commodity="gold",
-                target_buy_commodity="silver",
-                from_station_distance="82 Ls",
-                to_station_distance="5 Ls",
-                distance_from_system="~167 Ly",
-                route_distance="12.4 Ly",
-            )
-        ]
-        self.app._prompt_state.haul_params = {"commodity": "gold"}
-        self.app._prompt_state.dest_prompt_destination = "Achenar"
-        self.app._saved_state = ControlRoomState(
-            default_haul={"commodity": "gold"},
-            history=[history_entry],
-            instant_mode=True,
-        )
-        self.app._history_draft = "sell gold"
-        self.app._resume_filter = "ha"
-        self.app._replay_state.open = True
-        self.app._replay_state.filter_text = "ha"
-        self.app._resume_entries = [
-            ReplaySelection(
-                entry=history_entry,
-                label=resume_label(history_entry, self.app._saved_state.default_haul),
-                detail=resume_detail(history_entry),
-            )
-        ]
-
-        snapshot = snapshot_from_app(
-            self.app,
-            session_id="session-1",
-            client_name="observer-1",
-            activity_log=[
-                ActivityLogEntry(
-                    entry_id="log-1",
-                    timestamp="2026-06-15T15:02:00Z",
-                    message_text="Docked at Jameson Memorial",
-                    severity="info",
-                )
-            ],
-            capability_names=["snapshot", "announcement_stream"],
-        )
-
-        self.assertEqual(snapshot.session.session_id, "session-1")
-        self.assertEqual(snapshot.ship.commander_name, "CMDR TEST")
-        self.assertEqual(snapshot.ship.station_name, "Jameson Memorial")
-        self.assertTrue(snapshot.haul_session.active)
-        self.assertEqual(snapshot.haul_session.current_run_profit, 5000)
-        self.assertTrue(snapshot.ui_state.routine_active)
-        self.assertTrue(snapshot.ui_state.instant_mode)
-        self.assertTrue(snapshot.ui_state.activity_auto_follow_paused)
-        self.assertEqual(snapshot.command_history.default_haul, {"commodity": "gold"})
-        self.assertEqual(snapshot.command_history.history_entries[0].raw_command, "haul gold")
-        self.assertEqual(snapshot.trade_routes.routes[0].from_station_distance, "82 Ls")
-        self.assertEqual(snapshot.trade_routes.routes[0].to_station_distance, "5 Ls")
-        self.assertEqual(snapshot.trade_routes.routes[0].distance_from_system, "~167 Ly")
-        self.assertEqual(snapshot.activity_log[0].message_text, "Docked at Jameson Memorial")
-
-    def test_log_records_protocol_activity_entry_and_snapshot_uses_it_by_default(self) -> None:
+    def test_log_records_protocol_activity_entry(self) -> None:
         self.app._log("[yellow]Docked at Jameson Memorial[/]")
 
         self.assertEqual(len(self.app._protocol_activity_log), 1)
         entry = self.app._protocol_activity_log[0]
         self.assertEqual(entry.message_text, "[yellow]Docked at Jameson Memorial[/]")
-
-        snapshot = snapshot_from_app(self.app)
-        self.assertEqual(len(snapshot.activity_log), 1)
-        self.assertEqual(
-            snapshot.activity_log[0].message_text,
-            "[yellow]Docked at Jameson Memorial[/]",
-        )
 
     def test_announce_tts_records_protocol_announcement_event_even_when_local_tts_disabled(self) -> None:
         self.app._announce_tts(AnnouncementId.ARRIVAL, system_name="Sol")
@@ -567,11 +451,9 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         remote_app._ship.commander = "CMDR DATA"
         remote_app._ship.system = "Achenar"
         remote_app._ship.status = "in_station"
-        snapshot = snapshot_from_app(remote_app)
-
         app = _RenderHarnessApp(
             _make_context(Path(self.tmpdir.name)),
-            backend=_SnapshotBackend(snapshot),
+            backend=_BackendStub(),
         )
         app._ship.commander = "CMDR LOCAL"
         app._dependencies = replace(
@@ -585,8 +467,7 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.assertNotIn("CMDR LOCAL", rendered)
 
     def test_dispatch_command_routes_through_execution_dependency(self) -> None:
-        snapshot = snapshot_from_app(self.app)
-        backend = _IntentRecorderBackend(snapshot)
+        backend = _IntentRecorderBackend()
         execution = _ExecutionRecorder()
         app = _RenderHarnessApp(
             _make_context(Path(self.tmpdir.name)),
@@ -599,8 +480,7 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.assertEqual(execution.dispatched_commands, [("commands", True)])
 
     def test_action_open_history_opens_local_replay_browser(self) -> None:
-        snapshot = snapshot_from_app(self.app)
-        backend = _IntentRecorderBackend(snapshot)
+        backend = _IntentRecorderBackend()
         app = _RenderHarnessApp(
             _make_context(Path(self.tmpdir.name)),
             backend=backend,
@@ -615,8 +495,7 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.assertTrue(app._resume_open)
 
     def test_resume_execute_selected_dispatches_through_execution(self) -> None:
-        snapshot = snapshot_from_app(self.app)
-        backend = _IntentRecorderBackend(snapshot)
+        backend = _IntentRecorderBackend()
         execution = _ExecutionRecorder()
         app = _RenderHarnessApp(
             _make_context(Path(self.tmpdir.name)),
@@ -638,8 +517,7 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.assertEqual(execution.dispatched_commands, [("jump", None)])
 
     def test_trade_route_picker_enter_dispatches_haul_route_command(self) -> None:
-        snapshot = snapshot_from_app(self.app)
-        backend = _IntentRecorderBackend(snapshot)
+        backend = _IntentRecorderBackend()
         execution = _ExecutionRecorder()
         app = _RenderHarnessApp(
             _make_context(Path(self.tmpdir.name)),
@@ -667,8 +545,7 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.assertEqual(execution.dispatched_commands, [("haul route 2", None)])
 
     def test_trade_route_picker_escape_closes_without_dispatch(self) -> None:
-        snapshot = snapshot_from_app(self.app)
-        backend = _IntentRecorderBackend(snapshot)
+        backend = _IntentRecorderBackend()
         execution = _ExecutionRecorder()
         app = _RenderHarnessApp(
             _make_context(Path(self.tmpdir.name)),
@@ -689,8 +566,7 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.assertEqual(backend.dispatched_commands, [])
 
     def test_trade_route_picker_d_sets_destination_to_first_station_system(self) -> None:
-        snapshot = snapshot_from_app(self.app)
-        backend = _IntentRecorderBackend(snapshot)
+        backend = _IntentRecorderBackend()
         execution = _ExecutionRecorder()
         app = _RenderHarnessApp(
             _make_context(Path(self.tmpdir.name)),
@@ -718,8 +594,7 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.assertEqual(execution.dispatched_commands, [("dest TSONGORIS", None)])
 
     def test_replay_open_arrow_keys_move_local_selection(self) -> None:
-        snapshot = snapshot_from_app(self.app)
-        backend = _IntentRecorderBackend(snapshot)
+        backend = _IntentRecorderBackend()
         app = _RenderHarnessApp(
             _make_context(Path(self.tmpdir.name)),
             backend=backend,
@@ -744,8 +619,7 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.assertEqual(app._selected_resume_history_entry, second)
 
     def test_blank_input_submission_dispatches_destination_prompt_default(self) -> None:
-        snapshot = snapshot_from_app(self.app)
-        backend = _IntentRecorderBackend(snapshot)
+        backend = _IntentRecorderBackend()
         execution = _ExecutionRecorder()
         app = _RenderHarnessApp(
             _make_context(Path(self.tmpdir.name)),
@@ -767,8 +641,7 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.assertEqual(input_stub.value, "")
 
     def test_blank_enter_key_dispatches_destination_prompt_default(self) -> None:
-        snapshot = snapshot_from_app(self.app)
-        backend = _IntentRecorderBackend(snapshot)
+        backend = _IntentRecorderBackend()
         execution = _ExecutionRecorder()
         app = _RenderHarnessApp(
             _make_context(Path(self.tmpdir.name)),
