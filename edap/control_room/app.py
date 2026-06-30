@@ -1501,36 +1501,16 @@ class ControlRoomApp(App[None]):
         self._refresh_resume_picker()
 
     def _close_trade_route_picker(self) -> None:
-        self._trade_route_picker_open = False
-        self._refresh_trade_route_picker()
-        try:
-            self.set_focus(self.query_one("#cmd", Input))
-        except ScreenStackError:
-            return
+        self._view_actions.trade_routes.close()
 
     def _move_trade_route_selection(self, offset: int) -> None:
-        if not self._trade_routes.routes or offset == 0:
-            return
-        route_indices = [route.index for route in self._trade_routes.routes]
-        selected_index = self._selected_trade_route_index
-        current_position = route_indices.index(selected_index) if selected_index in route_indices else 0
-        next_position = max(0, min(len(route_indices) - 1, current_position + offset))
-        self._selected_trade_route_index = route_indices[next_position]
-        self._refresh_trade_route_picker()
+        self._view_actions.trade_routes.move_selection(offset)
 
     def _load_selected_trade_route(self) -> None:
-        route = self._selected_trade_route()
-        if route is None:
-            return
-        self._close_trade_route_picker()
-        self._dispatch_command(f"haul route {route.index}")
+        self._view_actions.trade_routes.load_selected()
 
     def _set_destination_for_selected_trade_route(self) -> None:
-        route = self._selected_trade_route()
-        if route is None or not route.from_system:
-            return
-        self._close_trade_route_picker()
-        self._dispatch_command(f"dest {route.from_system}")
+        self._view_actions.trade_routes.set_destination_for_selected()
 
     def _update_resume_detail(self) -> None:
         _replay.update_resume_detail(self)

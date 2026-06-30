@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `169`
-- Latest generated iteration number: `302`
+- Generated iteration count: `170`
+- Latest generated iteration number: `303`
 
 ## Iteration 134
 
@@ -4712,3 +4712,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Continue extracting action seams for trade-route picker movement/load/destination commands.
+
+## Iteration 303
+
+- When: `2026-06-30 22:17`
+- Area: `control-room`
+- Title: `trade-route-picker-view-actions`
+- Source: [2026-06-30-22-17_control-room_trade-route-picker-view-actions.md](iteration-logs/2026-06-30-22-17_control-room_trade-route-picker-view-actions.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `trade-route-picker-view-actions`
+- Started: `2026-06-30 22:17`
+
+## Summary
+
+- Extracted trade-route picker close/move/load/destination behavior into a ViewActions object.
+
+## Changes
+
+- Added `TradeRoutePickerActions` and `LocalTradeRoutePickerActions`.
+- Rewired `ControlRoomApp` trade-route helper methods to delegate through `self._view_actions.trade_routes`.
+- Added direct ViewAction tests for picker selection movement and command dispatch.
+
+## Follow-ups
+
+- Replay browser actions remain local app methods and are the next candidate for extraction.
