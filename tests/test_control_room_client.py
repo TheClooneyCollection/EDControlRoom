@@ -39,6 +39,7 @@ from edap.inara.trade_routes import TradeRoute, TradeRouteSearchResult
 from edap.control_room.protocol.snapshot import (
     ActivityLogEntry,
     ActiveOperatorSnapshot,
+    CommandHistoryEntrySnapshot,
     CommandHistorySnapshot,
     ControlRoomSnapshot,
     HaulSessionSnapshot,
@@ -365,7 +366,7 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertTrue(command_input.disabled)
         self.assertEqual(command_input.placeholder, "observer mode - read only")
 
-    def test_observer_app_applies_remote_replay_edit_prefill(self) -> None:
+    def test_observer_app_ignores_remote_prompt_prefill_snapshot(self) -> None:
         updated_snapshot = replace(
             _snapshot(),
             session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
@@ -385,9 +386,91 @@ class ControlRoomClientTests(unittest.TestCase):
         app._refresh_remote_command_input()
 
         self.assertFalse(command_input.disabled)
-        self.assertEqual(command_input.placeholder, "commands | help dock | ...")
-        self.assertEqual(command_input.value, "jump")
-        self.assertEqual(command_input.cursor_position, 4)
+        self.assertEqual(command_input.placeholder, app._default_command_placeholder)
+        self.assertEqual(command_input.value, "")
+        self.assertEqual(command_input.cursor_position, 0)
+
+    def test_observer_app_replay_browser_runs_locally_from_remote_history(self) -> None:
+        updated_snapshot = replace(
+            _snapshot(),
+            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+            command_history=CommandHistorySnapshot(
+                history_entries=[
+                    CommandHistoryEntrySnapshot(
+                        raw_command="haul Silver",
+                        command_name="haul",
+                        arguments={
+                            "station_1_buying": "Silver",
+                            "station_1": "Savitskaya Orbital",
+                            "station_1_system": "TSONGORIS",
+                            "station_2": "Nyberg Vision",
+                            "station_2_system": "NJOKUJINUN",
+                        },
+                        timestamp="2026-06-30T12:00:00Z",
+                    )
+                ],
+                history_limit=20,
+            ),
+        )
+        backend = self._backend(initial_snapshot=updated_snapshot)
+        app = self._app(backend=backend)
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
+        app.set_focus = lambda _widget: None  # type: ignore[method-assign]
+
+        app._apply_view_snapshot_state()
+        app._show_resume_picker()
+
+        self.assertTrue(app._resume_open)
+        self.assertEqual(len(app._resume_entries), 1)
+        self.assertTrue(backend._outgoing_messages.empty())
+
+        app._resume_edit_selected()
+
+        self.assertEqual(app._haul_prompt_step, "station_1_buying")
+        self.assertEqual(command_input.value, "Silver")
+        self.assertEqual(
+            app._prompt_state.haul_prompt_defaults["station_2"],
+            "Nyberg Vision",
+        )
+        self.assertTrue(backend._outgoing_messages.empty())
+
+    def test_observer_app_replay_filter_runs_locally(self) -> None:
+        updated_snapshot = replace(
+            _snapshot(),
+            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+            command_history=CommandHistorySnapshot(
+                history_entries=[
+                    CommandHistoryEntrySnapshot(
+                        raw_command="haul Silver",
+                        command_name="haul",
+                        arguments={"station_1_buying": "Silver"},
+                        timestamp="2026-06-30T12:00:00Z",
+                    ),
+                    CommandHistoryEntrySnapshot(
+                        raw_command="dest Achenar",
+                        command_name="dest",
+                        arguments={"destination": "Achenar", "galaxy_map_settle": 2.0},
+                        timestamp="2026-06-30T12:01:00Z",
+                    ),
+                ],
+                history_limit=20,
+            ),
+        )
+        backend = self._backend(initial_snapshot=updated_snapshot)
+        app = self._app(backend=backend)
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
+        app.set_focus = lambda _widget: None  # type: ignore[method-assign]
+
+        app._apply_view_snapshot_state()
+        app._show_resume_picker()
+        app._resume_filter = "dest"
+        app._refresh_resume_picker()
+
+        self.assertEqual(len(app._resume_entries), 1)
+        self.assertEqual(app._resume_entries[0].entry.raw, "dest Achenar")
+        self.assertTrue(backend._outgoing_messages.empty())
 
     def test_observer_app_ignores_remote_trade_routes_snapshot(self) -> None:
         updated_snapshot = replace(

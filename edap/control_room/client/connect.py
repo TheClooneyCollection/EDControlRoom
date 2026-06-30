@@ -8,6 +8,7 @@ from textual.widgets import Input
 from edap.control_room.app import ActivityLog, ControlRoomApp, _ALL_ROUTINE_ACTIONS, _build_log_text
 from edap.control_room import commands as _commands
 from edap.control_room import prompts as _prompts
+from edap.control_room import replay as _replay
 from edap.control_room.backend import ControlRoomBackendEvent
 from edap.control_room.client.backend import RemoteObserverBackend, fetch_remote_observer_snapshot
 from edap.control_room.client.target import ObserverServerTarget, parse_observer_server_target
@@ -46,6 +47,9 @@ class ObserverControlRoomApp(ControlRoomApp):
         self._local_trade_routes = TradeRoutesData()
         self._local_trade_route_picker = TradeRoutePickerState()
         self._local_prompt_state: PromptState | None = None
+        self._local_replay_filter = ""
+        self._local_replay_open = False
+        self._local_selected_resume_history_entry: CommandHistoryEntry | None = None
 
     def on_mount(self) -> None:
         self._configure_screen_widgets()
@@ -159,6 +163,15 @@ class ObserverControlRoomApp(ControlRoomApp):
                 command_input_placeholder=self._local_prompt_state.command_input_placeholder,
                 command_input_value=self._local_prompt_state.command_input_value,
             )
+        else:
+            self._prompt_state = PromptState()
+        self._resume_filter = self._local_replay_filter
+        self._resume_open = self._local_replay_open
+        self._resume_entries = self._filtered_resume_entries()
+        self._selected_resume_history_entry = self._resolve_local_selected_resume_entry()
+        self._replay_state.filter_text = self._local_replay_filter
+        self._replay_state.open = self._local_replay_open
+        self._apply_replay_browser_visibility()
         self._debug_log(
             "observer_apply_view_snapshot_state_local_override",
             local_trade_route_count=len(self._trade_routes.routes),
@@ -166,8 +179,13 @@ class ObserverControlRoomApp(ControlRoomApp):
             local_picker_open=self._trade_route_picker_open,
             local_selected_trade_route_index=self._selected_trade_route_index,
             local_prompt_step=self._prompt_state.haul_prompt_step,
+            local_replay_open=self._resume_open,
+            local_replay_filter=self._resume_filter,
         )
         self._refresh_trade_routes()
+        if self._resume_open:
+            self._refresh_resume_help()
+            self._update_resume_detail()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         raw = event.value
@@ -454,6 +472,53 @@ class ObserverControlRoomApp(ControlRoomApp):
             return
         self._clear_local_prompt_state()
 
+    def _sync_local_replay_state(self) -> None:
+        self._local_replay_filter = self._resume_filter
+        self._local_replay_open = self._resume_open
+        self._local_selected_resume_history_entry = self._selected_resume_history_entry
+
+    def _resolve_local_selected_resume_entry(self) -> CommandHistoryEntry | None:
+        if not self._resume_entries:
+            return None
+        selected = self._local_selected_resume_history_entry
+        if selected is None:
+            return self._resume_entries[0].entry
+        for replay_entry in self._resume_entries:
+            if replay_entry.entry == selected:
+                return replay_entry.entry
+        return self._resume_entries[0].entry
+
+    def _show_resume_picker(self) -> None:
+        _replay.show_resume_picker(self)
+        self._sync_local_replay_state()
+
+    def _refresh_resume_picker(self) -> None:
+        _replay.refresh_resume_picker(self)
+        self._sync_local_replay_state()
+
+    def _close_resume_picker(self) -> None:
+        _replay.close_resume_picker(self)
+        self._sync_local_replay_state()
+
+    def _resume_execute_selected(self) -> None:
+        _replay.resume_execute_selected(self)
+        self._sync_local_replay_state()
+        self._sync_local_prompt_state()
+
+    def _resume_execute_selected_immediate(self) -> None:
+        _replay.resume_execute_selected_immediate(self)
+        self._sync_local_replay_state()
+        self._sync_local_prompt_state()
+
+    def _resume_edit_selected(self) -> None:
+        _replay.resume_edit_selected(self)
+        self._sync_local_replay_state()
+        self._sync_local_prompt_state()
+
+    def _resume_toggle_default_selected(self) -> None:
+        _replay.resume_toggle_default_selected(self)
+        self._sync_local_replay_state()
+
     def _capture_local_trade_route_state(self) -> None:
         self._local_trade_routes = TradeRoutesData(
             system_name=self._trade_routes.system_name,
@@ -540,6 +605,50 @@ class ObserverControlRoomApp(ControlRoomApp):
             command_input.cursor_position = len(command_input.value)
             return
         command_input.placeholder = self._default_command_placeholder
+        command_input.value = ""
+        command_input.cursor_position = 0
+
+    def on_key(self, event) -> None:
+        if self._resume_open:
+            if event.key != "enter":
+                self._suppress_replay_enter_until = 0.0
+            if event.key == "escape" or (event.key == "q" and not self._resume_filter):
+                event.prevent_default()
+                self._close_resume_picker()
+            elif event.key == "up":
+                event.prevent_default()
+                _replay.move_resume_selection(self, -1)
+                self._sync_local_replay_state()
+            elif event.key == "down":
+                event.prevent_default()
+                _replay.move_resume_selection(self, 1)
+                self._sync_local_replay_state()
+            elif event.key == "e" and not self._resume_filter:
+                event.prevent_default()
+                self._resume_edit_selected()
+            elif event.character == "!":
+                event.prevent_default()
+                self._resume_execute_selected_immediate()
+            elif event.character == "*":
+                event.prevent_default()
+                self._resume_toggle_default_selected()
+            elif event.key == "enter":
+                event.prevent_default()
+                if self._time_fn() <= self._suppress_replay_enter_until:
+                    self._suppress_replay_enter_until = 0.0
+                    return
+                self._resume_execute_selected()
+            elif event.key == "backspace":
+                event.prevent_default()
+                if self._resume_filter:
+                    self._resume_filter = self._resume_filter[:-1]
+                    self._refresh_resume_picker()
+            elif event.character and event.character.isprintable() and len(event.character) == 1:
+                event.prevent_default()
+                self._resume_filter = self._resume_filter + event.character
+                self._refresh_resume_picker()
+            return
+        super().on_key(event)
 
 
 def connect_observer_mode(
