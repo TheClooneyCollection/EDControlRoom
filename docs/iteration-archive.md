@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `151`
-- Latest generated iteration number: `284`
+- Generated iteration count: `152`
+- Latest generated iteration number: `285`
 
 ## Iteration 134
 
@@ -4212,3 +4212,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Remove snapshot fanout once connect no longer depends on snapshot-driven UI state.
+
+## Iteration 285
+
+- When: `2026-06-30 18:31`
+- Area: `control-room`
+- Title: `connect-hydrate-bootstrap`
+- Source: [2026-06-30-18-31_control-room_connect-hydrate-bootstrap.md](iteration-logs/2026-06-30-18-31_control-room_connect-hydrate-bootstrap.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `connect-hydrate-bootstrap`
+- Started: `2026-06-30 18:31`
+
+## Summary
+
+- Removed the production connect-mode bootstrap dependency on the legacy `/snapshot` endpoint.
+
+## Changes
+
+- Added a hydrate-data initializer for the legacy view snapshot shape that `ControlRoomApp` still needs during construction.
+- Changed `connect_observer_mode()` to fetch `/hydrate` only, then build the initial remote backend state from the hydrated data source.
+- Stopped websocket connect/reconnect and replay refresh from issuing `command.request_snapshot`; live updates now rely on server hydrate messages.
+- Added client tests for hydrate-derived initial state and reconnect behavior.
+
+## Follow-ups
+
+- Remove the remaining explicit `request_snapshot()` protocol surface after the server/client observer compatibility tests are retired.

@@ -23,6 +23,7 @@ from edap.control_room.client.backend import (
     RemoteObserverDataSource,
     RemoteObserverExecution,
     _validate_remote_observer_capabilities,
+    initial_remote_snapshot_from_data,
 )
 from edap.control_room.dependencies import (
     ActivityLogReadModel,
@@ -1472,6 +1473,19 @@ class ControlRoomClientTests(unittest.TestCase):
 
         self.assertEqual(data_source.current().ship.system, "Achenar")
 
+    def test_initial_remote_snapshot_is_derived_from_hydrate_data(self) -> None:
+        data = _data_read_model(system_name="Achenar")
+
+        snapshot = initial_remote_snapshot_from_data(data, client_name="observer-ipad")
+
+        self.assertEqual(snapshot.ship.system_name, "Achenar")
+        self.assertEqual(snapshot.session.session_id, data.session.session_id)
+        self.assertEqual(
+            snapshot.command_history.history_limit,
+            data.command_history.history_limit,
+        )
+        self.assertEqual(snapshot.server_status.operator_mode, data.server_status.operator_mode)
+
     def test_remote_backend_hydrates_data_source_from_data_message(self) -> None:
         data_source = RemoteObserverDataSource(_data_read_model(system_name="Sol"))
         backend = self._backend()
@@ -1681,7 +1695,6 @@ class ControlRoomClientTests(unittest.TestCase):
         backend._handle_connection_lost("Observer connection lost: ping timeout")
         backend._emit_local_message("Reconnecting in 1.0s...")
         backend._connected = True
-        backend.request_snapshot()
         backend._emit_local_message("Observer connection restored.")
 
         messages = [
@@ -1692,8 +1705,7 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertIn("Observer connection lost: ping timeout", messages)
         self.assertIn("Reconnecting in 1.0s...", messages)
         self.assertIn("Observer connection restored.", messages)
-        reconnect_request = backend._outgoing_messages.get_nowait()
-        self.assertEqual(reconnect_request["message_type"], "command.request_snapshot")
+        self.assertTrue(backend._outgoing_messages.empty())
 
     def test_remote_backend_enqueues_active_operator_claim(self) -> None:
         target = ObserverServerTarget(

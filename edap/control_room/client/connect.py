@@ -17,7 +17,7 @@ from edap.control_room.client.backend import (
     RemoteObserverDataSource,
     RemoteObserverExecution,
     fetch_remote_control_room_data,
-    fetch_remote_observer_snapshot,
+    initial_remote_snapshot_from_data,
 )
 from edap.control_room.client.target import ObserverServerTarget, parse_observer_server_target
 from edap.control_room.history import now_iso
@@ -95,7 +95,6 @@ class ObserverControlRoomApp(ControlRoomApp):
         self._backend_event_unsubscribe = self._backend.subscribe_events(self._handle_backend_event)
         self._observer_backend.start()
         self._apply_remote_snapshot(replace_activity=True)
-        self._observer_backend.request_snapshot()
         self._refresh_remote_command_input()
 
     def on_unmount(self) -> None:
@@ -861,10 +860,6 @@ def connect_observer_mode(
         server_target=server_target,
         access_token=access_token,
     )
-    _, snapshot = fetch_remote_observer_snapshot(
-        server_target=server_target,
-        access_token=access_token,
-    )
     ctx = build_runtime_context(
         loaded.config,
         config_path=loaded.config_path,
@@ -876,7 +871,10 @@ def connect_observer_mode(
         server_target=server_target,
         access_token=access_token,
         client_name=resolved_client_name,
-        initial_snapshot=snapshot,
+        initial_snapshot=initial_remote_snapshot_from_data(
+            remote_data,
+            client_name=resolved_client_name,
+        ),
         data_source=data_source,
         websocket_connect_info=build_remote_observer_websocket_connect_info(
             websocket_url=server_target.websocket_url,
