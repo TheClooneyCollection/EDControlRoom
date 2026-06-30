@@ -101,13 +101,17 @@ class _FakeActivityWidget:
         self.styles = _WidgetStyles()
         self.border_title = "ACTIVITY"
         self.auto_scroll = True
+        self.writes: list[object] = []
 
     @property
     def auto_follow_paused(self) -> bool:
         return not self.auto_scroll
 
-    def write(self, *_args, **_kwargs) -> None:
-        return None
+    def write(self, value, *_args, **_kwargs) -> None:
+        self.writes.append(value)
+
+    def clear(self) -> None:
+        self.writes = []
 
 
 class _FakeContainerWidget:
@@ -443,6 +447,45 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(command_input.placeholder, "station 1 buying...")
         self.assertEqual(command_input.value, "Gol")
         self.assertEqual(command_input.cursor_position, len("Gol"))
+
+    def test_observer_app_preserves_local_activity_entries_across_snapshot_refresh(self) -> None:
+        updated_snapshot = replace(
+            _snapshot(),
+            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+            activity_log=[
+                ActivityLogEntry(
+                    entry_id="remote-1",
+                    timestamp="2026-06-30T13:54:34Z",
+                    message_text="[dim]Unknown command: dest sol[/]",
+                )
+            ],
+        )
+        backend = self._backend(initial_snapshot=updated_snapshot)
+        app = self._app(backend=backend)
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
+        activity = app.query_one("#activity")
+
+        app._apply_view_snapshot_state()
+        app._replace_activity_log(updated_snapshot.activity_log)
+        app._log("[bold]dest[/] - dest <system>")
+        self.assertEqual(len(activity.writes), 2)
+
+        refreshed_snapshot = replace(
+            updated_snapshot,
+            ship=replace(updated_snapshot.ship, system_name="Achenar"),
+        )
+        backend.publish_snapshot(refreshed_snapshot)
+        app._view_snapshot = refreshed_snapshot
+        app._apply_view_snapshot_state()
+        app._replace_activity_log(refreshed_snapshot.activity_log)
+
+        rendered_messages = [segment.plain for segment in activity.writes]
+        self.assertTrue(
+            any("Unknown command: dest sol" in message for message in rendered_messages)
+        )
+        self.assertTrue(any("dest - dest <system>" in message for message in rendered_messages))
+        self.assertIn("dest - dest <system>", rendered_messages[-1])
 
     def test_observer_app_replay_browser_runs_locally_from_remote_history(self) -> None:
         updated_snapshot = replace(

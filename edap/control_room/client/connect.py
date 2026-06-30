@@ -18,6 +18,7 @@ from edap.control_room.protocol import (
     ActivityLogAppendedEvent,
     AnnouncementEvent,
     SnapshotUpdatedEvent,
+    build_activity_log_entry,
     build_remote_observer_websocket_connect_info,
 )
 from edap.runtime import build_runtime_context, load_config_with_fallback
@@ -49,6 +50,7 @@ class ObserverControlRoomApp(ControlRoomApp):
         self._local_prompt_state: PromptState | None = None
         self._local_command_input_value = ""
         self._local_prompt_prefill_signature = (False, "", "")
+        self._local_activity_log: list[ActivityLogEntry] = []
         self._local_replay_filter = ""
         self._local_replay_open = False
         self._local_selected_resume_history_entry: CommandHistoryEntry | None = None
@@ -86,6 +88,27 @@ class ObserverControlRoomApp(ControlRoomApp):
             return
         if isinstance(event, AnnouncementEvent):
             self._play_local_announcement(event)
+
+    def _replace_activity_log(self, entries: list[ActivityLogEntry]) -> None:
+        merged_entries = list(entries) + list(self._local_activity_log)
+        if len(merged_entries) > self._activity_log_max_lines:
+            merged_entries = merged_entries[-self._activity_log_max_lines :]
+        super()._replace_activity_log(merged_entries)
+
+    def _log(self, msg: str) -> None:
+        activity = self.query_one("#activity", ActivityLog)
+        activity.write(_build_log_text(msg))
+        entry = self._build_local_activity_entry(msg)
+        self._local_activity_log.append(entry)
+        if len(self._local_activity_log) > self._activity_log_max_lines:
+            self._local_activity_log = self._local_activity_log[-self._activity_log_max_lines :]
+        self._protocol_activity_log.append(entry)
+        if len(self._protocol_activity_log) > self._activity_log_max_lines:
+            self._protocol_activity_log = self._protocol_activity_log[-self._activity_log_max_lines :]
+        self._refresh_activity_title()
+
+    def _build_local_activity_entry(self, msg: str) -> ActivityLogEntry:
+        return build_activity_log_entry(msg)
 
     def _apply_remote_snapshot(self, *, replace_activity: bool) -> None:
         self._debug_log(

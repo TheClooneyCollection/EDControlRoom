@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `126`
-- Latest generated iteration number: `259`
+- Generated iteration count: `127`
+- Latest generated iteration number: `260`
 
 ## Iteration 134
 
@@ -3526,3 +3526,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-validate the fix in a real `control_room connect` session to confirm Textual input-change events behave the same as the unit-test harness.
+
+## Iteration 260
+
+- When: `2026-06-30 13:57`
+- Area: `control-room`
+- Title: `preserve-connect-local-activity-log`
+- Source: [2026-06-30-13-57_control-room_preserve-connect-local-activity-log.md](iteration-logs/2026-06-30-13-57_control-room_preserve-connect-local-activity-log.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `preserve-connect-local-activity-log`
+- Started: `2026-06-30 13:57`
+
+## Summary
+
+- Fixed a `connect`-mode regression where client-local activity-log output briefly appeared and then got wiped by the next remote snapshot refresh.
+
+## Changes
+
+- Overrode observer activity-log replacement to merge the server snapshot log with retained client-local entries instead of treating the snapshot as the only source of truth.
+- Kept observer-local `_log()` writes out of the headless protocol stream while still preserving them in the visible log across later snapshot replacements.
+- Added regression coverage showing a local help-style entry surviving a remote snapshot refresh that still contains older server `Unknown command` entries.
+
+## Follow-ups
+
+- Live-validate in a real `control_room connect` session that local prompt/help output remains visible while remote activity continues streaming underneath it.
