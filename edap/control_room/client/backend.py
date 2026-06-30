@@ -28,7 +28,6 @@ from edap.control_room.protocol import (
     ServerStatusSnapshot,
     SessionSnapshot,
     ShipSnapshot,
-    SnapshotUpdatedEvent,
     TradeRoutesSnapshot,
     UiStateSnapshot,
     build_activity_log_entry,
@@ -142,7 +141,6 @@ class RemoteObserverBackend(ControlRoomBackend):
     def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
         with self._lock:
             self._snapshot = snapshot
-        self._emit(SnapshotUpdatedEvent(snapshot=snapshot))
 
     def submit_input(self, raw: str) -> None:
         if _is_client_local_command(raw):

@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `157`
-- Latest generated iteration number: `290`
+- Generated iteration count: `158`
+- Latest generated iteration number: `291`
 
 ## Iteration 134
 
@@ -4381,3 +4381,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Remove the temporary legacy initial view snapshot once `ControlRoomApp` construction no longer requires a backend snapshot.
+
+## Iteration 291
+
+- When: `2026-06-30 19:12`
+- Area: `control-room`
+- Title: `remove-remote-snapshot-events`
+- Source: [2026-06-30-19-12_control-room_remove-remote-snapshot-events.md](iteration-logs/2026-06-30-19-12_control-room_remove-remote-snapshot-events.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `remove-remote-snapshot-events`
+- Started: `2026-06-30 19:12`
+
+## Summary
+
+- Removed remote snapshot update events from the connect client backend.
+
+## Changes
+
+- `RemoteObserverBackend.publish_snapshot()` now only updates its temporary compatibility cache and emits no backend event.
+- Removed the unreachable connect app snapshot-event branch and stale imports.
+- Updated client tests to assert compatibility-cache updates are silent.
+
+## Follow-ups
+
+- Remove the temporary compatibility cache once `ControlRoomApp` no longer needs a constructor-time `_view_snapshot`.

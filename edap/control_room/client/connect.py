@@ -27,7 +27,6 @@ from edap.control_room.protocol import (
     ActivityLogEntry,
     AnnouncementEvent,
     DataUpdatedEvent,
-    SnapshotUpdatedEvent,
     build_activity_log_entry,
     build_remote_observer_websocket_connect_info,
 )
@@ -107,8 +106,6 @@ class ObserverControlRoomApp(ControlRoomApp):
         self.call_from_thread(self._apply_backend_event, event)
 
     def _apply_backend_event(self, event: ControlRoomBackendEvent) -> None:
-        if isinstance(event, SnapshotUpdatedEvent):
-            return
         if isinstance(event, DataUpdatedEvent):
             self._apply_remote_data_state(event.data, replace_activity=True)
             return

@@ -46,7 +46,6 @@ from edap.control_room.protocol import (
     DataUpdatedEvent,
     REQUIRED_AUTHENTICATION_TRANSPORTS,
     RemoteObserverWebSocketConnectInfo,
-    SnapshotUpdatedEvent,
     build_remote_observer_capabilities_payload,
     build_remote_observer_websocket_connect_info,
     event_from_message,
@@ -487,29 +486,6 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(command_input.value, "haul gold")
         self.assertEqual(command_input.cursor_position, 4)
         self.assertEqual(command_input.placeholder, app._default_command_placeholder)
-
-    def test_observer_app_ignores_legacy_snapshot_backend_events(self) -> None:
-        updated_snapshot = replace(
-            _snapshot(),
-            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-        )
-        backend = self._backend(initial_snapshot=updated_snapshot)
-        app = self._app(backend=backend)
-        command_input = _FakeInputWidget()
-        _bind_observer_widgets(app, command_input)
-
-        app._apply_view_snapshot_state()
-        command_input.value = "haul gold"
-        app._local_command_input_value = command_input.value
-        refreshed_snapshot = replace(
-            updated_snapshot,
-            ship=replace(updated_snapshot.ship, system_name="Achenar"),
-        )
-
-        app._apply_backend_event(SnapshotUpdatedEvent(snapshot=refreshed_snapshot))
-
-        self.assertEqual(app._view_snapshot.ship.system_name, "Sol")
-        self.assertEqual(command_input.value, "haul gold")
 
     def test_observer_app_preserves_prompt_draft_across_snapshot_refresh(self) -> None:
         updated_snapshot = replace(
@@ -1341,7 +1317,7 @@ class ControlRoomClientTests(unittest.TestCase):
         backend.publish_snapshot(updated_snapshot)
 
         self.assertEqual(backend.current_snapshot().ship.system_name, "Achenar")
-        self.assertIsInstance(received[0], SnapshotUpdatedEvent)
+        self.assertEqual(received, [])
 
     def test_remote_backend_surfaces_response_error_messages(self) -> None:
         target = ObserverServerTarget(
