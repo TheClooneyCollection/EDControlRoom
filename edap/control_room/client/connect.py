@@ -70,6 +70,24 @@ class ObserverCommandBarState:
         self.prompt_prefill_signature = (False, "", "")
 
 
+@dataclass
+class ObserverReplayViewState:
+    filter_text: str = ""
+    open: bool = False
+    selected_entry: CommandHistoryEntry | None = None
+
+    def capture(
+        self,
+        *,
+        filter_text: str,
+        open: bool,
+        selected_entry: CommandHistoryEntry | None,
+    ) -> None:
+        self.filter_text = filter_text
+        self.open = open
+        self.selected_entry = selected_entry
+
+
 class ObserverControlRoomApp(ControlRoomApp):
     def __init__(
         self,
@@ -95,9 +113,7 @@ class ObserverControlRoomApp(ControlRoomApp):
         self._local_prompt_state: PromptState | None = None
         self._command_bar_state = ObserverCommandBarState()
         self._local_activity_log: list[ActivityLogEntry] = []
-        self._local_replay_filter = ""
-        self._local_replay_open = False
-        self._local_selected_resume_history_entry: CommandHistoryEntry | None = None
+        self._local_replay_state = ObserverReplayViewState()
 
     @property
     def _local_command_input_value(self) -> str:
@@ -312,12 +328,12 @@ class ObserverControlRoomApp(ControlRoomApp):
             )
         else:
             self._prompt_state = PromptState()
-        self._resume_filter = self._local_replay_filter
-        self._resume_open = self._local_replay_open
+        self._resume_filter = self._local_replay_state.filter_text
+        self._resume_open = self._local_replay_state.open
         self._resume_entries = self._filtered_resume_entries()
         self._selected_resume_history_entry = self._resolve_local_selected_resume_entry()
-        self._replay_state.filter_text = self._local_replay_filter
-        self._replay_state.open = self._local_replay_open
+        self._replay_state.filter_text = self._local_replay_state.filter_text
+        self._replay_state.open = self._local_replay_state.open
         self._apply_replay_browser_visibility()
         self._debug_log(
             "observer_apply_view_snapshot_state_local_override",
@@ -674,14 +690,16 @@ class ObserverControlRoomApp(ControlRoomApp):
         self._clear_local_prompt_state()
 
     def _sync_local_replay_state(self) -> None:
-        self._local_replay_filter = self._resume_filter
-        self._local_replay_open = self._resume_open
-        self._local_selected_resume_history_entry = self._selected_resume_history_entry
+        self._local_replay_state.capture(
+            filter_text=self._resume_filter,
+            open=self._resume_open,
+            selected_entry=self._selected_resume_history_entry,
+        )
 
     def _resolve_local_selected_resume_entry(self) -> CommandHistoryEntry | None:
         if not self._resume_entries:
             return None
-        selected = self._local_selected_resume_history_entry
+        selected = self._local_replay_state.selected_entry
         if selected is None:
             return self._resume_entries[0].entry
         for replay_entry in self._resume_entries:

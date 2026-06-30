@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `161`
-- Latest generated iteration number: `294`
+- Generated iteration count: `162`
+- Latest generated iteration number: `295`
 
 ## Iteration 134
 
@@ -4489,3 +4489,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Move command-bar refresh/restore behavior behind a dedicated view action after replay and trade-route picker state are similarly isolated.
+
+## Iteration 295
+
+- When: `2026-06-30 19:25`
+- Area: `control-room`
+- Title: `connect-replay-view-state`
+- Source: [2026-06-30-19-25_control-room_connect-replay-view-state.md](iteration-logs/2026-06-30-19-25_control-room_connect-replay-view-state.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `connect-replay-view-state`
+- Started: `2026-06-30 19:25`
+
+## Summary
+
+- Encapsulated connect replay-browser local UI state in a dedicated `ObserverReplayViewState`.
+
+## Changes
+
+- Replaced scattered observer-local replay filter/open/selected-entry fields with one capture/apply object.
+- Kept hydrate/snapshot-compat application from overwriting replay-browser local state directly.
+- Verified `tests/test_control_room_client.py` and the full unittest suite.
+
+## Follow-ups
+
+- Continue moving trade-route picker and remaining prompt interaction state behind view-action/data-source-owned seams.
