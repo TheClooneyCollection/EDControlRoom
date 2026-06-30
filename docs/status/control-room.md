@@ -13,4 +13,4 @@
 - Routine-heavy live sessions still need validation, especially targeted input with `set_pid` / `set_hwnd` under CrossOver and Windows.
 - Shared LAN token auth remains acceptable for current remote work; per-user or internet-facing identity is not implemented.
 ## Next
-- Continue plan 0008 bottom-up by moving command bar, replay browser, and trade-route picker interactions behind local view actions/data sources, then remove remaining internal snapshot compatibility.
+- Continue plan 0008 bottom-up by moving replay browser and trade-route picker interactions behind local view actions/data sources, then turn the connect command-bar state object into a dedicated view action and remove remaining internal snapshot compatibility.

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime
 import socket
 
@@ -47,6 +47,29 @@ def _activity_log_entry_sort_key(entry: ActivityLogEntry) -> tuple[datetime, str
     )
 
 
+@dataclass
+class ObserverCommandBarState:
+    value: str = ""
+    cursor_position: int = 0
+    prompt_prefill_signature: tuple[object, ...] = (False, "", "")
+
+    def capture(self, command_input: Input) -> None:
+        self.value = command_input.value
+        self.cursor_position = min(
+            getattr(command_input, "cursor_position", len(command_input.value)),
+            len(command_input.value),
+        )
+
+    def clear_widget(self, command_input: Input) -> None:
+        command_input.value = ""
+        command_input.cursor_position = 0
+        self.value = ""
+        self.cursor_position = 0
+
+    def reset_prefill_signature(self) -> None:
+        self.prompt_prefill_signature = (False, "", "")
+
+
 class ObserverControlRoomApp(ControlRoomApp):
     def __init__(
         self,
@@ -70,13 +93,35 @@ class ObserverControlRoomApp(ControlRoomApp):
         self._local_trade_routes = TradeRoutesData()
         self._local_trade_route_picker = TradeRoutePickerState()
         self._local_prompt_state: PromptState | None = None
-        self._local_command_input_value = ""
-        self._local_command_input_cursor_position = 0
-        self._local_prompt_prefill_signature = (False, "", "")
+        self._command_bar_state = ObserverCommandBarState()
         self._local_activity_log: list[ActivityLogEntry] = []
         self._local_replay_filter = ""
         self._local_replay_open = False
         self._local_selected_resume_history_entry: CommandHistoryEntry | None = None
+
+    @property
+    def _local_command_input_value(self) -> str:
+        return self._command_bar_state.value
+
+    @_local_command_input_value.setter
+    def _local_command_input_value(self, value: str) -> None:
+        self._command_bar_state.value = value
+
+    @property
+    def _local_command_input_cursor_position(self) -> int:
+        return self._command_bar_state.cursor_position
+
+    @_local_command_input_cursor_position.setter
+    def _local_command_input_cursor_position(self, value: int) -> None:
+        self._command_bar_state.cursor_position = value
+
+    @property
+    def _local_prompt_prefill_signature(self) -> tuple[object, ...]:
+        return self._command_bar_state.prompt_prefill_signature
+
+    @_local_prompt_prefill_signature.setter
+    def _local_prompt_prefill_signature(self, value: tuple[object, ...]) -> None:
+        self._command_bar_state.prompt_prefill_signature = value
 
     def _check_routine_ready(self) -> bool:
         if not self._is_active_operator():
@@ -354,10 +399,7 @@ class ObserverControlRoomApp(ControlRoomApp):
         self._backend.submit_input(raw)
 
     def _clear_command_input_widget_state(self, command_input: Input) -> None:
-        command_input.value = ""
-        command_input.cursor_position = 0
-        self._local_command_input_value = ""
-        self._local_command_input_cursor_position = 0
+        self._command_bar_state.clear_widget(command_input)
 
     def _dispatch_haul_search(
         self,
@@ -610,7 +652,7 @@ class ObserverControlRoomApp(ControlRoomApp):
 
     def _clear_local_prompt_state(self) -> None:
         self._local_prompt_state = None
-        self._local_prompt_prefill_signature = (False, "", "")
+        self._command_bar_state.reset_prefill_signature()
         _prompts.clear_haul_prompt(self._prompt_state)
         _prompts.clear_destination_prompt(self._prompt_state)
         try:
@@ -618,10 +660,7 @@ class ObserverControlRoomApp(ControlRoomApp):
         except Exception:
             return
         command_input.placeholder = self._default_command_placeholder
-        command_input.value = ""
-        command_input.cursor_position = 0
-        self._local_command_input_value = ""
-        self._local_command_input_cursor_position = 0
+        self._command_bar_state.clear_widget(command_input)
 
     def _sync_local_prompt_state(self) -> None:
         if (
@@ -760,11 +799,7 @@ class ObserverControlRoomApp(ControlRoomApp):
         self._capture_local_command_input_widget_state(event.input)
 
     def _capture_local_command_input_widget_state(self, command_input: Input) -> None:
-        self._local_command_input_value = command_input.value
-        self._local_command_input_cursor_position = min(
-            getattr(command_input, "cursor_position", len(command_input.value)),
-            len(command_input.value),
-        )
+        self._command_bar_state.capture(command_input)
         if self._prompt_state.command_input_prefill_active:
             self._prompt_state.command_input_value = command_input.value
             if self._local_prompt_state is not None:
@@ -872,9 +907,7 @@ class ObserverControlRoomApp(ControlRoomApp):
             event.prevent_default()
             cmd_input = self.query_one("#cmd", Input)
             raw = cmd_input.value
-            cmd_input.value = ""
-            self._local_command_input_value = ""
-            self._local_command_input_cursor_position = 0
+            self._command_bar_state.clear_widget(cmd_input)
             self._handle_exit_prompt_input(raw)
             return
         if (
@@ -885,9 +918,7 @@ class ObserverControlRoomApp(ControlRoomApp):
             event.prevent_default()
             cmd_input = self.query_one("#cmd", Input)
             raw = cmd_input.value
-            cmd_input.value = ""
-            self._local_command_input_value = ""
-            self._local_command_input_cursor_position = 0
+            self._command_bar_state.clear_widget(cmd_input)
             self._handle_local_prompt(raw)
             return
         super().on_key(event)

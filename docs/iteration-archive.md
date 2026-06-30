@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `160`
-- Latest generated iteration number: `293`
+- Generated iteration count: `161`
+- Latest generated iteration number: `294`
 
 ## Iteration 134
 
@@ -4462,3 +4462,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Remove the `publish_snapshot()` method from the remote backend surface when `ControlRoomBackend` no longer inherits the snapshot sink protocol.
+
+## Iteration 294
+
+- When: `2026-06-30 19:22`
+- Area: `control-room`
+- Title: `connect-command-bar-state`
+- Source: [2026-06-30-19-22_control-room_connect-command-bar-state.md](iteration-logs/2026-06-30-19-22_control-room_connect-command-bar-state.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `connect-command-bar-state`
+- Started: `2026-06-30 19:22`
+
+## Summary
+
+- Encapsulated connect-mode command-bar draft/cursor/prefill state.
+
+## Changes
+
+- Added `ObserverCommandBarState` to own command input value, cursor position, and prompt prefill signature.
+- Routed command input capture and clear paths through the new state object.
+- Kept compatibility properties for existing tests/call sites while centralizing command-bar state.
+
+## Follow-ups
+
+- Move command-bar refresh/restore behavior behind a dedicated view action after replay and trade-route picker state are similarly isolated.
