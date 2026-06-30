@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -24,6 +25,7 @@ from edap.control_room.client.backend import (
     RemoteObserverExecution,
     _validate_remote_observer_capabilities,
 )
+from edap.control_room.client.connect import connect_observer_mode
 from edap.control_room.dependencies import (
     ActivityLogReadModel,
     CommandHistoryReadModel,
@@ -815,6 +817,54 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(target.port, 9443)
         self.assertEqual(target.http_base_url, "https://bridge.local:9443")
         self.assertEqual(target.websocket_url, "wss://bridge.local:9443/session")
+
+    def test_connect_observer_mode_uses_parsed_websocket_url(self) -> None:
+        loaded = SimpleNamespace(
+            config=_make_observer_context().config,
+            config_path="config.toml",
+            used_example_config_fallback=False,
+        )
+        captured_apps: list[object] = []
+        captured_backends: list[RemoteObserverBackend] = []
+
+        class _FakeApp:
+            def __init__(self, *_args, **kwargs) -> None:
+                captured_backends.append(kwargs["backend"])
+
+            def run(self) -> None:
+                captured_apps.append(self)
+
+        with (
+            patch("edap.control_room.client.connect.load_config_with_fallback", return_value=loaded),
+            patch(
+                "edap.control_room.client.connect.build_runtime_context",
+                return_value=_make_observer_context(),
+            ),
+            patch(
+                "edap.control_room.client.connect.fetch_remote_control_room_data",
+                return_value=(_current_remote_capabilities(), _data_read_model()),
+            ),
+            patch("edap.control_room.client.connect.ControlRoomApp", new=_FakeApp),
+        ):
+            connect_observer_mode(
+                config_path="config.toml",
+                target="http://192.168.50.201:8765",
+                access_token="1001",
+                client_name="observer-test",
+                claim_operator=True,
+            )
+
+        self.assertEqual(
+            captured_backends[0]._websocket_connect_info.session_url,
+            "ws://192.168.50.201:8765/session?client_name=observer-test",
+        )
+        self.assertEqual(
+            captured_backends[0]._websocket_connect_info.additional_headers,
+            (("Authorization", "Bearer 1001"),),
+        )
+        claim_message = captured_backends[0]._outgoing_messages.get_nowait()
+        self.assertEqual(claim_message["message_type"], "command.request_active_operator")
+        self.assertEqual(len(captured_apps), 1)
 
     def test_remote_backend_surfaces_response_error_messages(self) -> None:
         target = ObserverServerTarget(

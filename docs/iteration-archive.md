@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `170`
-- Latest generated iteration number: `303`
+- Generated iteration count: `171`
+- Latest generated iteration number: `304`
 
 ## Iteration 134
 
@@ -4739,3 +4739,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Replay browser actions remain local app methods and are the next candidate for extraction.
+
+## Iteration 304
+
+- When: `2026-06-30 22:28`
+- Area: `control-room`
+- Title: `fix-connect-target-wiring`
+- Source: [2026-06-30-22-28_control-room_fix-connect-target-wiring.md](iteration-logs/2026-06-30-22-28_control-room_fix-connect-target-wiring.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `fix-connect-target-wiring`
+- Started: `2026-06-30 22:28`
+
+## Summary
+
+- Fixed connect-mode startup after the live CLI path hit stale target/runtime API usage.
+
+## Changes
+
+- Use `ObserverServerTarget.websocket_url` and call `build_remote_observer_websocket_connect_info()` with its current keyword-only signature.
+- Queue `--claim-operator` through `RemoteObserverBackend.request_active_operator()` after backend construction.
+- Align connect runtime context creation with the current `load_config_with_fallback()` return shape.
+- Added a regression test that uses the real websocket connect-info builder instead of mocking away the failing call.
+
+## Follow-ups
+
+- Re-run live `uv run control_room.py connect ...` against the server after this commit.
