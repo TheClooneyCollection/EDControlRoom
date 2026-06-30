@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `150`
-- Latest generated iteration number: `283`
+- Generated iteration count: `151`
+- Latest generated iteration number: `284`
 
 ## Iteration 134
 
@@ -4183,3 +4183,32 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Broadcast source-oriented update messages on live data changes instead of relying on snapshot fanout.
 - Remove old snapshot bootstrap and snapshot websocket handling from connect mode.
+
+## Iteration 284
+
+- When: `2026-06-30 18:27`
+- Area: `control-room`
+- Title: `fanout-live-hydrate-updates`
+- Source: [2026-06-30-18-27_control-room_fanout-live-hydrate-updates.md](iteration-logs/2026-06-30-18-27_control-room_fanout-live-hydrate-updates.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `fanout-live-hydrate-updates`
+- Started: `2026-06-30 18:27`
+
+## Summary
+
+- Added live hydrate fanout from the headless server to connected websocket clients.
+
+## Changes
+
+- Added broker support for queueing already-formed data messages.
+- Added `DataHydrateFanoutSink`, which broadcasts `control_room.hydrate` from the server data source whenever the headless host publishes runtime changes.
+- Wired `control_room serve` to include the hydrate fanout sink.
+- Updated websocket sending so data messages keep their no-snapshot schema instead of being wrapped in the old command/event schema.
+- Added server tests for hydrate fanout.
+
+## Follow-ups
+
+- Remove snapshot fanout once connect no longer depends on snapshot-driven UI state.

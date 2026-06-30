@@ -66,7 +66,7 @@ from edap.control_room.server.auth import SharedAccessTokenAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
 from edap.control_room.server.commands import ObserverSessionCommandHandler
 from edap.control_room.server.host import HeadlessControlRoomHost
-from edap.control_room.server.sink import ServerActivityLogSink
+from edap.control_room.server.sink import DataHydrateFanoutSink, ServerActivityLogSink
 from edap.control_room.server.state import ControlRoomServerState
 from edap.control_room_state import CommandHistoryEntry
 from edap.runtime import ResolvedPath, RuntimeContext
@@ -797,6 +797,21 @@ class ControlRoomServerTests(unittest.TestCase):
             message["payload"]["connected_clients"][0]["client_name"],
             "bridge-ipad",
         )
+
+    def test_data_hydrate_fanout_sink_broadcasts_data_message(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        observer = broker.register_observer("bridge-ipad")
+        sink = DataHydrateFanoutSink(
+            data_provider=_base_data_read_model,
+            broker=broker,
+        )
+
+        sink.publish_snapshot(_base_snapshot())
+
+        message = observer.queue.get_nowait()
+        self.assertEqual(message["schema"], "edcontrolroom.control_room_data_message")
+        self.assertEqual(message["message_type"], "control_room.hydrate")
+        self.assertEqual(message["payload"]["ship"]["system"], "Sol")
 
     def test_broker_replays_server_owned_activity_history_in_new_snapshots(self) -> None:
         broker = InMemoryObserverSessionBroker()

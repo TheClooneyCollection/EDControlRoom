@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import logging
-from typing import Iterable
+from typing import Callable, Iterable
 
 from rich.text import Text
 
 from edap.control_room.protocol.events import AnnouncementEvent
+from edap.control_room.protocol import hydrate_message
 from edap.control_room.protocol.sink import ControlRoomEventSink
 from edap.control_room.protocol.snapshot import ActivityLogEntry, ControlRoomSnapshot
+from edap.control_room.server.broker import InMemoryObserverSessionBroker
 
 
 class FanoutControlRoomEventSink(ControlRoomEventSink):
@@ -39,3 +41,23 @@ class ServerActivityLogSink(ControlRoomEventSink):
 
     def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
         return None
+
+
+class DataHydrateFanoutSink(ControlRoomEventSink):
+    def __init__(
+        self,
+        *,
+        data_provider: Callable[[], object],
+        broker: InMemoryObserverSessionBroker,
+    ) -> None:
+        self._data_provider = data_provider
+        self._broker = broker
+
+    def publish_activity_log(self, entry: ActivityLogEntry) -> None:
+        return None
+
+    def publish_announcement(self, event: AnnouncementEvent) -> None:
+        return None
+
+    def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
+        self._broker.publish_data_message(hydrate_message(self._data_provider()))

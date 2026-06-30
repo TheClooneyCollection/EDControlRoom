@@ -193,6 +193,9 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
                 },
             )
 
+    def publish_data_message(self, message: dict[str, Any]) -> None:
+        self._broadcast(message)
+
     def _broadcast_current_snapshot(self) -> None:
         if self._latest_snapshot is None:
             return

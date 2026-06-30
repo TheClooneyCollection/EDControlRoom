@@ -181,7 +181,10 @@ def build_observer_server_app(
 async def _send_session_messages(websocket: WebSocket, observer) -> None:
     while True:
         message = await observer.queue.get()
-        await websocket.send_json(protocol_message(message["message_type"], message["payload"]))
+        if "schema" in message:
+            await websocket.send_json(message)
+        else:
+            await websocket.send_json(protocol_message(message["message_type"], message["payload"]))
 
 
 async def _receive_session_messages(
