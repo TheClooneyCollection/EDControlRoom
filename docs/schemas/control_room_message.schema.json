@@ -14,12 +14,10 @@
     },
     "message_type": {
       "enum": [
-        "state.snapshot",
         "event.connection_ready",
         "event.active_operator_changed",
         "event.activity_log_appended",
         "event.announcement_emitted",
-        "command.request_snapshot",
         "command.request_active_operator",
         "command.submit_input",
         "command.dispatch_destination",
@@ -46,18 +44,6 @@
     }
   },
   "allOf": [
-    {
-      "if": {
-        "properties": {
-          "message_type": { "const": "command.request_snapshot" }
-        }
-      },
-      "then": {
-        "properties": {
-          "payload": { "$ref": "#/$defs/command_request_snapshot_payload" }
-        }
-      }
-    },
     {
       "if": {
         "properties": {
@@ -103,18 +89,6 @@
       "then": {
         "properties": {
           "payload": { "$ref": "#/$defs/command_dispatch_haul_loop_payload" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "message_type": { "const": "state.snapshot" }
-        }
-      },
-      "then": {
-        "properties": {
-          "payload": { "$ref": "#/$defs/state_snapshot_payload" }
         }
       }
     },
@@ -246,10 +220,6 @@
         "message_text": { "type": "string", "minLength": 1 },
         "recommended_action": { "type": ["string", "null"] }
       }
-    },
-    "command_request_snapshot_payload": {
-      "type": "object",
-      "additionalProperties": false
     },
     "command_request_active_operator_payload": {
       "type": "object",

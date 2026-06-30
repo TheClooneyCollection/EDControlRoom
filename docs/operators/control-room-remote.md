@@ -69,7 +69,7 @@ uv run python3 tools/scratch/scratch_control_room_remote.py 192.168.1.50:8765 --
 uv run python3 tools/scratch/scratch_control_room_remote.py 192.168.1.50:8765 --token 1001 --claim-operator --watch-seconds 10
 ```
 
-The scratch probe fetches `health`, `capabilities`, and `snapshot`, validates the advertised remote surface, then opens a websocket session using the same native auth preference as `connect`: bearer header first, advertised query-parameter fallback second.
+The scratch probe fetches `health`, `capabilities`, and `hydrate`, validates the advertised remote surface, then opens a websocket session using the same native auth preference as `connect`: bearer header first, advertised query-parameter fallback second.
 
 `GET /capabilities` now advertises both `message_schema_url` and `browser_probe_url`, so future launchers or web shells do not need to hardcode the hosted browser entrypoint.
 
@@ -79,7 +79,7 @@ For a browser-native smoke check against the same LAN server, open:
 http://<server-host>:8765/browser-probe
 ```
 
-The served page uses `fetch()` plus browser `WebSocket` directly against `GET /health`, `GET /capabilities`, `GET /snapshot`, `GET /schema/control_room_message.json`, and `WS /session`, and it can claim operator, submit command input, request snapshots, cancel active routines, and exercise replay-browser commands. It follows the server's advertised websocket auth query-parameter metadata instead of hardcoding `access_token`, mirrors the TUI client’s reconnect/backoff behavior so stale browser state heals from a fresh snapshot after transient disconnects, disables mutating controls while the browser session is only an observer, reacts explicitly to active-operator changes, and shows connected-client plus recent-activity state directly in the page.
+The served page uses `fetch()` plus browser `WebSocket` directly against `GET /health`, `GET /capabilities`, `GET /hydrate`, `GET /schema/control_room_message.json`, and `WS /session`, and it can claim operator, submit command input, cancel active routines, and exercise replay-browser commands. It follows the server's advertised websocket auth query-parameter metadata instead of hardcoding `access_token`, mirrors the TUI client’s reconnect/backoff behavior so stale browser state heals from fresh hydrate data after transient disconnects, disables mutating controls while the browser session is only an observer, reacts explicitly to active-operator changes, and shows recent activity state directly in the page.
 
 If you want to open the same probe from disk instead of through the server, the source file still lives at:
 

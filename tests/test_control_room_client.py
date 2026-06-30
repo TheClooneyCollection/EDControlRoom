@@ -1379,7 +1379,7 @@ class ControlRoomClientTests(unittest.TestCase):
             "Observer clients cannot issue operator commands.",
         )
 
-    def test_remote_backend_enqueues_snapshot_request_and_submit_input(self) -> None:
+    def test_remote_backend_enqueues_submit_input(self) -> None:
         target = ObserverServerTarget(
             host="bridge.local",
             port=8765,
@@ -1394,14 +1394,11 @@ class ControlRoomClientTests(unittest.TestCase):
             websocket_connect_info=_websocket_connect_info(),
         )
 
-        backend.request_snapshot()
         backend.dispatch_command("dock")
 
-        first = backend._outgoing_messages.get_nowait()
-        second = backend._outgoing_messages.get_nowait()
-        self.assertEqual(first["message_type"], "command.request_snapshot")
-        self.assertEqual(second["message_type"], "command.submit_input")
-        self.assertEqual(second["payload"]["raw_input"], "dock")
+        message = backend._outgoing_messages.get_nowait()
+        self.assertEqual(message["message_type"], "command.submit_input")
+        self.assertEqual(message["payload"]["raw_input"], "dock")
 
     def test_remote_backend_does_not_enqueue_client_local_submit_input(self) -> None:
         target = ObserverServerTarget(

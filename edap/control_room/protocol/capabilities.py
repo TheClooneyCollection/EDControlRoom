@@ -11,7 +11,6 @@ AUTHENTICATION_SCHEME_BEARER_TOKEN = "bearer_token"
 MINIMUM_CLIENT_VERSION = "1"
 SUPPORTED_CLIENT_ROLES = ["active_operator", "observer"]
 SUPPORTED_COMMAND_MESSAGE_TYPES = [
-    "command.request_snapshot",
     "command.request_active_operator",
     "command.submit_input",
     "command.dispatch_destination",
@@ -29,7 +28,6 @@ SUPPORTED_RESPONSE_MESSAGE_TYPES = [
     "response.error",
 ]
 SUPPORTED_MESSAGE_TYPES = [
-    "state.snapshot",
     *SUPPORTED_EVENT_MESSAGE_TYPES,
     *SUPPORTED_COMMAND_MESSAGE_TYPES,
     *SUPPORTED_RESPONSE_MESSAGE_TYPES,
@@ -121,15 +119,14 @@ def validate_remote_observer_capabilities_payload(
     if missing_message_types:
         return f"does not support required message types: {', '.join(missing_message_types)}"
     expected_message_types = [
-        "state.snapshot",
         *supported_event_message_types,
         *supported_command_message_types,
         *supported_response_message_types,
     ]
     if set(supported_message_types) != set(expected_message_types):
         return (
-            "supported_message_types must match the union of state.snapshot plus the advertised "
-            "command, event, and response message types."
+            "supported_message_types must match the union of the advertised command, event, "
+            "and response message types."
         )
 
     supported_client_roles = capabilities.get("supported_client_roles")

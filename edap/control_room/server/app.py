@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from dataclasses import asdict
 from pathlib import Path
 from typing import Callable
 
@@ -90,12 +89,6 @@ def build_observer_server_app(
             )
         )
 
-    async def snapshot(request):
-        auth_failure = require_http_auth(request)
-        if auth_failure is not None:
-            return auth_failure
-        return JSONResponse(asdict(broker.current_snapshot(snapshot_provider=snapshot_provider)))
-
     async def hydrate(request):
         auth_failure = require_http_auth(request)
         if auth_failure is not None:
@@ -133,13 +126,11 @@ def build_observer_server_app(
             )
             if data_provider is not None:
                 await websocket.send_json(hydrate_message(data_provider()))
-            broker.publish_snapshot(snapshot_provider())
             sender = asyncio.create_task(_send_session_messages(websocket, observer))
             receiver = asyncio.create_task(
                 _receive_session_messages(
                     websocket,
                     observer=observer,
-                    snapshot_provider=snapshot_provider,
                     command_handler=command_handler,
                     broker=broker,
                 )
@@ -156,13 +147,11 @@ def build_observer_server_app(
             pass
         finally:
             broker.unregister(observer.session_id)
-            broker.publish_snapshot(snapshot_provider())
 
     app = Starlette(
         routes=[
             Route("/health", health),
             Route("/capabilities", capabilities),
-            Route("/snapshot", snapshot),
             Route("/hydrate", hydrate),
             Route(MESSAGE_SCHEMA_URL_PATH, message_schema),
             Route(BROWSER_PROBE_URL_PATH, browser_probe),
@@ -191,7 +180,6 @@ async def _receive_session_messages(
     websocket: WebSocket,
     *,
     observer,
-    snapshot_provider: Callable[[], object],
     command_handler: ObserverSessionCommandHandler | None,
     broker: InMemoryObserverSessionBroker,
 ) -> None:
@@ -201,7 +189,6 @@ async def _receive_session_messages(
             message,
             session_id=observer.session_id,
             client_role=broker.current_session_role(observer.session_id),
-            snapshot_provider=snapshot_provider,
             command_handler=command_handler,
             broker=broker,
         )
@@ -215,7 +202,6 @@ def _handle_session_message(
     *,
     session_id: str,
     client_role: str,
-    snapshot_provider: Callable[[], object],
     command_handler: ObserverSessionCommandHandler | None,
     broker: InMemoryObserverSessionBroker,
 ) -> dict[str, object] | None:
@@ -224,18 +210,6 @@ def _handle_session_message(
     correlation_message_id = str(message_id) if message_id is not None else None
     payload_value = message.get("payload", {})
     payload = payload_value if isinstance(payload_value, dict) else {}
-
-    if message_type == "command.request_snapshot":
-        return protocol_message(
-            "state.snapshot",
-            asdict(
-                broker.current_snapshot(
-                    snapshot_provider=snapshot_provider,
-                    session_id=session_id,
-                )
-            ),
-            correlation_message_id=correlation_message_id,
-        )
 
     if message_type == "command.request_active_operator":
         broker.set_active_operator_session(session_id)

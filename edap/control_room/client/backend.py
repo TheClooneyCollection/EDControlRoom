@@ -335,15 +335,6 @@ class RemoteObserverBackend(ControlRoomBackend):
             if message_text:
                 self._emit_local_message(message_text)
 
-    def request_snapshot(self) -> None:
-        self._send_command(
-            "command.request_snapshot",
-            {
-                "include_activity_log": True,
-                "include_market_state": True,
-            },
-        )
-
     def request_active_operator(self) -> None:
         self._send_command(
             "command.request_active_operator",

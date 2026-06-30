@@ -513,13 +513,6 @@ class ControlRoomServerTests(unittest.TestCase):
                 "access_token",
             )
 
-            snapshot = client.get(
-                "/snapshot",
-                headers={"Authorization": "Bearer secret-token"},
-            )
-            self.assertEqual(snapshot.status_code, 200)
-            self.assertEqual(snapshot.json()["ship"]["commander_name"], "CMDR TEST")
-
             hydrate = client.get(
                 "/hydrate",
                 headers={"Authorization": "Bearer secret-token"},
@@ -540,14 +533,6 @@ class ControlRoomServerTests(unittest.TestCase):
                 self.assertEqual(hydrate_message["message_type"], "control_room.hydrate")
                 self.assertEqual(hydrate_message["payload"]["ship"]["system"], "Sol")
 
-                state = websocket.receive_json()
-                self.assertEqual(state["message_type"], "state.snapshot")
-                self.assertEqual(state["payload"]["session"]["client_role"], "active_operator")
-                self.assertEqual(
-                    state["payload"]["connected_clients"][0]["client_name"],
-                    "bridge-ipad",
-                )
-
                 broker.publish_announcement(
                     AnnouncementEvent(
                         announcement_id="startup_greeting",
@@ -556,8 +541,6 @@ class ControlRoomServerTests(unittest.TestCase):
                     )
                 )
                 announcement = websocket.receive_json()
-                while announcement["message_type"] == "state.snapshot":
-                    announcement = websocket.receive_json()
                 self.assertEqual(announcement["message_type"], "event.announcement_emitted")
                 self.assertEqual(announcement["payload"]["announcement_id"], "startup_greeting")
 
@@ -637,7 +620,7 @@ class ControlRoomServerTests(unittest.TestCase):
             self.assertIn("Connected Clients", response.text)
             self.assertIn("Recent Activity", response.text)
             self.assertIn("session ready role=", response.text)
-            self.assertIn("requestSnapshot();", response.text)
+            self.assertNotIn("requestSnapshot();", response.text)
             self.assertIn("authentication_supported_transports", response.text)
             self.assertIn("authentication_query_parameter_name", response.text)
             self.assertIn("Browser probe requires query-parameter websocket auth support.", response.text)
@@ -656,34 +639,22 @@ class ControlRoomServerTests(unittest.TestCase):
                 "/session?client_name=bridge-ipad&access_token=secret-token"
             ) as first:
                 first.receive_json()
-                first.receive_json()
                 with client.websocket_connect(
                     "/session?client_name=bridge-mac&access_token=secret-token"
                 ) as second:
-                    second.receive_json()
                     second.receive_json()
 
                     first.close()
 
                     promoted_event = second.receive_json()
-                    while promoted_event["message_type"] == "state.snapshot":
-                        promoted_event = second.receive_json()
                     self.assertEqual(promoted_event["message_type"], "event.active_operator_changed")
                     self.assertEqual(
                         promoted_event["payload"]["active_operator_client_name"],
                         "bridge-mac",
                     )
-
-                    promoted_snapshot = second.receive_json()
-                    while promoted_snapshot["message_type"] != "state.snapshot":
-                        promoted_snapshot = second.receive_json()
                     self.assertEqual(
-                        promoted_snapshot["payload"]["session"]["client_role"],
+                        broker.current_session_role(promoted_event["payload"]["active_operator_session_id"]),
                         "active_operator",
-                    )
-                    self.assertEqual(
-                        promoted_snapshot["payload"]["active_operator"]["client_name"],
-                        "bridge-mac",
                     )
 
     def test_websocket_session_client_local_command_is_treated_as_unknown(self) -> None:
@@ -713,7 +684,6 @@ class ControlRoomServerTests(unittest.TestCase):
                 with client.websocket_connect(
                     "/session?client_name=bridge-ipad&access_token=secret-token"
                 ) as websocket:
-                    websocket.receive_json()
                     websocket.receive_json()
 
                     websocket.send_json(
@@ -757,11 +727,9 @@ class ControlRoomServerTests(unittest.TestCase):
                 "/session?client_name=bridge-ipad&access_token=secret-token"
             ) as first:
                 first.receive_json()
-                first.receive_json()
                 with client.websocket_connect(
                     "/session?client_name=bridge-mac&access_token=secret-token"
                 ) as second:
-                    second.receive_json()
                     second.receive_json()
 
                     second_session_id = next(
@@ -784,19 +752,15 @@ class ControlRoomServerTests(unittest.TestCase):
                         "active_operator",
                     )
 
-    def test_broker_broadcasts_live_snapshot_updates(self) -> None:
+    def test_broker_retains_latest_snapshot_without_broadcasting_it(self) -> None:
         broker = InMemoryObserverSessionBroker()
         observer = broker.register_observer("bridge-ipad")
 
         broker.publish_snapshot(_base_snapshot())
 
-        message = observer.queue.get_nowait()
-        self.assertEqual(message["message_type"], "state.snapshot")
-        self.assertEqual(message["payload"]["session"]["client_role"], "active_operator")
-        self.assertEqual(
-            message["payload"]["connected_clients"][0]["client_name"],
-            "bridge-ipad",
-        )
+        self.assertTrue(observer.queue.empty())
+        retained = broker.current_snapshot(snapshot_provider=_base_snapshot)
+        self.assertEqual(retained.ship.system_name, "Sol")
 
     def test_data_hydrate_fanout_sink_broadcasts_data_message(self) -> None:
         broker = InMemoryObserverSessionBroker()
@@ -813,7 +777,7 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(message["message_type"], "control_room.hydrate")
         self.assertEqual(message["payload"]["ship"]["system"], "Sol")
 
-    def test_broker_replays_server_owned_activity_history_in_new_snapshots(self) -> None:
+    def test_broker_retains_server_owned_activity_history_in_current_snapshot(self) -> None:
         broker = InMemoryObserverSessionBroker()
         broker.publish_snapshot(_base_snapshot())
         broker.publish_activity_log(
@@ -827,10 +791,10 @@ class ControlRoomServerTests(unittest.TestCase):
 
         observer = broker.register_observer("bridge-ipad")
 
-        message = observer.queue.get_nowait()
-        self.assertEqual(message["message_type"], "state.snapshot")
+        self.assertTrue(observer.queue.empty())
+        retained = broker.current_snapshot(snapshot_provider=_base_snapshot)
         self.assertEqual(
-            [entry["message_text"] for entry in message["payload"]["activity_log"]],
+            [entry.message_text for entry in retained.activity_log],
             ["Hello commander.", "Market filter set to Gold."],
         )
 
@@ -893,7 +857,7 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(merged.command_history.default_haul, {"station_1_buying": "gold"})
         self.assertEqual(merged.command_history.history_entries[0].raw_command, "haul gold")
 
-    def test_request_snapshot_command_returns_correlated_snapshot(self) -> None:
+    def test_request_snapshot_command_is_unknown(self) -> None:
         broker = InMemoryObserverSessionBroker()
         observer = broker.register_observer("bridge-ipad")
 
@@ -908,31 +872,16 @@ class ControlRoomServerTests(unittest.TestCase):
             },
             session_id=observer.session_id,
             client_role="observer",
-            snapshot_provider=_base_snapshot,
             command_handler=None,
             broker=broker,
         )
 
-        self.assertEqual(response["message_type"], "state.snapshot")
+        self.assertEqual(response["message_type"], "response.error")
         self.assertEqual(response["correlation_message_id"], "message-42")
-        self.assertEqual(response["payload"]["session"]["client_role"], "active_operator")
-        self.assertEqual(response["payload"]["connected_clients"][0]["client_name"], "bridge-ipad")
+        self.assertEqual(response["payload"]["error_code"], "unsupported_message_type")
 
-    def test_snapshot_endpoint_prefers_broker_retained_snapshot(self) -> None:
+    def test_snapshot_endpoint_is_not_registered(self) -> None:
         broker = InMemoryObserverSessionBroker()
-        retained_snapshot = ControlRoomSnapshot(
-            session=_base_snapshot().session,
-            connected_clients=_base_snapshot().connected_clients,
-            active_operator=_base_snapshot().active_operator,
-            ship=ShipSnapshot(**{**asdict(_base_snapshot().ship), "system_name": "Achenar"}),
-            market=_base_snapshot().market,
-            haul_session=_base_snapshot().haul_session,
-            ui_state=_base_snapshot().ui_state,
-            command_history=_base_snapshot().command_history,
-            activity_log=_base_snapshot().activity_log,
-            server_status=_base_snapshot().server_status,
-        )
-        broker.publish_snapshot(retained_snapshot)
         app = build_observer_server_app(
             snapshot_provider=_base_snapshot,
             command_handler=None,
@@ -946,8 +895,7 @@ class ControlRoomServerTests(unittest.TestCase):
                 headers={"Authorization": "Bearer secret-token"},
             )
 
-        self.assertEqual(snapshot.status_code, 200)
-        self.assertEqual(snapshot.json()["ship"]["system_name"], "Achenar")
+        self.assertEqual(snapshot.status_code, 404)
 
     def test_observer_submit_input_command_is_rejected(self) -> None:
         broker = InMemoryObserverSessionBroker()
@@ -960,7 +908,6 @@ class ControlRoomServerTests(unittest.TestCase):
             },
             session_id="observer-unknown",
             client_role="observer",
-            snapshot_provider=_base_snapshot,
             command_handler=None,
             broker=broker,
         )
@@ -981,7 +928,6 @@ class ControlRoomServerTests(unittest.TestCase):
             },
             session_id="observer-100",
             client_role="active_operator",
-            snapshot_provider=_base_snapshot,
             command_handler=command_handler,
             broker=broker,
         )
@@ -1002,7 +948,6 @@ class ControlRoomServerTests(unittest.TestCase):
             },
             session_id="observer-blank",
             client_role="active_operator",
-            snapshot_provider=_base_snapshot,
             command_handler=command_handler,
             broker=broker,
         )
@@ -1028,7 +973,6 @@ class ControlRoomServerTests(unittest.TestCase):
             },
             session_id="observer-dest",
             client_role="active_operator",
-            snapshot_provider=_base_snapshot,
             command_handler=command_handler,
             broker=broker,
         )
@@ -1062,7 +1006,6 @@ class ControlRoomServerTests(unittest.TestCase):
             },
             session_id="observer-haul",
             client_role="active_operator",
-            snapshot_provider=_base_snapshot,
             command_handler=command_handler,
             broker=broker,
         )
@@ -1098,7 +1041,6 @@ class ControlRoomServerTests(unittest.TestCase):
             },
             session_id="observer-cancel",
             client_role="active_operator",
-            snapshot_provider=_base_snapshot,
             command_handler=command_handler,
             broker=broker,
         )
@@ -1118,27 +1060,23 @@ class ControlRoomServerTests(unittest.TestCase):
             },
             session_id="observer-cancel-observer",
             client_role="observer",
-            snapshot_provider=_base_snapshot,
             command_handler=None,
             broker=broker,
         )
 
         self.assertEqual(response["message_type"], "response.error")
         self.assertEqual(response["payload"]["error_code"], "observer_read_only")
-    def test_broker_personalizes_snapshot_for_active_operator_session(self) -> None:
+    def test_broker_active_operator_claim_only_broadcasts_operator_event(self) -> None:
         broker = InMemoryObserverSessionBroker()
         observer = broker.register_observer("bridge-ipad")
         broker.set_active_operator_session(observer.session_id)
 
         broker.publish_snapshot(_base_snapshot())
 
-        first = observer.queue.get_nowait()
-        second = observer.queue.get_nowait()
-        self.assertEqual(first["message_type"], "event.active_operator_changed")
-        self.assertEqual(first["payload"]["active_operator_client_name"], "bridge-ipad")
-        self.assertEqual(second["message_type"], "state.snapshot")
-        self.assertEqual(second["payload"]["session"]["client_role"], "active_operator")
-        self.assertEqual(second["payload"]["active_operator"]["client_name"], "bridge-ipad")
+        event = observer.queue.get_nowait()
+        self.assertEqual(event["message_type"], "event.active_operator_changed")
+        self.assertEqual(event["payload"]["active_operator_client_name"], "bridge-ipad")
+        self.assertTrue(observer.queue.empty())
 
     def test_request_active_operator_claim_reassigns_session(self) -> None:
         broker = InMemoryObserverSessionBroker()
@@ -1153,7 +1091,6 @@ class ControlRoomServerTests(unittest.TestCase):
             },
             session_id=second.session_id,
             client_role=broker.current_session_role(second.session_id),
-            snapshot_provider=_base_snapshot,
             command_handler=None,
             broker=broker,
         )
@@ -1177,7 +1114,7 @@ class ControlRoomServerTests(unittest.TestCase):
             self.assertEqual(capabilities.status_code, 401)
 
             snapshot = client.get("/snapshot")
-            self.assertEqual(snapshot.status_code, 401)
+            self.assertEqual(snapshot.status_code, 404)
 
     def test_server_activity_log_sink_mirrors_activity_messages(self) -> None:
         logger = logging.getLogger("tests.control_room.server.activity")

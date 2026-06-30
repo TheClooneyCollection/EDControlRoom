@@ -154,7 +154,6 @@
         </div>
         <div class="row">
           <button id="claimButton" class="secondary">Claim Operator</button>
-          <button id="snapshotButton">Request Snapshot</button>
           <button id="cancelButton">Cancel Routine</button>
         </div>
         <label>
@@ -438,17 +437,17 @@
       }
 
       async function refreshHttp() {
-        const [health, capabilities, snapshot] = await Promise.all([
+        const [health, capabilities, hydrate] = await Promise.all([
           fetchJson("/health", { auth: false }),
           fetchJson("/capabilities"),
-          fetchJson("/snapshot"),
+          fetchJson("/hydrate"),
         ]);
         state.latestCapabilities = capabilities;
         $("healthStatus").textContent = health.status;
         $("serverVersion").textContent = capabilities.server_version;
         $("capabilitiesView").textContent = JSON.stringify(capabilities, null, 2);
         $("schemaUrl").textContent = `${httpBaseUrl()}${capabilities.message_schema_url}`;
-        renderSnapshot(snapshot);
+        renderSnapshot(hydrate.payload);
         appendMessageLog(
           `HTTP discovery refreshed. websocket auth query parameter=${capabilities.authentication_query_parameter_name || "(none)"}`
         );
@@ -464,7 +463,7 @@
           appendMessageLog(`Cannot send ${messageType}: websocket is not open.`);
           return;
         }
-        if (messageType !== "command.request_snapshot" && messageType !== "command.request_active_operator" && !isActiveOperator()) {
+        if (messageType !== "command.request_active_operator" && !isActiveOperator()) {
           appendMessageLog(`Cannot send ${messageType}: this browser session is currently observer-only.`);
           return;
         }
@@ -476,10 +475,6 @@
           })
         );
         appendMessageLog(`sent ${messageType}`);
-      }
-
-      function requestSnapshot() {
-        sendMessage("command.request_snapshot", {});
       }
 
       function selectedReplayEntryPayload(extraPayload = {}) {
@@ -507,7 +502,6 @@
           state.reconnectDelaySeconds = RECONNECT_DELAY_SECONDS;
           setConnectionStatus("Connected", true);
           appendMessageLog("websocket opened");
-          requestSnapshot();
           if (wasReconnecting) {
             appendMessageLog("Observer connection restored.");
           }
@@ -534,7 +528,7 @@
         state.websocket.addEventListener("message", (event) => {
           const message = JSON.parse(event.data);
           appendMessageLog(`recv ${message.message_type}`);
-          if (message.message_type === "state.snapshot") {
+          if (message.message_type === "control_room.hydrate") {
             renderSnapshot(message.payload);
           } else if (message.message_type === "event.connection_ready") {
             appendMessageLog(
@@ -554,14 +548,10 @@
             appendMessageLog(`announcement ${message.payload.message_text ?? "-"}`);
           } else if (message.message_type === "event.active_operator_changed") {
             appendMessageLog(`active operator changed to ${message.payload.active_operator_client_name ?? "(none)"}`);
-            requestSnapshot();
           } else if (message.message_type === "response.error") {
             appendMessageLog(`error ${message.payload.error_code}: ${message.payload.error_message}`);
           } else if (message.message_type === "response.success") {
             appendMessageLog(`success ${message.payload.message_text ?? "accepted"}`);
-            if (message.payload.result?.client_role === "active_operator") {
-              requestSnapshot();
-            }
           }
         });
       }
@@ -596,9 +586,6 @@
       });
       $("claimButton").addEventListener("click", () => {
         sendMessage("command.request_active_operator", {});
-      });
-      $("snapshotButton").addEventListener("click", () => {
-        requestSnapshot();
       });
       $("cancelButton").addEventListener("click", () => {
         sendMessage("command.cancel_active_routine", {});

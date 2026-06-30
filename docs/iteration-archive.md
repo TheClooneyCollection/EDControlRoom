@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `153`
-- Latest generated iteration number: `286`
+- Generated iteration count: `154`
+- Latest generated iteration number: `287`
 
 ## Iteration 134
 
@@ -4268,3 +4268,32 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Remove the old snapshot endpoint/message protocol once server compatibility tests are retired.
+
+## Iteration 287
+
+- When: `2026-06-30 18:50`
+- Area: `control-room`
+- Title: `remove-snapshot-wire-protocol`
+- Source: [2026-06-30-18-50_control-room_remove-snapshot-wire-protocol.md](iteration-logs/2026-06-30-18-50_control-room_remove-snapshot-wire-protocol.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `remove-snapshot-wire-protocol`
+- Started: `2026-06-30 18:50`
+
+## Summary
+
+- Removed the legacy snapshot message family from the remote `serve` / `connect` wire protocol.
+
+## Changes
+
+- Removed `/snapshot` from the observer server routes and stopped handling `command.request_snapshot`.
+- Removed `state.snapshot` and `command.request_snapshot` from advertised capabilities and the JSON message schema enum.
+- Changed broker snapshot publication to retain server-local state without broadcasting snapshot messages.
+- Updated the browser probe to use `/hydrate` and `control_room.hydrate` instead of snapshot fetch/request flows.
+- Updated server/client/schema tests and remote operator docs for the hydrate-only remote surface.
+
+## Follow-ups
+
+- Remove remaining internal/local snapshot compatibility after command bar, replay browser, and trade-route picker state are fully data-source/view-action owned.

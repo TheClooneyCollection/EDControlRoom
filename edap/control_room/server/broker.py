@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import Any
 from uuid import uuid4
 
@@ -47,7 +47,6 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
         self._sessions[session.session_id] = session
         if self._active_operator_session_id is None:
             self._active_operator_session_id = session.session_id
-        self._broadcast_current_snapshot()
         return session
 
     def unregister(self, session_id: str) -> None:
@@ -62,7 +61,6 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
                     replacement,
                     reason="active_operator_disconnected",
                 )
-            self._broadcast_current_snapshot()
 
     def connected_clients(self) -> list[ConnectedClientSnapshot]:
         return [
@@ -80,7 +78,6 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
         self._active_operator_session_id = session_id
         session = self._sessions.get(session_id) if session_id is not None else None
         self._broadcast_active_operator_changed(session, reason="operator_claimed")
-        self._broadcast_current_snapshot()
 
     def current_session_role(self, session_id: str) -> str:
         return self._resolved_session_role(session_id)
@@ -179,27 +176,9 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
         self._server_state.capture_remote_session(snapshot)
         resolved_snapshot = self._server_state.merge_snapshot(snapshot)
         self._latest_snapshot = resolved_snapshot
-        for session in list(self._sessions.values()):
-            self._queue_message(
-                session,
-                {
-                    "message_type": "state.snapshot",
-                    "payload": asdict(
-                        self.merge_snapshot(
-                            resolved_snapshot,
-                            session_id=session.session_id,
-                        )
-                    ),
-                },
-            )
 
     def publish_data_message(self, message: dict[str, Any]) -> None:
         self._broadcast(message)
-
-    def _broadcast_current_snapshot(self) -> None:
-        if self._latest_snapshot is None:
-            return
-        self.publish_snapshot(self._latest_snapshot)
 
     def _broadcast(self, message: dict[str, Any]) -> None:
         for session in list(self._sessions.values()):
