@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `168`
-- Latest generated iteration number: `301`
+- Generated iteration count: `169`
+- Latest generated iteration number: `302`
 
 ## Iteration 134
 
@@ -4685,3 +4685,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Continue extracting explicit ViewModel/action seams for panels that still read app state directly.
+
+## Iteration 302
+
+- When: `2026-06-30 22:12`
+- Area: `control-room`
+- Title: `trade-route-picker-view-model`
+- Source: [2026-06-30-22-12_control-room_trade-route-picker-view-model.md](iteration-logs/2026-06-30-22-12_control-room_trade-route-picker-view-model.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `trade-route-picker-view-model`
+- Started: `2026-06-30 22:12`
+
+## Summary
+
+- Added a trade-route picker ViewModel so the picker display state is translated before Textual widget updates.
+
+## Changes
+
+- Added `TradeRoutePickerViewModel` and `trade_route_picker_view_model()`.
+- Rewired `ControlRoomApp._refresh_trade_route_picker()` to consume the picker ViewModel.
+- Added ViewModel tests for selected/default/empty route states.
+
+## Follow-ups
+
+- Continue extracting action seams for trade-route picker movement/load/destination commands.

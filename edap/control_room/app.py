@@ -1138,40 +1138,31 @@ class ControlRoomApp(App[None]):
         except Exception:
             return
 
-        labels = [_rendering.trade_route_option_label(route) for route in self._trade_routes.routes]
+        view_model = self._trade_route_picker_view_model()
+        labels = [_rendering.trade_route_option_label(route) for route in view_model.routes]
         option_list.clear_options()
         option_list.add_options(labels)
-        if self._trade_routes.routes:
-            first_route = self._trade_routes.routes[0]
+        if view_model.routes:
+            first_route = view_model.routes[0]
             self._debug_log(
                 "trade_route_picker_refresh",
-                route_count=len(self._trade_routes.routes),
+                route_count=len(view_model.routes),
                 selected_trade_route_index=self._selected_trade_route_index,
                 first_route_index=first_route.index,
                 first_route_profit_per_trip=first_route.profit_per_trip,
                 first_route_profit_per_hour=first_route.profit_per_hour,
                 first_label=labels[0] if labels else "",
             )
-        selected_route = self._selected_trade_route()
-        if self._trade_routes.routes:
-            if selected_route is None:
-                self._selected_trade_route_index = self._trade_routes.routes[0].index
-                selected_route = self._trade_routes.routes[0]
-            highlighted = next(
-                (
-                    index
-                    for index, route in enumerate(self._trade_routes.routes)
-                    if route.index == self._selected_trade_route_index
-                ),
-                0,
-            )
-            option_list.highlighted = highlighted
-            self._update_trade_route_detail(selected_route)
+        if view_model.routes:
+            if self._selected_trade_route_index is None and view_model.selected_route is not None:
+                self._selected_trade_route_index = view_model.selected_route.index
+            option_list.highlighted = view_model.highlighted_index
+            self._update_trade_route_detail(view_model.selected_route)
         else:
             option_list.highlighted = None
             detail.update(Text.from_markup("[dim]No trade routes loaded.[/]"))
 
-        if self._trade_route_picker_open and self._trade_routes.routes:
+        if view_model.visible:
             main.styles.display = "none"
             picker.styles.display = "block"
             try:
@@ -1181,6 +1172,12 @@ class ControlRoomApp(App[None]):
             return
         picker.styles.display = "none"
         main.styles.display = "block"
+
+    def _trade_route_picker_view_model(self) -> _view_models.TradeRoutePickerViewModel:
+        return _view_models.trade_route_picker_view_model(
+            self._trade_routes,
+            self._trade_route_picker_state,
+        )
 
     def _activity_auto_follow_paused(self) -> bool:
         try:
@@ -1202,11 +1199,12 @@ class ControlRoomApp(App[None]):
         if route is None:
             detail.update(Text.from_markup("[dim]No trade route selected.[/]"))
             return
+        view_model = self._trade_route_picker_view_model()
         markup = _rendering.trade_route_detail_markup(
             route,
-            system_name=self._trade_routes.system_name,
-            searched_at=self._trade_routes.searched_at,
-            route_count=len(self._trade_routes.routes),
+            system_name=view_model.system_name,
+            searched_at=view_model.searched_at,
+            route_count=len(view_model.routes),
         )
         self._debug_log(
             "trade_route_detail_update",
