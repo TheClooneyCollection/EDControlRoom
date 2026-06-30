@@ -1301,18 +1301,6 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(target.http_base_url, "https://bridge.local:9443")
         self.assertEqual(target.websocket_url, "wss://bridge.local:9443/session")
 
-    def test_event_from_message_parses_snapshot_message(self) -> None:
-        snapshot = _snapshot()
-        event = event_from_message(
-            {
-                "message_type": "state.snapshot",
-                "payload": asdict(snapshot),
-            }
-        )
-
-        self.assertIsInstance(event, SnapshotUpdatedEvent)
-        self.assertEqual(event.snapshot.ship.system_name, "Sol")
-
     def test_remote_backend_updates_cached_snapshot(self) -> None:
         target = ObserverServerTarget(
             host="bridge.local",

@@ -34,7 +34,7 @@ from .data_messages import (
 )
 from .events import ActivityLogAppendedEvent, AnnouncementEvent, DataUpdatedEvent, SnapshotUpdatedEvent
 from .from_app import snapshot_from_app
-from .from_message import event_from_message, snapshot_from_message
+from .from_message import event_from_message
 from .sink import ControlRoomEventSink
 from .snapshot import (
     ActivityLogEntry,
@@ -113,5 +113,4 @@ __all__ = [
     "UiStateSnapshot",
     "validate_remote_observer_capabilities_payload",
     "snapshot_from_app",
-    "snapshot_from_message",
 ]

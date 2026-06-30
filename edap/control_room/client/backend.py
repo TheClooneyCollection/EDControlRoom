@@ -306,8 +306,6 @@ class RemoteObserverBackend(ControlRoomBackend):
                 continue
             parsed_event = event_from_message(message)
             if parsed_event is not None:
-                if isinstance(parsed_event, SnapshotUpdatedEvent):
-                    continue
                 self._emit(parsed_event)
                 continue
             self._handle_response_message(message)
