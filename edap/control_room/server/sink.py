@@ -8,7 +8,7 @@ from rich.text import Text
 from edap.control_room.protocol.events import AnnouncementEvent
 from edap.control_room.protocol import hydrate_message
 from edap.control_room.protocol.sink import ControlRoomEventSink
-from edap.control_room.protocol.snapshot import ActivityLogEntry, ControlRoomSnapshot
+from edap.control_room.protocol.snapshot import ActivityLogEntry
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
 
 
@@ -24,9 +24,9 @@ class FanoutControlRoomEventSink(ControlRoomEventSink):
         for sink in self._sinks:
             sink.publish_announcement(event)
 
-    def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
+    def publish_data_refresh(self) -> None:
         for sink in self._sinks:
-            sink.publish_snapshot(snapshot)
+            sink.publish_data_refresh()
 
 
 class ServerActivityLogSink(ControlRoomEventSink):
@@ -39,7 +39,7 @@ class ServerActivityLogSink(ControlRoomEventSink):
     def publish_announcement(self, event: AnnouncementEvent) -> None:
         return None
 
-    def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
+    def publish_data_refresh(self) -> None:
         return None
 
 
@@ -59,5 +59,5 @@ class DataHydrateFanoutSink(ControlRoomEventSink):
     def publish_announcement(self, event: AnnouncementEvent) -> None:
         return None
 
-    def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
+    def publish_data_refresh(self) -> None:
         self._broker.publish_data_message(hydrate_message(self._data_provider()))

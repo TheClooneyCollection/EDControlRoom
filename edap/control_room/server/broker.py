@@ -9,9 +9,7 @@ from edap.control_room.protocol.events import AnnouncementEvent
 from edap.control_room.protocol.sink import ControlRoomEventSink
 from edap.control_room.protocol.snapshot import (
     ActivityLogEntry,
-    ActiveOperatorSnapshot,
     ConnectedClientSnapshot,
-    ControlRoomSnapshot,
 )
 from edap.control_room.server.state import ControlRoomServerState
 
@@ -33,7 +31,6 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
     ) -> None:
         self._queue_size = queue_size
         self._sessions: dict[str, ObserverSession] = {}
-        self._latest_snapshot: ControlRoomSnapshot | None = None
         self._active_operator_session_id: str | None = None
         self._server_state = server_state or ControlRoomServerState()
 
@@ -82,67 +79,6 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
     def current_session_role(self, session_id: str) -> str:
         return self._resolved_session_role(session_id)
 
-    def current_snapshot(
-        self,
-        *,
-        snapshot_provider,
-        session_id: str | None = None,
-    ) -> ControlRoomSnapshot:
-        base_snapshot = self._latest_snapshot
-        if base_snapshot is None:
-            base_snapshot = self.merge_snapshot(snapshot_provider())
-            self._latest_snapshot = base_snapshot
-        return self.merge_snapshot(base_snapshot, session_id=session_id)
-
-    def merge_snapshot(
-        self,
-        base_snapshot: ControlRoomSnapshot,
-        *,
-        session_id: str | None = None,
-        include_local_operator: bool = True,
-    ) -> ControlRoomSnapshot:
-        base_snapshot = self._server_state.merge_snapshot(base_snapshot)
-        connected_clients = list(self.connected_clients())
-        active_operator = base_snapshot.active_operator
-        if self._active_operator_session_id is None and include_local_operator:
-            connected_clients.insert(
-                0,
-                ConnectedClientSnapshot(
-                    session_id=base_snapshot.session.session_id,
-                    client_name=base_snapshot.active_operator.client_name
-                    if base_snapshot.active_operator is not None
-                    else "local-server",
-                    client_role="active_operator",
-                ),
-            )
-        elif self._active_operator_session_id is not None:
-            active_session = self._sessions.get(self._active_operator_session_id)
-            if active_session is not None:
-                active_operator = ActiveOperatorSnapshot(
-                    session_id=active_session.session_id,
-                    client_name=active_session.client_name,
-                )
-
-        session_role = base_snapshot.session.client_role
-        if session_id is not None:
-            session_role = self._resolved_session_role(session_id)
-        return ControlRoomSnapshot(
-            session=type(base_snapshot.session)(
-                session_id=session_id or base_snapshot.session.session_id,
-                client_role=session_role,
-            ),
-            connected_clients=connected_clients,
-            active_operator=active_operator,
-            ship=base_snapshot.ship,
-            market=base_snapshot.market,
-            haul_session=base_snapshot.haul_session,
-            ui_state=base_snapshot.ui_state,
-            command_history=base_snapshot.command_history,
-            activity_log=base_snapshot.activity_log,
-            server_status=base_snapshot.server_status,
-            trade_routes=base_snapshot.trade_routes,
-        )
-
     def publish_activity_log(self, entry: ActivityLogEntry) -> None:
         self._server_state.record_activity_log(entry)
         self._broadcast(
@@ -171,11 +107,6 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
                 },
             }
         )
-
-    def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
-        self._server_state.capture_remote_session(snapshot)
-        resolved_snapshot = self._server_state.merge_snapshot(snapshot)
-        self._latest_snapshot = resolved_snapshot
 
     def publish_data_message(self, message: dict[str, Any]) -> None:
         self._broadcast(message)

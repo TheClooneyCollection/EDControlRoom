@@ -39,8 +39,7 @@ CONTROL_ROOM_BROWSER_PROBE_HTML = _BROWSER_PROBE_PATH.read_text(encoding="utf-8"
 
 def build_observer_server_app(
     *,
-    snapshot_provider: Callable[[], object],
-    data_provider: Callable[[], object] | None = None,
+    data_provider: Callable[[], object],
     command_handler: ObserverSessionCommandHandler | None,
     broker: InMemoryObserverSessionBroker,
     auth: ObserverServerAuth,
@@ -58,13 +57,13 @@ def build_observer_server_app(
         return unauthorized_response()
 
     async def health(request):
-        snapshot = broker.current_snapshot(snapshot_provider=snapshot_provider)
+        data = data_provider()
         auth_description = auth.describe()
         return JSONResponse(
             {
                 "status": "ok",
-                "server_name": snapshot.server_status.server_name,
-                "server_version": snapshot.server_status.server_version,
+                "server_name": data.server_status.server_name,
+                "server_version": data.server_status.server_version,
                 "observer_mode": True,
                 "authentication_required": auth_description.authentication_required,
             }
@@ -74,12 +73,12 @@ def build_observer_server_app(
         auth_failure = require_http_auth(request)
         if auth_failure is not None:
             return auth_failure
-        snapshot = broker.current_snapshot(snapshot_provider=snapshot_provider)
+        data = data_provider()
         auth_description = auth.describe()
         return JSONResponse(
             build_remote_observer_capabilities_payload(
-                capability_names=snapshot.server_status.capability_names,
-                server_version=snapshot.server_status.server_version,
+                capability_names=data.server_status.capability_names,
+                server_version=data.server_status.server_version,
                 authentication_required=auth_description.authentication_required,
                 authentication_scheme=auth_description.authentication_scheme,
                 authentication_supported_transports=auth_description.supported_transports,
@@ -93,8 +92,6 @@ def build_observer_server_app(
         auth_failure = require_http_auth(request)
         if auth_failure is not None:
             return auth_failure
-        if data_provider is None:
-            return JSONResponse({"detail": "data provider unavailable"}, status_code=503)
         return JSONResponse(hydrate_message(data_provider()))
 
     async def message_schema(request):
@@ -110,22 +107,21 @@ def build_observer_server_app(
         client_name = websocket.query_params.get("client_name", "observer-client")
         await websocket.accept()
         observer = broker.register_observer(client_name)
-        merged_snapshot = broker.current_snapshot(snapshot_provider=snapshot_provider)
+        data = data_provider()
         try:
             await websocket.send_json(
                 protocol_message(
                     "event.connection_ready",
                     {
                         "session_id": observer.session_id,
-                        "server_name": merged_snapshot.server_status.server_name,
-                        "server_version": merged_snapshot.server_status.server_version,
+                        "server_name": data.server_status.server_name,
+                        "server_version": data.server_status.server_version,
                         "client_role": broker.current_session_role(observer.session_id),
-                        "capability_names": merged_snapshot.server_status.capability_names,
+                        "capability_names": data.server_status.capability_names,
                     },
                 )
             )
-            if data_provider is not None:
-                await websocket.send_json(hydrate_message(data_provider()))
+            await websocket.send_json(hydrate_message(data_provider()))
             sender = asyncio.create_task(_send_session_messages(websocket, observer))
             receiver = asyncio.create_task(
                 _receive_session_messages(

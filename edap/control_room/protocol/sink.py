@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from .events import AnnouncementEvent
-from .snapshot import ActivityLogEntry, ControlRoomSnapshot
+from .snapshot import ActivityLogEntry
 
 
 class ControlRoomEventSink(Protocol):
@@ -11,4 +11,4 @@ class ControlRoomEventSink(Protocol):
 
     def publish_announcement(self, event: AnnouncementEvent) -> None: ...
 
-    def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None: ...
+    def publish_data_refresh(self) -> None: ...

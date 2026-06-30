@@ -1,13 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import replace
-
 from edap.control_room.protocol.events import AnnouncementEvent
-from edap.control_room.protocol.snapshot import (
-    ActivityLogEntry,
-    CommandHistorySnapshot,
-    ControlRoomSnapshot,
-)
+from edap.control_room.protocol.snapshot import ActivityLogEntry
 
 
 class ControlRoomServerState:
@@ -21,20 +15,6 @@ class ControlRoomServerState:
         self._announcement_limit = announcement_limit
         self._activity_log: list[ActivityLogEntry] = []
         self._announcements: list[AnnouncementEvent] = []
-        self._command_history: CommandHistorySnapshot | None = None
-
-    def merge_snapshot(self, snapshot: ControlRoomSnapshot) -> ControlRoomSnapshot:
-        if not self._activity_log and snapshot.activity_log:
-            self.replace_activity_log(snapshot.activity_log)
-        self._capture_remote_session_defaults(snapshot)
-        return replace(
-            snapshot,
-            command_history=self._command_history or snapshot.command_history,
-            activity_log=list(self._activity_log),
-        )
-
-    def capture_remote_session(self, snapshot: ControlRoomSnapshot) -> None:
-        self._command_history = snapshot.command_history
 
     def replace_activity_log(self, entries: list[ActivityLogEntry]) -> None:
         self._activity_log = list(entries)[-self._activity_log_limit :]
@@ -52,7 +32,3 @@ class ControlRoomServerState:
 
     def announcements(self) -> list[AnnouncementEvent]:
         return list(self._announcements)
-
-    def _capture_remote_session_defaults(self, snapshot: ControlRoomSnapshot) -> None:
-        if self._command_history is None:
-            self._command_history = snapshot.command_history

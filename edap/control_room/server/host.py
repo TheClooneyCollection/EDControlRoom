@@ -10,9 +10,6 @@ from rich.markup import escape
 from edap.control_room import bootstrap as _bootstrap
 from edap.control_room.app import ControlRoomApp
 from edap.control_room.history import now_iso
-from edap.control_room.protocol import snapshot_from_app
-from edap.control_room.protocol.snapshot import ControlRoomSnapshot
-from edap.control_room.server.state import ControlRoomServerState
 from edap.control_room_state import CommandHistoryEntry
 from edap.runtime import RuntimeContext
 from edap.state import JournalWatcher
@@ -94,7 +91,6 @@ class HeadlessControlRoomHost(ControlRoomApp):
         ctx: RuntimeContext,
         *,
         market_filter: str | None = None,
-        server_state: ControlRoomServerState | None = None,
     ) -> None:
         self._activity_widget = _ActivityWidgetStub()
         self._command_input_widget = _CommandInputWidgetStub()
@@ -107,7 +103,6 @@ class HeadlessControlRoomHost(ControlRoomApp):
         self._trade_route_list_widget = _OptionListWidgetStub()
         self._trade_route_picker_widget = _ContainerWidgetStub()
         self._main_widget = _ContainerWidgetStub()
-        self._server_state = server_state
         super().__init__(ctx, market_filter=market_filter)
         self._tts = TTSAnnouncer(
             self._config.tts,
@@ -152,7 +147,7 @@ class HeadlessControlRoomHost(ControlRoomApp):
         return None
 
     def _refresh_haul_stats(self) -> None:  # type: ignore[override]
-        self._publish_snapshot()
+        self._publish_data_refresh()
 
     def _refresh_trade_routes(self) -> None:  # type: ignore[override]
         return None
@@ -178,26 +173,16 @@ class HeadlessControlRoomHost(ControlRoomApp):
             self._watcher_thread.join(timeout=1.0)
         self._tts.close()
 
-    def snapshot(self) -> ControlRoomSnapshot:
-        return snapshot_from_app(
-            self,
-            session_id="local-server",
-            client_role="active_operator",
-            client_name="local-server",
-            capability_names=["observer_http", "observer_websocket", "announcement_stream"],
-            operator_mode="observer_only",
-        )
-
     def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None:
         resolved = raw_input
         if skip_delay is True and not raw_input.startswith("!"):
             resolved = f"!{raw_input}"
         if self._is_client_local_remote_command(resolved):
             self._record_unknown_remote_command(resolved)
-            self._publish_snapshot()
+            self._publish_data_refresh()
             return
         self._backend.submit_input(resolved)
-        self._publish_snapshot()
+        self._publish_data_refresh()
 
     def dispatch_destination(
         self,
@@ -220,7 +205,7 @@ class HeadlessControlRoomHost(ControlRoomApp):
             skip_delay=skip_delay,
             raw_command=raw_command,
         )
-        self._publish_snapshot()
+        self._publish_data_refresh()
 
     def dispatch_haul_loop(
         self,
@@ -234,15 +219,12 @@ class HeadlessControlRoomHost(ControlRoomApp):
             skip_delay=skip_delay,
             raw_command=raw_command,
         )
-        self._publish_snapshot()
+        self._publish_data_refresh()
 
-    def _publish_snapshot(self) -> None:
-        snapshot = self.snapshot()
-        if self._server_state is not None:
-            self._server_state.capture_remote_session(snapshot)
+    def _publish_data_refresh(self) -> None:
         sink = self._protocol_event_sink
         if sink is not None:
-            sink.publish_snapshot(snapshot)
+            sink.publish_data_refresh()
 
     def handle_remote_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None:
         self.submit_input(raw_input, skip_delay=skip_delay)
@@ -251,7 +233,7 @@ class HeadlessControlRoomHost(ControlRoomApp):
         self._handle_interrupt("Remote Ctrl-C")
         sink = self._protocol_event_sink
         if sink is not None:
-            sink.publish_snapshot(self.snapshot())
+            sink.publish_data_refresh()
 
     def _is_client_local_remote_command(self, raw: str) -> bool:
         command_raw = raw[1:].lstrip() if raw.startswith("!") else raw

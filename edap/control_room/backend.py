@@ -8,7 +8,6 @@ from edap.control_room.protocol import (
     ActivityLogAppendedEvent,
     AnnouncementEvent,
     ControlRoomEventSink,
-    ControlRoomSnapshot,
     DataUpdatedEvent,
 )
 from edap.control_room.protocol.snapshot import ActivityLogEntry
@@ -242,10 +241,10 @@ class LocalControlRoomBackend(ControlRoomEventSink):
         if external_sink is not None:
             external_sink.publish_announcement(event)
 
-    def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
+    def publish_data_refresh(self) -> None:
         external_sink = self._host._protocol_external_event_sink
         if external_sink is not None:
-            external_sink.publish_snapshot(snapshot)
+            external_sink.publish_data_refresh()
 
     def _emit(self, event: ControlRoomBackendEvent) -> None:
         for handler in list(self._event_handlers):

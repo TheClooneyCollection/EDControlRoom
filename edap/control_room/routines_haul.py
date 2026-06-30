@@ -204,7 +204,7 @@ def _set_trade_routes_loading(app: HaulHost, *, system_name: str, query_url: str
     app._presented_trade_route_query_url = query_url
     app._presented_trade_route_searched_at = app._trade_routes.searched_at
     app._refresh_trade_routes()
-    app._publish_protocol_snapshot()
+    app._publish_protocol_data_refresh()
 
 
 def _set_trade_routes_loaded(app: HaulHost, result) -> None:
@@ -237,7 +237,7 @@ def _set_trade_routes_loaded(app: HaulHost, result) -> None:
     app._presented_trade_route_query_url = result.query_url
     app._presented_trade_route_searched_at = result.searched_at
     app._refresh_trade_routes()
-    app._publish_protocol_snapshot()
+    app._publish_protocol_data_refresh()
 
 
 def _set_trade_routes_error(app: HaulHost, *, system_name: str, query_url: str, message: str) -> None:
@@ -254,7 +254,7 @@ def _set_trade_routes_error(app: HaulHost, *, system_name: str, query_url: str, 
     app._presented_trade_route_query_url = query_url
     app._presented_trade_route_searched_at = app._trade_routes.searched_at
     app._refresh_trade_routes()
-    app._publish_protocol_snapshot()
+    app._publish_protocol_data_refresh()
 
 
 def dispatch_haul_search(

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import asdict
 from dataclasses import replace
 import logging
 import unittest
@@ -38,19 +37,7 @@ from edap.control_room.dependencies import (
     SessionReadModel,
 )
 from edap.control_room.models import HaulStats, MarketData, ShipState
-from edap.control_room.protocol.snapshot import (
-    ActivityLogEntry,
-    ActiveOperatorSnapshot,
-    CommandHistoryEntrySnapshot,
-    CommandHistorySnapshot,
-    ControlRoomSnapshot,
-    HaulSessionSnapshot,
-    MarketSnapshot,
-    ServerStatusSnapshot,
-    SessionSnapshot,
-    ShipSnapshot,
-    UiStateSnapshot,
-)
+from edap.control_room.protocol.snapshot import ActivityLogEntry
 from edap.control_room.server.app import (
     BROWSER_PROBE_URL_PATH,
     CONTROL_ROOM_MESSAGE_SCHEMA,
@@ -68,7 +55,6 @@ from edap.control_room.server.commands import ObserverSessionCommandHandler
 from edap.control_room.server.host import HeadlessControlRoomHost
 from edap.control_room.server.sink import DataHydrateFanoutSink, ServerActivityLogSink
 from edap.control_room.server.state import ControlRoomServerState
-from edap.control_room_state import CommandHistoryEntry
 from edap.runtime import ResolvedPath, RuntimeContext
 from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler
 from edap.tts import AnnouncementId
@@ -182,84 +168,6 @@ def _make_context_with_tts(journal_dir: Path) -> RuntimeContext:
     )
 
 
-def _base_snapshot() -> ControlRoomSnapshot:
-    return ControlRoomSnapshot(
-        session=SessionSnapshot(session_id="local-server", client_role="active_operator"),
-        connected_clients=[],
-        active_operator=ActiveOperatorSnapshot(session_id="local-server", client_name="local-server"),
-        ship=ShipSnapshot(
-            commander_name="CMDR TEST",
-            ship_type="Type-9",
-            system_name="Sol",
-            station_name="Jameson Memorial",
-            status="in_station",
-            fuel_level=10.0,
-            fuel_capacity=32.0,
-            credits=1000,
-            cargo_count=2,
-            cargo_capacity=100,
-            cargo_inventory=[],
-        ),
-        market=MarketSnapshot(
-            station_name="Jameson Memorial",
-            system_name="Sol",
-            market_timestamp="2026-06-15T18:00:00Z",
-            items=[],
-        ),
-        haul_session=HaulSessionSnapshot(
-            station_1_buying="",
-            station_2_buying="",
-            station_1="",
-            station_2="",
-            session_started_at=None,
-            session_elapsed_seconds=0.0,
-            session_active=False,
-            active=False,
-            clean_run_active=False,
-            waiting_for_station_1_departure=False,
-            resumed_mid_run=False,
-            docked_back_at_station_1=False,
-            current_run_started_at=None,
-            current_run_elapsed_seconds=None,
-            current_run_profit=0,
-            completed_runs=0,
-            accumulated_profit=0,
-            last_run_profit=None,
-            last_run_elapsed_seconds=None,
-            total_run_elapsed_seconds=0.0,
-        ),
-        ui_state=UiStateSnapshot(
-            routine_active=False,
-            active_routine_name=None,
-            haul_stop_requested=False,
-            verbose_controls=False,
-            instant_mode=False,
-            activity_auto_follow_paused=False,
-            shutdown_requested=False,
-            shutdown_finalized=False,
-        ),
-        command_history=CommandHistorySnapshot(history_limit=20),
-        activity_log=[
-            ActivityLogEntry(
-                entry_id="activity-000001",
-                timestamp="2026-06-15T18:00:00Z",
-                message_text="Hello commander.",
-                severity=None,
-            )
-        ],
-        server_status=ServerStatusSnapshot(
-            server_name="ED Control Room",
-            server_version="1.2.3",
-            runtime_platform="macos",
-            journal_source_status="configured",
-            bindings_source_status="configured",
-            bindings_loaded=False,
-            capability_names=["observer_http", "observer_websocket", "announcement_stream"],
-            operator_mode="observer_only",
-        ),
-    )
-
-
 def _base_data_read_model() -> ControlRoomDataReadModel:
     return ControlRoomDataReadModel(
         ship=ShipState(system="Sol", commander="CMDR TEST"),
@@ -301,7 +209,7 @@ class _SnapshotRecorder(ControlRoomEventSink):
     def __init__(self) -> None:
         self.activity_entries: list[ActivityLogEntry] = []
         self.announcements: list[AnnouncementEvent] = []
-        self.snapshots: list[ControlRoomSnapshot] = []
+        self.data_refresh_count = 0
 
     def publish_activity_log(self, entry: ActivityLogEntry) -> None:
         self.activity_entries.append(entry)
@@ -309,8 +217,8 @@ class _SnapshotRecorder(ControlRoomEventSink):
     def publish_announcement(self, event: AnnouncementEvent) -> None:
         self.announcements.append(event)
 
-    def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
-        self.snapshots.append(snapshot)
+    def publish_data_refresh(self) -> None:
+        self.data_refresh_count += 1
 
 
 class _CommandHandlerRecorder(ObserverSessionCommandHandler):
@@ -353,14 +261,14 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
 
 
 class ControlRoomServerTests(unittest.TestCase):
-    def test_headless_host_initializes_and_can_snapshot_before_mount(self) -> None:
+    def test_headless_host_initializes_data_source_before_mount(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
 
-            snapshot = host.snapshot()
+            data = host.dependencies.data_source.current()
 
-        self.assertEqual(snapshot.session.session_id, "local-server")
-        self.assertFalse(snapshot.ui_state.activity_auto_follow_paused)
+        self.assertEqual(data.session.session_id, "local-session")
+        self.assertFalse(data.routine.routine_active)
 
     def test_headless_host_accepts_simple_remote_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -406,7 +314,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
         self.assertEqual(host._protocol_announcements[0].message_text, "Hello VRYAE")
 
-    def test_headless_host_publishes_snapshot_after_remote_input(self) -> None:
+    def test_headless_host_publishes_data_refresh_after_remote_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
             sink = _SnapshotRecorder()
@@ -414,10 +322,10 @@ class ControlRoomServerTests(unittest.TestCase):
 
             host.handle_remote_input("market filter gold")
 
-        self.assertTrue(sink.snapshots)
-        self.assertEqual(sink.snapshots[-1].command_history.history_entries[-1].raw_command, "market filter gold")
+        self.assertEqual(sink.data_refresh_count, 1)
+        self.assertEqual(host._saved_state.history[-1].raw, "market filter gold")
 
-    def test_headless_host_remote_ctrl_c_cancels_prompt_flow_and_publishes_snapshot(self) -> None:
+    def test_headless_host_remote_ctrl_c_cancels_prompt_flow_and_publishes_data_refresh(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
             sink = _SnapshotRecorder()
@@ -428,13 +336,11 @@ class ControlRoomServerTests(unittest.TestCase):
 
         self.assertEqual(host._dest_prompt_destination, "")
         self.assertIsNone(host._dest_prompt_settle_default)
-        self.assertTrue(sink.snapshots)
-        self.assertEqual(sink.snapshots[-1].ship.commander_name, host.snapshot().ship.commander_name)
+        self.assertEqual(sink.data_refresh_count, 1)
 
     def test_http_endpoints_and_websocket_observer_stream(self) -> None:
         broker = InMemoryObserverSessionBroker()
         app = build_observer_server_app(
-            snapshot_provider=_base_snapshot,
             data_provider=_base_data_read_model,
             command_handler=None,
             broker=broker,
@@ -519,7 +425,7 @@ class ControlRoomServerTests(unittest.TestCase):
     def test_http_endpoints_include_cors_headers_for_browser_clients(self) -> None:
         broker = InMemoryObserverSessionBroker()
         app = build_observer_server_app(
-            snapshot_provider=_base_snapshot,
+            data_provider=_base_data_read_model,
             command_handler=None,
             broker=broker,
             auth=SharedAccessTokenAuth("secret-token"),
@@ -552,7 +458,7 @@ class ControlRoomServerTests(unittest.TestCase):
     def test_message_schema_endpoint_is_public_and_matches_loaded_schema(self) -> None:
         broker = InMemoryObserverSessionBroker()
         app = build_observer_server_app(
-            snapshot_provider=_base_snapshot,
+            data_provider=_base_data_read_model,
             command_handler=None,
             broker=broker,
             auth=SharedAccessTokenAuth("secret-token"),
@@ -570,7 +476,7 @@ class ControlRoomServerTests(unittest.TestCase):
     def test_browser_probe_endpoint_is_public_html(self) -> None:
         broker = InMemoryObserverSessionBroker()
         app = build_observer_server_app(
-            snapshot_provider=_base_snapshot,
+            data_provider=_base_data_read_model,
             command_handler=None,
             broker=broker,
             auth=SharedAccessTokenAuth("secret-token"),
@@ -600,7 +506,7 @@ class ControlRoomServerTests(unittest.TestCase):
     def test_websocket_active_operator_failover_promotes_remaining_client(self) -> None:
         broker = InMemoryObserverSessionBroker()
         app = build_observer_server_app(
-            snapshot_provider=_base_snapshot,
+            data_provider=_base_data_read_model,
             command_handler=None,
             broker=broker,
             auth=SharedAccessTokenAuth("secret-token"),
@@ -614,6 +520,7 @@ class ControlRoomServerTests(unittest.TestCase):
                 with client.websocket_connect(
                     "/session?client_name=bridge-mac&access_token=secret-token"
                 ) as second:
+                    second.receive_json()
                     second.receive_json()
 
                     first.close()
@@ -638,15 +545,11 @@ class ControlRoomServerTests(unittest.TestCase):
             self.fail(f"Did not receive {expected_type}")
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            server_state = ControlRoomServerState()
-            broker = InMemoryObserverSessionBroker(server_state=server_state)
-            host = HeadlessControlRoomHost(
-                _make_context(Path(temp_dir)),
-                server_state=server_state,
-            )
+            broker = InMemoryObserverSessionBroker()
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
             host._controls = object()
             app = build_observer_server_app(
-                snapshot_provider=host.snapshot,
+                data_provider=host.dependencies.data_source.current,
                 command_handler=host,
                 broker=broker,
                 auth=SharedAccessTokenAuth("secret-token"),
@@ -688,7 +591,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
         broker = InMemoryObserverSessionBroker()
         app = build_observer_server_app(
-            snapshot_provider=_base_snapshot,
+            data_provider=_base_data_read_model,
             command_handler=None,
             broker=broker,
             auth=SharedAccessTokenAuth("secret-token"),
@@ -724,16 +627,6 @@ class ControlRoomServerTests(unittest.TestCase):
                         "active_operator",
                     )
 
-    def test_broker_retains_latest_snapshot_without_broadcasting_it(self) -> None:
-        broker = InMemoryObserverSessionBroker()
-        observer = broker.register_observer("bridge-ipad")
-
-        broker.publish_snapshot(_base_snapshot())
-
-        self.assertTrue(observer.queue.empty())
-        retained = broker.current_snapshot(snapshot_provider=_base_snapshot)
-        self.assertEqual(retained.ship.system_name, "Sol")
-
     def test_data_hydrate_fanout_sink_broadcasts_data_message(self) -> None:
         broker = InMemoryObserverSessionBroker()
         observer = broker.register_observer("bridge-ipad")
@@ -742,33 +635,12 @@ class ControlRoomServerTests(unittest.TestCase):
             broker=broker,
         )
 
-        sink.publish_snapshot(_base_snapshot())
+        sink.publish_data_refresh()
 
         message = observer.queue.get_nowait()
         self.assertEqual(message["schema"], "edcontrolroom.control_room_data_message")
         self.assertEqual(message["message_type"], "control_room.hydrate")
         self.assertEqual(message["payload"]["ship"]["system"], "Sol")
-
-    def test_broker_retains_server_owned_activity_history_in_current_snapshot(self) -> None:
-        broker = InMemoryObserverSessionBroker()
-        broker.publish_snapshot(_base_snapshot())
-        broker.publish_activity_log(
-            ActivityLogEntry(
-                entry_id="activity-000002",
-                timestamp="2026-06-15T18:01:00Z",
-                message_text="Market filter set to Gold.",
-                severity=None,
-            )
-        )
-
-        observer = broker.register_observer("bridge-ipad")
-
-        self.assertTrue(observer.queue.empty())
-        retained = broker.current_snapshot(snapshot_provider=_base_snapshot)
-        self.assertEqual(
-            [entry.message_text for entry in retained.activity_log],
-            ["Hello commander.", "Market filter set to Gold."],
-        )
 
     def test_server_state_keeps_recent_announcements_for_future_sessions(self) -> None:
         server_state = ControlRoomServerState(announcement_limit=2)
@@ -799,36 +671,6 @@ class ControlRoomServerTests(unittest.TestCase):
             ["arrival", "approaching_station"],
         )
 
-    def test_server_state_retains_remote_command_history_session_state(self) -> None:
-        server_state = ControlRoomServerState()
-        history_entry = CommandHistoryEntry(
-            raw="haul gold",
-            command="haul",
-            params={"station_1_buying": "gold"},
-            timestamp="2026-06-15T18:00:00Z",
-        )
-        retained_snapshot = replace(
-            _base_snapshot(),
-            command_history=replace(
-                _base_snapshot().command_history,
-                default_haul={"station_1_buying": "gold"},
-                history_entries=[
-                    CommandHistoryEntrySnapshot(
-                        raw_command=history_entry.raw,
-                        command_name=history_entry.command,
-                        arguments=history_entry.params,
-                        timestamp=history_entry.timestamp,
-                    )
-                ],
-            ),
-        )
-        server_state.capture_remote_session(retained_snapshot)
-
-        merged = server_state.merge_snapshot(_base_snapshot())
-
-        self.assertEqual(merged.command_history.default_haul, {"station_1_buying": "gold"})
-        self.assertEqual(merged.command_history.history_entries[0].raw_command, "haul gold")
-
     def test_request_snapshot_command_is_unknown(self) -> None:
         broker = InMemoryObserverSessionBroker()
         observer = broker.register_observer("bridge-ipad")
@@ -855,7 +697,7 @@ class ControlRoomServerTests(unittest.TestCase):
     def test_snapshot_endpoint_is_not_registered(self) -> None:
         broker = InMemoryObserverSessionBroker()
         app = build_observer_server_app(
-            snapshot_provider=_base_snapshot,
+            data_provider=_base_data_read_model,
             command_handler=None,
             broker=broker,
             auth=SharedAccessTokenAuth("secret-token"),
@@ -1043,8 +885,6 @@ class ControlRoomServerTests(unittest.TestCase):
         observer = broker.register_observer("bridge-ipad")
         broker.set_active_operator_session(observer.session_id)
 
-        broker.publish_snapshot(_base_snapshot())
-
         event = observer.queue.get_nowait()
         self.assertEqual(event["message_type"], "event.active_operator_changed")
         self.assertEqual(event["payload"]["active_operator_client_name"], "bridge-ipad")
@@ -1075,7 +915,7 @@ class ControlRoomServerTests(unittest.TestCase):
     def test_observer_endpoints_reject_missing_token(self) -> None:
         broker = InMemoryObserverSessionBroker()
         app = build_observer_server_app(
-            snapshot_provider=_base_snapshot,
+            data_provider=_base_data_read_model,
             command_handler=None,
             broker=broker,
             auth=SharedAccessTokenAuth("secret-token"),

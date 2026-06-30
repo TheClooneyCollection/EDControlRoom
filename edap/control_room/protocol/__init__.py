@@ -32,7 +32,7 @@ from .data_messages import (
     hydrate_message,
     is_control_room_data_message,
 )
-from .events import ActivityLogAppendedEvent, AnnouncementEvent, DataUpdatedEvent, SnapshotUpdatedEvent
+from .events import ActivityLogAppendedEvent, AnnouncementEvent, DataUpdatedEvent
 from .from_app import snapshot_from_app
 from .from_message import event_from_message
 from .sink import ControlRoomEventSink
@@ -98,7 +98,6 @@ __all__ = [
     "ServerStatusSnapshot",
     "SESSION_UPDATED",
     "SessionSnapshot",
-    "SnapshotUpdatedEvent",
     "ShipSnapshot",
     "SHIP_UPDATED",
     "SUPPORTED_CLIENT_ROLES",

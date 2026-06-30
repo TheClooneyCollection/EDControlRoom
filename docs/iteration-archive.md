@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `166`
-- Latest generated iteration number: `299`
+- Generated iteration count: `167`
+- Latest generated iteration number: `300`
 
 ## Iteration 134
 
@@ -4628,3 +4628,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Remove the remaining server broker/protocol snapshot compatibility path.
+
+## Iteration 300
+
+- When: `2026-06-30 21:54`
+- Area: `control-room`
+- Title: `remove-server-snapshot-refresh`
+- Source: [2026-06-30-21-54_control-room_remove-server-snapshot-refresh.md](iteration-logs/2026-06-30-21-54_control-room_remove-server-snapshot-refresh.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `remove-server-snapshot-refresh`
+- Started: `2026-06-30 21:54`
+
+## Summary
+
+- Removed the server-side snapshot refresh path so `serve` reads metadata and hydrates clients from the composed data source.
+
+## Changes
+
+- Replaced `ControlRoomEventSink.publish_snapshot()` with `publish_data_refresh()`.
+- Removed broker snapshot retention/merge logic and server-state command-history snapshot merging.
+- Removed `HeadlessControlRoomHost.snapshot()` and serve-time snapshot seeding.
+- Updated websocket/HTTP tests to construct the server around `_base_data_read_model`.
+
+## Follow-ups
+
+- Prune remaining legacy protocol snapshot dataclasses/conversion helpers once local tests no longer need them as fixtures.

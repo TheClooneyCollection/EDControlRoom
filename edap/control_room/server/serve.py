@@ -15,7 +15,6 @@ from edap.control_room.server.sink import (
     FanoutControlRoomEventSink,
     ServerActivityLogSink,
 )
-from edap.control_room.server.state import ControlRoomServerState
 from edap.runtime import build_runtime_context, load_config_with_fallback
 
 
@@ -47,9 +46,8 @@ def serve_observer_mode(
         )
         sys.exit(1)
 
-    server_state = ControlRoomServerState()
-    broker = InMemoryObserverSessionBroker(server_state=server_state)
-    runtime_host = HeadlessControlRoomHost(ctx, server_state=server_state)
+    broker = InMemoryObserverSessionBroker()
+    runtime_host = HeadlessControlRoomHost(ctx)
     runtime_host._protocol_event_sink = FanoutControlRoomEventSink(
         [
             broker,
@@ -61,9 +59,7 @@ def serve_observer_mode(
         ]
     )
     runtime_host.start()
-    broker.publish_snapshot(runtime_host.snapshot())
     app = build_observer_server_app(
-        snapshot_provider=runtime_host.snapshot,
         data_provider=runtime_host.dependencies.data_source.current,
         command_handler=runtime_host,
         broker=broker,

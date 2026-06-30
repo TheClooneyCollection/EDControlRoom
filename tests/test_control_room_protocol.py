@@ -254,9 +254,6 @@ class _SnapshotBackend(ControlRoomBackend):
     def __init__(self, snapshot: ControlRoomSnapshot) -> None:
         self.snapshot = snapshot
 
-    def current_snapshot(self) -> ControlRoomSnapshot:
-        return self.snapshot
-
     def subscribe_events(self, handler):
         return lambda: None
 
@@ -266,7 +263,7 @@ class _SnapshotBackend(ControlRoomBackend):
     def publish_announcement(self, event: AnnouncementEvent) -> None:
         return None
 
-    def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
+    def publish_data_refresh(self) -> None:
         return None
 
     def submit_input(self, raw: str) -> None:
@@ -378,7 +375,7 @@ class _SinkRecorder(ControlRoomEventSink):
     def __init__(self) -> None:
         self.activity_messages: list[str] = []
         self.announcement_ids: list[str] = []
-        self.snapshot_count = 0
+        self.data_refresh_count = 0
 
     def publish_activity_log(self, entry: ActivityLogEntry) -> None:
         self.activity_messages.append(entry.message_text)
@@ -386,8 +383,8 @@ class _SinkRecorder(ControlRoomEventSink):
     def publish_announcement(self, event: AnnouncementEvent) -> None:
         self.announcement_ids.append(event.announcement_id)
 
-    def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
-        self.snapshot_count += 1
+    def publish_data_refresh(self) -> None:
+        self.data_refresh_count += 1
 
 
 class ControlRoomProtocolSnapshotTests(unittest.TestCase):
@@ -555,7 +552,7 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.assertEqual(recorder.activity_messages, ["[green]Observer ready[/]"])
         self.assertEqual(recorder.announcement_ids, ["arrival"])
 
-    def test_handle_event_publishes_snapshot_to_external_sink(self) -> None:
+    def test_handle_event_publishes_data_refresh_to_external_sink(self) -> None:
         app = _RenderHarnessApp(_make_context(Path(self.tmpdir.name)))
         recorder = _SinkRecorder()
         app._protocol_event_sink = recorder
@@ -563,7 +560,7 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         app._handle_event({"event": "FSDTarget", "Name": "Achenar"})
         app._finalize_shutdown()
 
-        self.assertEqual(recorder.snapshot_count, 1)
+        self.assertEqual(recorder.data_refresh_count, 1)
 
     def test_status_panel_renders_from_data_source(self) -> None:
         remote_app = _ProtocolHarnessApp(_make_context(Path(self.tmpdir.name)))

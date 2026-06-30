@@ -362,9 +362,6 @@ class _RemoteBackendStub:
         self._snapshot = snapshot
         self.interrupt_calls = 0
 
-    def current_snapshot(self) -> ControlRoomSnapshot:
-        return self._snapshot
-
     def subscribe_events(self, handler: ControlRoomBackendEventHandler):
         def unsubscribe() -> None:
             return None
@@ -377,8 +374,8 @@ class _RemoteBackendStub:
     def publish_announcement(self, event) -> None:
         return None
 
-    def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
-        self._snapshot = snapshot
+    def publish_data_refresh(self) -> None:
+        return None
 
     def submit_input(self, raw: str) -> None:
         return None
@@ -520,7 +517,7 @@ class _ArtifactLogHandleStub:
 
 class _EventSinkStub:
     def __init__(self) -> None:
-        self.snapshots: list[object] = []
+        self.data_refresh_count = 0
 
     def publish_activity_log(self, entry) -> None:
         return None
@@ -528,8 +525,8 @@ class _EventSinkStub:
     def publish_announcement(self, event) -> None:
         return None
 
-    def publish_snapshot(self, snapshot) -> None:
-        self.snapshots.append(snapshot)
+    def publish_data_refresh(self) -> None:
+        self.data_refresh_count += 1
 
 
 class ControlRoomCommandTests(unittest.TestCase):
@@ -687,7 +684,7 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertEqual(self.app.exit_calls, 0)
         self.assertIn("no active routine to cancel", "\n".join(self.app.logged))
 
-    def test_clear_routine_publishes_protocol_snapshot(self) -> None:
+    def test_clear_routine_publishes_protocol_data_refresh(self) -> None:
         sink = _EventSinkStub()
         self.app._protocol_external_event_sink = sink
         self.app._routine_active = True
@@ -696,8 +693,7 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.app._clear_routine()
 
         self.assertFalse(self.app._routine_active)
-        self.assertEqual(len(sink.snapshots), 1)
-        self.assertFalse(sink.snapshots[0].ui_state.routine_active)
+        self.assertEqual(sink.data_refresh_count, 1)
 
     def test_request_exit_requires_second_press_before_shutdown(self) -> None:
         self.app.action_request_exit()

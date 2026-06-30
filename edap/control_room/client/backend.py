@@ -123,7 +123,7 @@ class RemoteObserverBackend(ControlRoomBackend):
     def publish_announcement(self, event: AnnouncementEvent) -> None:
         return None
 
-    def publish_snapshot(self, snapshot) -> None:
+    def publish_data_refresh(self) -> None:
         return None
 
     def submit_input(self, raw: str) -> None:

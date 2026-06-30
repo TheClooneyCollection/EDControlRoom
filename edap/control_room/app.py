@@ -103,7 +103,6 @@ from edap.control_room.protocol.adapters import (
     build_activity_log_entry,
     build_announcement_event,
 )
-from edap.control_room.protocol.from_app import snapshot_from_app
 from edap.control_room.protocol.events import (
     ActivityLogAppendedEvent,
     AnnouncementEvent,
@@ -990,12 +989,12 @@ class ControlRoomApp(App[None]):
     def _clear_session_stats(self) -> None:
         _persistence.clear_session_stats(self)
         self._refresh_haul_stats()
-        self._publish_protocol_snapshot()
+        self._publish_protocol_data_refresh()
 
     def _stop_session_stats(self) -> None:
         _persistence.stop_session_stats(self)
         self._refresh_haul_stats()
-        self._publish_protocol_snapshot()
+        self._publish_protocol_data_refresh()
 
     def _log_startup_modes(self) -> None:
         state = "on" if self._instant_mode else "off"
@@ -1471,11 +1470,11 @@ class ControlRoomApp(App[None]):
                 revenue_short=format_credits_short(int(ev["TotalSale"])),
             )
 
-    def _publish_protocol_snapshot(self) -> None:
+    def _publish_protocol_data_refresh(self) -> None:
         sink = self._protocol_external_event_sink
         if sink is None:
             return
-        sink.publish_snapshot(snapshot_from_app(self))
+        sink.publish_data_refresh()
 
     def _default_haul_matches(self, entry: CommandHistoryEntry) -> bool:
         return _replay.default_haul_matches(self, entry)
@@ -1609,7 +1608,7 @@ class ControlRoomApp(App[None]):
         self._refresh_status()
         self._handle_haul_event(ev, station_before=station_before)
         self._announce_tts_for_event(ev, station_before=station_before)
-        self._publish_protocol_snapshot()
+        self._publish_protocol_data_refresh()
 
     def _activity_line(self, ev: dict[str, Any]) -> str | None:
         return _rendering.activity_line(ev)
