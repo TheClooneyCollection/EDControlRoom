@@ -1650,11 +1650,6 @@ on_land = true
         self.assertEqual(self.app._saved_state.history[-1].params["cargo_capacity"], "460")
         self.assertIn("Loaded 1 Inara route(s)", "\n".join(self.app.logged))
 
-        snapshot = self.app._backend.current_snapshot()
-        self.assertEqual(snapshot.trade_routes.system_name, "Praea Euq AK-A d25")
-        self.assertEqual(len(snapshot.trade_routes.routes), 1)
-        self.assertEqual(snapshot.trade_routes.routes[0].from_station, "Savitskaya Orbital")
-
     def test_haul_search_accepts_any_for_max_station_distance(self) -> None:
         self.app._ship.system = "Ix"
         self.app._ship.cargo_capacity = 460

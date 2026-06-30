@@ -15,21 +15,9 @@ from edap.control_room.dependencies import ControlRoomDataReadModel, ControlRoom
 from edap.control_room.protocol import (
     ActivityLogEntry,
     ActivityLogAppendedEvent,
-    ActiveOperatorSnapshot,
     AnnouncementEvent,
-    CommandHistoryEntrySnapshot,
-    CommandHistorySnapshot,
-    ConnectedClientSnapshot,
-    ControlRoomSnapshot,
     DataUpdatedEvent,
-    HaulSessionSnapshot,
-    MarketSnapshot,
     RemoteObserverWebSocketConnectInfo,
-    ServerStatusSnapshot,
-    SessionSnapshot,
-    ShipSnapshot,
-    TradeRoutesSnapshot,
-    UiStateSnapshot,
     build_activity_log_entry,
     data_read_model_from_message,
     event_from_message,
@@ -80,12 +68,10 @@ class RemoteObserverBackend(ControlRoomBackend):
         client_name: str,
         websocket_connect_info: RemoteObserverWebSocketConnectInfo,
         data_source: RemoteObserverDataSource | None = None,
-        initial_snapshot: ControlRoomSnapshot | None = None,
     ) -> None:
         self._server_target = server_target
         self._access_token = access_token
         self._client_name = client_name
-        self._snapshot = initial_snapshot
         self._data_source = data_source
         self._websocket_connect_info = websocket_connect_info
         self._event_handlers: list[ControlRoomBackendEventHandler] = []
@@ -117,17 +103,6 @@ class RemoteObserverBackend(ControlRoomBackend):
             self._thread.join(timeout=1.0)
             self._thread = None
 
-    def current_snapshot(self) -> ControlRoomSnapshot:
-        with self._lock:
-            if self._snapshot is not None:
-                return self._snapshot
-        if self._data_source is None:
-            raise RuntimeError("Remote observer backend has no snapshot or data source.")
-        return initial_remote_snapshot_from_data(
-            self._data_source.current(),
-            client_name=self._client_name,
-        )
-
     def subscribe_events(
         self,
         handler: ControlRoomBackendEventHandler,
@@ -148,7 +123,7 @@ class RemoteObserverBackend(ControlRoomBackend):
     def publish_announcement(self, event: AnnouncementEvent) -> None:
         return None
 
-    def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
+    def publish_snapshot(self, snapshot) -> None:
         return None
 
     def submit_input(self, raw: str) -> None:
@@ -468,118 +443,6 @@ def fetch_remote_control_room_data(
         _raise_for_auth_or_http_error(hydrate_response, server_target)
         data = data_read_model_from_message(hydrate_response.json())
     return capabilities, data
-
-
-def initial_remote_snapshot_from_data(
-    data: ControlRoomDataReadModel,
-    *,
-    client_name: str,
-) -> ControlRoomSnapshot:
-    client_role = "active_operator" if data.session.client_role == "active_operator" else "observer"
-    return ControlRoomSnapshot(
-        session=SessionSnapshot(session_id=data.session.session_id, client_role=client_role),
-        connected_clients=[
-            ConnectedClientSnapshot(
-                session_id=data.session.session_id,
-                client_name=client_name,
-                client_role=client_role,
-            )
-        ],
-        active_operator=ActiveOperatorSnapshot(
-            session_id=data.session.session_id,
-            client_name=data.session.active_operator_name,
-        )
-        if data.session.active_operator_name
-        else None,
-        ship=ShipSnapshot(
-            commander_name=data.ship.commander,
-            ship_type=data.ship.ship_type,
-            system_name=data.ship.system,
-            station_name=data.ship.station,
-            status=data.ship.status,
-            fuel_level=data.ship.fuel_level,
-            fuel_capacity=data.ship.fuel_capacity,
-            credits=data.ship.credits,
-            cargo_count=data.ship.cargo_count,
-            cargo_capacity=data.ship.cargo_capacity,
-            cargo_inventory=list(data.ship.cargo_inventory),
-            target_name=data.ship.target,
-            destination_system=data.ship.destination_system,
-            destination_body=data.ship.destination_body,
-            destination_name=data.ship.destination_name,
-        ),
-        market=MarketSnapshot(
-            station_name=data.market.station,
-            system_name=data.market.system,
-            market_timestamp=data.market.timestamp,
-            items=list(data.market.items),
-        ),
-        haul_session=HaulSessionSnapshot(
-            station_1_buying=data.haul_session.station_1_buying,
-            station_2_buying=data.haul_session.station_2_buying,
-            station_1=data.haul_session.station_1,
-            station_2=data.haul_session.station_2,
-            session_started_at=data.haul_session.session_started_at,
-            session_elapsed_seconds=data.haul_session.session_elapsed_s,
-            session_active=data.haul_session.session_active,
-            active=data.haul_session.active,
-            clean_run_active=data.haul_session.clean_run_active,
-            waiting_for_station_1_departure=data.haul_session.waiting_for_station_1_departure,
-            resumed_mid_run=data.haul_session.resumed_mid_run,
-            docked_back_at_station_1=data.haul_session.docked_back_at_station_1,
-            current_run_started_at=data.haul_session.current_run_started_at,
-            current_run_elapsed_seconds=data.haul_session.current_run_elapsed_s,
-            current_run_profit=data.haul_session.current_run_profit,
-            completed_runs=data.haul_session.completed_runs,
-            accumulated_profit=data.haul_session.accumulated_profit,
-            last_run_profit=data.haul_session.last_run_profit,
-            last_run_elapsed_seconds=data.haul_session.last_run_elapsed_s,
-            total_run_elapsed_seconds=data.haul_session.total_run_elapsed_s,
-        ),
-        ui_state=UiStateSnapshot(
-            routine_active=data.routine.routine_active,
-            active_routine_name=data.routine.active_routine_name,
-            haul_stop_requested=data.routine.haul_stop_requested,
-            verbose_controls=data.routine.verbose_controls,
-            instant_mode=data.routine.instant_mode,
-            activity_auto_follow_paused=False,
-            shutdown_requested=data.routine.shutdown_requested,
-            shutdown_finalized=data.routine.shutdown_finalized,
-        ),
-        command_history=CommandHistorySnapshot(
-            default_haul=dict(data.command_history.default_haul),
-            history_entries=[
-                CommandHistoryEntrySnapshot(
-                    raw_command=entry.raw,
-                    command_name=entry.command,
-                    arguments=dict(entry.params),
-                    timestamp=entry.timestamp,
-                )
-                for entry in data.command_history.history_entries
-            ],
-            history_limit=data.command_history.history_limit,
-        ),
-        activity_log=[
-            ActivityLogEntry(
-                entry_id=entry.entry_id,
-                timestamp=entry.timestamp,
-                message_text=entry.message_text,
-                severity=entry.severity,
-            )
-            for entry in data.activity_log.entries
-        ],
-        server_status=ServerStatusSnapshot(
-            server_name=data.server_status.server_name,
-            server_version=data.server_status.server_version,
-            runtime_platform=data.server_status.runtime_platform,
-            journal_source_status=data.server_status.journal_source_status,
-            bindings_source_status=data.server_status.bindings_source_status,
-            bindings_loaded=data.server_status.bindings_loaded,
-            capability_names=list(data.server_status.capability_names),
-            operator_mode=data.server_status.operator_mode,
-        ),
-        trade_routes=TradeRoutesSnapshot(),
-    )
 
 
 def _raise_for_auth_or_http_error(

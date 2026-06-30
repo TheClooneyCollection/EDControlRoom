@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, replace
+from dataclasses import replace
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -23,7 +23,6 @@ from edap.control_room.client.backend import (
     RemoteObserverDataSource,
     RemoteObserverExecution,
     _validate_remote_observer_capabilities,
-    initial_remote_snapshot_from_data,
 )
 from edap.control_room.dependencies import (
     ActivityLogReadModel,
@@ -400,12 +399,11 @@ class ControlRoomClientTests(unittest.TestCase):
         )
 
     @staticmethod
-    def _backend(*, initial_snapshot: ControlRoomSnapshot | None = None) -> RemoteObserverBackend:
+    def _backend() -> RemoteObserverBackend:
         return RemoteObserverBackend(
             server_target=ControlRoomClientTests._target(),
             access_token="secret-token",
             client_name="observer-ipad",
-            initial_snapshot=initial_snapshot or _snapshot(),
             websocket_connect_info=_websocket_connect_info(),
         )
 
@@ -448,7 +446,7 @@ class ControlRoomClientTests(unittest.TestCase):
                 )
             ],
         )
-        backend = self._backend(initial_snapshot=updated_snapshot)
+        backend = self._backend()
         app = self._app(backend=backend)
         command_input = _FakeInputWidget()
         _bind_observer_widgets(app, command_input)
@@ -494,7 +492,7 @@ class ControlRoomClientTests(unittest.TestCase):
                 ),
             ],
         )
-        backend = self._backend(initial_snapshot=updated_snapshot)
+        backend = self._backend()
         app = self._app(backend=backend)
         command_input = _FakeInputWidget()
         _bind_observer_widgets(app, command_input)
@@ -534,7 +532,7 @@ class ControlRoomClientTests(unittest.TestCase):
         )
 
     def test_observer_app_uses_event_timestamp_for_incremental_activity_append(self) -> None:
-        backend = self._backend(initial_snapshot=_snapshot())
+        backend = self._backend()
         app = self._app(backend=backend)
         command_input = _FakeInputWidget()
         _bind_observer_widgets(app, command_input)
@@ -648,17 +646,7 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertTrue(backend._outgoing_messages.empty())
 
     def test_observer_app_market_lock_unlock_are_local_display_controls(self) -> None:
-        initial_snapshot = replace(
-            _snapshot(),
-            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-            market=MarketSnapshot(
-                station_name="Jameson Memorial",
-                system_name="Sol",
-                market_timestamp="2026-06-30T12:00:00Z",
-                items=[{"Name": "gold", "Stock": 42}],
-            ),
-        )
-        backend = self._backend(initial_snapshot=initial_snapshot)
+        backend = self._backend()
         data_source = RemoteObserverDataSource(
             replace(
                 _data_read_model(system_name="Sol"),
@@ -837,12 +825,7 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(command_input.placeholder, app._default_command_placeholder)
 
     def test_observer_app_handles_dest_command_locally_then_dispatches_remote(self) -> None:
-        backend = self._backend(
-            initial_snapshot=replace(
-                _snapshot(),
-                session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-            )
-        )
+        backend = self._backend()
         app = self._app(backend=backend)
         command_input = _FakeInputWidget()
         _bind_observer_widgets(app, command_input)
@@ -864,12 +847,7 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(message["payload"]["raw_command"], "dest Achenar")
 
     def test_observer_app_enter_on_dest_prompt_uses_default_locally(self) -> None:
-        backend = self._backend(
-            initial_snapshot=replace(
-                _snapshot(),
-                session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-            )
-        )
+        backend = self._backend()
         app = self._app(backend=backend)
         command_input = _FakeInputWidget()
         _bind_observer_widgets(app, command_input)
@@ -894,17 +872,7 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertTrue(backend._outgoing_messages.empty())
 
     def test_observer_app_handles_haul_prompt_locally_then_dispatches_remote(self) -> None:
-        backend = self._backend(
-            initial_snapshot=replace(
-                _snapshot(),
-                session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-                ship=replace(
-                    _snapshot().ship,
-                    system_name="TSONGORIS",
-                    station_name="Savitskaya Orbital",
-                ),
-            )
-        )
+        backend = self._backend()
         app = self._app(backend=backend)
         command_input = _FakeInputWidget()
         _bind_observer_widgets(app, command_input)
@@ -952,38 +920,6 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(target.http_base_url, "https://bridge.local:9443")
         self.assertEqual(target.websocket_url, "wss://bridge.local:9443/session")
 
-    def test_remote_backend_ignores_snapshot_publication(self) -> None:
-        target = ObserverServerTarget(
-            host="bridge.local",
-            port=8765,
-            http_base_url="http://bridge.local:8765",
-            websocket_url="ws://bridge.local:8765/session",
-        )
-        snapshot = _snapshot()
-        backend = RemoteObserverBackend(
-            server_target=target,
-            access_token="secret-token",
-            client_name="observer-ipad",
-            initial_snapshot=snapshot,
-            websocket_connect_info=_websocket_connect_info(),
-        )
-        updated_snapshot = ControlRoomSnapshot(
-            session=snapshot.session,
-            connected_clients=snapshot.connected_clients,
-            active_operator=snapshot.active_operator,
-            ship=ShipSnapshot(**{**asdict(snapshot.ship), "system_name": "Achenar"}),
-            market=snapshot.market,
-            haul_session=snapshot.haul_session,
-            ui_state=snapshot.ui_state,
-            command_history=snapshot.command_history,
-            activity_log=snapshot.activity_log,
-            server_status=snapshot.server_status,
-        )
-
-        backend.publish_snapshot(updated_snapshot)
-
-        self.assertEqual(backend.current_snapshot().ship.system_name, "Sol")
-
     def test_remote_backend_surfaces_response_error_messages(self) -> None:
         target = ObserverServerTarget(
             host="bridge.local",
@@ -995,7 +931,6 @@ class ControlRoomClientTests(unittest.TestCase):
             server_target=target,
             access_token="secret-token",
             client_name="observer-ipad",
-            initial_snapshot=_snapshot(),
             websocket_connect_info=_websocket_connect_info(),
         )
         received: list[object] = []
@@ -1025,7 +960,6 @@ class ControlRoomClientTests(unittest.TestCase):
             server_target=target,
             access_token="secret-token",
             client_name="observer-ipad",
-            initial_snapshot=_snapshot(),
             websocket_connect_info=_websocket_connect_info(),
         )
 
@@ -1046,7 +980,6 @@ class ControlRoomClientTests(unittest.TestCase):
             server_target=target,
             access_token="secret-token",
             client_name="observer-ipad",
-            initial_snapshot=_snapshot(),
             websocket_connect_info=_websocket_connect_info(),
         )
 
@@ -1128,34 +1061,6 @@ class ControlRoomClientTests(unittest.TestCase):
 
         self.assertEqual(data_source.current().ship.system, "Achenar")
 
-    def test_initial_remote_snapshot_is_derived_from_hydrate_data(self) -> None:
-        data = _data_read_model(system_name="Achenar")
-
-        snapshot = initial_remote_snapshot_from_data(data, client_name="observer-ipad")
-
-        self.assertEqual(snapshot.ship.system_name, "Achenar")
-        self.assertEqual(snapshot.session.session_id, data.session.session_id)
-        self.assertEqual(
-            snapshot.command_history.history_limit,
-            data.command_history.history_limit,
-        )
-        self.assertEqual(snapshot.server_status.operator_mode, data.server_status.operator_mode)
-
-    def test_remote_backend_current_snapshot_can_derive_from_data_source(self) -> None:
-        data_source = RemoteObserverDataSource(_data_read_model(system_name="Achenar"))
-        backend = RemoteObserverBackend(
-            server_target=self._target(),
-            access_token="secret-token",
-            client_name="observer-ipad",
-            data_source=data_source,
-            websocket_connect_info=_websocket_connect_info(),
-        )
-
-        snapshot = backend.current_snapshot()
-
-        self.assertEqual(snapshot.ship.system_name, "Achenar")
-        self.assertEqual(snapshot.session.session_id, "observer-1")
-
     def test_remote_backend_hydrates_data_source_from_data_message(self) -> None:
         data_source = RemoteObserverDataSource(_data_read_model(system_name="Sol"))
         backend = self._backend()
@@ -1172,42 +1077,17 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertIsInstance(events[0], DataUpdatedEvent)
         self.assertEqual(events[0].data.ship.system, "Achenar")
 
-    def test_remote_backend_preserves_cached_snapshot_on_connection_loss(self) -> None:
+    def test_remote_backend_reports_connection_loss(self) -> None:
         target = ObserverServerTarget(
             host="bridge.local",
             port=8765,
             http_base_url="http://bridge.local:8765",
             websocket_url="ws://bridge.local:8765/session",
         )
-        snapshot = ControlRoomSnapshot(
-            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-            connected_clients=[],
-            active_operator=ActiveOperatorSnapshot(
-                session_id="observer-1",
-                client_name="observer-ipad",
-            ),
-            ship=_snapshot().ship,
-            market=_snapshot().market,
-            haul_session=_snapshot().haul_session,
-            ui_state=UiStateSnapshot(
-                routine_active=True,
-                active_routine_name="dock",
-                haul_stop_requested=False,
-                verbose_controls=False,
-                instant_mode=False,
-                activity_auto_follow_paused=False,
-                shutdown_requested=False,
-                shutdown_finalized=False,
-            ),
-            command_history=_snapshot().command_history,
-            activity_log=_snapshot().activity_log,
-            server_status=_snapshot().server_status,
-        )
         backend = RemoteObserverBackend(
             server_target=target,
             access_token="secret-token",
             client_name="observer-ipad",
-            initial_snapshot=snapshot,
             websocket_connect_info=_websocket_connect_info(),
         )
         received: list[object] = []
@@ -1216,11 +1096,6 @@ class ControlRoomClientTests(unittest.TestCase):
 
         backend._handle_connection_lost("Observer connection lost: ping timeout")
 
-        current = backend.current_snapshot()
-        self.assertEqual(current.connected_clients, [])
-        self.assertEqual(current.active_operator, snapshot.active_operator)
-        self.assertTrue(current.ui_state.routine_active)
-        self.assertEqual(current.ui_state.active_routine_name, "dock")
         self.assertIsInstance(received[0], ActivityLogAppendedEvent)
         self.assertEqual(received[0].entry.message_text, "Observer connection lost: ping timeout")
 
@@ -1235,7 +1110,6 @@ class ControlRoomClientTests(unittest.TestCase):
             server_target=target,
             access_token="secret-token",
             client_name="observer-ipad",
-            initial_snapshot=_snapshot(),
             websocket_connect_info=_websocket_connect_info(),
         )
         received: list[object] = []
@@ -1258,7 +1132,6 @@ class ControlRoomClientTests(unittest.TestCase):
             ),
             access_token="secret-token",
             client_name="observer-ipad",
-            initial_snapshot=_snapshot(),
             websocket_connect_info=_websocket_connect_info(),
         )
 
@@ -1278,7 +1151,6 @@ class ControlRoomClientTests(unittest.TestCase):
             server_target=target,
             access_token="secret-token",
             client_name="observer-ipad",
-            initial_snapshot=_snapshot(),
             websocket_connect_info=_websocket_connect_info(),
         )
         received: list[object] = []
@@ -1311,7 +1183,6 @@ class ControlRoomClientTests(unittest.TestCase):
             server_target=target,
             access_token="secret-token",
             client_name="observer-ipad",
-            initial_snapshot=_snapshot(),
             websocket_connect_info=_websocket_connect_info(),
         )
 
@@ -1331,7 +1202,6 @@ class ControlRoomClientTests(unittest.TestCase):
             server_target=target,
             access_token="secret-token",
             client_name="observer-ipad",
-            initial_snapshot=_snapshot(),
             websocket_connect_info=_websocket_connect_info(),
         )
 

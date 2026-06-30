@@ -10,22 +10,16 @@ from edap.control_room.protocol import (
     ControlRoomEventSink,
     ControlRoomSnapshot,
     DataUpdatedEvent,
-    SnapshotUpdatedEvent,
-    snapshot_from_app,
 )
 from edap.control_room.protocol.snapshot import ActivityLogEntry
 from edap.inara.trade_routes import TradeRoute
 
 
-ControlRoomBackendEvent: TypeAlias = (
-    ActivityLogAppendedEvent | AnnouncementEvent | SnapshotUpdatedEvent | DataUpdatedEvent
-)
+ControlRoomBackendEvent: TypeAlias = ActivityLogAppendedEvent | AnnouncementEvent | DataUpdatedEvent
 ControlRoomBackendEventHandler: TypeAlias = Callable[[ControlRoomBackendEvent], None]
 
 
 class ControlRoomBackend(ControlRoomEventSink, Protocol):
-    def current_snapshot(self) -> ControlRoomSnapshot: ...
-
     def subscribe_events(
         self,
         handler: ControlRoomBackendEventHandler,
@@ -134,9 +128,6 @@ class LocalControlRoomBackend(ControlRoomEventSink):
         self._host = host
         self._event_handlers: list[ControlRoomBackendEventHandler] = []
 
-    def current_snapshot(self) -> ControlRoomSnapshot:
-        return snapshot_from_app(self._host)
-
     def subscribe_events(
         self,
         handler: ControlRoomBackendEventHandler,
@@ -186,7 +177,6 @@ class LocalControlRoomBackend(ControlRoomEventSink):
 
     def interrupt_active_routine(self) -> None:
         self._host.dependencies.execution.cancel_active_routine()
-        self.publish_snapshot(self.current_snapshot())
 
     def exit_detaches_remote_session(self) -> bool:
         return False
@@ -253,7 +243,6 @@ class LocalControlRoomBackend(ControlRoomEventSink):
             external_sink.publish_announcement(event)
 
     def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
-        self._emit(SnapshotUpdatedEvent(snapshot=snapshot))
         external_sink = self._host._protocol_external_event_sink
         if external_sink is not None:
             external_sink.publish_snapshot(snapshot)
