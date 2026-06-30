@@ -183,8 +183,8 @@ def _fmt_duration(seconds: float | None) -> str:
     return _rendering.fmt_duration(seconds)
 
 
-def _build_log_text(msg: str) -> Text:
-    return _rendering.build_log_text(msg)
+def _build_log_text(msg: str, *, timestamp: str) -> Text:
+    return _rendering.build_log_text(msg, timestamp=timestamp)
 
 
 def _read_cargo_inventory(journal_dir: Path) -> list[dict[str, Any]]:
@@ -1230,7 +1230,7 @@ class ControlRoomApp(App[None]):
         elif hasattr(activity, "writes"):
             activity.writes = []
         for entry in entries:
-            activity.write(_build_log_text(entry.message_text))
+            activity.write(_build_log_text(entry.message_text, timestamp=entry.timestamp))
         self._protocol_activity_log = list(entries)
         self._refresh_activity_title()
 
@@ -1309,8 +1309,8 @@ class ControlRoomApp(App[None]):
 
     def _log(self, msg: str) -> None:
         activity = self.query_one("#activity", ActivityLog)
-        activity.write(_build_log_text(msg))
         entry = build_activity_log_entry(msg)
+        activity.write(_build_log_text(entry.message_text, timestamp=entry.timestamp))
         self._protocol_activity_log.append(entry)
         if len(self._protocol_activity_log) > self._activity_log_max_lines:
             self._protocol_activity_log = self._protocol_activity_log[-self._activity_log_max_lines :]

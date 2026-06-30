@@ -92,7 +92,7 @@ class ObserverControlRoomApp(ControlRoomApp):
             if len(self._protocol_activity_log) > self._activity_log_max_lines:
                 self._protocol_activity_log = self._protocol_activity_log[-self._activity_log_max_lines :]
             activity = self.query_one("#activity", ActivityLog)
-            activity.write(_build_log_text(event.entry.message_text))
+            activity.write(_build_log_text(event.entry.message_text, timestamp=event.entry.timestamp))
             self._refresh_activity_title()
             return
         if isinstance(event, AnnouncementEvent):
@@ -106,8 +106,8 @@ class ObserverControlRoomApp(ControlRoomApp):
 
     def _log(self, msg: str) -> None:
         activity = self.query_one("#activity", ActivityLog)
-        activity.write(_build_log_text(msg))
         entry = self._build_local_activity_entry(msg)
+        activity.write(_build_log_text(entry.message_text, timestamp=entry.timestamp))
         self._local_activity_log.append(entry)
         if len(self._local_activity_log) > self._activity_log_max_lines:
             self._local_activity_log = self._local_activity_log[-self._activity_log_max_lines :]

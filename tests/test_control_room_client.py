@@ -496,7 +496,30 @@ class ControlRoomClientTests(unittest.TestCase):
             any("Unknown command: dest sol" in message for message in rendered_messages)
         )
         self.assertTrue(any("dest - dest <system>" in message for message in rendered_messages))
+        self.assertIn("13:54:34  Unknown command: dest sol", rendered_messages[0])
         self.assertIn("dest - dest <system>", rendered_messages[-1])
+
+    def test_observer_app_uses_event_timestamp_for_incremental_activity_append(self) -> None:
+        backend = self._backend(initial_snapshot=_snapshot())
+        app = self._app(backend=backend)
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
+        activity = app.query_one("#activity")
+
+        app._apply_backend_event(
+            ActivityLogAppendedEvent(
+                entry=ActivityLogEntry(
+                    entry_id="remote-2",
+                    timestamp="2026-06-30T16:44:02Z",
+                    message_text="[dim]Executing dest sol in 5.0s...[/]",
+                )
+            )
+        )
+
+        self.assertEqual(
+            activity.writes[-1].plain,
+            "16:44:02  Executing dest sol in 5.0s...",
+        )
 
     def test_observer_app_replay_browser_runs_locally_from_remote_history(self) -> None:
         updated_snapshot = replace(

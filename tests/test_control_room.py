@@ -1983,10 +1983,15 @@ on_land = true
         self.assertEqual(raws, ["jump", "dock"])
 
     def test_log_lines_use_fold_wrap(self) -> None:
-        line = _build_log_text("A" * 200)
+        line = _build_log_text("A" * 200, timestamp="2026-06-30T16:44:02Z")
 
         self.assertFalse(line.no_wrap)
         self.assertEqual(line.overflow, "fold")
+        self.assertTrue(line.plain.startswith("16:44:02  "))
+
+    def test_log_lines_require_valid_timestamp(self) -> None:
+        with self.assertRaisesRegex(ValueError, "must include a timestamp"):
+            _build_log_text("hello", timestamp="")
 
     def test_activity_log_auto_follows_when_not_paused(self) -> None:
         activity = _ActivityLogStub()

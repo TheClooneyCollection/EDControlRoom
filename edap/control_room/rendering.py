@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
 
@@ -36,8 +36,14 @@ def loc(item: dict[str, Any], key: str) -> str:
     return item.get(f"{key}_Localised") or item.get(key, "")
 
 
-def hhmmss() -> str:
-    return datetime.now().strftime("%H:%M:%S")
+def hhmmss(timestamp: str) -> str:
+    if not timestamp:
+        raise ValueError("Activity log entries must include a timestamp.")
+    try:
+        parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"Invalid activity log timestamp: {timestamp}") from exc
+    return parsed.astimezone(UTC).strftime("%H:%M:%S")
 
 
 def is_recent(ev: dict[str, Any], threshold_s: float = 120.0) -> bool:
@@ -62,8 +68,8 @@ def fmt_duration(seconds: float | None) -> str:
     return f"{minutes:02d}:{secs:02d}"
 
 
-def build_log_text(msg: str) -> Text:
-    line = Text.from_markup(f"[dim]{hhmmss()}[/]  {msg}")
+def build_log_text(msg: str, *, timestamp: str) -> Text:
+    line = Text.from_markup(f"[dim]{hhmmss(timestamp)}[/]  {msg}")
     line.no_wrap = False
     line.overflow = "fold"
     return line

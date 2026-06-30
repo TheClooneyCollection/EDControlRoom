@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `130`
-- Latest generated iteration number: `263`
+- Generated iteration count: `131`
+- Latest generated iteration number: `264`
 
 ## Iteration 134
 
@@ -3634,3 +3634,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Re-run the manual `serve` + `connect` `dest sol` flow to confirm the default-Enter path now dispatches the destination routine instead of logging a blank command.
+
+## Iteration 264
+
+- When: `2026-06-30 16:46`
+- Area: `control-room`
+- Title: `fix-remote-activity-timestamps`
+- Source: [2026-06-30-16-46_control-room_fix-remote-activity-timestamps.md](iteration-logs/2026-06-30-16-46_control-room_fix-remote-activity-timestamps.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `fix-remote-activity-timestamps`
+- Started: `2026-06-30 16:46`
+
+## Summary
+
+- Fixed observer activity log rendering so remote entries keep their stored protocol timestamps during both snapshot redraws and incremental append events.
+
+## Changes
+
+- Made `build_log_text()` require a valid timestamp and render from that value instead of falling back to the local wall clock.
+- Updated embedded and observer Control Room activity writers to render from `ActivityLogEntry.timestamp`, including local entries after creating the protocol log object.
+- Added regression coverage for strict timestamp enforcement, remote snapshot redraw preservation, and incremental observer activity append rendering.
+
+## Follow-ups
+
+- Re-run a live `serve` + `connect` `dest sol` flow to confirm prompt lines and delayed execution lines now keep stable ordering under repeated snapshot refreshes.
