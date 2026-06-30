@@ -94,6 +94,7 @@ from edap.control_room.models import (
     TradeRoutePickerState,
     TradeRoutesData,
 )
+from edap.control_room import view_models as _view_models
 from edap.control_room.protocol.adapters import (
     build_activity_log_entry,
     build_announcement_event,
@@ -962,16 +963,15 @@ class ControlRoomApp(App[None]):
     def _refresh_status(self) -> None:
         self._sync_view_snapshot()
         self.query_one("#status", Static).update(
-            Text.from_markup(_rendering.status_markup(self._view_ship_state()))
+            Text.from_markup(_rendering.status_panel_markup(self._status_panel_view_model()))
         )
 
     def _refresh_haul_stats(self) -> None:
         self._sync_view_snapshot()
         widget = self.query_one("#haul", Static)
         widget.update(Text.from_markup(
-            _rendering.haul_stats_markup(
-                self._view_haul_stats(),
-                current_balance=self._view_snapshot.ship.credits,
+            _rendering.haul_panel_markup(
+                self._haul_panel_view_model(),
                 now_fn=self._time_fn,
             )
         ))
@@ -979,13 +979,10 @@ class ControlRoomApp(App[None]):
     def _refresh_market(self) -> None:
         self._sync_view_snapshot()
         self._sync_presented_market_from_snapshot()
+        view_model = self._market_panel_view_model()
         self.query_one("#market-content", Static).update(
             Text.from_markup(
-                _rendering.market_markup(
-                    self._view_market_data(),
-                    self._market_filter,
-                    side=self._runtime_state.market_panel_tab,
-                )
+                _rendering.market_panel_markup(view_model)
             )
         )
 
@@ -1310,6 +1307,22 @@ class ControlRoomApp(App[None]):
             )
             return
         self._presented_market.locked = True
+
+    def _status_panel_view_model(self) -> _view_models.StatusPanelViewModel:
+        return _view_models.status_panel_view_model(self._view_ship_state())
+
+    def _haul_panel_view_model(self) -> _view_models.HaulPanelViewModel:
+        return _view_models.haul_panel_view_model(
+            self._view_haul_stats(),
+            current_balance=self._view_snapshot.ship.credits,
+        )
+
+    def _market_panel_view_model(self) -> _view_models.MarketPanelViewModel:
+        return _view_models.market_panel_view_model(
+            self._view_market_data(),
+            market_filter=self._market_filter,
+            side=self._runtime_state.market_panel_tab,
+        )
 
     def _refresh_activity_title(self) -> None:
         title = "ACTIVITY"

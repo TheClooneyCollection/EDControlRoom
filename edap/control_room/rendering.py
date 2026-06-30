@@ -9,6 +9,14 @@ from rich.markup import escape
 from rich.text import Text
 
 from edap.control_room.models import HaulStats, MarketData, ShipState, TradeRoutesData
+from edap.control_room.view_models import (
+    HaulPanelViewModel,
+    MarketPanelViewModel,
+    StatusPanelViewModel,
+    haul_panel_view_model,
+    market_panel_view_model,
+    status_panel_view_model,
+)
 from edap.routines.market import _is_sell_market_item
 
 
@@ -117,7 +125,8 @@ def destination_summary(ship: ShipState) -> str | None:
     return " / ".join(filtered)
 
 
-def status_markup(ship: ShipState) -> str:
+def status_panel_markup(view_model: StatusPanelViewModel) -> str:
+    ship = view_model.ship
     left_rows: list[str] = []
     right_rows: list[str] = []
     full_width_rows: list[str] = []
@@ -169,12 +178,17 @@ def status_markup(ship: ShipState) -> str:
     return "\n".join(rows) if rows else "[dim]No data yet[/]"
 
 
-def haul_stats_markup(
-    stats: HaulStats,
+def status_markup(ship: ShipState) -> str:
+    return status_panel_markup(status_panel_view_model(ship))
+
+
+def haul_panel_markup(
+    view_model: HaulPanelViewModel,
     *,
-    current_balance: int | None,
     now_fn: Callable[[], float],
 ) -> str:
+    stats = view_model.stats
+    current_balance = view_model.current_balance
     if not stats.station_1_buying:
         session_elapsed = (
             now_fn() - stats.session_started_at
@@ -252,12 +266,22 @@ def haul_stats_markup(
     return "\n".join(rows)
 
 
-def market_markup(
-    market: MarketData,
-    market_filter: str | None,
+def haul_stats_markup(
+    stats: HaulStats,
     *,
-    side: str = "buy",
+    current_balance: int | None,
+    now_fn: Callable[[], float],
 ) -> str:
+    return haul_panel_markup(
+        haul_panel_view_model(stats, current_balance=current_balance),
+        now_fn=now_fn,
+    )
+
+
+def market_panel_markup(view_model: MarketPanelViewModel) -> str:
+    market = view_model.market
+    market_filter = view_model.market_filter
+    side = view_model.side
     if not market.items:
         return (
             "[dim]No market data.[/]\n\n"
@@ -312,6 +336,21 @@ def market_markup(
         sections.append(f"\n[dim]No sell items{no_match}.[/]")
 
     return "\n".join(sections)
+
+
+def market_markup(
+    market: MarketData,
+    market_filter: str | None,
+    *,
+    side: str = "buy",
+) -> str:
+    return market_panel_markup(
+        market_panel_view_model(
+            market,
+            market_filter=market_filter,
+            side=side,
+        )
+    )
 
 
 def trade_route_option_label(route: TradeRoute) -> str:

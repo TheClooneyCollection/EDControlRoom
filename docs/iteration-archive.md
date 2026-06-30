@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `140`
-- Latest generated iteration number: `273`
+- Generated iteration count: `141`
+- Latest generated iteration number: `274`
 
 ## Iteration 134
 
@@ -3904,3 +3904,32 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Continue reducing direct backend/facade coupling by moving app-facing command helpers to execution dependencies.
+
+## Iteration 274
+
+- When: `2026-06-30 18:03`
+- Area: `control-room`
+- Title: `add-panel-view-models`
+- Source: [2026-06-30-18-03_control-room_add-panel-view-models.md](iteration-logs/2026-06-30-18-03_control-room_add-panel-view-models.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `add-panel-view-models`
+- Started: `2026-06-30 18:03`
+
+## Summary
+
+- Added the first view-model layer for read-only Control Room panels.
+
+## Changes
+
+- Added status, haul, and market panel view models.
+- Added panel-specific rendering entrypoints that accept view models while preserving existing markup helper wrappers.
+- Routed status, haul, and market refresh methods through the new panel view models.
+- Added focused view-model tests.
+
+## Follow-ups
+
+- Move view-model builders from snapshot-derived app helpers to `ControlRoomDependencies.data_source` once remote data sources replace snapshots.
+- Add action objects for interactive views next: command bar, market presentation, replay browser, and trade-route picker.
