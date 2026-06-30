@@ -1860,6 +1860,12 @@ class ControlRoomApp(App[None]):
                     cmd_input.value = self._history[self._history_pos]
                 cmd_input.cursor_position = len(cmd_input.value)
 
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if getattr(event.input, "id", None) not in {None, "cmd"}:
+            return
+        if self._prompt_state.command_input_prefill_active:
+            self._prompt_state.command_input_value = event.input.value
+
     def on_input_submitted(self, event: Input.Submitted) -> None:
         raw = event.value
         event.input.value = ""

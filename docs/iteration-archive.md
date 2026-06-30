@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `135`
-- Latest generated iteration number: `268`
+- Generated iteration count: `136`
+- Latest generated iteration number: `269`
 
 ## Iteration 134
 
@@ -3769,3 +3769,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-check one active `serve` plus `connect` session while a prompt is open to confirm the real Textual widget keeps caret position stable under the normal status refresh cadence.
+
+## Iteration 269
+
+- When: `2026-06-30 17:23`
+- Area: `control-room`
+- Title: `preserve-local-prompt-edits`
+- Source: [2026-06-30-17-23_control-room_preserve-local-prompt-edits.md](iteration-logs/2026-06-30-17-23_control-room_preserve-local-prompt-edits.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `preserve-local-prompt-edits`
+- Started: `2026-06-30 17:23`
+
+## Summary
+
+- Fixed embedded Control Room prompt editing so periodic local snapshot refreshes no longer overwrite in-progress `haul search` command-bar edits with the older prefilled parameter string.
+
+## Changes
+
+- Added local command-input change handling in `ControlRoomApp` so active prompt-prefill state tracks the live command-bar text instead of only the original prefill value.
+- Added a regression proving a locally edited `search_edit` prompt survives `_apply_view_snapshot_state()` without losing the operator's edited search line or cursor position.
+- Re-ran the embedded app test module plus the full repo suite after the shared input-path change.
+
+## Follow-ups
+
+- Live-check local `haul search` editing under the normal status-refresh cadence to confirm the real Textual widget no longer reverts edited parameters during long prompt sessions.

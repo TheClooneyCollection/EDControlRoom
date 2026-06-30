@@ -289,6 +289,7 @@ class _ShutdownHarnessApp(ControlRoomApp):
 
 class _InputStub:
     def __init__(self) -> None:
+        self.id = "cmd"
         self.placeholder = ""
         self.value = ""
         self.cursor_position = 0
@@ -3454,6 +3455,30 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertEqual(focused, [input_stub])
         self.assertTrue(self.app._prompt_state.command_input_prefill_active)
         self.assertEqual(self.app._prompt_state.command_input_value, "jump")
+
+    def test_prompt_draft_survives_local_snapshot_refresh_after_input_change(self) -> None:
+        self.app._prompt_state.command_input_prefill_active = True
+        self.app._prompt_state.command_input_placeholder = (
+            "edit Inara search params then press Enter..."
+        )
+        self.app._prompt_state.command_input_value = "near_system='Sol'"
+        self.app._prompt_state.haul_prompt_step = "search_edit"
+        self.app._prompt_state.haul_prompt_mode = "search"
+        self.app._command_input.placeholder = self.app._prompt_state.command_input_placeholder
+        self.app._command_input.value = "near_system='Achenar'"
+        self.app._command_input.cursor_position = 5
+
+        changed_event = type(
+            "_ChangedEvent",
+            (),
+            {"input": self.app._command_input, "value": self.app._command_input.value},
+        )()
+        self.app.on_input_changed(changed_event)
+        self.app._apply_view_snapshot_state()
+
+        self.assertEqual(self.app._prompt_state.command_input_value, "near_system='Achenar'")
+        self.assertEqual(self.app._command_input.value, "near_system='Achenar'")
+        self.assertEqual(self.app._command_input.cursor_position, 5)
 
     def test_non_executable_command_stays_immediate_even_with_delay_configured(self) -> None:
         delays: list[float] = []
