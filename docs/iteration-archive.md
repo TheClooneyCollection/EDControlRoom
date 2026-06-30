@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `158`
-- Latest generated iteration number: `291`
+- Generated iteration count: `159`
+- Latest generated iteration number: `292`
 
 ## Iteration 134
 
@@ -4408,3 +4408,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Remove the temporary compatibility cache once `ControlRoomApp` no longer needs a constructor-time `_view_snapshot`.
+
+## Iteration 292
+
+- When: `2026-06-30 19:15`
+- Area: `control-room`
+- Title: `connect-lazy-snapshot-compat`
+- Source: [2026-06-30-19-15_control-room_connect-lazy-snapshot-compat.md](iteration-logs/2026-06-30-19-15_control-room_connect-lazy-snapshot-compat.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `connect-lazy-snapshot-compat`
+- Started: `2026-06-30 19:15`
+
+## Summary
+
+- Removed production connect's upfront legacy snapshot construction.
+
+## Changes
+
+- `RemoteObserverBackend` now accepts an optional `initial_snapshot`; if absent, `current_snapshot()` lazily derives the temporary compatibility shape from the remote data source.
+- `connect_observer_mode()` now passes only `RemoteObserverDataSource` into the backend.
+- Added coverage for deriving the compatibility snapshot from hydrated data.
+
+## Follow-ups
+
+- Remove the lazy compatibility snapshot once `ControlRoomApp` construction no longer asks backends for `_view_snapshot`.

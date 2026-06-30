@@ -75,9 +75,9 @@ class RemoteObserverBackend(ControlRoomBackend):
         server_target: ObserverServerTarget,
         access_token: str,
         client_name: str,
-        initial_snapshot: ControlRoomSnapshot,
         websocket_connect_info: RemoteObserverWebSocketConnectInfo,
         data_source: RemoteObserverDataSource | None = None,
+        initial_snapshot: ControlRoomSnapshot | None = None,
     ) -> None:
         self._server_target = server_target
         self._access_token = access_token
@@ -116,7 +116,14 @@ class RemoteObserverBackend(ControlRoomBackend):
 
     def current_snapshot(self) -> ControlRoomSnapshot:
         with self._lock:
-            return self._snapshot
+            if self._snapshot is not None:
+                return self._snapshot
+        if self._data_source is None:
+            raise RuntimeError("Remote observer backend has no snapshot or data source.")
+        return initial_remote_snapshot_from_data(
+            self._data_source.current(),
+            client_name=self._client_name,
+        )
 
     def subscribe_events(
         self,

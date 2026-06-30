@@ -1476,6 +1476,21 @@ class ControlRoomClientTests(unittest.TestCase):
         )
         self.assertEqual(snapshot.server_status.operator_mode, data.server_status.operator_mode)
 
+    def test_remote_backend_current_snapshot_can_derive_from_data_source(self) -> None:
+        data_source = RemoteObserverDataSource(_data_read_model(system_name="Achenar"))
+        backend = RemoteObserverBackend(
+            server_target=self._target(),
+            access_token="secret-token",
+            client_name="observer-ipad",
+            data_source=data_source,
+            websocket_connect_info=_websocket_connect_info(),
+        )
+
+        snapshot = backend.current_snapshot()
+
+        self.assertEqual(snapshot.ship.system_name, "Achenar")
+        self.assertEqual(snapshot.session.session_id, "observer-1")
+
     def test_remote_backend_hydrates_data_source_from_data_message(self) -> None:
         data_source = RemoteObserverDataSource(_data_read_model(system_name="Sol"))
         backend = self._backend()

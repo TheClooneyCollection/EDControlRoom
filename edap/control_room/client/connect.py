@@ -17,7 +17,6 @@ from edap.control_room.client.backend import (
     RemoteObserverDataSource,
     RemoteObserverExecution,
     fetch_remote_control_room_data,
-    initial_remote_snapshot_from_data,
 )
 from edap.control_room.client.target import ObserverServerTarget, parse_observer_server_target
 from edap.control_room.history import now_iso
@@ -925,10 +924,6 @@ def connect_observer_mode(
         server_target=server_target,
         access_token=access_token,
         client_name=resolved_client_name,
-        initial_snapshot=initial_remote_snapshot_from_data(
-            remote_data,
-            client_name=resolved_client_name,
-        ),
         data_source=data_source,
         websocket_connect_info=build_remote_observer_websocket_connect_info(
             websocket_url=server_target.websocket_url,
