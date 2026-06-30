@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `155`
-- Latest generated iteration number: `288`
+- Generated iteration count: `156`
+- Latest generated iteration number: `289`
 
 ## Iteration 134
 
@@ -4325,3 +4325,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Continue removing internal/local snapshot compatibility after the remaining connect UI surfaces move to data-source/view-action ownership.
+
+## Iteration 289
+
+- When: `2026-06-30 18:57`
+- Area: `control-room`
+- Title: `connect-data-source-context`
+- Source: [2026-06-30-18-57_control-room_connect-data-source-context.md](iteration-logs/2026-06-30-18-57_control-room_connect-data-source-context.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `connect-data-source-context`
+- Started: `2026-06-30 18:57`
+
+## Summary
+
+- Moved more connect-mode command context reads from legacy view snapshot state to the remote data source.
+
+## Changes
+
+- `ObserverControlRoomApp` now keeps an optional remote data source reference for production connect mode.
+- Active-operator gating for routine readiness and command input refresh reads `data_source.session.client_role` when available.
+- Local command ship context and trade-search system lookup read `data_source.ship` when available.
+- Commander-name initialization uses hydrated ship data when available.
+
+## Follow-ups
+
+- Continue moving remaining command bar, replay browser, and trade-route picker state away from internal snapshot compatibility.

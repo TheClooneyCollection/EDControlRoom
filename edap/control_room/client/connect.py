@@ -59,6 +59,7 @@ class ObserverControlRoomApp(ControlRoomApp):
         client_name: str,
     ) -> None:
         super().__init__(ctx, backend=backend)
+        self._remote_data_source = data_source
         self._dependencies = replace(
             self._dependencies,
             data_source=data_source or self._dependencies.data_source,
@@ -79,7 +80,7 @@ class ObserverControlRoomApp(ControlRoomApp):
         self._local_selected_resume_history_entry: CommandHistoryEntry | None = None
 
     def _check_routine_ready(self) -> bool:
-        if self._view_snapshot.session.client_role != "active_operator":
+        if not self._is_active_operator():
             self._log("[yellow]Observer session is read-only.[/]")
             return False
         if self._routine_active:
@@ -160,7 +161,12 @@ class ObserverControlRoomApp(ControlRoomApp):
             else "",
         )
         self._sync_view_snapshot()
-        self._tts.set_commander_name(self._view_snapshot.ship.commander_name)
+        commander_name = (
+            self._remote_data_source.current().ship.commander
+            if self._remote_data_source is not None
+            else self._view_snapshot.ship.commander_name
+        )
+        self._tts.set_commander_name(commander_name)
         if replace_activity:
             self._replace_activity_log(self._view_snapshot.activity_log)
         self._refresh_status()
@@ -503,7 +509,7 @@ class ObserverControlRoomApp(ControlRoomApp):
             "?",
             "market",
         }:
-            self._sync_local_ship_context_from_snapshot()
+            self._sync_local_ship_context()
             _commands.dispatch(self, raw)
             self._sync_local_prompt_state()
             self._sync_local_replay_state()
@@ -512,10 +518,19 @@ class ObserverControlRoomApp(ControlRoomApp):
         return False
 
     def _observer_ship_system(self) -> str:
+        if self._remote_data_source is not None:
+            data_system = self._remote_data_source.current().ship.system or ""
+            return data_system.strip() or (self._ship.system or "").strip()
         snapshot_system = getattr(self._view_snapshot.ship, "system_name", "") or ""
         return snapshot_system.strip() or (self._ship.system or "").strip()
 
-    def _sync_local_ship_context_from_snapshot(self) -> None:
+    def _sync_local_ship_context(self) -> None:
+        if self._remote_data_source is not None:
+            ship = self._remote_data_source.current().ship
+            self._ship.system = ship.system
+            self._ship.station = ship.station
+            self._ship.cargo_capacity = ship.cargo_capacity
+            return
         ship = self._view_snapshot.ship
         self._ship.system = ship.system_name
         self._ship.station = ship.station_name
@@ -743,7 +758,7 @@ class ObserverControlRoomApp(ControlRoomApp):
         command_input = self.query_one("#cmd", Input)
         if command_input.value == self._local_command_input_value:
             self._capture_local_command_input_widget_state(command_input)
-        is_active_operator = self._view_snapshot.session.client_role == "active_operator"
+        is_active_operator = self._is_active_operator()
         command_input.disabled = not is_active_operator
         if not is_active_operator:
             command_input.placeholder = "observer mode - read only"
@@ -772,6 +787,11 @@ class ObserverControlRoomApp(ControlRoomApp):
                 self._local_command_input_cursor_position,
                 len(command_input.value),
             )
+
+    def _is_active_operator(self) -> bool:
+        if self._remote_data_source is not None:
+            return self._remote_data_source.current().session.client_role == "active_operator"
+        return self._view_snapshot.session.client_role == "active_operator"
 
     def on_key(self, event) -> None:
         if self._resume_open:
