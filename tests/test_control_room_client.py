@@ -454,7 +454,6 @@ class ControlRoomClientTests(unittest.TestCase):
         _bind_observer_widgets(app, command_input)
         activity = app.query_one("#activity")
 
-        app._apply_view_snapshot_state()
         app._replace_activity_log(updated_snapshot.activity_log)
         app._log("[bold]dest[/] - dest <system>")
         self.assertEqual(len(activity.writes), 2)
@@ -463,8 +462,6 @@ class ControlRoomClientTests(unittest.TestCase):
             updated_snapshot,
             ship=replace(updated_snapshot.ship, system_name="Achenar"),
         )
-        app._view_snapshot = refreshed_snapshot
-        app._apply_view_snapshot_state()
         app._replace_activity_log(refreshed_snapshot.activity_log)
 
         rendered_messages = [segment.plain for segment in activity.writes]
@@ -559,34 +556,26 @@ class ControlRoomClientTests(unittest.TestCase):
         )
 
     def test_observer_app_replay_browser_runs_locally_from_remote_history(self) -> None:
-        updated_snapshot = replace(
-            _snapshot(),
-            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-            command_history=CommandHistorySnapshot(
-                history_entries=[
-                    CommandHistoryEntrySnapshot(
-                        raw_command="haul Silver",
-                        command_name="haul",
-                        arguments={
-                            "station_1_buying": "Silver",
-                            "station_1": "Savitskaya Orbital",
-                            "station_1_system": "TSONGORIS",
-                            "station_2": "Nyberg Vision",
-                            "station_2_system": "NJOKUJINUN",
-                        },
-                        timestamp="2026-06-30T12:00:00Z",
-                    )
-                ],
-                history_limit=20,
-            ),
-        )
-        backend = self._backend(initial_snapshot=updated_snapshot)
+        backend = self._backend()
         app = self._app(backend=backend)
+        app._saved_state.history = [
+            CommandHistoryEntry(
+                raw="haul Silver",
+                command="haul",
+                params={
+                    "station_1_buying": "Silver",
+                    "station_1": "Savitskaya Orbital",
+                    "station_1_system": "TSONGORIS",
+                    "station_2": "Nyberg Vision",
+                    "station_2_system": "NJOKUJINUN",
+                },
+                timestamp="2026-06-30T12:00:00Z",
+            )
+        ]
         command_input = _FakeInputWidget()
         _bind_observer_widgets(app, command_input)
         app.set_focus = lambda _widget: None  # type: ignore[method-assign]
 
-        app._apply_view_snapshot_state()
         app._show_resume_picker()
 
         self.assertTrue(app._resume_open)
@@ -604,34 +593,26 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertTrue(backend._outgoing_messages.empty())
 
     def test_observer_app_replay_filter_runs_locally(self) -> None:
-        updated_snapshot = replace(
-            _snapshot(),
-            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-            command_history=CommandHistorySnapshot(
-                history_entries=[
-                    CommandHistoryEntrySnapshot(
-                        raw_command="haul Silver",
-                        command_name="haul",
-                        arguments={"station_1_buying": "Silver"},
-                        timestamp="2026-06-30T12:00:00Z",
-                    ),
-                    CommandHistoryEntrySnapshot(
-                        raw_command="dest Achenar",
-                        command_name="dest",
-                        arguments={"destination": "Achenar", "galaxy_map_settle": 2.0},
-                        timestamp="2026-06-30T12:01:00Z",
-                    ),
-                ],
-                history_limit=20,
-            ),
-        )
-        backend = self._backend(initial_snapshot=updated_snapshot)
+        backend = self._backend()
         app = self._app(backend=backend)
+        app._saved_state.history = [
+            CommandHistoryEntry(
+                raw="haul Silver",
+                command="haul",
+                params={"station_1_buying": "Silver"},
+                timestamp="2026-06-30T12:00:00Z",
+            ),
+            CommandHistoryEntry(
+                raw="dest Achenar",
+                command="dest",
+                params={"destination": "Achenar", "galaxy_map_settle": "2.0"},
+                timestamp="2026-06-30T12:01:00Z",
+            ),
+        ]
         command_input = _FakeInputWidget()
         _bind_observer_widgets(app, command_input)
         app.set_focus = lambda _widget: None  # type: ignore[method-assign]
 
-        app._apply_view_snapshot_state()
         app._show_resume_picker()
         app._resume_filter = "dest"
         app._refresh_resume_picker()
@@ -641,23 +622,16 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertTrue(backend._outgoing_messages.empty())
 
     def test_observer_app_replay_command_runs_locally(self) -> None:
-        updated_snapshot = replace(
-            _snapshot(),
-            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-            command_history=CommandHistorySnapshot(
-                history_entries=[
-                    CommandHistoryEntrySnapshot(
-                        raw_command="haul Silver",
-                        command_name="haul",
-                        arguments={"station_1_buying": "Silver"},
-                        timestamp="2026-06-30T12:00:00Z",
-                    )
-                ],
-                history_limit=20,
-            ),
-        )
-        backend = self._backend(initial_snapshot=updated_snapshot)
+        backend = self._backend()
         app = self._app(backend=backend)
+        app._saved_state.history = [
+            CommandHistoryEntry(
+                raw="haul Silver",
+                command="haul",
+                params={"station_1_buying": "Silver"},
+                timestamp="2026-06-30T12:00:00Z",
+            )
+        ]
         command_input = _FakeInputWidget()
         _bind_observer_widgets(app, command_input)
         app.set_focus = lambda _widget: None  # type: ignore[method-assign]
@@ -667,7 +641,6 @@ class ControlRoomClientTests(unittest.TestCase):
                 self.value = value
                 self.input = type("_Input", (), {"value": value})()
 
-        app._apply_view_snapshot_state()
         app.on_input_submitted(_Submitted("replay"))
 
         self.assertTrue(app._resume_open)
@@ -706,7 +679,7 @@ class ControlRoomClientTests(unittest.TestCase):
                 self.value = value
                 self.input = type("_Input", (), {"value": value})()
 
-        app._apply_view_snapshot_state()
+        app._apply_data_state(data_source.current(), replace_activity=False)
         app._sync_presented_market_from_snapshot(force=True)
         self.assertEqual(app._view_market_data().station, "Jameson Memorial")
 
@@ -714,15 +687,6 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertTrue(app._market.locked)
         self.assertTrue(backend._outgoing_messages.empty())
 
-        updated_snapshot = replace(
-            initial_snapshot,
-            market=MarketSnapshot(
-                station_name="Galileo",
-                system_name="Sol",
-                market_timestamp="2026-06-30T12:01:00Z",
-                items=[{"Name": "silver", "Stock": 99}],
-            ),
-        )
         data_source.hydrate(
             replace(
                 data_source.current(),
@@ -734,8 +698,7 @@ class ControlRoomClientTests(unittest.TestCase):
                 ),
             )
         )
-        app._view_snapshot = updated_snapshot
-        app._apply_view_snapshot_state()
+        app._apply_data_state(data_source.current(), replace_activity=False)
         self.assertEqual(app._view_market_data().station, "Jameson Memorial")
         self.assertEqual(app._view_market_data().items[0]["Name"], "gold")
 

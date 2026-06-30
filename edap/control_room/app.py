@@ -103,6 +103,7 @@ from edap.control_room.protocol.adapters import (
     build_activity_log_entry,
     build_announcement_event,
 )
+from edap.control_room.protocol.from_app import snapshot_from_app
 from edap.control_room.protocol.events import (
     ActivityLogAppendedEvent,
     AnnouncementEvent,
@@ -476,7 +477,6 @@ class ControlRoomApp(App[None]):
         self._dependencies = dependencies or build_local_control_room_dependencies(self)
         self._view_actions = view_actions or build_local_control_room_view_actions(self)
         self._backend: ControlRoomBackend = backend or LocalControlRoomBackend(self)
-        self._view_snapshot = self._backend.current_snapshot()
         self._backend_event_unsubscribe: Callable[[], None] | None = None
         self._title_override = title_override
         self._exit_requested_once = False
@@ -1189,82 +1189,6 @@ class ControlRoomApp(App[None]):
         except ScreenStackError:
             return False
 
-    def _sync_view_snapshot(self) -> None:
-        self._view_snapshot = self._backend.current_snapshot()
-        self._apply_view_snapshot_state()
-
-    def _apply_view_snapshot_state(self) -> None:
-        snapshot = self._view_snapshot
-        previous_trade_routes = self._trade_routes
-        self._runtime_state.routine_active = snapshot.ui_state.routine_active
-        self._runtime_state.active_routine_name = snapshot.ui_state.active_routine_name
-        self._runtime_state.haul_stop_requested = snapshot.ui_state.haul_stop_requested
-        self._runtime_state.verbose_controls = snapshot.ui_state.verbose_controls
-        self._runtime_state.instant_mode = snapshot.ui_state.instant_mode
-        self._runtime_state.shutdown_requested = snapshot.ui_state.shutdown_requested
-        self._runtime_state.shutdown_finalized = snapshot.ui_state.shutdown_finalized
-        self._saved_state.default_haul = dict(snapshot.command_history.default_haul)
-        self._saved_state.history = [
-            CommandHistoryEntry(
-                raw=entry.raw_command,
-                command=entry.command_name,
-                params={str(key): str(value) for key, value in entry.arguments.items()},
-                timestamp=entry.timestamp,
-            )
-            for entry in snapshot.command_history.history_entries
-        ]
-        self._trade_routes = TradeRoutesData(
-            system_name=snapshot.trade_routes.system_name,
-            query_url=snapshot.trade_routes.query_url,
-            searched_at=snapshot.trade_routes.searched_at,
-            loading=snapshot.trade_routes.loading,
-            error=snapshot.trade_routes.error,
-            routes=[
-                TradeRoute(
-                    index=route.index,
-                    from_station=route.from_station,
-                    from_system=route.from_system,
-                    to_station=route.to_station,
-                    to_system=route.to_system,
-                    source_buy_commodity=route.source_buy_commodity,
-                    target_buy_commodity=route.target_buy_commodity,
-                    from_station_distance=route.from_station_distance,
-                    to_station_distance=route.to_station_distance,
-                    distance_from_system=route.distance_from_system,
-                    route_distance=route.route_distance,
-                    profit_per_unit=route.profit_per_unit,
-                    profit_per_trip=route.profit_per_trip,
-                    profit_per_hour=route.profit_per_hour,
-                    updated=route.updated,
-                    raw_text=route.raw_text,
-                    url_links=tuple(route.url_links),
-                )
-                for route in snapshot.trade_routes.routes
-            ],
-        )
-        self._sync_trade_route_picker_for_snapshot(
-            previous_trade_routes=previous_trade_routes
-        )
-        try:
-            command_input = self.query_one("#cmd", Input)
-        except Exception:
-            command_input = None
-        if command_input is not None and self._prompt_state.command_input_prefill_active:
-            if command_input.placeholder != self._prompt_state.command_input_placeholder:
-                command_input.placeholder = self._prompt_state.command_input_placeholder
-            if command_input.value != self._prompt_state.command_input_value:
-                command_input.value = self._prompt_state.command_input_value
-                command_input.cursor_position = len(command_input.value)
-        try:
-            option_list = self.query_one("#resume-list", OptionList)
-            option_list.clear_options()
-            option_list.add_options([item.label for item in self._resume_entries])
-            _replay.sync_resume_widget_selection(self)
-        except Exception:
-            return
-        self._apply_replay_browser_visibility()
-        self._refresh_trade_route_picker()
-
     def _sync_trade_route_picker_for_snapshot(
         self,
         *,
@@ -1405,51 +1329,6 @@ class ControlRoomApp(App[None]):
                 command_input.cursor_position = len(command_input.value)
             return
         command_input.placeholder = self._default_command_placeholder
-
-    def _view_ship_state(self) -> ShipState:
-        ship = self._view_snapshot.ship
-        return ShipState(
-            commander=ship.commander_name,
-            ship_type=ship.ship_type,
-            system=ship.system_name,
-            station=ship.station_name,
-            status=ship.status,
-            fuel_level=ship.fuel_level,
-            fuel_capacity=ship.fuel_capacity,
-            credits=ship.credits,
-            cargo_count=ship.cargo_count,
-            cargo_capacity=ship.cargo_capacity,
-            cargo_inventory=list(ship.cargo_inventory),
-            target=ship.target_name,
-            destination_system=ship.destination_system,
-            destination_body=ship.destination_body,
-            destination_name=ship.destination_name,
-        )
-
-    def _view_haul_stats(self) -> HaulStats:
-        haul = self._view_snapshot.haul_session
-        return HaulStats(
-            station_1_buying=haul.station_1_buying,
-            station_2_buying=haul.station_2_buying,
-            station_1=haul.station_1,
-            station_2=haul.station_2,
-            session_started_at=haul.session_started_at,
-            session_elapsed_s=haul.session_elapsed_seconds,
-            session_active=haul.session_active,
-            active=haul.active,
-            clean_run_active=haul.clean_run_active,
-            waiting_for_station_1_departure=haul.waiting_for_station_1_departure,
-            resumed_mid_run=haul.resumed_mid_run,
-            docked_back_at_station_1=haul.docked_back_at_station_1,
-            current_run_started_at=haul.current_run_started_at,
-            current_run_elapsed_s=haul.current_run_elapsed_seconds,
-            current_run_profit=haul.current_run_profit,
-            completed_runs=haul.completed_runs,
-            accumulated_profit=haul.accumulated_profit,
-            last_run_profit=haul.last_run_profit,
-            last_run_elapsed_s=haul.last_run_elapsed_seconds,
-            total_run_elapsed_s=haul.total_run_elapsed_seconds,
-        )
 
     def _view_market_data(self) -> MarketData:
         return MarketData(
@@ -1596,7 +1475,7 @@ class ControlRoomApp(App[None]):
         sink = self._protocol_external_event_sink
         if sink is None:
             return
-        sink.publish_snapshot(self._backend.current_snapshot())
+        sink.publish_snapshot(snapshot_from_app(self))
 
     def _default_haul_matches(self, entry: CommandHistoryEntry) -> bool:
         return _replay.default_haul_matches(self, entry)

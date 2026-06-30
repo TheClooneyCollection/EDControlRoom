@@ -715,7 +715,6 @@ class ControlRoomCommandTests(unittest.TestCase):
         backend = _RemoteBackendStub(_remote_snapshot())
         app = _HarnessApp(_make_context(Path(self.tmpdir.name)))
         app._backend = backend
-        app._view_snapshot = backend.current_snapshot()
         app._routine_active = True
 
         app.action_request_exit()
@@ -737,7 +736,6 @@ class ControlRoomCommandTests(unittest.TestCase):
         backend = _RemoteBackendStub(_remote_snapshot())
         app = _HarnessApp(_make_context(Path(self.tmpdir.name)))
         app._backend = backend
-        app._view_snapshot = backend.current_snapshot()
         app._routine_active = True
 
         app.action_request_exit()
@@ -752,7 +750,6 @@ class ControlRoomCommandTests(unittest.TestCase):
         backend = _RemoteBackendStub(_remote_snapshot())
         app = _HarnessApp(_make_context(Path(self.tmpdir.name)))
         app._backend = backend
-        app._view_snapshot = backend.current_snapshot()
         app._routine_active = True
 
         app.action_request_exit()
@@ -3181,7 +3178,6 @@ class ControlRoomDispatchTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.app._load_market_json()
-        self.app._sync_view_snapshot()
         self.app._sync_presented_market_from_snapshot(force=True)
 
         self.assertEqual(self.app._market.station, "Jameson Memorial")
@@ -3210,7 +3206,6 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertEqual(self.app._presented_market.items[0]["Name"], "gold")
 
         self.app._dispatch_command("market unlock")
-        self.app._sync_view_snapshot()
         self.app._sync_presented_market_from_snapshot()
 
         self.assertFalse(self.app._market.locked)
@@ -3453,7 +3448,6 @@ class ControlRoomDispatchTests(unittest.TestCase):
             {"input": self.app._command_input, "value": self.app._command_input.value},
         )()
         self.app.on_input_changed(changed_event)
-        self.app._apply_view_snapshot_state()
 
         self.assertEqual(self.app._prompt_state.command_input_value, "near_system='Achenar'")
         self.assertEqual(self.app._command_input.value, "near_system='Achenar'")

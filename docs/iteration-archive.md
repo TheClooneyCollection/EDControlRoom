@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `164`
-- Latest generated iteration number: `297`
+- Generated iteration count: `165`
+- Latest generated iteration number: `298`
 
 ## Iteration 134
 
@@ -4573,3 +4573,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Continue removing internal snapshot compatibility from base app/backend and server broker paths.
+
+## Iteration 298
+
+- When: `2026-06-30 21:38`
+- Area: `control-room`
+- Title: `remove-app-snapshot-state`
+- Source: [2026-06-30-21-38_control-room_remove-app-snapshot-state.md](iteration-logs/2026-06-30-21-38_control-room_remove-app-snapshot-state.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `remove-app-snapshot-state`
+- Started: `2026-06-30 21:38`
+
+## Summary
+
+- Removed `ControlRoomApp`'s direct dependency on backend snapshots.
+
+## Changes
+
+- Dropped `_view_snapshot`, `_sync_view_snapshot`, `_apply_view_snapshot_state`, and snapshot-backed view helper methods from the shared app.
+- Updated app snapshot publication to build from the app directly for the remaining legacy external sink path instead of asking the backend for `current_snapshot()`.
+- Reworked local/remote tests to seed app state or hydrate data sources directly rather than applying snapshots to the app.
+- Verified focused control-room/client/protocol tests and the full unittest suite.
+
+## Follow-ups
+
+- Continue pruning backend/server snapshot compatibility and then validate live `serve` + `connect`.
