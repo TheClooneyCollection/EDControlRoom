@@ -409,8 +409,9 @@ class ControlRoomClientTests(unittest.TestCase):
 
         app._apply_view_snapshot_state()
         command_input.value = "haul gold"
-        command_input.cursor_position = len(command_input.value)
+        command_input.cursor_position = 4
         app._local_command_input_value = command_input.value
+        app._local_command_input_cursor_position = command_input.cursor_position
 
         refreshed_snapshot = replace(
             updated_snapshot,
@@ -422,7 +423,7 @@ class ControlRoomClientTests(unittest.TestCase):
         app._refresh_remote_command_input()
 
         self.assertEqual(command_input.value, "haul gold")
-        self.assertEqual(command_input.cursor_position, len("haul gold"))
+        self.assertEqual(command_input.cursor_position, 4)
         self.assertEqual(command_input.placeholder, app._default_command_placeholder)
 
     def test_observer_app_preserves_prompt_draft_across_snapshot_refresh(self) -> None:
@@ -443,8 +444,9 @@ class ControlRoomClientTests(unittest.TestCase):
         app._refresh_remote_command_input()
 
         command_input.value = "Gol"
-        command_input.cursor_position = len(command_input.value)
+        command_input.cursor_position = 1
         app._local_command_input_value = command_input.value
+        app._local_command_input_cursor_position = command_input.cursor_position
 
         refreshed_snapshot = replace(
             updated_snapshot,
@@ -457,7 +459,69 @@ class ControlRoomClientTests(unittest.TestCase):
 
         self.assertEqual(command_input.placeholder, "station 1 buying...")
         self.assertEqual(command_input.value, "Gol")
-        self.assertEqual(command_input.cursor_position, len("Gol"))
+        self.assertEqual(command_input.cursor_position, 1)
+
+    def test_observer_app_tracks_latest_cursor_position_without_text_change(self) -> None:
+        updated_snapshot = replace(
+            _snapshot(),
+            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+        )
+        backend = self._backend(initial_snapshot=updated_snapshot)
+        app = self._app(backend=backend)
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
+
+        app._apply_view_snapshot_state()
+        app._prompt_state.command_input_prefill_active = True
+        app._prompt_state.command_input_placeholder = "edit Inara search params then press Enter..."
+        app._prompt_state.haul_prompt_step = "search_edit"
+        app._prompt_state.haul_prompt_mode = "search"
+        app._prompt_state.command_input_value = "near_system='Sol'"
+        app._sync_local_prompt_state()
+        app._refresh_remote_command_input()
+
+        command_input.value = "near_system='Sol'"
+        command_input.cursor_position = 5
+        app._local_command_input_value = command_input.value
+        app._local_command_input_cursor_position = 14
+
+        app.on_key(_KeyEvent("left"))
+
+        self.assertEqual(app._local_command_input_cursor_position, 5)
+
+        refreshed_snapshot = replace(
+            updated_snapshot,
+            market=replace(updated_snapshot.market, station_name="Galileo"),
+        )
+        app._view_snapshot = refreshed_snapshot
+        app._apply_view_snapshot_state()
+        app._refresh_remote_command_input()
+
+        self.assertEqual(command_input.value, "near_system='Sol'")
+        self.assertEqual(command_input.cursor_position, 5)
+
+    def test_observer_app_syncs_live_prompt_text_into_local_prompt_state(self) -> None:
+        updated_snapshot = replace(
+            _snapshot(),
+            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+        )
+        backend = self._backend(initial_snapshot=updated_snapshot)
+        app = self._app(backend=backend)
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
+
+        app._apply_view_snapshot_state()
+        app._prompt_state.command_input_prefill_active = True
+        app._prompt_state.command_input_placeholder = "station 1 buying..."
+        app._prompt_state.command_input_value = "Gold"
+        command_input.value = "Gold ore"
+        command_input.cursor_position = 4
+
+        app._sync_local_prompt_state()
+
+        self.assertIsNotNone(app._local_prompt_state)
+        self.assertEqual(app._local_prompt_state.command_input_value, "Gold ore")
+        self.assertEqual(app._prompt_state.command_input_value, "Gold ore")
 
     def test_observer_app_preserves_local_activity_entries_across_snapshot_refresh(self) -> None:
         updated_snapshot = replace(

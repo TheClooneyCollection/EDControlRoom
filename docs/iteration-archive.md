@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `134`
-- Latest generated iteration number: `267`
+- Generated iteration count: `135`
+- Latest generated iteration number: `268`
 
 ## Iteration 134
 
@@ -3740,3 +3740,32 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Re-run a live `serve` + `connect` `dest sol` flow and confirm the activity panel keeps `Command`, `Destination`, and settle-prompt lines above later `Executing...` / cancellation lines during reconnects or periodic snapshot refreshes.
+
+## Iteration 268
+
+- When: `2026-06-30 17:14`
+- Area: `control-room`
+- Title: `preserve-observer-prompt-caret`
+- Source: [2026-06-30-17-14_control-room_preserve-observer-prompt-caret.md](iteration-logs/2026-06-30-17-14_control-room_preserve-observer-prompt-caret.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `preserve-observer-prompt-caret`
+- Started: `2026-06-30 17:14`
+
+## Summary
+
+- Fixed `control_room connect` prompt editing so periodic remote snapshot refreshes no longer shove the caret to the end of the command field while the operator is editing a local prompt or draft command.
+
+## Changes
+
+- Added observer-local caret tracking alongside the existing local draft-text preservation so the remote client can reapply the current input value without losing the operator's edit position.
+- Synced the live observer prompt widget text back into retained local prompt state so snapshot rebuilds stop reviving stale prefill-era command text after mid-prompt edits.
+- Split prompt-prefill signature handling so active prompt steps no longer treat operator text edits as a brand-new prefill event that should reset the caret to the end.
+- Scoped the restore logic to observer mode only, leaving embedded/local Control Room input behavior unchanged after confirming the bug was not reproducible there.
+- Tightened observer client regressions to assert mid-string caret preservation for both freeform command drafts and prompt-prefilled inputs across snapshot refreshes.
+
+## Follow-ups
+
+- Live-check one active `serve` plus `connect` session while a prompt is open to confirm the real Textual widget keeps caret position stable under the normal status refresh cadence.

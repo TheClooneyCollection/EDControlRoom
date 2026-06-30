@@ -57,6 +57,7 @@ class ObserverControlRoomApp(ControlRoomApp):
         self._local_trade_route_picker = TradeRoutePickerState()
         self._local_prompt_state: PromptState | None = None
         self._local_command_input_value = ""
+        self._local_command_input_cursor_position = 0
         self._local_prompt_prefill_signature = (False, "", "")
         self._local_activity_log: list[ActivityLogEntry] = []
         self._local_replay_filter = ""
@@ -234,6 +235,7 @@ class ObserverControlRoomApp(ControlRoomApp):
         raw = event.value
         event.input.value = ""
         self._local_command_input_value = ""
+        self._local_command_input_cursor_position = 0
         self._debug_log(
             "observer_input_submitted",
             raw=raw,
@@ -493,6 +495,15 @@ class ObserverControlRoomApp(ControlRoomApp):
         return build_trade_routes_url(system_name, query_params=query_params)
 
     def _capture_local_prompt_state(self) -> None:
+        command_input_value = self._prompt_state.command_input_value
+        if self._prompt_state.command_input_prefill_active:
+            try:
+                command_input = self.query_one("#cmd", Input)
+            except Exception:
+                command_input = None
+            if command_input is not None:
+                self._capture_local_command_input_widget_state(command_input)
+                command_input_value = command_input.value
         self._local_prompt_state = PromptState(
             haul_params=dict(self._prompt_state.haul_params),
             haul_search_params=dict(self._prompt_state.haul_search_params),
@@ -509,7 +520,7 @@ class ObserverControlRoomApp(ControlRoomApp):
             dest_prompt_skip_delay=self._prompt_state.dest_prompt_skip_delay,
             command_input_prefill_active=self._prompt_state.command_input_prefill_active,
             command_input_placeholder=self._prompt_state.command_input_placeholder,
-            command_input_value=self._prompt_state.command_input_value,
+            command_input_value=command_input_value,
         )
 
     def _clear_local_prompt_state(self) -> None:
@@ -525,6 +536,7 @@ class ObserverControlRoomApp(ControlRoomApp):
         command_input.value = ""
         command_input.cursor_position = 0
         self._local_command_input_value = ""
+        self._local_command_input_cursor_position = 0
 
     def _sync_local_prompt_state(self) -> None:
         if (
@@ -660,36 +672,71 @@ class ObserverControlRoomApp(ControlRoomApp):
     def on_input_changed(self, event: Input.Changed) -> None:
         if getattr(event.input, "id", None) not in {None, "cmd"}:
             return
-        self._local_command_input_value = event.value
+        self._capture_local_command_input_widget_state(event.input)
+
+    def _capture_local_command_input_widget_state(self, command_input: Input) -> None:
+        self._local_command_input_value = command_input.value
+        self._local_command_input_cursor_position = min(
+            getattr(command_input, "cursor_position", len(command_input.value)),
+            len(command_input.value),
+        )
+        if self._prompt_state.command_input_prefill_active:
+            self._prompt_state.command_input_value = command_input.value
+            if self._local_prompt_state is not None:
+                self._local_prompt_state.command_input_value = command_input.value
+
+    def _prompt_prefill_signature(self) -> tuple[object, ...]:
+        if (
+            self._prompt_state.haul_prompt_step
+            or self._prompt_state.haul_confirm_buy_station
+            or self._prompt_state.dest_prompt_destination
+        ):
+            return (
+                self._prompt_state.command_input_prefill_active,
+                self._prompt_state.command_input_placeholder,
+                self._prompt_state.haul_prompt_step,
+                self._prompt_state.haul_confirm_buy_station,
+                self._prompt_state.dest_prompt_destination,
+            )
+        return (
+            self._prompt_state.command_input_prefill_active,
+            self._prompt_state.command_input_placeholder,
+            self._prompt_state.command_input_value,
+        )
 
     def _refresh_remote_command_input(self) -> None:
         command_input = self.query_one("#cmd", Input)
+        if command_input.value == self._local_command_input_value:
+            self._capture_local_command_input_widget_state(command_input)
         is_active_operator = self._view_snapshot.session.client_role == "active_operator"
         command_input.disabled = not is_active_operator
         if not is_active_operator:
             command_input.placeholder = "observer mode - read only"
             return
-        prompt_prefill_signature = (
-            self._prompt_state.command_input_prefill_active,
-            self._prompt_state.command_input_placeholder,
-            self._prompt_state.command_input_value,
-        )
+        prompt_prefill_signature = self._prompt_prefill_signature()
         if self._prompt_state.command_input_prefill_active:
             command_input.placeholder = self._prompt_state.command_input_placeholder
             if prompt_prefill_signature != self._local_prompt_prefill_signature:
                 command_input.value = self._prompt_state.command_input_value
                 command_input.cursor_position = len(command_input.value)
                 self._local_command_input_value = command_input.value
+                self._local_command_input_cursor_position = command_input.cursor_position
             elif command_input.value != self._local_command_input_value:
                 command_input.value = self._local_command_input_value
-                command_input.cursor_position = len(command_input.value)
+                command_input.cursor_position = min(
+                    self._local_command_input_cursor_position,
+                    len(command_input.value),
+                )
             self._local_prompt_prefill_signature = prompt_prefill_signature
             return
         self._local_prompt_prefill_signature = prompt_prefill_signature
         command_input.placeholder = self._default_command_placeholder
         if command_input.value != self._local_command_input_value:
             command_input.value = self._local_command_input_value
-            command_input.cursor_position = len(command_input.value)
+            command_input.cursor_position = min(
+                self._local_command_input_cursor_position,
+                len(command_input.value),
+            )
 
     def on_key(self, event) -> None:
         if self._resume_open:
@@ -737,6 +784,7 @@ class ObserverControlRoomApp(ControlRoomApp):
             raw = cmd_input.value
             cmd_input.value = ""
             self._local_command_input_value = ""
+            self._local_command_input_cursor_position = 0
             self._handle_exit_prompt_input(raw)
             return
         if (
@@ -749,9 +797,15 @@ class ObserverControlRoomApp(ControlRoomApp):
             raw = cmd_input.value
             cmd_input.value = ""
             self._local_command_input_value = ""
+            self._local_command_input_cursor_position = 0
             self._handle_local_prompt(raw)
             return
         super().on_key(event)
+        try:
+            focused_input = self.query_one("#cmd", Input)
+        except Exception:
+            return
+        self._capture_local_command_input_widget_state(focused_input)
 
 
 def connect_observer_mode(
