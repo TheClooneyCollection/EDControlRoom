@@ -15,6 +15,7 @@
 - Control Room now supports `home` / `home set`, repo-local `haul load [path]`, and replay/edit prefill for multi-step haul prompts; the config fallback path also creates repo-root `config.toml` instead of editing `config.example.toml`.
 - Routine failures now surface as `Failed:` plus `Try:` guidance instead of raw internal-looking output, and activity-log retention plus the repo-local `artifacts/control-room.log` mirror are covered in tests.
 ## Caveats
+- `control_room connect` still has one known live-only prompt bug: after `haul search <system>`, the observer can show the correct placeholder but an empty command bar instead of the expected serialized search params, despite local mode working and current harness coverage passing.
 - The deepest remaining uncertainty is still live runtime behavior under routine-heavy real sessions, including the new targeted-input path; authentication also remains a shared LAN token rather than per-user or internet-ready identity.
 ## Next
 - Live-validate `set_pid` / `set_hwnd` during real Control Room sessions on CrossOver and Windows, then fold that into the broader remote validation playbook to decide whether either the Windows background-input path or remote operator ergonomics still need more work.

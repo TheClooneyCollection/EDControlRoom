@@ -514,14 +514,41 @@ class ControlRoomClientTests(unittest.TestCase):
         app._prompt_state.command_input_prefill_active = True
         app._prompt_state.command_input_placeholder = "station 1 buying..."
         app._prompt_state.command_input_value = "Gold"
+        app._prompt_state.haul_prompt_step = "station_1_buying"
         command_input.value = "Gold ore"
         command_input.cursor_position = 4
+        app._local_prompt_prefill_signature = app._prompt_prefill_signature()
 
         app._sync_local_prompt_state()
 
         self.assertIsNotNone(app._local_prompt_state)
         self.assertEqual(app._local_prompt_state.command_input_value, "Gold ore")
         self.assertEqual(app._prompt_state.command_input_value, "Gold ore")
+
+    def test_observer_app_keeps_new_prompt_prefill_when_widget_is_still_blank(self) -> None:
+        backend = self._backend(
+            initial_snapshot=replace(
+                _snapshot(),
+                session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+            )
+        )
+        app = self._app(backend=backend)
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
+
+        app._prompt_state.command_input_prefill_active = True
+        app._prompt_state.command_input_placeholder = "edit Inara search params then press Enter..."
+        app._prompt_state.haul_prompt_step = "search_edit"
+        app._prompt_state.haul_prompt_mode = "search"
+        app._prompt_state.command_input_value = "near_system='Sol'"
+        command_input.value = ""
+        app._local_prompt_prefill_signature = (False, "", "")
+
+        app._sync_local_prompt_state()
+
+        self.assertIsNotNone(app._local_prompt_state)
+        self.assertEqual(app._local_prompt_state.command_input_value, "near_system='Sol'")
+        self.assertEqual(app._prompt_state.command_input_value, "near_system='Sol'")
 
     def test_observer_app_preserves_local_activity_entries_across_snapshot_refresh(self) -> None:
         updated_snapshot = replace(
@@ -939,6 +966,33 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(app._haul_prompt_step, "")
         self.assertEqual(command_input.value, "")
         self.assertEqual(command_input.placeholder, app._default_command_placeholder)
+
+    def test_observer_app_keeps_haul_search_prefill_when_local_command_submits(self) -> None:
+        backend = self._backend(
+            initial_snapshot=replace(
+                _snapshot(),
+                session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+                ship=replace(_snapshot().ship, cargo_capacity=460),
+            )
+        )
+        app = self._app(backend=backend)
+        app._ship.system = "Praea Euq AK-A d25"
+        app._controls = object()
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
+
+        class _Submitted:
+            def __init__(self, value: str, widget: _FakeInputWidget) -> None:
+                self.value = value
+                self.input = widget
+
+        app.on_input_submitted(_Submitted("haul search Praea Euq AK-A d25", command_input))
+
+        self.assertEqual(app._prompt_state.haul_prompt_mode, "search")
+        self.assertEqual(app._haul_prompt_step, "search_edit")
+        self.assertTrue(command_input.value)
+        self.assertIn("near_system='Praea Euq AK-A d25'", command_input.value)
+        self.assertIn("cargo_capacity=460", command_input.value)
 
     def test_observer_app_uses_remote_snapshot_context_for_bare_haul_search(self) -> None:
         backend = self._backend(

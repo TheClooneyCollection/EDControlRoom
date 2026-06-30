@@ -233,9 +233,6 @@ class ObserverControlRoomApp(ControlRoomApp):
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         raw = event.value
-        event.input.value = ""
-        self._local_command_input_value = ""
-        self._local_command_input_cursor_position = 0
         self._debug_log(
             "observer_input_submitted",
             raw=raw,
@@ -247,6 +244,7 @@ class ObserverControlRoomApp(ControlRoomApp):
 
         if self._exit_prompt_active:
             self._debug_log("observer_input_branch_exit_prompt")
+            self._clear_command_input_widget_state(event.input)
             self._handle_exit_prompt_input(raw)
             return
 
@@ -256,6 +254,7 @@ class ObserverControlRoomApp(ControlRoomApp):
                 raw=raw,
                 haul_prompt_step=self._haul_prompt_step,
             )
+            self._clear_command_input_widget_state(event.input)
             self._handle_local_prompt(raw)
             return
 
@@ -267,24 +266,40 @@ class ObserverControlRoomApp(ControlRoomApp):
                 haul_confirm_buy_station=self._haul_confirm_buy_station,
                 dest_prompt_destination=self._dest_prompt_destination,
             )
+            self._clear_command_input_widget_state(event.input)
             self._handle_local_prompt(raw)
             return
 
         raw = raw.strip()
         if not raw:
             self._debug_log("observer_input_branch_blank_after_strip")
+            self._clear_command_input_widget_state(event.input)
             return
 
         if self._try_handle_local_client_command(raw):
             self._debug_log("observer_input_branch_local_client_command_handled", raw=raw)
+            if not (
+                self._prompt_state.command_input_prefill_active
+                or self._haul_prompt_step
+                or self._haul_confirm_buy_station
+                or self._dest_prompt_destination
+            ):
+                self._clear_command_input_widget_state(event.input)
             return
 
+        self._clear_command_input_widget_state(event.input)
         if raw.lower() in {"replay", "history"}:
             self._suppress_replay_enter_until = self._time_fn() + 0.1
             self._debug_log("observer_input_branch_replay_history_submit", raw=raw)
         else:
             self._debug_log("observer_input_branch_remote_plain_submit", raw=raw)
         self._backend.submit_input(raw)
+
+    def _clear_command_input_widget_state(self, command_input: Input) -> None:
+        command_input.value = ""
+        command_input.cursor_position = 0
+        self._local_command_input_value = ""
+        self._local_command_input_cursor_position = 0
 
     def _dispatch_haul_search(
         self,
@@ -501,7 +516,10 @@ class ObserverControlRoomApp(ControlRoomApp):
                 command_input = self.query_one("#cmd", Input)
             except Exception:
                 command_input = None
-            if command_input is not None:
+            if (
+                command_input is not None
+                and self._prompt_prefill_signature() == self._local_prompt_prefill_signature
+            ):
                 self._capture_local_command_input_widget_state(command_input)
                 command_input_value = command_input.value
         self._local_prompt_state = PromptState(
