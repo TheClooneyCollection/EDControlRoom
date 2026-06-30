@@ -1704,7 +1704,7 @@ class ControlRoomApp(App[None]):
         edit: bool,
         skip_delay: bool = False,
     ) -> None:
-        self._backend.replay_history_entry(entry, edit=edit, skip_delay=skip_delay)
+        _replay.replay_history_entry(self, entry, edit=edit, skip_delay=skip_delay)
 
     # ── Market JSON ────────────────────────────────────────────────────────────
 

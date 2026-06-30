@@ -320,12 +320,6 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
         self.dispatched_hauls: list[tuple[dict[str, str] | None, bool, str | None]] = []
         self.loaded_trade_routes: list[tuple[object, str | None]] = []
         self.cancel_calls = 0
-        self.opened_replay_browser = 0
-        self.closed_replay_browser = 0
-        self.replay_filters: list[str] = []
-        self.replay_selection_offsets: list[int] = []
-        self.replayed_entries: list[tuple[str, str, bool, bool]] = []
-        self.toggled_default_hauls: list[str] = []
 
     def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None:
         self.submitted_inputs.append((raw_input, skip_delay))
@@ -357,29 +351,7 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
     def cancel_active_routine(self) -> None:
         self.cancel_calls += 1
 
-    def open_replay_browser(self) -> None:
-        self.opened_replay_browser += 1
 
-    def close_replay_browser(self) -> None:
-        self.closed_replay_browser += 1
-
-    def set_replay_filter(self, filter_text: str) -> None:
-        self.replay_filters.append(filter_text)
-
-    def move_replay_selection(self, offset: int) -> None:
-        self.replay_selection_offsets.append(offset)
-
-    def replay_history_entry(
-        self,
-        entry,
-        *,
-        edit: bool,
-        skip_delay: bool = False,
-    ) -> None:
-        self.replayed_entries.append((entry.raw, entry.command, edit, skip_delay))
-
-    def toggle_replay_default_haul(self, entry) -> None:
-        self.toggled_default_hauls.append(entry.raw)
 class ControlRoomServerTests(unittest.TestCase):
     def test_headless_host_initializes_and_can_snapshot_before_mount(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

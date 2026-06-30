@@ -420,27 +420,6 @@ class _RemoteBackendStub:
     def load_trade_route(self, route, *, raw_command: str | None = None) -> None:
         return None
 
-    def open_replay_browser(self) -> None:
-        return None
-
-    def close_replay_browser(self) -> None:
-        return None
-
-    def refresh_replay_browser(self) -> None:
-        return None
-
-    def set_replay_filter(self, filter_text: str) -> None:
-        return None
-
-    def move_replay_selection(self, offset: int) -> None:
-        return None
-
-    def replay_history_entry(self, entry, *, edit: bool, skip_delay: bool = False) -> None:
-        return None
-
-    def toggle_replay_default_haul(self, entry) -> None:
-        return None
-
 
 def _remote_snapshot(
     *,

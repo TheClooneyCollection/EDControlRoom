@@ -3,11 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Protocol, TypeAlias
 
-from rich.markup import escape
-
-from edap.control_room import history as _history
 from edap.control_room import prompts as _prompts
-from edap.control_room import replay as _replay
 from edap.control_room.protocol import (
     ActivityLogAppendedEvent,
     AnnouncementEvent,
@@ -18,7 +14,6 @@ from edap.control_room.protocol import (
     snapshot_from_app,
 )
 from edap.control_room.protocol.snapshot import ActivityLogEntry
-from edap.control_room_state import CommandHistoryEntry
 from edap.inara.trade_routes import TradeRoute
 
 
@@ -72,36 +67,11 @@ class ControlRoomBackend(ControlRoomEventSink, Protocol):
 
     def handle_haul_confirm_prompt(self, value: str) -> None: ...
 
-    def open_replay_browser(self) -> None: ...
-
-    def close_replay_browser(self) -> None: ...
-
-    def refresh_replay_browser(self) -> None: ...
-
-    def set_replay_filter(self, filter_text: str) -> None: ...
-
-    def move_replay_selection(self, offset: int) -> None: ...
-
-    def replay_history_entry(
-        self,
-        entry: CommandHistoryEntry,
-        *,
-        edit: bool,
-        skip_delay: bool = False,
-    ) -> None: ...
-
-    def toggle_replay_default_haul(self, entry: CommandHistoryEntry) -> None: ...
-
-
 class LocalBackendHost(Protocol):
     _facade: Any
     _config: Any
     _prompt_state: Any
-    _saved_state: Any
     _protocol_external_event_sink: ControlRoomEventSink | None
-    _resume_entries: list[Any]
-    _resume_open: bool
-    _resume_filter: str
     _haul_params: dict[str, str]
     _haul_prompt_step: str
     _haul_confirm_buy_station: str
@@ -113,9 +83,7 @@ class LocalBackendHost(Protocol):
     dependencies: Any
 
     def _log(self, msg: str) -> None: ...
-    def _save_saved_state(self) -> None: ...
     def _activity_auto_follow_paused(self) -> bool: ...
-    def _handle_interrupt(self, source: str) -> None: ...
     def _dispatch_command(self, raw: str, *, skip_delay: bool | None = None) -> None: ...
     def _dispatch_haul_loop(
         self,
@@ -270,52 +238,6 @@ class LocalControlRoomBackend(ControlRoomEventSink):
 
     def handle_haul_confirm_prompt(self, value: str) -> None:
         self._host.dependencies.execution.handle_haul_confirm_prompt(value)
-
-    def open_replay_browser(self) -> None:
-        _replay.show_resume_picker(self._host)
-
-    def close_replay_browser(self) -> None:
-        _replay.close_resume_picker(self._host)
-
-    def refresh_replay_browser(self) -> None:
-        _replay.refresh_resume_picker(self._host)
-
-    def set_replay_filter(self, filter_text: str) -> None:
-        self._host._resume_filter = filter_text
-        self.refresh_replay_browser()
-
-    def move_replay_selection(self, offset: int) -> None:
-        _replay.move_resume_selection(self._host, offset)
-
-    def replay_history_entry(
-        self,
-        entry: CommandHistoryEntry,
-        *,
-        edit: bool,
-        skip_delay: bool = False,
-    ) -> None:
-        _replay.replay_history_entry(
-            self._host,
-            entry,
-            edit=edit,
-            skip_delay=skip_delay,
-        )
-
-    def toggle_replay_default_haul(self, entry: CommandHistoryEntry) -> None:
-        if entry.command != "haul" or _history.is_haul_search_entry(entry):
-            self._host._log("[dim]Only two-station haul loop entries can be saved as the default.[/]")
-            return
-        if _replay.default_haul_matches(self._host, entry):
-            self._host._saved_state.default_haul = {}
-            self._host._log("[dim]Cleared saved default haul.[/]")
-        else:
-            self._host._saved_state.default_haul = {
-                str(key): str(value) for key, value in entry.params.items()
-            }
-            cargo = self._host._saved_state.default_haul.get("station_1_buying", "haul")
-            self._host._log(f"[dim]Saved default haul from history: {escape(cargo)}[/]")
-        self._host._save_saved_state()
-        self.refresh_replay_browser()
 
     def publish_activity_log(self, entry: ActivityLogEntry) -> None:
         event = ActivityLogAppendedEvent(entry=entry)

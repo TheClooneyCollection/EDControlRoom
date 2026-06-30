@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `163`
-- Latest generated iteration number: `296`
+- Generated iteration count: `164`
+- Latest generated iteration number: `297`
 
 ## Iteration 134
 
@@ -4545,3 +4545,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Continue removing internal snapshot compatibility that remains in the base app/backend after the connect subclass removal.
+
+## Iteration 297
+
+- When: `2026-06-30 21:15`
+- Area: `control-room`
+- Title: `prune-backend-replay-actions`
+- Source: [2026-06-30-21-15_control-room_prune-backend-replay-actions.md](iteration-logs/2026-06-30-21-15_control-room_prune-backend-replay-actions.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `prune-backend-replay-actions`
+- Started: `2026-06-30 21:15`
+
+## Summary
+
+- Removed the obsolete backend replay-browser action surface after collapsing connect onto the shared app.
+
+## Changes
+
+- Dropped replay browser methods from `ControlRoomBackend`, `LocalControlRoomBackend`, and `RemoteObserverBackend`.
+- Routed the remaining app `_replay_history_entry` helper directly through local replay logic.
+- Pruned obsolete replay-backend test stubs and the remote backend replay-locality test.
+- Verified focused control-room suites and the full unittest suite.
+
+## Follow-ups
+
+- Continue removing internal snapshot compatibility from base app/backend and server broker paths.

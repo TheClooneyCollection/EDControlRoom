@@ -303,33 +303,6 @@ class _SnapshotBackend(ControlRoomBackend):
     def load_trade_route(self, route: TradeRoute, *, raw_command: str | None = None) -> None:
         return None
 
-    def open_replay_browser(self) -> None:
-        return None
-
-    def close_replay_browser(self) -> None:
-        return None
-
-    def refresh_replay_browser(self) -> None:
-        return None
-
-    def set_replay_filter(self, filter_text: str) -> None:
-        return None
-
-    def move_replay_selection(self, offset: int) -> None:
-        return None
-
-    def replay_history_entry(
-        self,
-        entry: CommandHistoryEntry,
-        *,
-        edit: bool,
-        skip_delay: bool = False,
-    ) -> None:
-        return None
-
-    def toggle_replay_default_haul(self, entry: CommandHistoryEntry) -> None:
-        return None
-
 
 class _IntentRecorderBackend(_SnapshotBackend):
     def __init__(self, snapshot: ControlRoomSnapshot) -> None:
@@ -337,10 +310,6 @@ class _IntentRecorderBackend(_SnapshotBackend):
         self.dispatched_commands: list[tuple[str, bool | None]] = []
         self.dispatched_hauls: list[tuple[dict[str, str] | None, bool, str | None]] = []
         self.submitted_inputs: list[str] = []
-        self.opened_replay_browser = 0
-        self.closed_replay_browser = 0
-        self.replay_selection_offsets: list[int] = []
-        self.replayed_entries: list[tuple[str, bool, bool]] = []
         self.loaded_trade_routes: list[tuple[TradeRoute, str | None]] = []
 
     def submit_input(self, raw: str) -> None:
@@ -360,24 +329,6 @@ class _IntentRecorderBackend(_SnapshotBackend):
 
     def load_trade_route(self, route: TradeRoute, *, raw_command: str | None = None) -> None:
         self.loaded_trade_routes.append((route, raw_command))
-
-    def open_replay_browser(self) -> None:
-        self.opened_replay_browser += 1
-
-    def close_replay_browser(self) -> None:
-        self.closed_replay_browser += 1
-
-    def move_replay_selection(self, offset: int) -> None:
-        self.replay_selection_offsets.append(offset)
-
-    def replay_history_entry(
-        self,
-        entry: CommandHistoryEntry,
-        *,
-        edit: bool,
-        skip_delay: bool = False,
-    ) -> None:
-        self.replayed_entries.append((entry.raw, edit, skip_delay))
 
 
 class _ExecutionRecorder:

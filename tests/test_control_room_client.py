@@ -1209,64 +1209,6 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertIsInstance(events[0], DataUpdatedEvent)
         self.assertEqual(events[0].data.ship.system, "Achenar")
 
-    def test_remote_backend_replay_commands_stay_client_local(self) -> None:
-        target = ObserverServerTarget(
-            host="bridge.local",
-            port=8765,
-            http_base_url="http://bridge.local:8765",
-            websocket_url="ws://bridge.local:8765/session",
-        )
-        backend = RemoteObserverBackend(
-            server_target=target,
-            access_token="secret-token",
-            client_name="observer-ipad",
-            initial_snapshot=_snapshot(),
-            websocket_connect_info=_websocket_connect_info(),
-        )
-        received: list[object] = []
-        backend.subscribe_events(received.append)
-
-        backend.open_replay_browser()
-        backend.set_replay_filter("haul")
-        backend.move_replay_selection(1)
-        backend.replay_history_entry(
-            entry=type("Entry", (), {
-                "raw": "haul gold",
-                "command": "haul",
-                "params": {"station_1_buying": "gold"},
-                "timestamp": "2026-06-18T13:00:00Z",
-            })(),
-            edit=True,
-            skip_delay=True,
-        )
-        backend.toggle_replay_default_haul(
-            type("Entry", (), {
-                "raw": "haul gold",
-                "command": "haul",
-                "params": {"station_1_buying": "gold"},
-                "timestamp": "2026-06-18T13:00:00Z",
-            })()
-        )
-        backend.close_replay_browser()
-
-        self.assertTrue(backend._outgoing_messages.empty())
-        messages = [
-            event.entry.message_text
-            for event in received
-            if isinstance(event, ActivityLogAppendedEvent)
-        ]
-        self.assertEqual(
-            messages,
-            [
-                "Observer replay browser is client-local.",
-                "Observer replay browser is client-local.",
-                "Observer replay browser is client-local.",
-                "Observer replay browser is client-local.",
-                "Observer replay browser is client-local.",
-                "Observer replay browser is client-local.",
-            ],
-        )
-
     def test_remote_backend_preserves_cached_snapshot_on_connection_loss(self) -> None:
         target = ObserverServerTarget(
             host="bridge.local",

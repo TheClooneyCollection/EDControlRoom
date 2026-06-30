@@ -224,33 +224,6 @@ class RemoteObserverBackend(ControlRoomBackend):
     def handle_haul_confirm_prompt(self, value: str) -> None:
         self._emit_local_message("Observer session is read-only.")
 
-    def open_replay_browser(self) -> None:
-        self._emit_local_message("Observer replay browser is client-local.")
-
-    def close_replay_browser(self) -> None:
-        self._emit_local_message("Observer replay browser is client-local.")
-
-    def refresh_replay_browser(self) -> None:
-        return None
-
-    def set_replay_filter(self, filter_text: str) -> None:
-        self._emit_local_message("Observer replay browser is client-local.")
-
-    def move_replay_selection(self, offset: int) -> None:
-        self._emit_local_message("Observer replay browser is client-local.")
-
-    def replay_history_entry(
-        self,
-        entry: CommandHistoryEntry,
-        *,
-        edit: bool,
-        skip_delay: bool = False,
-    ) -> None:
-        self._emit_local_message("Observer replay browser is client-local.")
-
-    def toggle_replay_default_haul(self, entry: CommandHistoryEntry) -> None:
-        self._emit_local_message("Observer replay browser is client-local.")
-
     def _run_stream_loop(self) -> None:
         asyncio.run(self._stream_observer_session())
 
