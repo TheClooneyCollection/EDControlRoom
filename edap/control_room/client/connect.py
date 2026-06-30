@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 import socket
 
 from rich.markup import escape
@@ -30,6 +31,13 @@ from edap.control_room.routines_haul import (
 )
 from edap.control_room_state import CommandHistoryEntry
 from edap.inara.trade_routes import search_trade_routes
+
+
+def _activity_log_entry_sort_key(entry: ActivityLogEntry) -> tuple[datetime, str]:
+    return (
+        datetime.fromisoformat(entry.timestamp.replace("Z", "+00:00")),
+        entry.entry_id,
+    )
 
 
 class ObserverControlRoomApp(ControlRoomApp):
@@ -100,6 +108,7 @@ class ObserverControlRoomApp(ControlRoomApp):
 
     def _replace_activity_log(self, entries: list[ActivityLogEntry]) -> None:
         merged_entries = list(entries) + list(self._local_activity_log)
+        merged_entries.sort(key=_activity_log_entry_sort_key)
         if len(merged_entries) > self._activity_log_max_lines:
             merged_entries = merged_entries[-self._activity_log_max_lines :]
         super()._replace_activity_log(merged_entries)

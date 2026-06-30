@@ -499,6 +499,67 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertIn("13:54:34  Unknown command: dest sol", rendered_messages[0])
         self.assertIn("dest - dest <system>", rendered_messages[-1])
 
+    def test_observer_app_sorts_local_and_remote_activity_by_timestamp_on_refresh(self) -> None:
+        updated_snapshot = replace(
+            _snapshot(),
+            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+            activity_log=[
+                ActivityLogEntry(
+                    entry_id="remote-1",
+                    timestamp="2026-06-30T15:57:35Z",
+                    message_text="[dim]Executing dest sol in 5.0s...[/]",
+                ),
+                ActivityLogEntry(
+                    entry_id="remote-2",
+                    timestamp="2026-06-30T15:57:38Z",
+                    message_text="[yellow]Remote Ctrl-C received — cancelling active routine.[/]",
+                ),
+                ActivityLogEntry(
+                    entry_id="remote-3",
+                    timestamp="2026-06-30T15:57:38Z",
+                    message_text="[yellow]Cancelled pending dest sol before execution.[/]",
+                ),
+            ],
+        )
+        backend = self._backend(initial_snapshot=updated_snapshot)
+        app = self._app(backend=backend)
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
+        activity = app.query_one("#activity")
+
+        app._local_activity_log = [
+            ActivityLogEntry(
+                entry_id="local-1",
+                timestamp="2026-06-30T15:57:34Z",
+                message_text="[dim]Command: dest sol[/]",
+            ),
+            ActivityLogEntry(
+                entry_id="local-2",
+                timestamp="2026-06-30T15:57:34Z",
+                message_text="Destination: [bold]sol[/]",
+            ),
+            ActivityLogEntry(
+                entry_id="local-3",
+                timestamp="2026-06-30T15:57:34Z",
+                message_text="[dim]Galaxy-map settle seconds? (Enter = 2.0)[/]",
+            ),
+        ]
+
+        app._replace_activity_log(updated_snapshot.activity_log)
+
+        rendered_messages = [segment.plain for segment in activity.writes]
+        self.assertEqual(
+            rendered_messages,
+            [
+                "15:57:34  Command: dest sol",
+                "15:57:34  Destination: sol",
+                "15:57:34  Galaxy-map settle seconds? (Enter = 2.0)",
+                "15:57:35  Executing dest sol in 5.0s...",
+                "15:57:38  Remote Ctrl-C received — cancelling active routine.",
+                "15:57:38  Cancelled pending dest sol before execution.",
+            ],
+        )
+
     def test_observer_app_uses_event_timestamp_for_incremental_activity_append(self) -> None:
         backend = self._backend(initial_snapshot=_snapshot())
         app = self._app(backend=backend)

@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `133`
-- Latest generated iteration number: `266`
+- Generated iteration count: `134`
+- Latest generated iteration number: `267`
 
 ## Iteration 134
 
@@ -3714,3 +3714,29 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Re-run a live `serve` + `connect` `dest sol` session and confirm the server activity stream no longer receives fresh `Command: dest sol` / `Unknown command: dest sol` entries from the observer client.
+
+## Iteration 267
+
+- When: `2026-06-30 16:59`
+- Area: `control-room`
+- Title: `sort-observer-activity-redraw`
+- Source: [2026-06-30-16-59_control-room_sort-observer-activity-redraw.md](iteration-logs/2026-06-30-16-59_control-room_sort-observer-activity-redraw.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `sort-observer-activity-redraw`
+- Started: `2026-06-30 16:59`
+
+## Summary
+
+- Fixed observer activity redraw ordering so preserved local prompt lines are merged back into remote snapshots chronologically instead of always appearing below newer remote routine lines.
+
+## Changes
+
+- Reintroduced timestamp sorting inside `ObserverControlRoomApp._replace_activity_log()` so merged remote plus local activity is ordered by `ActivityLogEntry.timestamp` before repaint.
+- Added a regression covering the exact `dest sol` plus remote cancel case: local `:34` prompt lines now render above remote `:35` and `:38` routine/cancel lines after snapshot refresh.
+
+## Follow-ups
+
+- Re-run a live `serve` + `connect` `dest sol` flow and confirm the activity panel keeps `Command`, `Destination`, and settle-prompt lines above later `Executing...` / cancellation lines during reconnects or periodic snapshot refreshes.
