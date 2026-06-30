@@ -650,25 +650,32 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
 
         self.assertEqual(execution.dispatched_commands, [("commands", True)])
 
-    def test_action_open_history_routes_through_backend(self) -> None:
+    def test_action_open_history_opens_local_replay_browser(self) -> None:
         snapshot = snapshot_from_app(self.app)
         backend = _IntentRecorderBackend(snapshot)
         app = _RenderHarnessApp(
             _make_context(Path(self.tmpdir.name)),
             backend=backend,
         )
+        app.set_focus = lambda _widget: None  # type: ignore[method-assign]
+        app._saved_state.history = [
+            CommandHistoryEntry(raw="jump", command="jump", timestamp="1")
+        ]
 
         app.action_open_history()
 
-        self.assertEqual(backend.opened_replay_browser, 1)
+        self.assertTrue(app._resume_open)
 
-    def test_resume_execute_selected_routes_through_backend(self) -> None:
+    def test_resume_execute_selected_dispatches_through_execution(self) -> None:
         snapshot = snapshot_from_app(self.app)
         backend = _IntentRecorderBackend(snapshot)
+        execution = _ExecutionRecorder()
         app = _RenderHarnessApp(
             _make_context(Path(self.tmpdir.name)),
             backend=backend,
         )
+        app._dependencies = replace(app._dependencies, execution=execution)
+        app.set_focus = lambda _widget: None  # type: ignore[method-assign]
         app._resume_entries = [
             ReplaySelection(
                 entry=CommandHistoryEntry(raw="jump", command="jump", timestamp="1"),
@@ -679,8 +686,8 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
 
         app._resume_execute_selected()
 
-        self.assertEqual(backend.closed_replay_browser, 1)
-        self.assertEqual(backend.replayed_entries, [("jump", False, False)])
+        self.assertFalse(app._resume_open)
+        self.assertEqual(execution.dispatched_commands, [("jump", None)])
 
     def test_trade_route_picker_enter_dispatches_haul_route_command(self) -> None:
         snapshot = snapshot_from_app(self.app)
@@ -762,7 +769,7 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.assertFalse(app._trade_route_picker_open)
         self.assertEqual(execution.dispatched_commands, [("dest TSONGORIS", None)])
 
-    def test_replay_open_arrow_keys_route_selection_through_backend(self) -> None:
+    def test_replay_open_arrow_keys_move_local_selection(self) -> None:
         snapshot = snapshot_from_app(self.app)
         backend = _IntentRecorderBackend(snapshot)
         app = _RenderHarnessApp(
@@ -770,6 +777,13 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
             backend=backend,
         )
         app._resume_open = True
+        first = CommandHistoryEntry(raw="jump", command="jump", timestamp="1")
+        second = CommandHistoryEntry(raw="dock", command="dock", timestamp="2")
+        app._resume_entries = [
+            ReplaySelection(entry=first, label="jump", detail="jump"),
+            ReplaySelection(entry=second, label="dock", detail="dock"),
+        ]
+        app._selected_resume_history_entry = second
 
         up_event = _KeyEventStub("up")
         down_event = _KeyEventStub("down")
@@ -779,15 +793,17 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
 
         self.assertTrue(up_event.prevented)
         self.assertTrue(down_event.prevented)
-        self.assertEqual(backend.replay_selection_offsets, [-1, 1])
+        self.assertEqual(app._selected_resume_history_entry, second)
 
-    def test_blank_input_submission_reaches_backend_during_destination_prompt(self) -> None:
+    def test_blank_input_submission_dispatches_destination_prompt_default(self) -> None:
         snapshot = snapshot_from_app(self.app)
         backend = _IntentRecorderBackend(snapshot)
+        execution = _ExecutionRecorder()
         app = _RenderHarnessApp(
             _make_context(Path(self.tmpdir.name)),
             backend=backend,
         )
+        app._dependencies = replace(app._dependencies, execution=execution)
         input_stub = _InputStub()
         app.query_one = lambda selector, widget_type=None: input_stub if selector == "#cmd" else _RenderHarnessApp.query_one(app, selector, widget_type)  # type: ignore[method-assign]
         app._dest_prompt_destination = "Sol"
@@ -799,16 +815,18 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
 
         app.on_input_submitted(_SubmittedEvent(input_stub))
 
-        self.assertEqual(backend.submitted_inputs, [""])
+        self.assertEqual(execution.dispatched_destinations, [("Sol", 0.0, False, "")])
         self.assertEqual(input_stub.value, "")
 
-    def test_blank_enter_key_submits_prompt_default_value_path(self) -> None:
+    def test_blank_enter_key_dispatches_destination_prompt_default(self) -> None:
         snapshot = snapshot_from_app(self.app)
         backend = _IntentRecorderBackend(snapshot)
+        execution = _ExecutionRecorder()
         app = _RenderHarnessApp(
             _make_context(Path(self.tmpdir.name)),
             backend=backend,
         )
+        app._dependencies = replace(app._dependencies, execution=execution)
         input_stub = _InputStub()
         app.query_one = lambda selector, widget_type=None: input_stub if selector == "#cmd" else _RenderHarnessApp.query_one(app, selector, widget_type)  # type: ignore[method-assign]
         app._dest_prompt_destination = "Sol"
@@ -817,7 +835,7 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         app.on_key(event)
 
         self.assertTrue(event.prevented)
-        self.assertEqual(backend.submitted_inputs, [""])
+        self.assertEqual(execution.dispatched_destinations, [("Sol", 0.0, False, "")])
         self.assertEqual(input_stub.value, "")
 
 

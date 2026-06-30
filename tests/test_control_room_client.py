@@ -17,7 +17,7 @@ from edap.config import (
     ScreenConfig,
     TTSConfig,
 )
-from edap.control_room.client.connect import ObserverControlRoomApp
+from edap.control_room.app import ControlRoomApp
 from edap.control_room.client.backend import (
     RemoteObserverBackend,
     RemoteObserverDataSource,
@@ -26,18 +26,17 @@ from edap.control_room.client.backend import (
     initial_remote_snapshot_from_data,
 )
 from edap.control_room.dependencies import (
-    ActivityLogItem,
     ActivityLogReadModel,
     CommandHistoryReadModel,
     ControlRoomDataReadModel,
     RoutineReadModel,
     ServerStatusReadModel,
     SessionReadModel,
+    ControlRoomDependencies,
 )
 from edap.control_room_state import CommandHistoryEntry
 from edap.control_room import commands as control_room_commands
 from edap.control_room.client.target import ObserverServerTarget, parse_observer_server_target
-from edap.control_room.models import TradeRoutePickerState, TradeRoutesData
 from edap.control_room.models import HaulStats, MarketData, ShipState
 from edap.control_room.protocol import (
     ACCESS_TOKEN_QUERY_PARAMETER,
@@ -65,7 +64,6 @@ from edap.control_room.protocol.snapshot import (
     ServerStatusSnapshot,
     SessionSnapshot,
     ShipSnapshot,
-    TradeRouteSnapshot,
     TradeRoutesSnapshot,
     UiStateSnapshot,
 )
@@ -146,7 +144,7 @@ class _KeyEvent:
         self.prevented = True
 
 
-def _bind_observer_widgets(app: ObserverControlRoomApp, command_input: _FakeInputWidget) -> None:
+def _bind_observer_widgets(app: ControlRoomApp, command_input: _FakeInputWidget) -> None:
     activity = _FakeActivityWidget()
     trade_route_list = _FakeOptionListWidget()
     trade_route_help = _FakeStaticWidget()
@@ -336,9 +334,13 @@ def _snapshot() -> ControlRoomSnapshot:
     )
 
 
-def _data_read_model(*, system_name: str = "Sol") -> ControlRoomDataReadModel:
+def _data_read_model(
+    *,
+    system_name: str = "Sol",
+    cargo_capacity: int | None = None,
+) -> ControlRoomDataReadModel:
     return ControlRoomDataReadModel(
-        ship=ShipState(system=system_name),
+        ship=ShipState(system=system_name, cargo_capacity=cargo_capacity),
         market=MarketData(station="Galileo", system=system_name),
         haul_session=HaulStats(),
         command_history=CommandHistoryReadModel(
@@ -412,202 +414,27 @@ class ControlRoomClientTests(unittest.TestCase):
         *,
         backend: RemoteObserverBackend | None = None,
         data_source: RemoteObserverDataSource | None = None,
-    ) -> ObserverControlRoomApp:
-        return ObserverControlRoomApp(
+    ) -> ControlRoomApp:
+        backend = backend or self._backend()
+        data_source = data_source or RemoteObserverDataSource(_data_read_model())
+        execution = RemoteObserverExecution(backend)
+        app = ControlRoomApp(
             _make_observer_context(),
             backend=backend or self._backend(),
-            data_source=data_source,
-            server_target=self._target(),
-            client_name="observer-ipad",
+            dependencies=ControlRoomDependencies(
+                data_source=data_source,
+                execution=execution,
+            ),
+            title_override="ED Control Room Observer - bridge.local:8765",
         )
+        execution.bind_app(app)
+        return app
 
     def test_observer_app_initializes_without_local_journal_dir(self) -> None:
         app = self._app()
 
         self.assertIsNone(app._journal_dir)
         self.assertIsNone(app._market_path)
-
-    def test_observer_app_refresh_remote_command_input_disables_observer_mode(self) -> None:
-        backend = self._backend()
-        app = self._app(backend=backend)
-        command_input = _FakeInputWidget()
-        _bind_observer_widgets(app, command_input)
-
-        app._apply_view_snapshot_state()
-        app._refresh_remote_command_input()
-
-        self.assertTrue(command_input.disabled)
-        self.assertEqual(command_input.placeholder, "observer mode - read only")
-
-    def test_observer_app_starts_with_clean_command_input_from_remote_snapshot(self) -> None:
-        updated_snapshot = replace(
-            _snapshot(),
-            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-        )
-        backend = self._backend(initial_snapshot=updated_snapshot)
-        app = self._app(backend=backend)
-        command_input = _FakeInputWidget()
-        command_input.disabled = True
-        _bind_observer_widgets(app, command_input)
-
-        app._apply_view_snapshot_state()
-        app._refresh_remote_command_input()
-
-        self.assertFalse(command_input.disabled)
-        self.assertEqual(command_input.placeholder, app._default_command_placeholder)
-        self.assertEqual(command_input.value, "")
-        self.assertEqual(command_input.cursor_position, 0)
-
-    def test_observer_app_preserves_freeform_command_draft_across_snapshot_refresh(self) -> None:
-        updated_snapshot = replace(
-            _snapshot(),
-            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-        )
-        backend = self._backend(initial_snapshot=updated_snapshot)
-        app = self._app(backend=backend)
-        command_input = _FakeInputWidget()
-        _bind_observer_widgets(app, command_input)
-
-        app._apply_view_snapshot_state()
-        command_input.value = "haul gold"
-        command_input.cursor_position = 4
-        app._local_command_input_value = command_input.value
-        app._local_command_input_cursor_position = command_input.cursor_position
-
-        refreshed_snapshot = replace(
-            updated_snapshot,
-            ship=replace(updated_snapshot.ship, system_name="Achenar"),
-        )
-        app._view_snapshot = refreshed_snapshot
-        app._apply_view_snapshot_state()
-        app._refresh_remote_command_input()
-
-        self.assertEqual(command_input.value, "haul gold")
-        self.assertEqual(command_input.cursor_position, 4)
-        self.assertEqual(command_input.placeholder, app._default_command_placeholder)
-
-    def test_observer_app_preserves_prompt_draft_across_snapshot_refresh(self) -> None:
-        updated_snapshot = replace(
-            _snapshot(),
-            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-        )
-        backend = self._backend(initial_snapshot=updated_snapshot)
-        app = self._app(backend=backend)
-        command_input = _FakeInputWidget()
-        _bind_observer_widgets(app, command_input)
-
-        app._apply_view_snapshot_state()
-        app._prompt_state.command_input_prefill_active = True
-        app._prompt_state.command_input_placeholder = "station 1 buying..."
-        app._prompt_state.command_input_value = "Gold"
-        app._sync_local_prompt_state()
-        app._refresh_remote_command_input()
-
-        command_input.value = "Gol"
-        command_input.cursor_position = 1
-        app._local_command_input_value = command_input.value
-        app._local_command_input_cursor_position = command_input.cursor_position
-
-        refreshed_snapshot = replace(
-            updated_snapshot,
-            market=replace(updated_snapshot.market, station_name="Galileo"),
-        )
-        app._view_snapshot = refreshed_snapshot
-        app._apply_view_snapshot_state()
-        app._refresh_remote_command_input()
-
-        self.assertEqual(command_input.placeholder, "station 1 buying...")
-        self.assertEqual(command_input.value, "Gol")
-        self.assertEqual(command_input.cursor_position, 1)
-
-    def test_observer_app_tracks_latest_cursor_position_without_text_change(self) -> None:
-        updated_snapshot = replace(
-            _snapshot(),
-            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-        )
-        backend = self._backend(initial_snapshot=updated_snapshot)
-        app = self._app(backend=backend)
-        command_input = _FakeInputWidget()
-        _bind_observer_widgets(app, command_input)
-
-        app._apply_view_snapshot_state()
-        app._prompt_state.command_input_prefill_active = True
-        app._prompt_state.command_input_placeholder = "edit Inara search params then press Enter..."
-        app._prompt_state.haul_prompt_step = "search_edit"
-        app._prompt_state.haul_prompt_mode = "search"
-        app._prompt_state.command_input_value = "near_system='Sol'"
-        app._sync_local_prompt_state()
-        app._refresh_remote_command_input()
-
-        command_input.value = "near_system='Sol'"
-        command_input.cursor_position = 5
-        app._local_command_input_value = command_input.value
-        app._local_command_input_cursor_position = 14
-
-        app.on_key(_KeyEvent("left"))
-
-        self.assertEqual(app._local_command_input_cursor_position, 5)
-
-        refreshed_snapshot = replace(
-            updated_snapshot,
-            market=replace(updated_snapshot.market, station_name="Galileo"),
-        )
-        app._view_snapshot = refreshed_snapshot
-        app._apply_view_snapshot_state()
-        app._refresh_remote_command_input()
-
-        self.assertEqual(command_input.value, "near_system='Sol'")
-        self.assertEqual(command_input.cursor_position, 5)
-
-    def test_observer_app_syncs_live_prompt_text_into_local_prompt_state(self) -> None:
-        updated_snapshot = replace(
-            _snapshot(),
-            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-        )
-        backend = self._backend(initial_snapshot=updated_snapshot)
-        app = self._app(backend=backend)
-        command_input = _FakeInputWidget()
-        _bind_observer_widgets(app, command_input)
-
-        app._apply_view_snapshot_state()
-        app._prompt_state.command_input_prefill_active = True
-        app._prompt_state.command_input_placeholder = "station 1 buying..."
-        app._prompt_state.command_input_value = "Gold"
-        app._prompt_state.haul_prompt_step = "station_1_buying"
-        command_input.value = "Gold ore"
-        command_input.cursor_position = 4
-        app._local_prompt_prefill_signature = app._prompt_prefill_signature()
-
-        app._sync_local_prompt_state()
-
-        self.assertIsNotNone(app._local_prompt_state)
-        self.assertEqual(app._local_prompt_state.command_input_value, "Gold ore")
-        self.assertEqual(app._prompt_state.command_input_value, "Gold ore")
-
-    def test_observer_app_keeps_new_prompt_prefill_when_widget_is_still_blank(self) -> None:
-        backend = self._backend(
-            initial_snapshot=replace(
-                _snapshot(),
-                session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-            )
-        )
-        app = self._app(backend=backend)
-        command_input = _FakeInputWidget()
-        _bind_observer_widgets(app, command_input)
-
-        app._prompt_state.command_input_prefill_active = True
-        app._prompt_state.command_input_placeholder = "edit Inara search params then press Enter..."
-        app._prompt_state.haul_prompt_step = "search_edit"
-        app._prompt_state.haul_prompt_mode = "search"
-        app._prompt_state.command_input_value = "near_system='Sol'"
-        command_input.value = ""
-        app._local_prompt_prefill_signature = (False, "", "")
-
-        app._sync_local_prompt_state()
-
-        self.assertIsNotNone(app._local_prompt_state)
-        self.assertEqual(app._local_prompt_state.command_input_value, "near_system='Sol'")
-        self.assertEqual(app._prompt_state.command_input_value, "near_system='Sol'")
 
     def test_observer_app_preserves_local_activity_entries_across_snapshot_refresh(self) -> None:
         updated_snapshot = replace(
@@ -918,91 +745,14 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(app._view_market_data().items[0]["Name"], "silver")
         self.assertTrue(backend._outgoing_messages.empty())
 
-    def test_observer_app_ignores_remote_trade_routes_snapshot(self) -> None:
-        updated_snapshot = replace(
-            _snapshot(),
-            trade_routes=TradeRoutesSnapshot(
-                system_name="Praea Euq AK-A d25",
-                query_url="https://inara.cz/elite/market-traderoutes/?ps1=Praea+Euq+AK-A+d25",
-                searched_at="2026-06-22T11:00:00Z",
-                routes=[
-                    TradeRouteSnapshot(
-                        index=1,
-                        from_station="Savitskaya Orbital",
-                        from_system="TSONGORIS",
-                        to_station="Scully-Power Station",
-                        to_system="IX",
-                        source_buy_commodity="Silver",
-                        from_station_distance="82 Ls",
-                        to_station_distance="5 Ls",
-                        distance_from_system="~167 Ly",
-                        route_distance="33.08 Ly",
-                        profit_per_unit="45,510 Cr",
-                        profit_per_hour="88,323,553 Cr",
-                        updated="3 hours ago",
-                    )
-                ],
-            ),
-        )
-        backend = self._backend(initial_snapshot=updated_snapshot)
-        app = self._app(backend=backend)
-
-        app._apply_view_snapshot_state()
-
-        self.assertEqual(app._trade_routes.system_name, "")
-        self.assertEqual(app._trade_routes.routes, [])
-        self.assertFalse(app._trade_route_picker_open)
-        self.assertIsNone(app._selected_trade_route_index)
-
-    def test_observer_app_keeps_local_trade_routes_across_remote_snapshot_updates(self) -> None:
-        backend = self._backend()
-        app = self._app(backend=backend)
-        app._local_trade_routes = TradeRoutesData(
-            system_name="Praea Euq AK-A d25",
-            query_url="https://inara.cz/elite/market-traderoutes/?ps1=Praea+Euq+AK-A+d25",
-            searched_at="2026-06-28T21:00:00Z",
-            routes=[
-                TradeRoute(
-                    index=1,
-                    from_station="Savitskaya Orbital",
-                    from_system="TSONGORIS",
-                    to_station="Scully-Power Station",
-                    to_system="IX",
-                    source_buy_commodity="Silver",
-                )
-            ],
-        )
-        app._local_trade_route_picker = TradeRoutePickerState(
-            open=True,
-            selected_route_index=1,
-            presented_query_url=app._local_trade_routes.query_url,
-            presented_searched_at=app._local_trade_routes.searched_at,
-        )
-
-        app._apply_view_snapshot_state()
-        self.assertEqual(app._trade_routes.system_name, "Praea Euq AK-A d25")
-
-        app._view_snapshot = replace(
-            _snapshot(),
-            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-        )
-        app._apply_view_snapshot_state()
-
-        self.assertEqual(app._trade_routes.system_name, "Praea Euq AK-A d25")
-        self.assertEqual(len(app._trade_routes.routes), 1)
-        self.assertTrue(app._trade_route_picker_open)
-        self.assertEqual(app._selected_trade_route_index, 1)
-
     def test_observer_app_handles_haul_search_locally(self) -> None:
-        backend = self._backend(
-            initial_snapshot=replace(
-                _snapshot(),
-                session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-                ship=replace(_snapshot().ship, cargo_capacity=460),
-            )
+        backend = self._backend()
+        data_source = RemoteObserverDataSource(
+            _data_read_model(system_name="Praea Euq AK-A d25", cargo_capacity=460)
         )
-        app = self._app(backend=backend)
+        app = self._app(backend=backend, data_source=data_source)
         app._ship.system = "Praea Euq AK-A d25"
+        app._ship.cargo_capacity = 460
         app._controls = object()
         app._run_in_thread = lambda fn: fn()
         app.call_from_thread = lambda callback, *args, **kwargs: callback(*args, **kwargs)  # type: ignore[method-assign]
@@ -1030,7 +780,7 @@ class ControlRoomClientTests(unittest.TestCase):
 
         command_input = _FakeInputWidget()
         _bind_observer_widgets(app, command_input)
-        with patch("edap.control_room.client.connect.search_trade_routes", return_value=result):
+        with patch("edap.control_room.routines_haul.search_trade_routes", return_value=result):
             app.on_input_submitted(_Submitted("haul search Praea Euq AK-A d25"))
             self.assertEqual(app._prompt_state.haul_prompt_mode, "search")
             self.assertEqual(app._haul_prompt_step, "search_edit")
@@ -1047,15 +797,13 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(command_input.placeholder, app._default_command_placeholder)
 
     def test_observer_app_keeps_haul_search_prefill_when_local_command_submits(self) -> None:
-        backend = self._backend(
-            initial_snapshot=replace(
-                _snapshot(),
-                session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-                ship=replace(_snapshot().ship, cargo_capacity=460),
-            )
+        backend = self._backend()
+        data_source = RemoteObserverDataSource(
+            _data_read_model(system_name="Praea Euq AK-A d25", cargo_capacity=460)
         )
-        app = self._app(backend=backend)
+        app = self._app(backend=backend, data_source=data_source)
         app._ship.system = "Praea Euq AK-A d25"
+        app._ship.cargo_capacity = 460
         app._controls = object()
         command_input = _FakeInputWidget()
         _bind_observer_widgets(app, command_input)
@@ -1073,15 +821,14 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertIn("near_system='Praea Euq AK-A d25'", command_input.value)
         self.assertIn("cargo_capacity=460", command_input.value)
 
-    def test_observer_app_uses_remote_snapshot_context_for_bare_haul_search(self) -> None:
-        backend = self._backend(
-            initial_snapshot=replace(
-                _snapshot(),
-                session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-                ship=replace(_snapshot().ship, system_name="Zeta Trianguli Australis", cargo_capacity=461),
-            )
+    def test_observer_app_uses_remote_data_context_for_bare_haul_search(self) -> None:
+        backend = self._backend()
+        data_source = RemoteObserverDataSource(
+            _data_read_model(system_name="Zeta Trianguli Australis", cargo_capacity=461)
         )
-        app = self._app(backend=backend)
+        app = self._app(backend=backend, data_source=data_source)
+        app._ship.system = "Zeta Trianguli Australis"
+        app._ship.cargo_capacity = 461
         app._controls = object()
         app._run_in_thread = lambda fn: fn()
         app.call_from_thread = lambda callback, *args, **kwargs: callback(*args, **kwargs)  # type: ignore[method-assign]
@@ -1109,7 +856,7 @@ class ControlRoomClientTests(unittest.TestCase):
 
         command_input = _FakeInputWidget()
         _bind_observer_widgets(app, command_input)
-        with patch("edap.control_room.client.connect.search_trade_routes", return_value=result):
+        with patch("edap.control_room.routines_haul.search_trade_routes", return_value=result):
             app.on_input_submitted(_Submitted("haul search"))
             self.assertEqual(app._prompt_state.haul_prompt_mode, "search")
             self.assertEqual(app._haul_prompt_step, "search_edit")
@@ -1125,43 +872,6 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(app._haul_prompt_step, "")
         self.assertEqual(command_input.value, "")
         self.assertEqual(command_input.placeholder, app._default_command_placeholder)
-
-    def test_observer_app_loads_selected_local_trade_route_into_local_prompt(self) -> None:
-        backend = self._backend(
-            initial_snapshot=replace(
-                _snapshot(),
-                session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-            )
-        )
-        app = self._app(backend=backend)
-        command_input = _FakeInputWidget()
-        _bind_observer_widgets(app, command_input)
-        app._local_trade_routes = TradeRoutesData(
-            system_name="Praea Euq AK-A d25",
-            routes=[
-                TradeRoute(
-                    index=2,
-                    from_station="Savitskaya Orbital",
-                    from_system="TSONGORIS",
-                    to_station="Nyberg Vision",
-                    to_system="NJOKUJINUN",
-                    source_buy_commodity="Beryllium",
-                )
-            ],
-        )
-        app._local_trade_route_picker = TradeRoutePickerState(open=True, selected_route_index=2)
-        app._apply_view_snapshot_state()
-
-        app._load_selected_trade_route()
-
-        self.assertTrue(app._prompt_state.haul_prompt_step)
-        self.assertEqual(app._haul_prompt_step, "station_1_buying")
-        self.assertEqual(command_input.value, "Beryllium")
-        self.assertEqual(app._prompt_state.haul_prompt_defaults["station_1"], "Savitskaya Orbital")
-        self.assertEqual(app._prompt_state.haul_prompt_defaults["station_2"], "Nyberg Vision")
-        self.assertEqual(app._prompt_state.haul_prompt_defaults["station_1_buying"], "Beryllium")
-        self.assertFalse(app._local_trade_route_picker.open)
-        self.assertFalse(app._trade_route_picker_open)
 
     def test_observer_app_handles_dest_command_locally_then_dispatches_remote(self) -> None:
         backend = self._backend(
@@ -1498,69 +1208,6 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(data_source.current().ship.system, "Achenar")
         self.assertIsInstance(events[0], DataUpdatedEvent)
         self.assertEqual(events[0].data.ship.system, "Achenar")
-
-    def test_observer_app_installs_remote_data_source_dependency(self) -> None:
-        backend = self._backend()
-        data_source = RemoteObserverDataSource(_data_read_model(system_name="Achenar"))
-
-        app = self._app(backend=backend)
-        self.assertNotEqual(app.dependencies.data_source.current().ship.system, "Achenar")
-
-        app = ObserverControlRoomApp(
-            _make_observer_context(),
-            backend=backend,
-            data_source=data_source,
-            server_target=self._target(),
-            client_name="observer-ipad",
-        )
-
-        self.assertIs(app.dependencies.data_source, data_source)
-        self.assertEqual(app.dependencies.data_source.current().ship.system, "Achenar")
-
-    def test_observer_app_applies_remote_data_without_refreshing_view_snapshot(self) -> None:
-        data = _data_read_model(system_name="Achenar")
-        data = replace(
-            data,
-            command_history=CommandHistoryReadModel(
-                default_haul={"station_1_buying": "Gold"},
-                history_entries=(
-                    CommandHistoryEntry(
-                        raw="haul Gold",
-                        command="haul",
-                        params={"station_1_buying": "Gold"},
-                        timestamp="2026-06-30T18:57:00Z",
-                    ),
-                ),
-                history_limit=20,
-            ),
-            activity_log=ActivityLogReadModel(
-                entries=(
-                    ActivityLogItem(
-                        entry_id="activity-1",
-                        timestamp="2026-06-30T18:57:01Z",
-                        message_text="Hydrated activity.",
-                    ),
-                )
-            ),
-            routine=replace(
-                data.routine,
-                routine_active=True,
-                active_routine_name="dock",
-            ),
-        )
-        data_source = RemoteObserverDataSource(data)
-        app = self._app(data_source=data_source)
-        _bind_observer_widgets(app, _FakeInputWidget())
-
-        app._apply_remote_snapshot(replace_activity=True)
-
-        self.assertEqual(app._view_snapshot.ship.system_name, "Sol")
-        self.assertEqual(app._ship.system, "Achenar")
-        self.assertTrue(app._runtime_state.routine_active)
-        self.assertEqual(app._runtime_state.active_routine_name, "dock")
-        self.assertEqual(app._saved_state.default_haul, {"station_1_buying": "Gold"})
-        self.assertEqual(app._saved_state.history[0].raw, "haul Gold")
-        self.assertEqual(app._protocol_activity_log[0].message_text, "Hydrated activity.")
 
     def test_remote_backend_replay_commands_stay_client_local(self) -> None:
         target = ObserverServerTarget(

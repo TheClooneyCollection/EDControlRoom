@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `162`
-- Latest generated iteration number: `295`
+- Generated iteration count: `163`
+- Latest generated iteration number: `296`
 
 ## Iteration 134
 
@@ -4516,3 +4516,32 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Continue moving trade-route picker and remaining prompt interaction state behind view-action/data-source-owned seams.
+
+## Iteration 296
+
+- When: `2026-06-30 19:49`
+- Area: `control-room`
+- Title: `connect-single-app-collapse`
+- Source: [2026-06-30-19-49_control-room_connect-single-app-collapse.md](iteration-logs/2026-06-30-19-49_control-room_connect-single-app-collapse.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `connect-single-app-collapse`
+- Started: `2026-06-30 19:49`
+
+## Summary
+
+- Collapsed connect mode onto the single local-first `ControlRoomApp` instead of maintaining `ObserverControlRoomApp`.
+
+## Changes
+
+- Replaced the large connect subclass with a small bootstrap that fetches remote hydrate data, builds `RemoteObserverDataSource` / `RemoteObserverExecution`, binds them into `ControlRoomApp`, and runs the shared app.
+- Moved remote hydrate/event application into the base app so data-backed panels refresh from the injected data source while command input, prompts, replay, and trade-route picker remain app-local.
+- Updated remote execution so prompt-owning/local UI commands execute locally through the shared app, while finalized routine dispatches still go to the server.
+- Removed obsolete subclass/snapshot compatibility tests and rewrote protocol assertions around local UI actions plus execution dependency dispatch.
+- Verified `tests/test_control_room_client.py`, `tests/test_control_room_protocol.py`, and the full unittest suite.
+
+## Follow-ups
+
+- Continue removing internal snapshot compatibility that remains in the base app/backend after the connect subclass removal.

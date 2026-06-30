@@ -103,7 +103,11 @@ from edap.control_room.protocol.adapters import (
     build_activity_log_entry,
     build_announcement_event,
 )
-from edap.control_room.protocol.events import AnnouncementEvent
+from edap.control_room.protocol.events import (
+    ActivityLogAppendedEvent,
+    AnnouncementEvent,
+    DataUpdatedEvent,
+)
 from edap.control_room.protocol.sink import ControlRoomEventSink
 from edap.control_room.protocol.snapshot import ActivityLogEntry
 from edap.inara.trade_routes import TradeRoute
@@ -137,7 +141,7 @@ from edap.control_room_state import (
 from edap.binding_names import format_binding_action_hint
 from edap.runtime import RuntimeContext, build_runtime_context, load_config_with_fallback
 from edap.ship_controls import DEFAULT_SHIP_CONTROL_ACTIONS, ShipControls
-from edap.tts import AnnouncementId, TTSAnnouncer, format_credits_short
+from edap.tts import AnnouncementId, TTSAnnouncer, format_credits_short, parse_announcement_id
 from edap import version as _version
 
 
@@ -418,6 +422,7 @@ class ControlRoomApp(App[None]):
         backend: ControlRoomBackend | None = None,
         dependencies: ControlRoomDependencies | None = None,
         view_actions: ControlRoomViewActions | None = None,
+        title_override: str | None = None,
     ) -> None:
         super().__init__()
         self._ctx = ctx
@@ -451,6 +456,7 @@ class ControlRoomApp(App[None]):
         self._journal_artifact_log_pending_writes = 0
         self._debug_artifact_log_path = _DEBUG_ARTIFACT_LOG_PATH
         self._protocol_activity_log: list[ActivityLogEntry] = []
+        self._local_activity_log: list[ActivityLogEntry] = []
         self._protocol_announcements: list[AnnouncementEvent] = []
         self._protocol_external_event_sink: ControlRoomEventSink | None = None
         self._saved_state = ControlRoomState()
@@ -472,6 +478,7 @@ class ControlRoomApp(App[None]):
         self._backend: ControlRoomBackend = backend or LocalControlRoomBackend(self)
         self._view_snapshot = self._backend.current_snapshot()
         self._backend_event_unsubscribe: Callable[[], None] | None = None
+        self._title_override = title_override
         self._exit_requested_once = False
         self._exit_prompt_active = False
         self._suppress_replay_enter_until = 0.0
@@ -778,11 +785,12 @@ class ControlRoomApp(App[None]):
     def on_mount(self) -> None:
         self._configure_screen_widgets()
         if self._backend.exit_detaches_remote_session():
+            self._mount_remote_runtime()
             return
         self._mount_local_runtime()
 
     def _configure_screen_widgets(self) -> None:
-        self.title = "ED Control Room"
+        self.title = self._title_override or "ED Control Room"
         self.query_one("#status", Static).border_title = "SHIP STATUS"
         self.query_one("#activity", ActivityLog).configure_auto_follow(
             time_fn=lambda: self._time_fn(),
@@ -817,10 +825,109 @@ class ControlRoomApp(App[None]):
         self.set_focus(self.query_one("#cmd", Input))
         self._update_resume_detail()
 
+    def _mount_remote_runtime(self) -> None:
+        self._backend_event_unsubscribe = self._backend.subscribe_events(
+            self._handle_backend_event
+        )
+        start = getattr(self._backend, "start", None)
+        if callable(start):
+            start()
+        self._apply_data_state(
+            self._dependencies.data_source.current(),
+            replace_activity=True,
+        )
+        self._refresh_command_input()
+        self.set_focus(self.query_one("#cmd", Input))
+
     def on_unmount(self) -> None:
         if self._backend_event_unsubscribe is not None:
             self._backend_event_unsubscribe()
             self._backend_event_unsubscribe = None
+        close = getattr(self._backend, "close", None)
+        if callable(close):
+            close()
+
+    def _handle_backend_event(self, event) -> None:
+        self.call_from_thread(self._apply_backend_event, event)
+
+    def _apply_backend_event(self, event) -> None:
+        if isinstance(event, DataUpdatedEvent):
+            self._apply_data_state(event.data, replace_activity=True)
+            return
+        if isinstance(event, ActivityLogAppendedEvent):
+            self._protocol_activity_log.append(event.entry)
+            if len(self._protocol_activity_log) > self._activity_log_max_lines:
+                self._protocol_activity_log = self._protocol_activity_log[
+                    -self._activity_log_max_lines :
+                ]
+            activity = self.query_one("#activity", ActivityLog)
+            activity.write(
+                _build_log_text(event.entry.message_text, timestamp=event.entry.timestamp)
+            )
+            self._refresh_activity_title()
+            return
+        if isinstance(event, AnnouncementEvent):
+            self._play_local_announcement(event)
+
+    def _apply_data_state(self, data, *, replace_activity: bool) -> None:
+        self._runtime_state.routine_active = data.routine.routine_active
+        self._runtime_state.active_routine_name = data.routine.active_routine_name
+        self._runtime_state.haul_stop_requested = data.routine.haul_stop_requested
+        self._runtime_state.verbose_controls = data.routine.verbose_controls
+        self._runtime_state.instant_mode = data.routine.instant_mode
+        self._runtime_state.shutdown_requested = data.routine.shutdown_requested
+        self._runtime_state.shutdown_finalized = data.routine.shutdown_finalized
+        self._saved_state.default_haul = dict(data.command_history.default_haul)
+        self._saved_state.history = list(data.command_history.history_entries)
+        self._ship = ShipState(
+            commander=data.ship.commander,
+            ship_type=data.ship.ship_type,
+            system=data.ship.system,
+            station=data.ship.station,
+            status=data.ship.status,
+            fuel_level=data.ship.fuel_level,
+            fuel_capacity=data.ship.fuel_capacity,
+            credits=data.ship.credits,
+            cargo_count=data.ship.cargo_count,
+            cargo_capacity=data.ship.cargo_capacity,
+            cargo_inventory=list(data.ship.cargo_inventory),
+            target=data.ship.target,
+            destination_system=data.ship.destination_system,
+            destination_body=data.ship.destination_body,
+            destination_name=data.ship.destination_name,
+        )
+        self._market = MarketData(
+            station=data.market.station,
+            system=data.market.system,
+            timestamp=data.market.timestamp,
+            items=list(data.market.items),
+            locked=self._market.locked,
+        )
+        self._tts.set_commander_name(data.ship.commander)
+        if replace_activity:
+            self._replace_activity_log(
+                [
+                    ActivityLogEntry(
+                        entry_id=entry.entry_id,
+                        timestamp=entry.timestamp,
+                        message_text=entry.message_text,
+                        severity=entry.severity,
+                    )
+                    for entry in data.activity_log.entries
+                ]
+            )
+        self._refresh_status()
+        self._refresh_haul_stats()
+        self._refresh_market()
+        self._refresh_trade_routes()
+        self._update_resume_detail()
+        self._refresh_command_input()
+
+    def _play_local_announcement(self, event: AnnouncementEvent) -> None:
+        parsed_id = parse_announcement_id(event.announcement_id)
+        if parsed_id is None:
+            return
+        self._tts.announce(parsed_id, **event.message_values)
 
     # ── Setup ──────────────────────────────────────────────────────────────────
 
@@ -1246,6 +1353,16 @@ class ControlRoomApp(App[None]):
         replay_browser.styles.display = "none"
 
     def _replace_activity_log(self, entries: list[ActivityLogEntry]) -> None:
+        if self._backend.exit_detaches_remote_session():
+            entries = list(entries) + list(self._local_activity_log)
+            entries.sort(
+                key=lambda entry: (
+                    entry.timestamp,
+                    entry.entry_id,
+                )
+            )
+            if len(entries) > self._activity_log_max_lines:
+                entries = entries[-self._activity_log_max_lines :]
         activity = self.query_one("#activity", ActivityLog)
         clear = getattr(activity, "clear", None)
         if callable(clear):
@@ -1256,6 +1373,38 @@ class ControlRoomApp(App[None]):
             activity.write(_build_log_text(entry.message_text, timestamp=entry.timestamp))
         self._protocol_activity_log = list(entries)
         self._refresh_activity_title()
+
+    def _is_active_operator(self) -> bool:
+        return self._dependencies.data_source.current().session.client_role == "active_operator"
+
+    def _check_routine_ready(self) -> bool:
+        if self._backend.exit_detaches_remote_session():
+            if not self._is_active_operator():
+                self._log("[yellow]Observer session is read-only.[/]")
+                return False
+            if self._routine_active:
+                self._log("[yellow]A routine is already running — wait for it to finish[/]")
+                return False
+            return True
+        return _workers.check_routine_ready(self)
+
+    def _refresh_command_input(self) -> None:
+        try:
+            command_input = self.query_one("#cmd", Input)
+        except Exception:
+            return
+        if not self._is_active_operator():
+            command_input.disabled = True
+            command_input.placeholder = "observer mode - read only"
+            return
+        command_input.disabled = False
+        if self._prompt_state.command_input_prefill_active:
+            command_input.placeholder = self._prompt_state.command_input_placeholder
+            if not command_input.value and self._prompt_state.command_input_value:
+                command_input.value = self._prompt_state.command_input_value
+                command_input.cursor_position = len(command_input.value)
+            return
+        command_input.placeholder = self._default_command_placeholder
 
     def _view_ship_state(self) -> ShipState:
         ship = self._view_snapshot.ship
@@ -1353,6 +1502,12 @@ class ControlRoomApp(App[None]):
         activity = self.query_one("#activity", ActivityLog)
         entry = build_activity_log_entry(msg)
         activity.write(_build_log_text(entry.message_text, timestamp=entry.timestamp))
+        if self._backend.exit_detaches_remote_session():
+            self._local_activity_log.append(entry)
+            if len(self._local_activity_log) > self._activity_log_max_lines:
+                self._local_activity_log = self._local_activity_log[
+                    -self._activity_log_max_lines :
+                ]
         self._protocol_activity_log.append(entry)
         if len(self._protocol_activity_log) > self._activity_log_max_lines:
             self._protocol_activity_log = self._protocol_activity_log[-self._activity_log_max_lines :]
@@ -1459,40 +1614,53 @@ class ControlRoomApp(App[None]):
         return _replay.selected_resume_entry(self)
 
     def _show_resume_picker(self) -> None:
-        self._backend.open_replay_browser()
+        _replay.show_resume_picker(self)
 
     def _refresh_resume_picker(self) -> None:
-        self._backend.refresh_replay_browser()
+        _replay.refresh_resume_picker(self)
 
     def _close_resume_picker(self) -> None:
-        self._backend.close_replay_browser()
+        _replay.close_resume_picker(self)
 
     def _resume_execute_selected(self) -> None:
         entry = self._selected_resume_entry()
         if entry is None:
             return
         self._close_resume_picker()
-        self._backend.replay_history_entry(entry, edit=False)
+        _replay.replay_history_entry(self, entry, edit=False)
 
     def _resume_execute_selected_immediate(self) -> None:
         entry = self._selected_resume_entry()
         if entry is None:
             return
         self._close_resume_picker()
-        self._backend.replay_history_entry(entry, edit=False, skip_delay=True)
+        _replay.replay_history_entry(self, entry, edit=False, skip_delay=True)
 
     def _resume_edit_selected(self) -> None:
         entry = self._selected_resume_entry()
         if entry is None:
             return
         self._close_resume_picker()
-        self._backend.replay_history_entry(entry, edit=True)
+        _replay.replay_history_entry(self, entry, edit=True)
 
     def _resume_toggle_default_selected(self) -> None:
         entry = self._selected_resume_entry()
         if entry is None:
             return
-        self._backend.toggle_replay_default_haul(entry)
+        if entry.command != "haul" or _history.is_haul_search_entry(entry):
+            self._log("[dim]Only two-station haul loop entries can be saved as the default.[/]")
+            return
+        if _replay.default_haul_matches(self, entry):
+            self._saved_state.default_haul = {}
+            self._log("[dim]Cleared saved default haul.[/]")
+        else:
+            self._saved_state.default_haul = {
+                str(key): str(value) for key, value in entry.params.items()
+            }
+            cargo = self._saved_state.default_haul.get("station_1_buying", "haul")
+            self._log(f"[dim]Saved default haul from history: {escape(cargo)}[/]")
+        self._save_saved_state()
+        self._refresh_resume_picker()
 
     def _close_trade_route_picker(self) -> None:
         self._trade_route_picker_open = False
@@ -1597,13 +1765,7 @@ class ControlRoomApp(App[None]):
 
     def action_request_interrupt(self) -> None:
         self._exit_requested_once = False
-        if self._haul_prompt_step or self._haul_confirm_buy_station or self._dest_prompt_destination:
-            self._backend.interrupt_active_routine()
-            return
-        if self._routine_active:
-            self._backend.interrupt_active_routine()
-            return
-        self._log("[yellow]Ctrl-C received — no active routine to cancel.[/]")
+        self._handle_interrupt("Ctrl-C")
 
     def action_request_exit(self) -> None:
         if self._exit_prompt_active:
@@ -1641,6 +1803,10 @@ class ControlRoomApp(App[None]):
 
     def _cancel_active_routine(self, source: str) -> None:
         if self._routine_worker is None:
+            if self._backend.exit_detaches_remote_session() and self._routine_active:
+                self._dependencies.execution.cancel_active_routine()
+                self._log(f"[yellow]{escape(source)} received — cancelling active routine.[/]")
+                return
             self._routine_active = False
             self._active_routine_name = None
             self._clear_pending_haul_stop()
@@ -1679,7 +1845,7 @@ class ControlRoomApp(App[None]):
     def _should_prompt_remote_exit(self) -> bool:
         return (
             self._backend.exit_detaches_remote_session()
-            and self._view_snapshot.session.client_role == "active_operator"
+            and self._is_active_operator()
             and self._routine_active
         )
 
@@ -1836,10 +2002,10 @@ class ControlRoomApp(App[None]):
                 self._close_resume_picker()
             elif event.key == "up":
                 event.prevent_default()
-                self._backend.move_replay_selection(-1)
+                _replay.move_resume_selection(self, -1)
             elif event.key == "down":
                 event.prevent_default()
-                self._backend.move_replay_selection(1)
+                _replay.move_resume_selection(self, 1)
             elif event.key == "e" and not self._resume_filter:
                 event.prevent_default()
                 self._resume_edit_selected()
@@ -1858,10 +2024,12 @@ class ControlRoomApp(App[None]):
             elif event.key == "backspace":
                 event.prevent_default()
                 if self._resume_filter:
-                    self._backend.set_replay_filter(self._resume_filter[:-1])
+                    self._resume_filter = self._resume_filter[:-1]
+                    self._refresh_resume_picker()
             elif event.character and event.character.isprintable() and len(event.character) == 1:
                 event.prevent_default()
-                self._backend.set_replay_filter(self._resume_filter + event.character)
+                self._resume_filter = self._resume_filter + event.character
+                self._refresh_resume_picker()
             return
         if self._exit_prompt_active:
             if event.key == "enter":
@@ -1877,7 +2045,7 @@ class ControlRoomApp(App[None]):
                 cmd_input = self.query_one("#cmd", Input)
                 raw = cmd_input.value
                 cmd_input.value = ""
-                self._backend.submit_input(raw)
+                self._submit_prompt_input(raw)
             return  # don't interfere with multi-step haul prompts
         if event.key not in ("up", "down"):
             return
@@ -1917,7 +2085,7 @@ class ControlRoomApp(App[None]):
             return
 
         if self._haul_prompt_step or self._haul_confirm_buy_station or self._dest_prompt_destination:
-            self._backend.submit_input(raw)
+            self._submit_prompt_input(raw)
             return
 
         raw = raw.strip()
@@ -1927,10 +2095,45 @@ class ControlRoomApp(App[None]):
         if raw.lower() in {"replay", "history"}:
             # Ignore the same Enter key if it also arrives after the replay browser opens.
             self._suppress_replay_enter_until = self._time_fn() + 0.1
-        self._backend.submit_input(raw)
+        self._dispatch_command(raw)
 
     def _dispatch_command(self, raw: str, *, skip_delay: bool | None = None) -> None:
         self._dependencies.execution.submit_command(raw, skip_delay=skip_delay)
+
+    def _submit_prompt_input(self, raw: str) -> None:
+        if self._haul_prompt_step:
+            self._handle_haul_prompt(raw)
+            return
+        if self._haul_confirm_buy_station:
+            self._handle_haul_confirm_prompt(raw)
+            return
+        if self._dest_prompt_destination:
+            dispatch = _prompts.resolve_destination_prompt_submission(
+                self._prompt_state,
+                raw,
+                parse_optional_nonnegative_float=lambda value, default, label: (
+                    self._parse_optional_nonnegative_float(
+                        value,
+                        default=default,
+                        label=label,
+                    )
+                ),
+            )
+            if dispatch is None:
+                return
+            try:
+                command_input = self.query_one("#cmd", Input)
+                command_input.placeholder = self._default_command_placeholder
+                command_input.value = ""
+                command_input.cursor_position = 0
+            except Exception:
+                pass
+            self._dispatch_dest(
+                dispatch.destination,
+                dispatch.galaxy_map_settle,
+                skip_delay=dispatch.skip_delay,
+                raw_command=dispatch.raw_command,
+            )
 
     def _dispatch_dest(
         self,

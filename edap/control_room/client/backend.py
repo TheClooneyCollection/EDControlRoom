@@ -5,7 +5,7 @@ import json
 import threading
 from collections.abc import Callable
 from queue import Queue
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 import websockets
@@ -40,6 +40,9 @@ from edap.control_room.protocol import (
 from edap.control_room_state import CommandHistoryEntry
 from edap.inara.trade_routes import TradeRoute
 from .target import ObserverServerTarget
+
+if TYPE_CHECKING:
+    from edap.control_room.app import ControlRoomApp
 
 
 _RECONNECT_DELAY_SECONDS = 1.0
@@ -377,8 +380,18 @@ class RemoteObserverBackend(ControlRoomBackend):
 class RemoteObserverExecution:
     def __init__(self, backend: RemoteObserverBackend) -> None:
         self._backend = backend
+        self._app: ControlRoomApp | None = None
+
+    def bind_app(self, app: ControlRoomApp) -> None:
+        self._app = app
 
     def submit_command(self, raw: str, *, skip_delay: bool | None = None) -> None:
+        if _is_client_local_command(raw):
+            app = self._require_app()
+            from edap.control_room import commands as _commands
+
+            _commands.dispatch(app, raw, skip_delay_override=skip_delay)
+            return
         self._backend.dispatch_command(raw, skip_delay=skip_delay)
 
     def dispatch_destination(
@@ -415,16 +428,35 @@ class RemoteObserverExecution:
         *,
         raw_command: str | None = None,
     ) -> None:
-        self._backend.load_trade_route(route, raw_command=raw_command)
+        self._require_app()._facade.load_trade_route(route, raw_command=raw_command)
 
     def handle_haul_prompt(self, value: str) -> None:
-        self._backend.handle_haul_prompt(value)
+        app = self._require_app()
+        from edap.control_room import prompts as _prompts
+
+        _prompts.handle_haul_prompt(
+            app,
+            value,
+            default_placeholder=app._default_command_placeholder,
+        )
 
     def handle_haul_confirm_prompt(self, value: str) -> None:
-        self._backend.handle_haul_confirm_prompt(value)
+        app = self._require_app()
+        from edap.control_room import prompts as _prompts
+
+        _prompts.handle_haul_confirm_prompt(
+            app,
+            value,
+            default_placeholder=app._default_command_placeholder,
+        )
 
     def cancel_active_routine(self) -> None:
         self._backend.interrupt_active_routine()
+
+    def _require_app(self) -> ControlRoomApp:
+        if self._app is None:
+            raise RuntimeError("Remote observer execution is not bound to an app.")
+        return self._app
 
 
 class RemoteObserverDataSource(ControlRoomDataSource):
