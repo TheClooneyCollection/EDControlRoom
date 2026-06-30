@@ -1442,6 +1442,24 @@ class ControlRoomClientTests(unittest.TestCase):
 
         self.assertEqual(data_source.current().ship.system, "Achenar")
 
+    def test_observer_app_installs_remote_data_source_dependency(self) -> None:
+        backend = self._backend()
+        data_source = RemoteObserverDataSource(_data_read_model(system_name="Achenar"))
+
+        app = self._app(backend=backend)
+        self.assertNotEqual(app.dependencies.data_source.current().ship.system, "Achenar")
+
+        app = ObserverControlRoomApp(
+            _make_observer_context(),
+            backend=backend,
+            data_source=data_source,
+            server_target=self._target(),
+            client_name="observer-ipad",
+        )
+
+        self.assertIs(app.dependencies.data_source, data_source)
+        self.assertEqual(app.dependencies.data_source.current().ship.system, "Achenar")
+
     def test_remote_backend_replay_commands_stay_client_local(self) -> None:
         target = ObserverServerTarget(
             host="bridge.local",

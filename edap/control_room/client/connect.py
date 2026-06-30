@@ -14,7 +14,9 @@ from edap.control_room import replay as _replay
 from edap.control_room.backend import ControlRoomBackendEvent
 from edap.control_room.client.backend import (
     RemoteObserverBackend,
+    RemoteObserverDataSource,
     RemoteObserverExecution,
+    fetch_remote_control_room_data,
     fetch_remote_observer_snapshot,
 )
 from edap.control_room.client.target import ObserverServerTarget, parse_observer_server_target
@@ -51,12 +53,14 @@ class ObserverControlRoomApp(ControlRoomApp):
         ctx,
         *,
         backend: RemoteObserverBackend,
+        data_source: RemoteObserverDataSource | None = None,
         server_target: ObserverServerTarget,
         client_name: str,
     ) -> None:
         super().__init__(ctx, backend=backend)
         self._dependencies = replace(
             self._dependencies,
+            data_source=data_source or self._dependencies.data_source,
             execution=RemoteObserverExecution(backend),
         )
         self._observer_backend = backend
@@ -846,7 +850,11 @@ def connect_observer_mode(
     loaded = load_config_with_fallback(config_path)
     server_target = parse_observer_server_target(target)
     resolved_client_name = (client_name or socket.gethostname()).strip() or "observer-client"
-    capabilities, snapshot = fetch_remote_observer_snapshot(
+    capabilities, remote_data = fetch_remote_control_room_data(
+        server_target=server_target,
+        access_token=access_token,
+    )
+    _, snapshot = fetch_remote_observer_snapshot(
         server_target=server_target,
         access_token=access_token,
     )
@@ -872,6 +880,7 @@ def connect_observer_mode(
     app = ObserverControlRoomApp(
         ctx,
         backend=backend,
+        data_source=RemoteObserverDataSource(remote_data),
         server_target=server_target,
         client_name=resolved_client_name,
     )

@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `146`
-- Latest generated iteration number: `279`
+- Generated iteration count: `147`
+- Latest generated iteration number: `280`
 
 ## Iteration 134
 
@@ -4074,3 +4074,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Wire `connect` dependencies to `RemoteObserverDataSource`.
 - Add websocket data update handling after the server streams source-oriented update messages.
+
+## Iteration 280
+
+- When: `2026-06-30 18:18`
+- Area: `control-room`
+- Title: `wire-connect-remote-data-source`
+- Source: [2026-06-30-18-18_control-room_wire-connect-remote-data-source.md](iteration-logs/2026-06-30-18-18_control-room_wire-connect-remote-data-source.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `wire-connect-remote-data-source`
+- Started: `2026-06-30 18:18`
+
+## Summary
+
+- Wired connect-mode app construction to install the new remote hydrate data source.
+
+## Changes
+
+- Updated `connect_observer_mode()` to fetch `/hydrate` and build `RemoteObserverDataSource`.
+- Updated `ObserverControlRoomApp` to accept a remote data source and install it into `ControlRoomDependencies`.
+- Added a client test proving connect-mode app dependencies use the supplied remote data source.
+
+## Follow-ups
+
+- Replace the remaining snapshot bootstrap and websocket stream in connect mode with hydrate/update data messages.
