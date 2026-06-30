@@ -122,6 +122,7 @@ def _bind_observer_widgets(app: ObserverControlRoomApp, command_input: _FakeInpu
     trade_route_help = _FakeStaticWidget()
     trade_route_detail = _FakeStaticWidget()
     trade_route_picker = _FakeContainerWidget()
+    market_content = _FakeStaticWidget()
     main = _FakeContainerWidget()
     resume_detail = _FakeStaticWidget()
     resume_list = _FakeOptionListWidget()
@@ -136,6 +137,7 @@ def _bind_observer_widgets(app: ObserverControlRoomApp, command_input: _FakeInpu
             "#trade-route-help": trade_route_help,
             "#trade-route-detail": trade_route_detail,
             "#trade-route-picker": trade_route_picker,
+            "#market-content": market_content,
             "#main": main,
             "#resume-detail": resume_detail,
             "#resume-list": resume_list,
@@ -504,6 +506,60 @@ class ControlRoomClientTests(unittest.TestCase):
 
         self.assertTrue(app._resume_open)
         self.assertTrue(any(entry.entry.raw == "haul Silver" for entry in app._resume_entries))
+        self.assertTrue(backend._outgoing_messages.empty())
+
+    def test_observer_app_market_lock_unlock_are_local_display_controls(self) -> None:
+        initial_snapshot = replace(
+            _snapshot(),
+            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+            market=MarketSnapshot(
+                station_name="Jameson Memorial",
+                system_name="Sol",
+                market_timestamp="2026-06-30T12:00:00Z",
+                market_filter_text=None,
+                locked=False,
+                items=[{"Name": "gold", "Stock": 42}],
+            ),
+        )
+        backend = self._backend(initial_snapshot=initial_snapshot)
+        app = self._app(backend=backend)
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
+
+        class _Submitted:
+            def __init__(self, value: str) -> None:
+                self.value = value
+                self.input = type("_Input", (), {"value": value})()
+
+        app._apply_view_snapshot_state()
+        app._sync_presented_market_from_snapshot(force=True)
+        self.assertEqual(app._view_market_data().station, "Jameson Memorial")
+
+        app.on_input_submitted(_Submitted("market lock"))
+        self.assertTrue(app._market.locked)
+        self.assertTrue(backend._outgoing_messages.empty())
+
+        updated_snapshot = replace(
+            initial_snapshot,
+            market=MarketSnapshot(
+                station_name="Galileo",
+                system_name="Sol",
+                market_timestamp="2026-06-30T12:01:00Z",
+                market_filter_text=None,
+                locked=False,
+                items=[{"Name": "silver", "Stock": 99}],
+            ),
+        )
+        backend.publish_snapshot(updated_snapshot)
+        app._view_snapshot = updated_snapshot
+        app._apply_view_snapshot_state()
+        self.assertEqual(app._view_market_data().station, "Jameson Memorial")
+        self.assertEqual(app._view_market_data().items[0]["Name"], "gold")
+
+        app.on_input_submitted(_Submitted("market unlock"))
+        self.assertFalse(app._market.locked)
+        self.assertEqual(app._view_market_data().station, "Galileo")
+        self.assertEqual(app._view_market_data().items[0]["Name"], "silver")
         self.assertTrue(backend._outgoing_messages.empty())
 
     def test_observer_app_ignores_remote_trade_routes_snapshot(self) -> None:

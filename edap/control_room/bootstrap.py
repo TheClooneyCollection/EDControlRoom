@@ -73,7 +73,7 @@ def bootstrap_ship_state(app: BootstrapHost) -> None:
 
 
 def load_market_json(app: BootstrapHost) -> None:
-    if app._market.locked or not app._market_path.exists():
+    if not app._market_path.exists():
         return
     mtime = app._market_path.stat().st_mtime
     if mtime == app._market_mtime:

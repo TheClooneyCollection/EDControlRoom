@@ -406,7 +406,18 @@ class ObserverControlRoomApp(ControlRoomApp):
         )
         parts = lowered.split(None, 1)
         verb = parts[0] if parts else ""
-        if verb in {"haul", "dest", "set_dest", "home", "replay", "history", "commands", "help", "?"}:
+        if verb in {
+            "haul",
+            "dest",
+            "set_dest",
+            "home",
+            "replay",
+            "history",
+            "commands",
+            "help",
+            "?",
+            "market",
+        }:
             self._sync_local_ship_context_from_snapshot()
             _commands.dispatch(self, raw)
             self._sync_local_prompt_state()

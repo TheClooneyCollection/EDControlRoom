@@ -288,7 +288,6 @@ def cmd_market(app: CommandHost, rest: str) -> None:
     elif rest_lower == "unlock":
         app._market.locked = False
         app._log("[dim]Market panel unlocked.[/]")
-        app._load_market_json()
         app._refresh_market()
     elif rest_lower.startswith("filter "):
         term = rest[7:].strip()

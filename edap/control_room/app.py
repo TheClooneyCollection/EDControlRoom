@@ -420,6 +420,7 @@ class ControlRoomApp(App[None]):
         )
         self._ship = ShipState()
         self._market = MarketData()
+        self._presented_market = MarketData()
         self._haul_stats = HaulStats()
         self._trade_routes = TradeRoutesData()
         self._market_filter = market_filter
@@ -967,11 +968,12 @@ class ControlRoomApp(App[None]):
 
     def _refresh_market(self) -> None:
         self._sync_view_snapshot()
+        self._sync_presented_market_from_snapshot()
         self.query_one("#market-content", Static).update(
             Text.from_markup(
                 _rendering.market_markup(
                     self._view_market_data(),
-                    self._view_snapshot.market.market_filter_text,
+                    self._market_filter,
                     side=self._runtime_state.market_panel_tab,
                 )
             )
@@ -1330,14 +1332,26 @@ class ControlRoomApp(App[None]):
         )
 
     def _view_market_data(self) -> MarketData:
-        market = self._view_snapshot.market
         return MarketData(
-            station=market.station_name,
-            system=market.system_name,
-            timestamp=market.market_timestamp,
-            items=list(market.items),
-            locked=market.locked,
+            station=self._presented_market.station,
+            system=self._presented_market.system,
+            timestamp=self._presented_market.timestamp,
+            items=list(self._presented_market.items),
+            locked=self._presented_market.locked,
         )
+
+    def _sync_presented_market_from_snapshot(self, *, force: bool = False) -> None:
+        market = self._view_snapshot.market
+        if not self._market.locked or force:
+            self._presented_market = MarketData(
+                station=market.station_name,
+                system=market.system_name,
+                timestamp=market.market_timestamp,
+                items=list(market.items),
+                locked=self._market.locked,
+            )
+            return
+        self._presented_market.locked = True
 
     def _refresh_activity_title(self) -> None:
         title = "ACTIVITY"
