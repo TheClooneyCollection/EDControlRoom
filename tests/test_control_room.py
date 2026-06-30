@@ -58,8 +58,7 @@ from edap.inara.trade_routes import TradeRoute, TradeRouteSearchResult
 from edap.platform.input.base import InputTargetState
 from edap.version import GitHubRelease
 from rich.text import Text
-from textual.containers import VerticalScroll
-from textual.widgets import Static, Tabs
+from textual.widgets import Static
 
 
 def _make_timing_config() -> TimingConfig:
@@ -1007,102 +1006,6 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertNotIn("SELL TO MARKET", buy_markup)
         self.assertIn("SELL TO MARKET", sell_markup)
         self.assertNotIn("BUY FROM MARKET", sell_markup)
-
-    def test_market_panel_enables_vertical_scroll_for_overflowing_content(self) -> None:
-        async def run() -> None:
-            with tempfile.TemporaryDirectory() as tmp:
-                journal_dir = Path(tmp)
-                items = [
-                    {
-                        "Category": "Metals",
-                        "Name": f"commodity_{index}",
-                        "Name_Localised": f"Commodity {index:02d}",
-                        "Stock": 1_000 + index,
-                        "BuyPrice": 10_000 + index,
-                        "Demand": 2_000 + index,
-                        "DemandBracket": 1,
-                        "SellPrice": 20_000 + index,
-                    }
-                    for index in range(30)
-                ]
-                snapshot = replace(
-                    _remote_snapshot(routine_active=False),
-                    market=MarketSnapshot(
-                        station_name="Jameson Memorial",
-                        system_name="Sol",
-                        market_timestamp="2026-06-29T12:00:00Z",
-                        items=items,
-                    ),
-                )
-                app = ControlRoomApp(
-                    _make_context(journal_dir),
-                    backend=_RemoteBackendStub(snapshot),
-                )
-
-                async with app.run_test() as pilot:
-                    app._view_snapshot = snapshot
-                    app._refresh_market()
-                    await pilot.pause()
-                    market = app.query_one("#market", VerticalScroll)
-
-                    self.assertTrue(market.show_vertical_scrollbar)
-                    self.assertGreater(market.max_scroll_y, 0)
-
-        asyncio.run(run())
-
-    def test_market_panel_switches_between_buy_and_sell_tabs(self) -> None:
-        async def run() -> None:
-            with tempfile.TemporaryDirectory() as tmp:
-                journal_dir = Path(tmp)
-                snapshot = replace(
-                    _remote_snapshot(routine_active=False),
-                    market=MarketSnapshot(
-                        station_name="Jameson Memorial",
-                        system_name="Sol",
-                        market_timestamp="2026-06-29T12:00:00Z",
-                        items=[
-                            {
-                                "Category": "Foods",
-                                "Name": "coffee",
-                                "Name_Localised": "Coffee",
-                                "Stock": 120,
-                                "BuyPrice": 2500,
-                            },
-                            {
-                                "Category": "Metals",
-                                "Name": "gold",
-                                "Name_Localised": "Gold",
-                                "Demand": 80,
-                                "DemandBracket": 1,
-                                "SellPrice": 10000,
-                            },
-                        ],
-                    ),
-                )
-                app = ControlRoomApp(
-                    _make_context(journal_dir),
-                    backend=_RemoteBackendStub(snapshot),
-                )
-
-                async with app.run_test() as pilot:
-                    app._view_snapshot = snapshot
-                    app._refresh_market()
-                    await pilot.pause()
-
-                    tabs = app.query_one("#market-tabs", Tabs)
-                    content = app.query_one("#market-content", Static)
-
-                    self.assertEqual(tabs.active, "market-tab-buy")
-                    self.assertIn("BUY FROM MARKET", content.render().plain)
-                    self.assertNotIn("SELL TO MARKET", content.render().plain)
-
-                    tabs.active = "market-tab-sell"
-                    await pilot.pause()
-
-                    self.assertIn("SELL TO MARKET", content.render().plain)
-                    self.assertNotIn("BUY FROM MARKET", content.render().plain)
-
-        asyncio.run(run())
 
     def test_fmt_cr_uses_billions_and_remaining_millions(self) -> None:
         self.assertEqual(

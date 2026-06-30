@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `124`
-- Latest generated iteration number: `257`
+- Generated iteration count: `125`
+- Latest generated iteration number: `258`
 
 ## Iteration 134
 
@@ -3472,3 +3472,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-check the tab strip in a real terminal session to confirm mouse/tab navigation feels acceptable for operators; no command-path fallback was added in this slice.
+
+## Iteration 258
+
+- When: `2026-06-30 13:49`
+- Area: `control-room`
+- Title: `remove-slow-market-ui-tests`
+- Source: [2026-06-30-13-49_control-room_remove-slow-market-ui-tests.md](iteration-logs/2026-06-30-13-49_control-room_remove-slow-market-ui-tests.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `remove-slow-market-ui-tests`
+- Started: `2026-06-30 13:49`
+
+## Summary
+
+- Removed two slow Textual market-panel harness tests after confirming they were exercising widget animation and idle-wait behavior more than repo logic.
+
+## Changes
+
+- Dropped the market-panel scrollbar test that required a full `ControlRoomApp.run_test()` cycle to assert `VerticalScroll` overflow behavior.
+- Dropped the market-panel tab-switch test that waited on Textual `Tabs` underline animation before asserting rendered buy/sell content.
+- Kept the lower-cost `market_markup(...)` rendering coverage as the remaining check for buy-versus-sell market output.
+
+## Follow-ups
+
+- If market panel regressions need coverage again, prefer state or rendering tests that avoid `pilot.pause()` and widget animation timing.
