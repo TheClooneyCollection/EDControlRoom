@@ -95,6 +95,10 @@ from edap.control_room.models import (
     TradeRoutesData,
 )
 from edap.control_room import view_models as _view_models
+from edap.control_room.view_actions import (
+    ControlRoomViewActions,
+    build_local_control_room_view_actions,
+)
 from edap.control_room.protocol.adapters import (
     build_activity_log_entry,
     build_announcement_event,
@@ -413,6 +417,7 @@ class ControlRoomApp(App[None]):
         version_source: VersionSource | None = None,
         backend: ControlRoomBackend | None = None,
         dependencies: ControlRoomDependencies | None = None,
+        view_actions: ControlRoomViewActions | None = None,
     ) -> None:
         super().__init__()
         self._ctx = ctx
@@ -463,6 +468,7 @@ class ControlRoomApp(App[None]):
             reloadable_modules=_RELOADABLE_MODULES,
         )
         self._dependencies = dependencies or build_local_control_room_dependencies(self)
+        self._view_actions = view_actions or build_local_control_room_view_actions(self)
         self._backend: ControlRoomBackend = backend or LocalControlRoomBackend(self)
         self._view_snapshot = self._backend.current_snapshot()
         self._backend_event_unsubscribe: Callable[[], None] | None = None
@@ -483,6 +489,10 @@ class ControlRoomApp(App[None]):
     @property
     def dependencies(self) -> ControlRoomDependencies:
         return self._dependencies
+
+    @property
+    def view_actions(self) -> ControlRoomViewActions:
+        return self._view_actions
 
     @property
     def _protocol_event_sink(self) -> ControlRoomEventSink | None:
@@ -991,10 +1001,19 @@ class ControlRoomApp(App[None]):
         return "market-tab-sell" if side == "sell" else "market-tab-buy"
 
     def _set_market_panel_tab(self, side: str) -> None:
-        if side not in {"buy", "sell"} or self._runtime_state.market_panel_tab == side:
-            return
-        self._runtime_state.market_panel_tab = side
-        self._refresh_market()
+        self._view_actions.market.set_tab(side)
+
+    def _lock_market_display(self) -> None:
+        self._view_actions.market.lock_display()
+
+    def _unlock_market_display(self) -> None:
+        self._view_actions.market.unlock_display()
+
+    def _set_market_filter(self, value: str) -> None:
+        self._view_actions.market.set_filter(value)
+
+    def _clear_market_filter(self) -> None:
+        self._view_actions.market.clear_filter()
 
     def on_tabs_tab_activated(self, event: Tabs.TabActivated) -> None:
         if event.tabs.id != "market-tabs":

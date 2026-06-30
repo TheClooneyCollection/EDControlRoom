@@ -284,25 +284,17 @@ def cmd_set_hwnd(app: CommandHost, rest: str) -> None:
 def cmd_market(app: CommandHost, rest: str) -> None:
     rest_lower = rest.lower()
     if rest_lower == "lock":
-        app._market.locked = True
-        app._log("[dim]Market panel locked.[/]")
-        app._refresh_market()
+        app._lock_market_display()
     elif rest_lower == "unlock":
-        app._market.locked = False
-        app._log("[dim]Market panel unlocked.[/]")
-        app._refresh_market()
+        app._unlock_market_display()
     elif rest_lower.startswith("filter "):
         term = rest[7:].strip()
         if not term:
             app._log(f"[red]{escape(error_text.render(app._config, 'market_filter_usage'))}[/]")
             return
-        app._market_filter = term.title()
-        app._log(f"[dim]Market filter: {escape(app._market_filter)}[/]")
-        app._refresh_market()
+        app._set_market_filter(term)
     else:
-        app._market_filter = None
-        app._log("[dim]Market filter cleared.[/]")
-        app._refresh_market()
+        app._clear_market_filter()
 
 
 def cmd_new_session(app: CommandHost) -> None:

@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `141`
-- Latest generated iteration number: `274`
+- Generated iteration count: `142`
+- Latest generated iteration number: `275`
 
 ## Iteration 134
 
@@ -3933,3 +3933,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Move view-model builders from snapshot-derived app helpers to `ControlRoomDependencies.data_source` once remote data sources replace snapshots.
 - Add action objects for interactive views next: command bar, market presentation, replay browser, and trade-route picker.
+
+## Iteration 275
+
+- When: `2026-06-30 18:05`
+- Area: `control-room`
+- Title: `add-market-view-actions`
+- Source: [2026-06-30-18-05_control-room_add-market-view-actions.md](iteration-logs/2026-06-30-18-05_control-room_add-market-view-actions.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `add-market-view-actions`
+- Started: `2026-06-30 18:05`
+
+## Summary
+
+- Added the first view-action surface for local market panel presentation state.
+
+## Changes
+
+- Added `ControlRoomViewActions` and `LocalMarketPanelActions`.
+- Wired market tab activation and `market lock` / `market unlock` / `market filter` / clear commands through market view actions.
+- Added focused tests for market view actions.
+
+## Follow-ups
+
+- Add view actions for command bar, replay browser, and trade-route picker.
+- Continue moving command parsing away from direct app state mutation.
