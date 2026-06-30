@@ -25,6 +25,7 @@ from edap.control_room.models import PromptState, TradeRoutePickerState, TradeRo
 from edap.control_room.protocol import (
     ActivityLogAppendedEvent,
     AnnouncementEvent,
+    DataUpdatedEvent,
     SnapshotUpdatedEvent,
     build_activity_log_entry,
     build_remote_observer_websocket_connect_info,
@@ -108,6 +109,12 @@ class ObserverControlRoomApp(ControlRoomApp):
         if isinstance(event, SnapshotUpdatedEvent):
             self._view_snapshot = event.snapshot
             self._apply_remote_snapshot(replace_activity=True)
+            return
+        if isinstance(event, DataUpdatedEvent):
+            self._refresh_status()
+            self._refresh_haul_stats()
+            self._refresh_market()
+            self._tts.set_commander_name(event.data.ship.commander)
             return
         if isinstance(event, ActivityLogAppendedEvent):
             self._protocol_activity_log.append(event.entry)
@@ -864,11 +871,13 @@ def connect_observer_mode(
         used_example_config_fallback=loaded.used_example_config_fallback,
         actions=_ALL_ROUTINE_ACTIONS,
     )
+    data_source = RemoteObserverDataSource(remote_data)
     backend = RemoteObserverBackend(
         server_target=server_target,
         access_token=access_token,
         client_name=resolved_client_name,
         initial_snapshot=snapshot,
+        data_source=data_source,
         websocket_connect_info=build_remote_observer_websocket_connect_info(
             websocket_url=server_target.websocket_url,
             access_token=access_token,
@@ -880,7 +889,7 @@ def connect_observer_mode(
     app = ObserverControlRoomApp(
         ctx,
         backend=backend,
-        data_source=RemoteObserverDataSource(remote_data),
+        data_source=data_source,
         server_target=server_target,
         client_name=resolved_client_name,
     )

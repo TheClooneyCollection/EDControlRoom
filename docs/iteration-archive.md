@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `149`
-- Latest generated iteration number: `282`
+- Generated iteration count: `150`
+- Latest generated iteration number: `283`
 
 ## Iteration 134
 
@@ -4154,3 +4154,32 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Continue removing snapshot sync from interactive surfaces after they move behind view actions and data sources.
+
+## Iteration 283
+
+- When: `2026-06-30 18:25`
+- Area: `control-room`
+- Title: `stream-websocket-hydrate-data`
+- Source: [2026-06-30-18-25_control-room_stream-websocket-hydrate-data.md](iteration-logs/2026-06-30-18-25_control-room_stream-websocket-hydrate-data.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `stream-websocket-hydrate-data`
+- Started: `2026-06-30 18:25`
+
+## Summary
+
+- Added websocket hydrate message handling for remote data sources.
+
+## Changes
+
+- Server websocket sessions now send `control_room.hydrate` after `event.connection_ready` when a data provider is available.
+- `RemoteObserverBackend` can consume Control Room data messages, hydrate its `RemoteObserverDataSource`, and emit `DataUpdatedEvent`.
+- `ObserverControlRoomApp` refreshes data-source-backed panels from `DataUpdatedEvent`.
+- Added client and server tests for websocket/data-message hydration.
+
+## Follow-ups
+
+- Broadcast source-oriented update messages on live data changes instead of relying on snapshot fanout.
+- Remove old snapshot bootstrap and snapshot websocket handling from connect mode.

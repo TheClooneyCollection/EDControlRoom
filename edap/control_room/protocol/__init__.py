@@ -32,7 +32,7 @@ from .data_messages import (
     hydrate_message,
     is_control_room_data_message,
 )
-from .events import ActivityLogAppendedEvent, AnnouncementEvent, SnapshotUpdatedEvent
+from .events import ActivityLogAppendedEvent, AnnouncementEvent, DataUpdatedEvent, SnapshotUpdatedEvent
 from .from_app import snapshot_from_app
 from .from_message import event_from_message, snapshot_from_message
 from .sink import ControlRoomEventSink
@@ -77,6 +77,7 @@ __all__ = [
     "control_room_data_message",
     "DATA_MESSAGE_SCHEMA",
     "DATA_MESSAGE_VERSION",
+    "DataUpdatedEvent",
     "data_read_model_from_message",
     "data_read_model_from_payload",
     "event_from_message",

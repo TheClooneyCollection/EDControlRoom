@@ -131,6 +131,8 @@ def build_observer_server_app(
                     },
                 )
             )
+            if data_provider is not None:
+                await websocket.send_json(hydrate_message(data_provider()))
             broker.publish_snapshot(snapshot_provider())
             sender = asyncio.create_task(_send_session_messages(websocket, observer))
             receiver = asyncio.create_task(

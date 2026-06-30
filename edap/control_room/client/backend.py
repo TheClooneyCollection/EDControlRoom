@@ -18,11 +18,13 @@ from edap.control_room.protocol import (
     ActivityLogAppendedEvent,
     AnnouncementEvent,
     ControlRoomSnapshot,
+    DataUpdatedEvent,
     RemoteObserverWebSocketConnectInfo,
     SnapshotUpdatedEvent,
     build_activity_log_entry,
     data_read_model_from_message,
     event_from_message,
+    is_control_room_data_message,
     protocol_timestamp_now,
     snapshot_from_message,
     validate_remote_observer_capabilities_payload,
@@ -67,11 +69,13 @@ class RemoteObserverBackend(ControlRoomBackend):
         client_name: str,
         initial_snapshot: ControlRoomSnapshot,
         websocket_connect_info: RemoteObserverWebSocketConnectInfo,
+        data_source: RemoteObserverDataSource | None = None,
     ) -> None:
         self._server_target = server_target
         self._access_token = access_token
         self._client_name = client_name
         self._snapshot = initial_snapshot
+        self._data_source = data_source
         self._websocket_connect_info = websocket_connect_info
         self._event_handlers: list[ControlRoomBackendEventHandler] = []
         self._lock = threading.Lock()
@@ -290,6 +294,8 @@ class RemoteObserverBackend(ControlRoomBackend):
             if self._stop_event.is_set():
                 break
             message = json.loads(raw_message)
+            if self._handle_data_message(message):
+                continue
             parsed_event = event_from_message(message)
             if parsed_event is not None:
                 if isinstance(parsed_event, SnapshotUpdatedEvent):
@@ -298,6 +304,16 @@ class RemoteObserverBackend(ControlRoomBackend):
                 self._emit(parsed_event)
                 continue
             self._handle_response_message(message)
+
+    def _handle_data_message(self, message: dict[str, object]) -> bool:
+        if not is_control_room_data_message(message):
+            return False
+        if self._data_source is None:
+            return True
+        data = data_read_model_from_message(message)
+        self._data_source.hydrate(data)
+        self._emit(DataUpdatedEvent(data=data))
+        return True
 
     def _handle_response_message(self, message: dict[str, object]) -> None:
         message_type = str(message.get("message_type", ""))

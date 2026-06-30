@@ -40,12 +40,14 @@ from edap.control_room.protocol import (
     ACCESS_TOKEN_QUERY_PARAMETER,
     ActivityLogAppendedEvent,
     AUTHENTICATION_SCHEME_BEARER_TOKEN,
+    DataUpdatedEvent,
     REQUIRED_AUTHENTICATION_TRANSPORTS,
     RemoteObserverWebSocketConnectInfo,
     SnapshotUpdatedEvent,
     build_remote_observer_capabilities_payload,
     build_remote_observer_websocket_connect_info,
     event_from_message,
+    hydrate_message,
 )
 from edap.inara.trade_routes import TradeRoute, TradeRouteSearchResult
 from edap.control_room.protocol.snapshot import (
@@ -1469,6 +1471,22 @@ class ControlRoomClientTests(unittest.TestCase):
         data_source.hydrate(_data_read_model(system_name="Achenar"))
 
         self.assertEqual(data_source.current().ship.system, "Achenar")
+
+    def test_remote_backend_hydrates_data_source_from_data_message(self) -> None:
+        data_source = RemoteObserverDataSource(_data_read_model(system_name="Sol"))
+        backend = self._backend()
+        backend._data_source = data_source
+        events: list[object] = []
+        backend.subscribe_events(events.append)
+
+        handled = backend._handle_data_message(
+            hydrate_message(_data_read_model(system_name="Achenar"))
+        )
+
+        self.assertTrue(handled)
+        self.assertEqual(data_source.current().ship.system, "Achenar")
+        self.assertIsInstance(events[0], DataUpdatedEvent)
+        self.assertEqual(events[0].data.ship.system, "Achenar")
 
     def test_observer_app_installs_remote_data_source_dependency(self) -> None:
         backend = self._backend()

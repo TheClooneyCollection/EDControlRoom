@@ -536,6 +536,10 @@ class ControlRoomServerTests(unittest.TestCase):
                 self.assertEqual(ready["message_type"], "event.connection_ready")
                 self.assertEqual(ready["payload"]["client_role"], "active_operator")
 
+                hydrate_message = websocket.receive_json()
+                self.assertEqual(hydrate_message["message_type"], "control_room.hydrate")
+                self.assertEqual(hydrate_message["payload"]["ship"]["system"], "Sol")
+
                 state = websocket.receive_json()
                 self.assertEqual(state["message_type"], "state.snapshot")
                 self.assertEqual(state["payload"]["session"]["client_role"], "active_operator")

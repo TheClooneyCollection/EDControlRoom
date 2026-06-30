@@ -13,6 +13,7 @@ from edap.control_room.protocol import (
     AnnouncementEvent,
     ControlRoomEventSink,
     ControlRoomSnapshot,
+    DataUpdatedEvent,
     SnapshotUpdatedEvent,
     snapshot_from_app,
 )
@@ -22,7 +23,7 @@ from edap.inara.trade_routes import TradeRoute
 
 
 ControlRoomBackendEvent: TypeAlias = (
-    ActivityLogAppendedEvent | AnnouncementEvent | SnapshotUpdatedEvent
+    ActivityLogAppendedEvent | AnnouncementEvent | SnapshotUpdatedEvent | DataUpdatedEvent
 )
 ControlRoomBackendEventHandler: TypeAlias = Callable[[ControlRoomBackendEvent], None]
 
