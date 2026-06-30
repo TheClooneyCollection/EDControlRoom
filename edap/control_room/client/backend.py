@@ -146,8 +146,7 @@ class RemoteObserverBackend(ControlRoomBackend):
         return None
 
     def publish_snapshot(self, snapshot: ControlRoomSnapshot) -> None:
-        with self._lock:
-            self._snapshot = snapshot
+        return None
 
     def submit_input(self, raw: str) -> None:
         if _is_client_local_command(raw):

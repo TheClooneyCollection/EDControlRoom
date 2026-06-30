@@ -478,7 +478,6 @@ class ControlRoomClientTests(unittest.TestCase):
             updated_snapshot,
             ship=replace(updated_snapshot.ship, system_name="Achenar"),
         )
-        backend.publish_snapshot(refreshed_snapshot)
         app._view_snapshot = refreshed_snapshot
         app._apply_view_snapshot_state()
         app._refresh_remote_command_input()
@@ -513,7 +512,6 @@ class ControlRoomClientTests(unittest.TestCase):
             updated_snapshot,
             market=replace(updated_snapshot.market, station_name="Galileo"),
         )
-        backend.publish_snapshot(refreshed_snapshot)
         app._view_snapshot = refreshed_snapshot
         app._apply_view_snapshot_state()
         app._refresh_remote_command_input()
@@ -638,7 +636,6 @@ class ControlRoomClientTests(unittest.TestCase):
             updated_snapshot,
             ship=replace(updated_snapshot.ship, system_name="Achenar"),
         )
-        backend.publish_snapshot(refreshed_snapshot)
         app._view_snapshot = refreshed_snapshot
         app._apply_view_snapshot_state()
         app._replace_activity_log(refreshed_snapshot.activity_log)
@@ -910,7 +907,6 @@ class ControlRoomClientTests(unittest.TestCase):
                 ),
             )
         )
-        backend.publish_snapshot(updated_snapshot)
         app._view_snapshot = updated_snapshot
         app._apply_view_snapshot_state()
         self.assertEqual(app._view_market_data().station, "Jameson Memorial")
@@ -1283,7 +1279,7 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(target.http_base_url, "https://bridge.local:9443")
         self.assertEqual(target.websocket_url, "wss://bridge.local:9443/session")
 
-    def test_remote_backend_updates_cached_snapshot(self) -> None:
+    def test_remote_backend_ignores_snapshot_publication(self) -> None:
         target = ObserverServerTarget(
             host="bridge.local",
             port=8765,
@@ -1298,9 +1294,6 @@ class ControlRoomClientTests(unittest.TestCase):
             initial_snapshot=snapshot,
             websocket_connect_info=_websocket_connect_info(),
         )
-        received: list[object] = []
-        backend.subscribe_events(received.append)
-
         updated_snapshot = ControlRoomSnapshot(
             session=snapshot.session,
             connected_clients=snapshot.connected_clients,
@@ -1316,8 +1309,7 @@ class ControlRoomClientTests(unittest.TestCase):
 
         backend.publish_snapshot(updated_snapshot)
 
-        self.assertEqual(backend.current_snapshot().ship.system_name, "Achenar")
-        self.assertEqual(received, [])
+        self.assertEqual(backend.current_snapshot().ship.system_name, "Sol")
 
     def test_remote_backend_surfaces_response_error_messages(self) -> None:
         target = ObserverServerTarget(

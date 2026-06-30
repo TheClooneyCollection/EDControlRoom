@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `159`
-- Latest generated iteration number: `292`
+- Generated iteration count: `160`
+- Latest generated iteration number: `293`
 
 ## Iteration 134
 
@@ -4435,3 +4435,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Remove the lazy compatibility snapshot once `ControlRoomApp` construction no longer asks backends for `_view_snapshot`.
+
+## Iteration 293
+
+- When: `2026-06-30 19:18`
+- Area: `control-room`
+- Title: `remote-snapshot-publish-noop`
+- Source: [2026-06-30-19-18_control-room_remote-snapshot-publish-noop.md](iteration-logs/2026-06-30-19-18_control-room_remote-snapshot-publish-noop.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `remote-snapshot-publish-noop`
+- Started: `2026-06-30 19:18`
+
+## Summary
+
+- Made remote backend snapshot publication a no-op.
+
+## Changes
+
+- `RemoteObserverBackend.publish_snapshot()` no longer mutates the compatibility cache.
+- Removed redundant snapshot publication calls from connect client tests.
+- Updated coverage to assert remote snapshot publication does not change current compatibility state.
+
+## Follow-ups
+
+- Remove the `publish_snapshot()` method from the remote backend surface when `ControlRoomBackend` no longer inherits the snapshot sink protocol.
