@@ -9,6 +9,7 @@ from edap.control_room.protocol.data_messages import (
     CONTROL_ROOM_HYDRATE,
     DATA_MESSAGE_SCHEMA,
     DATA_MESSAGE_VERSION,
+    data_read_model_from_message,
     hydrate_message,
     is_control_room_data_message,
 )
@@ -47,3 +48,9 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
         self.assertEqual(message["payload"]["haul_session"]["completed_runs"], 3)
         self.assertNotIn("prompt_state", message["payload"])
         self.assertNotIn("replay_browser", message["payload"])
+
+        parsed = data_read_model_from_message(message)
+
+        self.assertEqual(parsed.ship.system, "Sol")
+        self.assertEqual(parsed.market.station, "Galileo")
+        self.assertEqual(parsed.haul_session.completed_runs, 3)

@@ -20,12 +20,22 @@ from edap.config import (
 from edap.control_room.client.connect import ObserverControlRoomApp
 from edap.control_room.client.backend import (
     RemoteObserverBackend,
+    RemoteObserverDataSource,
     RemoteObserverExecution,
     _validate_remote_observer_capabilities,
+)
+from edap.control_room.dependencies import (
+    ActivityLogReadModel,
+    CommandHistoryReadModel,
+    ControlRoomDataReadModel,
+    RoutineReadModel,
+    ServerStatusReadModel,
+    SessionReadModel,
 )
 from edap.control_room import commands as control_room_commands
 from edap.control_room.client.target import ObserverServerTarget, parse_observer_server_target
 from edap.control_room.models import TradeRoutePickerState, TradeRoutesData
+from edap.control_room.models import HaulStats, MarketData, ShipState
 from edap.control_room.protocol import (
     ACCESS_TOKEN_QUERY_PARAMETER,
     ActivityLogAppendedEvent,
@@ -314,6 +324,42 @@ def _snapshot() -> ControlRoomSnapshot:
             bindings_loaded=False,
             capability_names=["observer_http", "observer_websocket", "announcement_stream"],
             operator_mode="observer_only",
+        ),
+    )
+
+
+def _data_read_model(*, system_name: str = "Sol") -> ControlRoomDataReadModel:
+    return ControlRoomDataReadModel(
+        ship=ShipState(system=system_name),
+        market=MarketData(station="Galileo", system=system_name),
+        haul_session=HaulStats(),
+        command_history=CommandHistoryReadModel(
+            default_haul={},
+            history_entries=(),
+            history_limit=20,
+        ),
+        activity_log=ActivityLogReadModel(entries=()),
+        routine=RoutineReadModel(
+            routine_active=False,
+            active_routine_name=None,
+            haul_stop_requested=False,
+            verbose_controls=False,
+            instant_mode=False,
+            shutdown_requested=False,
+            shutdown_finalized=False,
+        ),
+        session=SessionReadModel(
+            session_id="observer-1",
+            client_role="active_operator",
+            client_name="observer-ipad",
+        ),
+        server_status=ServerStatusReadModel(
+            server_name="ED Control Room",
+            server_version="1.2.3",
+            runtime_platform="macos",
+            journal_source_status="configured",
+            bindings_source_status="configured",
+            bindings_loaded=False,
         ),
     )
 
@@ -1388,6 +1434,13 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(destination_message["payload"]["destination"], "Achenar")
         self.assertEqual(haul_message["message_type"], "command.dispatch_haul_loop")
         self.assertEqual(haul_message["payload"]["params"]["station_1_buying"], "Silver")
+
+    def test_remote_data_source_hydrates_current_read_model(self) -> None:
+        data_source = RemoteObserverDataSource(_data_read_model(system_name="Sol"))
+
+        data_source.hydrate(_data_read_model(system_name="Achenar"))
+
+        self.assertEqual(data_source.current().ship.system, "Achenar")
 
     def test_remote_backend_replay_commands_stay_client_local(self) -> None:
         target = ObserverServerTarget(

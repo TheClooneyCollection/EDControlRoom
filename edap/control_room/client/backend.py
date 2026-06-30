@@ -12,6 +12,7 @@ import httpx
 import websockets
 
 from edap.control_room.backend import ControlRoomBackend, ControlRoomBackendEventHandler
+from edap.control_room.dependencies import ControlRoomDataReadModel, ControlRoomDataSource
 from edap.control_room.protocol import (
     ActivityLogEntry,
     ActivityLogAppendedEvent,
@@ -20,6 +21,7 @@ from edap.control_room.protocol import (
     RemoteObserverWebSocketConnectInfo,
     SnapshotUpdatedEvent,
     build_activity_log_entry,
+    data_read_model_from_message,
     event_from_message,
     protocol_timestamp_now,
     snapshot_from_message,
@@ -422,6 +424,20 @@ class RemoteObserverExecution:
         self._backend.interrupt_active_routine()
 
 
+class RemoteObserverDataSource(ControlRoomDataSource):
+    def __init__(self, initial_data: ControlRoomDataReadModel) -> None:
+        self._data = initial_data
+        self._lock = threading.Lock()
+
+    def current(self) -> ControlRoomDataReadModel:
+        with self._lock:
+            return self._data
+
+    def hydrate(self, data: ControlRoomDataReadModel) -> None:
+        with self._lock:
+            self._data = data
+
+
 def fetch_remote_observer_snapshot(
     *,
     server_target: ObserverServerTarget,
@@ -444,6 +460,29 @@ def fetch_remote_observer_snapshot(
         _raise_for_auth_or_http_error(snapshot_response, server_target)
         snapshot = snapshot_from_message(snapshot_response.json())
     return capabilities, snapshot
+
+
+def fetch_remote_control_room_data(
+    *,
+    server_target: ObserverServerTarget,
+    access_token: str,
+) -> tuple[dict[str, Any], ControlRoomDataReadModel]:
+    auth_headers = {"Authorization": f"Bearer {access_token}"}
+    with httpx.Client(timeout=10.0) as client:
+        capabilities_response = client.get(
+            f"{server_target.http_base_url}/capabilities",
+            headers=auth_headers,
+        )
+        _raise_for_auth_or_http_error(capabilities_response, server_target)
+        capabilities = capabilities_response.json()
+
+        hydrate_response = client.get(
+            f"{server_target.http_base_url}/hydrate",
+            headers=auth_headers,
+        )
+        _raise_for_auth_or_http_error(hydrate_response, server_target)
+        data = data_read_model_from_message(hydrate_response.json())
+    return capabilities, data
 
 
 def _raise_for_auth_or_http_error(

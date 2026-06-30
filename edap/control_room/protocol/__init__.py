@@ -27,6 +27,8 @@ from .data_messages import (
     SHIP_UPDATED,
     SUPPORTED_DATA_MESSAGE_TYPES,
     control_room_data_message,
+    data_read_model_from_message,
+    data_read_model_from_payload,
     hydrate_message,
     is_control_room_data_message,
 )
@@ -75,6 +77,8 @@ __all__ = [
     "control_room_data_message",
     "DATA_MESSAGE_SCHEMA",
     "DATA_MESSAGE_VERSION",
+    "data_read_model_from_message",
+    "data_read_model_from_payload",
     "event_from_message",
     "HaulSessionSnapshot",
     "HAUL_UPDATED",

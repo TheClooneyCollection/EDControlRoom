@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `145`
-- Latest generated iteration number: `278`
+- Generated iteration count: `146`
+- Latest generated iteration number: `279`
 
 ## Iteration 134
 
@@ -4045,3 +4045,32 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Add websocket hydrate/update streaming for remote data sources.
 - Rebuild `connect` around remote data-source hydration instead of `/snapshot`.
+
+## Iteration 279
+
+- When: `2026-06-30 18:17`
+- Area: `control-room`
+- Title: `add-remote-hydrate-data-source`
+- Source: [2026-06-30-18-17_control-room_add-remote-hydrate-data-source.md](iteration-logs/2026-06-30-18-17_control-room_add-remote-hydrate-data-source.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `add-remote-hydrate-data-source`
+- Started: `2026-06-30 18:17`
+
+## Summary
+
+- Added the first remote data-source building block for the no-snapshot `connect` path.
+
+## Changes
+
+- Added hydrate payload parsing into `ControlRoomDataReadModel`.
+- Added `RemoteObserverDataSource` as a typed remote read-model cache.
+- Added `fetch_remote_control_room_data()` to fetch `/capabilities` plus `/hydrate`.
+- Added tests for hydrate round-trip parsing and remote data-source hydration.
+
+## Follow-ups
+
+- Wire `connect` dependencies to `RemoteObserverDataSource`.
+- Add websocket data update handling after the server streams source-oriented update messages.
