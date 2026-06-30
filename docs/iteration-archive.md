@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `144`
-- Latest generated iteration number: `277`
+- Generated iteration count: `145`
+- Latest generated iteration number: `278`
 
 ## Iteration 134
 
@@ -4017,3 +4017,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Wire `serve` to emit `control_room.hydrate` from `ControlRoomDependencies.data_source`.
 - Build remote data sources that consume hydrate/update messages directly instead of snapshots.
+
+## Iteration 278
+
+- When: `2026-06-30 18:14`
+- Area: `control-room`
+- Title: `serve-data-hydrate-endpoint`
+- Source: [2026-06-30-18-14_control-room_serve-data-hydrate-endpoint.md](iteration-logs/2026-06-30-18-14_control-room_serve-data-hydrate-endpoint.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `serve-data-hydrate-endpoint`
+- Started: `2026-06-30 18:14`
+
+## Summary
+
+- Added the first server route for the no-snapshot data protocol.
+
+## Changes
+
+- Added authenticated `GET /hydrate` to the observer server app.
+- Wired `control_room serve` to serve hydrate data from `runtime_host.dependencies.data_source.current`.
+- Added server tests covering `control_room.hydrate` payload shape and UI-state omission.
+
+## Follow-ups
+
+- Add websocket hydrate/update streaming for remote data sources.
+- Rebuild `connect` around remote data-source hydration instead of `/snapshot`.

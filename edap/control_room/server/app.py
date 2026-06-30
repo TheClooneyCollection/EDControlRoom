@@ -22,6 +22,7 @@ from edap.control_room.protocol import (
     SUPPORTED_MESSAGE_TYPES,
     SUPPORTED_RESPONSE_MESSAGE_TYPES,
     build_remote_observer_capabilities_payload,
+    hydrate_message,
 )
 from edap.control_room.server.messages import protocol_message
 
@@ -40,6 +41,7 @@ CONTROL_ROOM_BROWSER_PROBE_HTML = _BROWSER_PROBE_PATH.read_text(encoding="utf-8"
 def build_observer_server_app(
     *,
     snapshot_provider: Callable[[], object],
+    data_provider: Callable[[], object] | None = None,
     command_handler: ObserverSessionCommandHandler | None,
     broker: InMemoryObserverSessionBroker,
     auth: ObserverServerAuth,
@@ -93,6 +95,14 @@ def build_observer_server_app(
         if auth_failure is not None:
             return auth_failure
         return JSONResponse(asdict(broker.current_snapshot(snapshot_provider=snapshot_provider)))
+
+    async def hydrate(request):
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        if data_provider is None:
+            return JSONResponse({"detail": "data provider unavailable"}, status_code=503)
+        return JSONResponse(hydrate_message(data_provider()))
 
     async def message_schema(request):
         return JSONResponse(CONTROL_ROOM_MESSAGE_SCHEMA)
@@ -151,6 +161,7 @@ def build_observer_server_app(
             Route("/health", health),
             Route("/capabilities", capabilities),
             Route("/snapshot", snapshot),
+            Route("/hydrate", hydrate),
             Route(MESSAGE_SCHEMA_URL_PATH, message_schema),
             Route(BROWSER_PROBE_URL_PATH, browser_probe),
             WebSocketRoute("/session", session),

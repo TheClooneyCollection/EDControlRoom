@@ -1,6 +1,6 @@
 # Control Room Status
 ## Current
-- Plan 0008 is the active Control Room architecture target: one local-first `ControlRoomApp` composed with data sources, view models, view actions, and execution dependencies; local and remote execution dependencies exist, app dispatch helpers route through execution, status/haul/market panels render through initial view models, market presentation commands route through view actions, and the new no-snapshot `control_room.hydrate` data message is defined.
+- Plan 0008 is the active Control Room architecture target: one local-first `ControlRoomApp` composed with data sources, view models, view actions, and execution dependencies; local and remote execution dependencies exist, app dispatch helpers route through execution, status/haul/market panels render through initial view models, market presentation commands route through view actions, and `serve` now exposes authenticated no-snapshot `GET /hydrate`.
 - Current `serve` / `connect` still runs on the older snapshot-based observer stack from plan 0007; it is functional but known to be fragile because remote refreshes can collide with local interaction state.
 - `connect` currently intercepts prompt-owning commands like `haul`, `haul route`, `haul search`, `dest`, `home`, `help`, `history`, and `market` locally, then sends finalized `command.dispatch_haul_loop` / `command.dispatch_destination` payloads to the headless server.
 - Market panel lock semantics are aligned across embedded and `connect`: market data keeps ingesting continuously, while lock/unlock freezes or unfreezes only the displayed panel.
@@ -14,4 +14,4 @@
 - Shared LAN token auth remains acceptable for current remote work; per-user or internet-facing identity is not implemented.
 ## Next
 - Continue plan 0008 bottom-up by moving view-model builders from snapshot-derived app helpers to `ControlRoomDependencies.data_source`, then add view actions for command bar, replay browser, and trade-route picker.
-- Wire `serve` to emit `control_room.hydrate` from `ControlRoomDependencies.data_source`, then build remote data sources that consume hydrate/update messages directly instead of snapshots.
+- Add websocket hydrate/update streaming for remote data sources, then rebuild `connect` around remote data-source hydration instead of `/snapshot`.

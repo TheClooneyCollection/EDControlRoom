@@ -29,6 +29,15 @@ from edap.config import (
 )
 from edap.control_room.protocol.events import AnnouncementEvent
 from edap.control_room.protocol.sink import ControlRoomEventSink
+from edap.control_room.dependencies import (
+    ActivityLogReadModel,
+    CommandHistoryReadModel,
+    ControlRoomDataReadModel,
+    RoutineReadModel,
+    ServerStatusReadModel,
+    SessionReadModel,
+)
+from edap.control_room.models import HaulStats, MarketData, ShipState
 from edap.control_room.protocol.snapshot import (
     ActivityLogEntry,
     ActiveOperatorSnapshot,
@@ -251,6 +260,43 @@ def _base_snapshot() -> ControlRoomSnapshot:
     )
 
 
+def _base_data_read_model() -> ControlRoomDataReadModel:
+    return ControlRoomDataReadModel(
+        ship=ShipState(system="Sol", commander="CMDR TEST"),
+        market=MarketData(station="Galileo", system="Sol"),
+        haul_session=HaulStats(completed_runs=2),
+        command_history=CommandHistoryReadModel(
+            default_haul={},
+            history_entries=(),
+            history_limit=20,
+        ),
+        activity_log=ActivityLogReadModel(entries=()),
+        routine=RoutineReadModel(
+            routine_active=False,
+            active_routine_name=None,
+            haul_stop_requested=False,
+            verbose_controls=False,
+            instant_mode=False,
+            shutdown_requested=False,
+            shutdown_finalized=False,
+        ),
+        session=SessionReadModel(
+            session_id="local-server",
+            client_role="active_operator",
+            client_name="local-server",
+            active_operator_name="local-server",
+        ),
+        server_status=ServerStatusReadModel(
+            server_name="ED Control Room",
+            server_version="1.2.3",
+            runtime_platform="macos",
+            journal_source_status="configured",
+            bindings_source_status="configured",
+            bindings_loaded=False,
+        ),
+    )
+
+
 class _SnapshotRecorder(ControlRoomEventSink):
     def __init__(self) -> None:
         self.activity_entries: list[ActivityLogEntry] = []
@@ -417,6 +463,7 @@ class ControlRoomServerTests(unittest.TestCase):
         broker = InMemoryObserverSessionBroker()
         app = build_observer_server_app(
             snapshot_provider=_base_snapshot,
+            data_provider=_base_data_read_model,
             command_handler=None,
             broker=broker,
             auth=SharedAccessTokenAuth("secret-token"),
@@ -472,6 +519,15 @@ class ControlRoomServerTests(unittest.TestCase):
             )
             self.assertEqual(snapshot.status_code, 200)
             self.assertEqual(snapshot.json()["ship"]["commander_name"], "CMDR TEST")
+
+            hydrate = client.get(
+                "/hydrate",
+                headers={"Authorization": "Bearer secret-token"},
+            )
+            self.assertEqual(hydrate.status_code, 200)
+            self.assertEqual(hydrate.json()["message_type"], "control_room.hydrate")
+            self.assertEqual(hydrate.json()["payload"]["ship"]["system"], "Sol")
+            self.assertNotIn("prompt_state", hydrate.json()["payload"])
 
             with client.websocket_connect(
                 "/session?client_name=bridge-ipad&access_token=secret-token"
