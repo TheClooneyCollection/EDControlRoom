@@ -1315,12 +1315,12 @@ class ControlRoomApp(App[None]):
         )
 
     def _sync_presented_market_from_snapshot(self, *, force: bool = False) -> None:
-        market = self._view_snapshot.market
+        market = self._dependencies.data_source.current().market
         if not self._market.locked or force:
             self._presented_market = MarketData(
-                station=market.station_name,
-                system=market.system_name,
-                timestamp=market.market_timestamp,
+                station=market.station,
+                system=market.system,
+                timestamp=market.timestamp,
                 items=list(market.items),
                 locked=self._market.locked,
             )
@@ -1328,12 +1328,15 @@ class ControlRoomApp(App[None]):
         self._presented_market.locked = True
 
     def _status_panel_view_model(self) -> _view_models.StatusPanelViewModel:
-        return _view_models.status_panel_view_model(self._view_ship_state())
+        return _view_models.status_panel_view_model(
+            self._dependencies.data_source.current().ship
+        )
 
     def _haul_panel_view_model(self) -> _view_models.HaulPanelViewModel:
+        data = self._dependencies.data_source.current()
         return _view_models.haul_panel_view_model(
-            self._view_haul_stats(),
-            current_balance=self._view_snapshot.ship.credits,
+            data.haul_session,
+            current_balance=data.ship.credits,
         )
 
     def _market_panel_view_model(self) -> _view_models.MarketPanelViewModel:

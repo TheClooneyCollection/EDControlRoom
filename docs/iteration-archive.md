@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `147`
-- Latest generated iteration number: `280`
+- Generated iteration count: `148`
+- Latest generated iteration number: `281`
 
 ## Iteration 134
 
@@ -4101,3 +4101,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Replace the remaining snapshot bootstrap and websocket stream in connect mode with hydrate/update data messages.
+
+## Iteration 281
+
+- When: `2026-06-30 18:21`
+- Area: `control-room`
+- Title: `render-panels-from-data-source`
+- Source: [2026-06-30-18-21_control-room_render-panels-from-data-source.md](iteration-logs/2026-06-30-18-21_control-room_render-panels-from-data-source.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `render-panels-from-data-source`
+- Started: `2026-06-30 18:21`
+
+## Summary
+
+- Moved the first rendered panels from snapshot-derived app helpers to the composable data-source dependency.
+
+## Changes
+
+- Updated status and haul panel view-model builders to read from `ControlRoomDependencies.data_source`.
+- Updated market presentation sync to read latest market data from the data source while keeping display lock state local.
+- Updated tests to assert panel rendering and connect market lock behavior through data-source hydration rather than backend snapshots.
+
+## Follow-ups
+
+- Remove remaining `_sync_view_snapshot()` calls from read-only panel refresh paths.
+- Add websocket data update streaming so remote data sources hydrate continuously without snapshots.

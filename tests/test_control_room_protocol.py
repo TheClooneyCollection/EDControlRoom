@@ -19,6 +19,7 @@ from edap.config import (
 )
 from edap.control_room.backend import ControlRoomBackend, LocalControlRoomBackend
 from edap.control_room.app import ControlRoomApp
+from edap.control_room.dependencies import LocalControlRoomDataSource
 from edap.control_room.history import resume_detail, resume_label
 from edap.control_room.models import ReplaySelection
 from edap.control_room.protocol import (
@@ -613,9 +614,9 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
 
         self.assertEqual(recorder.snapshot_count, 1)
 
-    def test_status_panel_can_render_from_backend_snapshot(self) -> None:
+    def test_status_panel_renders_from_data_source(self) -> None:
         remote_app = _ProtocolHarnessApp(_make_context(Path(self.tmpdir.name)))
-        remote_app._ship.commander = "CMDR REMOTE"
+        remote_app._ship.commander = "CMDR DATA"
         remote_app._ship.system = "Achenar"
         remote_app._ship.status = "in_station"
         snapshot = snapshot_from_app(remote_app)
@@ -625,10 +626,14 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
             backend=_SnapshotBackend(snapshot),
         )
         app._ship.commander = "CMDR LOCAL"
+        app._dependencies = replace(
+            app._dependencies,
+            data_source=LocalControlRoomDataSource(remote_app),
+        )
         app._refresh_status()
 
         rendered = app._status_widget.updated.plain
-        self.assertIn("CMDR REMOTE", rendered)
+        self.assertIn("CMDR DATA", rendered)
         self.assertNotIn("CMDR LOCAL", rendered)
 
     def test_dispatch_command_routes_through_execution_dependency(self) -> None:

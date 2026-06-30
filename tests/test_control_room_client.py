@@ -399,10 +399,16 @@ class ControlRoomClientTests(unittest.TestCase):
             websocket_connect_info=_websocket_connect_info(),
         )
 
-    def _app(self, *, backend: RemoteObserverBackend | None = None) -> ObserverControlRoomApp:
+    def _app(
+        self,
+        *,
+        backend: RemoteObserverBackend | None = None,
+        data_source: RemoteObserverDataSource | None = None,
+    ) -> ObserverControlRoomApp:
         return ObserverControlRoomApp(
             _make_observer_context(),
             backend=backend or self._backend(),
+            data_source=data_source,
             server_target=self._target(),
             client_name="observer-ipad",
         )
@@ -848,7 +854,18 @@ class ControlRoomClientTests(unittest.TestCase):
             ),
         )
         backend = self._backend(initial_snapshot=initial_snapshot)
-        app = self._app(backend=backend)
+        data_source = RemoteObserverDataSource(
+            replace(
+                _data_read_model(system_name="Sol"),
+                market=MarketData(
+                    station="Jameson Memorial",
+                    system="Sol",
+                    timestamp="2026-06-30T12:00:00Z",
+                    items=[{"Name": "gold", "Stock": 42}],
+                ),
+            )
+        )
+        app = self._app(backend=backend, data_source=data_source)
         command_input = _FakeInputWidget()
         _bind_observer_widgets(app, command_input)
 
@@ -873,6 +890,17 @@ class ControlRoomClientTests(unittest.TestCase):
                 market_timestamp="2026-06-30T12:01:00Z",
                 items=[{"Name": "silver", "Stock": 99}],
             ),
+        )
+        data_source.hydrate(
+            replace(
+                data_source.current(),
+                market=MarketData(
+                    station="Galileo",
+                    system="Sol",
+                    timestamp="2026-06-30T12:01:00Z",
+                    items=[{"Name": "silver", "Stock": 99}],
+                ),
+            )
         )
         backend.publish_snapshot(updated_snapshot)
         app._view_snapshot = updated_snapshot
