@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `123`
-- Latest generated iteration number: `256`
+- Generated iteration count: `124`
+- Latest generated iteration number: `257`
 
 ## Iteration 134
 
@@ -3444,3 +3444,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - The full suite still exceeds the repo timing budget because Textual app tests dominate runtime; this fix adds one `pilot.pause()` to verify layout-driven scrollbar visibility and that test is now the slowest case in `tools/report_test_timing.py`.
+
+## Iteration 257
+
+- When: `2026-06-30 13:12`
+- Area: `control-room`
+- Title: `market-panel-tabs`
+- Source: [2026-06-30-13-12_control-room_market-panel-tabs.md](iteration-logs/2026-06-30-13-12_control-room_market-panel-tabs.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `market-panel-tabs`
+- Started: `2026-06-30 13:12`
+
+## Summary
+
+- Split the Control Room market panel into native `Buy` and `Sell` tabs without changing any market commands or backend data flow.
+
+## Changes
+
+- Added a tab strip above the existing market scroll view and kept the panel data/render refresh path local to the UI state.
+- Updated the market renderer so the active tab shows only its selected trade side while preserving market filtering, sorting, and empty-state messaging.
+- Extended Control Room tests to cover sell-side rendering, tab-specific rendering, and live tab switching in the Textual app.
+
+## Follow-ups
+
+- Live-check the tab strip in a real terminal session to confirm mouse/tab navigation feels acceptable for operators; no command-path fallback was added in this slice.

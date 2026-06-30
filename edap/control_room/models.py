@@ -135,6 +135,7 @@ class RuntimeUIState:
     haul_stop_requested: bool = False
     verbose_controls: bool = False
     instant_mode: bool = False
+    market_panel_tab: str = "buy"
     sigint_pending: bool = False
     shutdown_requested: bool = False
     shutdown_finalized: bool = False

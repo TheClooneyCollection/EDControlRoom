@@ -53,7 +53,7 @@ from textual.app import App, ComposeResult
 from textual.app import ScreenStackError
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.events import MouseScrollDown, MouseScrollUp
-from textual.widgets import Footer, Header, Input, OptionList, RichLog, Static
+from textual.widgets import Footer, Header, Input, OptionList, RichLog, Static, Tab, Tabs
 
 from edap.config import AppConfig
 from edap.control_room.backend import ControlRoomBackend, LocalControlRoomBackend
@@ -342,9 +342,15 @@ class ControlRoomApp(App[None]):
         border: solid $primary;
         padding: 0 1;
     }
-    #market {
+    #market-pane {
         height: 1fr;
         border: solid $primary;
+    }
+    #market-tabs {
+        dock: top;
+    }
+    #market {
+        height: 1fr;
         padding: 0 1;
     }
     #market-content {
@@ -727,8 +733,15 @@ class ControlRoomApp(App[None]):
                         yield OptionList(id="resume-list")
                         yield Static(id="resume-detail")
             with Vertical(id="right"):
-                with VerticalScroll(id="market"):
-                    yield Static(id="market-content")
+                with Vertical(id="market-pane"):
+                    yield Tabs(
+                        Tab("Buy", id="market-tab-buy"),
+                        Tab("Sell", id="market-tab-sell"),
+                        id="market-tabs",
+                        active="market-tab-buy",
+                    )
+                    with VerticalScroll(id="market"):
+                        yield Static(id="market-content")
                 yield Static(id="haul")
         with Vertical(id="trade-route-picker"):
             yield Static(
@@ -756,7 +769,10 @@ class ControlRoomApp(App[None]):
         self._refresh_activity_title()
         self.query_one("#resume-browser", Vertical).border_title = "REPLAY HISTORY"
         self.query_one("#haul", Static).border_title = "HAUL"
-        self.query_one("#market", VerticalScroll).border_title = "MARKET"
+        self.query_one("#market-pane", Vertical).border_title = "MARKET"
+        self.query_one("#market-tabs", Tabs).active = self._market_tab_id(
+            self._runtime_state.market_panel_tab
+        )
         self.query_one("#trade-route-picker", Vertical).border_title = "HAUL ROUTES"
 
     def _mount_local_runtime(self) -> None:
@@ -956,9 +972,28 @@ class ControlRoomApp(App[None]):
                 _rendering.market_markup(
                     self._view_market_data(),
                     self._view_snapshot.market.market_filter_text,
+                    side=self._runtime_state.market_panel_tab,
                 )
             )
         )
+
+    @staticmethod
+    def _market_tab_id(side: str) -> str:
+        return "market-tab-sell" if side == "sell" else "market-tab-buy"
+
+    def _set_market_panel_tab(self, side: str) -> None:
+        if side not in {"buy", "sell"} or self._runtime_state.market_panel_tab == side:
+            return
+        self._runtime_state.market_panel_tab = side
+        self._refresh_market()
+
+    def on_tabs_tab_activated(self, event: Tabs.TabActivated) -> None:
+        if event.tabs.id != "market-tabs":
+            return
+        if event.tab.id == "market-tab-sell":
+            self._set_market_panel_tab("sell")
+        else:
+            self._set_market_panel_tab("buy")
 
     def _refresh_trade_routes(self) -> None:
         self._refresh_trade_route_picker()

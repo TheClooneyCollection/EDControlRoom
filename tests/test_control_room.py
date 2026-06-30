@@ -61,7 +61,7 @@ from edap.platform.input.base import InputTargetState
 from edap.version import GitHubRelease
 from rich.text import Text
 from textual.containers import VerticalScroll
-from textual.widgets import Static
+from textual.widgets import Static, Tabs
 
 
 def _make_timing_config() -> TimingConfig:
@@ -969,7 +969,7 @@ class ControlRoomCommandTests(unittest.TestCase):
             ],
         )
 
-        markup = control_room_rendering.market_markup(market, None)
+        markup = control_room_rendering.market_markup(market, None, side="sell")
 
         self.assertIn("SELL TO MARKET", markup)
         self.assertIn("Food Cartridges", markup)
@@ -1001,9 +1001,36 @@ class ControlRoomCommandTests(unittest.TestCase):
             ],
         )
 
-        markup = control_room_rendering.market_markup(market, None)
+        markup = control_room_rendering.market_markup(market, None, side="sell")
 
         self.assertLess(markup.index("Food Cartridges"), markup.index("Gold"))
+
+    def test_market_markup_renders_only_selected_side(self) -> None:
+        market = MarketData(
+            station="Pawelczyk Dock",
+            system="HIP 58412",
+            timestamp="2026-06-08T20:09:46Z",
+            items=[
+                {
+                    "Category": "Foods",
+                    "Name": "foodcartridges",
+                    "Name_Localised": "Food Cartridges",
+                    "Stock": 15,
+                    "BuyPrice": 1500,
+                    "Demand": 0,
+                    "DemandBracket": 0,
+                    "SellPrice": 1929,
+                }
+            ],
+        )
+
+        buy_markup = control_room_rendering.market_markup(market, None, side="buy")
+        sell_markup = control_room_rendering.market_markup(market, None, side="sell")
+
+        self.assertIn("BUY FROM MARKET", buy_markup)
+        self.assertNotIn("SELL TO MARKET", buy_markup)
+        self.assertIn("SELL TO MARKET", sell_markup)
+        self.assertNotIn("BUY FROM MARKET", sell_markup)
 
     def test_market_panel_enables_vertical_scroll_for_overflowing_content(self) -> None:
         async def run() -> None:
@@ -1046,6 +1073,62 @@ class ControlRoomCommandTests(unittest.TestCase):
 
                     self.assertTrue(market.show_vertical_scrollbar)
                     self.assertGreater(market.max_scroll_y, 0)
+
+        asyncio.run(run())
+
+    def test_market_panel_switches_between_buy_and_sell_tabs(self) -> None:
+        async def run() -> None:
+            with tempfile.TemporaryDirectory() as tmp:
+                journal_dir = Path(tmp)
+                snapshot = replace(
+                    _remote_snapshot(routine_active=False),
+                    market=MarketSnapshot(
+                        station_name="Jameson Memorial",
+                        system_name="Sol",
+                        market_timestamp="2026-06-29T12:00:00Z",
+                        market_filter_text=None,
+                        locked=False,
+                        items=[
+                            {
+                                "Category": "Foods",
+                                "Name": "coffee",
+                                "Name_Localised": "Coffee",
+                                "Stock": 120,
+                                "BuyPrice": 2500,
+                            },
+                            {
+                                "Category": "Metals",
+                                "Name": "gold",
+                                "Name_Localised": "Gold",
+                                "Demand": 80,
+                                "DemandBracket": 1,
+                                "SellPrice": 10000,
+                            },
+                        ],
+                    ),
+                )
+                app = ControlRoomApp(
+                    _make_context(journal_dir),
+                    backend=_RemoteBackendStub(snapshot),
+                )
+
+                async with app.run_test() as pilot:
+                    app._view_snapshot = snapshot
+                    app._refresh_market()
+                    await pilot.pause()
+
+                    tabs = app.query_one("#market-tabs", Tabs)
+                    content = app.query_one("#market-content", Static)
+
+                    self.assertEqual(tabs.active, "market-tab-buy")
+                    self.assertIn("BUY FROM MARKET", content.render().plain)
+                    self.assertNotIn("SELL TO MARKET", content.render().plain)
+
+                    tabs.active = "market-tab-sell"
+                    await pilot.pause()
+
+                    self.assertIn("SELL TO MARKET", content.render().plain)
+                    self.assertNotIn("BUY FROM MARKET", content.render().plain)
 
         asyncio.run(run())
 

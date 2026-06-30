@@ -246,7 +246,12 @@ def haul_stats_markup(
     return "\n".join(rows)
 
 
-def market_markup(market: MarketData, market_filter: str | None) -> str:
+def market_markup(
+    market: MarketData,
+    market_filter: str | None,
+    *,
+    side: str = "buy",
+) -> str:
     if not market.items:
         return (
             "[dim]No market data.[/]\n\n"
@@ -277,7 +282,7 @@ def market_markup(market: MarketData, market_filter: str | None) -> str:
     ]
 
     sections: list[str] = [header]
-    if buy:
+    if side == "buy" and buy:
         col = max(max(len(name) for name, *_ in buy), 12)
         sections.append("\n[bold]  BUY FROM MARKET[/]")
         sections.append(f"  [dim]{'Item':<{col}}  {'Supply':>10}  {'Buy CR':>10}[/]")
@@ -285,7 +290,7 @@ def market_markup(market: MarketData, market_filter: str | None) -> str:
         for name, stock, price in sorted(buy, key=lambda row: row[0].lower()):
             sections.append(f"  {escape(name):<{col}}  {stock:>10,}  {price:>8,}")
 
-    if sell:
+    if side == "sell" and sell:
         col = max(max(len(name) for name, *_ in sell), 12)
         sections.append("\n[bold]  SELL TO MARKET[/]")
         sections.append(f"  [dim]{'Item':<{col}}  {'Demand':>10}  {'Sell CR':>10}[/]")
@@ -293,9 +298,12 @@ def market_markup(market: MarketData, market_filter: str | None) -> str:
         for name, demand, price in sorted(sell, key=lambda row: row[0].lower()):
             sections.append(f"  {escape(name):<{col}}  {demand:>10,}  {price:>8,}")
 
-    if not buy and not sell:
+    if side == "buy" and not buy:
         no_match = f" matching '{escape(term)}'" if term else ""
-        sections.append(f"\n[dim]No items{no_match}.[/]")
+        sections.append(f"\n[dim]No buy items{no_match}.[/]")
+    elif side == "sell" and not sell:
+        no_match = f" matching '{escape(term)}'" if term else ""
+        sections.append(f"\n[dim]No sell items{no_match}.[/]")
 
     return "\n".join(sections)
 
