@@ -406,10 +406,11 @@ class ObserverControlRoomApp(ControlRoomApp):
         )
         parts = lowered.split(None, 1)
         verb = parts[0] if parts else ""
-        if verb in {"haul", "dest", "set_dest", "home"}:
+        if verb in {"haul", "dest", "set_dest", "home", "replay", "history", "commands", "help", "?"}:
             self._sync_local_ship_context_from_snapshot()
             _commands.dispatch(self, raw)
             self._sync_local_prompt_state()
+            self._sync_local_replay_state()
             return True
         self._debug_log("observer_try_local_client_command_not_matched", raw=raw)
         return False

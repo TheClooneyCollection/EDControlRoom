@@ -472,6 +472,40 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(app._resume_entries[0].entry.raw, "dest Achenar")
         self.assertTrue(backend._outgoing_messages.empty())
 
+    def test_observer_app_replay_command_runs_locally(self) -> None:
+        updated_snapshot = replace(
+            _snapshot(),
+            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+            command_history=CommandHistorySnapshot(
+                history_entries=[
+                    CommandHistoryEntrySnapshot(
+                        raw_command="haul Silver",
+                        command_name="haul",
+                        arguments={"station_1_buying": "Silver"},
+                        timestamp="2026-06-30T12:00:00Z",
+                    )
+                ],
+                history_limit=20,
+            ),
+        )
+        backend = self._backend(initial_snapshot=updated_snapshot)
+        app = self._app(backend=backend)
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
+        app.set_focus = lambda _widget: None  # type: ignore[method-assign]
+
+        class _Submitted:
+            def __init__(self, value: str) -> None:
+                self.value = value
+                self.input = type("_Input", (), {"value": value})()
+
+        app._apply_view_snapshot_state()
+        app.on_input_submitted(_Submitted("replay"))
+
+        self.assertTrue(app._resume_open)
+        self.assertTrue(any(entry.entry.raw == "haul Silver" for entry in app._resume_entries))
+        self.assertTrue(backend._outgoing_messages.empty())
+
     def test_observer_app_ignores_remote_trade_routes_snapshot(self) -> None:
         updated_snapshot = replace(
             _snapshot(),
