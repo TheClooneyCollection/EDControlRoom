@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from edap.config import (
@@ -378,6 +379,49 @@ class _IntentRecorderBackend(_SnapshotBackend):
         self.replayed_entries.append((entry.raw, edit, skip_delay))
 
 
+class _ExecutionRecorder:
+    def __init__(self) -> None:
+        self.dispatched_commands: list[tuple[str, bool | None]] = []
+        self.dispatched_destinations: list[tuple[str, float, bool, str | None]] = []
+        self.dispatched_hauls: list[tuple[dict[str, str] | None, bool, str | None]] = []
+
+    def submit_command(self, raw: str, *, skip_delay: bool | None = None) -> None:
+        self.dispatched_commands.append((raw, skip_delay))
+
+    def dispatch_destination(
+        self,
+        destination: str,
+        galaxy_map_settle: float,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self.dispatched_destinations.append(
+            (destination, galaxy_map_settle, skip_delay, raw_command)
+        )
+
+    def dispatch_haul_loop(
+        self,
+        *,
+        params: dict[str, str] | None = None,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self.dispatched_hauls.append((params, skip_delay, raw_command))
+
+    def load_trade_route(self, route: TradeRoute, *, raw_command: str | None = None) -> None:
+        return None
+
+    def handle_haul_prompt(self, value: str) -> None:
+        return None
+
+    def handle_haul_confirm_prompt(self, value: str) -> None:
+        return None
+
+    def cancel_active_routine(self) -> None:
+        return None
+
+
 class _SinkRecorder(ControlRoomEventSink):
     def __init__(self) -> None:
         self.activity_messages: list[str] = []
@@ -587,17 +631,19 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.assertIn("CMDR REMOTE", rendered)
         self.assertNotIn("CMDR LOCAL", rendered)
 
-    def test_dispatch_command_routes_through_backend(self) -> None:
+    def test_dispatch_command_routes_through_execution_dependency(self) -> None:
         snapshot = snapshot_from_app(self.app)
         backend = _IntentRecorderBackend(snapshot)
+        execution = _ExecutionRecorder()
         app = _RenderHarnessApp(
             _make_context(Path(self.tmpdir.name)),
             backend=backend,
         )
+        app._dependencies = replace(app._dependencies, execution=execution)
 
         app._dispatch_command("commands", skip_delay=True)
 
-        self.assertEqual(backend.dispatched_commands, [("commands", True)])
+        self.assertEqual(execution.dispatched_commands, [("commands", True)])
 
     def test_action_open_history_routes_through_backend(self) -> None:
         snapshot = snapshot_from_app(self.app)
@@ -634,10 +680,12 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
     def test_trade_route_picker_enter_dispatches_haul_route_command(self) -> None:
         snapshot = snapshot_from_app(self.app)
         backend = _IntentRecorderBackend(snapshot)
+        execution = _ExecutionRecorder()
         app = _RenderHarnessApp(
             _make_context(Path(self.tmpdir.name)),
             backend=backend,
         )
+        app._dependencies = replace(app._dependencies, execution=execution)
         app._trade_routes.routes = [
             TradeRoute(
                 index=2,
@@ -656,15 +704,17 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
 
         self.assertTrue(event.prevented)
         self.assertFalse(app._trade_route_picker_open)
-        self.assertEqual(backend.dispatched_commands, [("haul route 2", None)])
+        self.assertEqual(execution.dispatched_commands, [("haul route 2", None)])
 
     def test_trade_route_picker_escape_closes_without_dispatch(self) -> None:
         snapshot = snapshot_from_app(self.app)
         backend = _IntentRecorderBackend(snapshot)
+        execution = _ExecutionRecorder()
         app = _RenderHarnessApp(
             _make_context(Path(self.tmpdir.name)),
             backend=backend,
         )
+        app._dependencies = replace(app._dependencies, execution=execution)
         app._trade_routes.routes = [
             TradeRoute(index=1, from_station="A", from_system="B", to_station="C", to_system="D")
         ]
@@ -681,10 +731,12 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
     def test_trade_route_picker_d_sets_destination_to_first_station_system(self) -> None:
         snapshot = snapshot_from_app(self.app)
         backend = _IntentRecorderBackend(snapshot)
+        execution = _ExecutionRecorder()
         app = _RenderHarnessApp(
             _make_context(Path(self.tmpdir.name)),
             backend=backend,
         )
+        app._dependencies = replace(app._dependencies, execution=execution)
         app._trade_routes.routes = [
             TradeRoute(
                 index=2,
@@ -703,7 +755,7 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
 
         self.assertTrue(event.prevented)
         self.assertFalse(app._trade_route_picker_open)
-        self.assertEqual(backend.dispatched_commands, [("dest TSONGORIS", None)])
+        self.assertEqual(execution.dispatched_commands, [("dest TSONGORIS", None)])
 
     def test_replay_open_arrow_keys_route_selection_through_backend(self) -> None:
         snapshot = snapshot_from_app(self.app)

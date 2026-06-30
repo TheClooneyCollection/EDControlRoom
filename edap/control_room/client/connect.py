@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime
 import socket
 
@@ -11,7 +12,11 @@ from edap.control_room import commands as _commands
 from edap.control_room import prompts as _prompts
 from edap.control_room import replay as _replay
 from edap.control_room.backend import ControlRoomBackendEvent
-from edap.control_room.client.backend import RemoteObserverBackend, fetch_remote_observer_snapshot
+from edap.control_room.client.backend import (
+    RemoteObserverBackend,
+    RemoteObserverExecution,
+    fetch_remote_observer_snapshot,
+)
 from edap.control_room.client.target import ObserverServerTarget, parse_observer_server_target
 from edap.control_room.history import now_iso
 from edap.control_room.models import PromptState, TradeRoutePickerState, TradeRoutesData
@@ -50,6 +55,10 @@ class ObserverControlRoomApp(ControlRoomApp):
         client_name: str,
     ) -> None:
         super().__init__(ctx, backend=backend)
+        self._dependencies = replace(
+            self._dependencies,
+            execution=RemoteObserverExecution(backend),
+        )
         self._observer_backend = backend
         self._server_target = server_target
         self._client_name = client_name

@@ -369,6 +369,59 @@ class RemoteObserverBackend(ControlRoomBackend):
             handler(event)  # type: ignore[arg-type]
 
 
+class RemoteObserverExecution:
+    def __init__(self, backend: RemoteObserverBackend) -> None:
+        self._backend = backend
+
+    def submit_command(self, raw: str, *, skip_delay: bool | None = None) -> None:
+        self._backend.dispatch_command(raw, skip_delay=skip_delay)
+
+    def dispatch_destination(
+        self,
+        destination: str,
+        galaxy_map_settle: float,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self._backend.dispatch_destination(
+            destination,
+            galaxy_map_settle,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+
+    def dispatch_haul_loop(
+        self,
+        *,
+        params: dict[str, str] | None = None,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self._backend.dispatch_haul_loop(
+            params=params,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+
+    def load_trade_route(
+        self,
+        route: TradeRoute,
+        *,
+        raw_command: str | None = None,
+    ) -> None:
+        self._backend.load_trade_route(route, raw_command=raw_command)
+
+    def handle_haul_prompt(self, value: str) -> None:
+        self._backend.handle_haul_prompt(value)
+
+    def handle_haul_confirm_prompt(self, value: str) -> None:
+        self._backend.handle_haul_confirm_prompt(value)
+
+    def cancel_active_routine(self) -> None:
+        self._backend.interrupt_active_routine()
+
+
 def fetch_remote_observer_snapshot(
     *,
     server_target: ObserverServerTarget,

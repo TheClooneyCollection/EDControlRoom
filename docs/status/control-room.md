@@ -1,6 +1,6 @@
 # Control Room Status
 ## Current
-- Plan 0008 is the active Control Room architecture target: one local-first `ControlRoomApp` composed with data sources, view models, view actions, and execution dependencies; local data/execution dependencies exist, `LocalControlRoomBackend` dispatch paths route through execution, status/haul/market panels render through initial view models, and market presentation commands now route through view actions.
+- Plan 0008 is the active Control Room architecture target: one local-first `ControlRoomApp` composed with data sources, view models, view actions, and execution dependencies; local and remote execution dependencies exist, app dispatch helpers route through execution, status/haul/market panels render through initial view models, and market presentation commands route through view actions.
 - Current `serve` / `connect` still runs on the older snapshot-based observer stack from plan 0007; it is functional but known to be fragile because remote refreshes can collide with local interaction state.
 - `connect` currently intercepts prompt-owning commands like `haul`, `haul route`, `haul search`, `dest`, `home`, `help`, `history`, and `market` locally, then sends finalized `command.dispatch_haul_loop` / `command.dispatch_destination` payloads to the headless server.
 - Market panel lock semantics are aligned across embedded and `connect`: market data keeps ingesting continuously, while lock/unlock freezes or unfreezes only the displayed panel.

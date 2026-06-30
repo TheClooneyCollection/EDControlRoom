@@ -20,6 +20,7 @@ from edap.config import (
 from edap.control_room.client.connect import ObserverControlRoomApp
 from edap.control_room.client.backend import (
     RemoteObserverBackend,
+    RemoteObserverExecution,
     _validate_remote_observer_capabilities,
 )
 from edap.control_room import commands as control_room_commands
@@ -1367,6 +1368,26 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(haul_message["message_type"], "command.dispatch_haul_loop")
         self.assertEqual(haul_message["payload"]["params"]["station_1_buying"], "Silver")
         self.assertEqual(haul_message["payload"]["raw_command"], "haul Silver")
+
+    def test_remote_execution_delegates_to_remote_backend(self) -> None:
+        backend = self._backend()
+        execution = RemoteObserverExecution(backend)
+
+        execution.submit_command("jump", skip_delay=True)
+        execution.dispatch_destination("Achenar", 3.5, raw_command="dest Achenar")
+        execution.dispatch_haul_loop(params={"station_1_buying": "Silver"}, raw_command="haul")
+
+        command_message = backend._outgoing_messages.get_nowait()
+        destination_message = backend._outgoing_messages.get_nowait()
+        haul_message = backend._outgoing_messages.get_nowait()
+
+        self.assertEqual(command_message["message_type"], "command.submit_input")
+        self.assertEqual(command_message["payload"]["raw_input"], "jump")
+        self.assertEqual(command_message["payload"]["skip_delay"], True)
+        self.assertEqual(destination_message["message_type"], "command.dispatch_destination")
+        self.assertEqual(destination_message["payload"]["destination"], "Achenar")
+        self.assertEqual(haul_message["message_type"], "command.dispatch_haul_loop")
+        self.assertEqual(haul_message["payload"]["params"]["station_1_buying"], "Silver")
 
     def test_remote_backend_replay_commands_stay_client_local(self) -> None:
         target = ObserverServerTarget(

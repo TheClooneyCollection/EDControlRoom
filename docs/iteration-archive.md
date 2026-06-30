@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `142`
-- Latest generated iteration number: `275`
+- Generated iteration count: `143`
+- Latest generated iteration number: `276`
 
 ## Iteration 134
 
@@ -3961,3 +3961,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Add view actions for command bar, replay browser, and trade-route picker.
 - Continue moving command parsing away from direct app state mutation.
+
+## Iteration 276
+
+- When: `2026-06-30 18:07`
+- Area: `control-room`
+- Title: `route-app-dispatch-through-execution`
+- Source: [2026-06-30-18-07_control-room_route-app-dispatch-through-execution.md](iteration-logs/2026-06-30-18-07_control-room_route-app-dispatch-through-execution.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `route-app-dispatch-through-execution`
+- Started: `2026-06-30 18:07`
+
+## Summary
+
+- Routed app-level routine/command dispatch helpers through composable execution dependencies.
+
+## Changes
+
+- Added `RemoteObserverExecution` so connect mode has a remote execution dependency backed by the websocket backend.
+- Updated `ObserverControlRoomApp` to install the remote execution dependency after construction.
+- Switched `_dispatch_command`, `_dispatch_dest`, `_dispatch_haul_loop`, and haul prompt handlers to `ControlRoomDependencies.execution`.
+- Added remote execution wrapper tests.
+
+## Follow-ups
+
+- Continue moving remaining app/backend command paths, especially interrupt and replay/picker actions, toward explicit view actions and execution dependencies.

@@ -1930,7 +1930,7 @@ class ControlRoomApp(App[None]):
         self._backend.submit_input(raw)
 
     def _dispatch_command(self, raw: str, *, skip_delay: bool | None = None) -> None:
-        self._backend.dispatch_command(raw, skip_delay=skip_delay)
+        self._dependencies.execution.submit_command(raw, skip_delay=skip_delay)
 
     def _dispatch_dest(
         self,
@@ -1940,7 +1940,7 @@ class ControlRoomApp(App[None]):
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None:
-        self._backend.dispatch_destination(
+        self._dependencies.execution.dispatch_destination(
             destination,
             galaxy_map_settle,
             skip_delay=skip_delay,
@@ -1953,17 +1953,17 @@ class ControlRoomApp(App[None]):
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None:
-        self._backend.dispatch_haul_loop(
+        self._dependencies.execution.dispatch_haul_loop(
             params=dict(self._haul_params),
             skip_delay=skip_delay,
             raw_command=raw_command,
         )
 
     def _handle_haul_prompt(self, value: str) -> None:
-        self._backend.handle_haul_prompt(value)
+        self._dependencies.execution.handle_haul_prompt(value)
 
     def _handle_haul_confirm_prompt(self, value: str) -> None:
-        self._backend.handle_haul_confirm_prompt(value)
+        self._dependencies.execution.handle_haul_confirm_prompt(value)
 
     def _parse_optional_nonnegative_float(self, raw: str, *, default: float, label: str) -> float | None:
         return _prompts.parse_optional_nonnegative_float(
