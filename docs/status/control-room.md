@@ -1,6 +1,6 @@
 # Control Room Status
 ## Current
-- Plan 0008 is the active Control Room architecture target: one local-first `ControlRoomApp` composed with data sources, view models, view actions, and execution dependencies; no snapshot model, no compatibility adapter, and no separate remote UI subclass as the target state.
+- Plan 0008 is the active Control Room architecture target: one local-first `ControlRoomApp` composed with data sources, view models, view actions, and execution dependencies; the first dependency layer now exists for local data reads and local execution, with no snapshot model, no compatibility adapter, and no separate remote UI subclass as the target state.
 - Current `serve` / `connect` still runs on the older snapshot-based observer stack from plan 0007; it is functional but known to be fragile because remote refreshes can collide with local interaction state.
 - `connect` currently intercepts prompt-owning commands like `haul`, `haul route`, `haul search`, `dest`, `home`, `help`, `history`, and `market` locally, then sends finalized `command.dispatch_haul_loop` / `command.dispatch_destination` payloads to the headless server.
 - Market panel lock semantics are aligned across embedded and `connect`: market data keeps ingesting continuously, while lock/unlock freezes or unfreezes only the displayed panel.
@@ -13,5 +13,5 @@
 - Routine-heavy live sessions still need validation, especially targeted input with `set_pid` / `set_hwnd` under CrossOver and Windows.
 - Shared LAN token auth remains acceptable for current remote work; per-user or internet-facing identity is not implemented.
 ## Next
-- Implement plan 0008 bottom-up: define data source, view model, view action, and execution protocols, then make local mode use them before rebuilding `serve` / `connect`.
+- Continue plan 0008 bottom-up by moving local rendering surfaces to view models fed by the new dependency layer, then route backend command paths through execution dependencies.
 - After the dependency boundary is in place, delete snapshot-era app-facing code and rebuild remote protocol messages around data-source hydration/events plus explicit execution intents.

@@ -57,6 +57,10 @@ from textual.widgets import Footer, Header, Input, OptionList, RichLog, Static, 
 
 from edap.config import AppConfig
 from edap.control_room.backend import ControlRoomBackend, LocalControlRoomBackend
+from edap.control_room.dependencies import (
+    ControlRoomDependencies,
+    build_local_control_room_dependencies,
+)
 from edap.control_room import (
     bootstrap as _bootstrap,
     commands as _commands,
@@ -407,6 +411,7 @@ class ControlRoomApp(App[None]):
         activity_log_max_lines: int | None = None,
         version_source: VersionSource | None = None,
         backend: ControlRoomBackend | None = None,
+        dependencies: ControlRoomDependencies | None = None,
     ) -> None:
         super().__init__()
         self._ctx = ctx
@@ -456,6 +461,7 @@ class ControlRoomApp(App[None]):
             default_placeholder=_DEFAULT_COMMAND_PLACEHOLDER,
             reloadable_modules=_RELOADABLE_MODULES,
         )
+        self._dependencies = dependencies or build_local_control_room_dependencies(self)
         self._backend: ControlRoomBackend = backend or LocalControlRoomBackend(self)
         self._view_snapshot = self._backend.current_snapshot()
         self._backend_event_unsubscribe: Callable[[], None] | None = None
@@ -472,6 +478,10 @@ class ControlRoomApp(App[None]):
     @property
     def backend(self) -> ControlRoomBackend:
         return self._backend
+
+    @property
+    def dependencies(self) -> ControlRoomDependencies:
+        return self._dependencies
 
     @property
     def _protocol_event_sink(self) -> ControlRoomEventSink | None:
