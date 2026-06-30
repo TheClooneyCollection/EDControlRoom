@@ -4,7 +4,6 @@ import asyncio
 import json
 import threading
 from collections.abc import Callable
-from dataclasses import replace
 from queue import Queue
 from typing import Any
 
@@ -308,7 +307,6 @@ class RemoteObserverBackend(ControlRoomBackend):
             parsed_event = event_from_message(message)
             if parsed_event is not None:
                 if isinstance(parsed_event, SnapshotUpdatedEvent):
-                    self.publish_snapshot(parsed_event.snapshot)
                     continue
                 self._emit(parsed_event)
                 continue
@@ -357,19 +355,6 @@ class RemoteObserverBackend(ControlRoomBackend):
 
     def _handle_connection_lost(self, text: str) -> None:
         self._connected = False
-        with self._lock:
-            stale_snapshot = self._snapshot
-            self._snapshot = replace(
-                stale_snapshot,
-                active_operator=None,
-                connected_clients=[],
-                ui_state=replace(
-                    stale_snapshot.ui_state,
-                    routine_active=False,
-                    active_routine_name=None,
-                ),
-            )
-        self._emit(SnapshotUpdatedEvent(snapshot=self._snapshot))
         self._emit_local_message(text)
 
     def _next_reconnect_delay(self, delay_seconds: float) -> float:

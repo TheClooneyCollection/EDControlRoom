@@ -106,8 +106,6 @@ class ObserverControlRoomApp(ControlRoomApp):
 
     def _apply_backend_event(self, event: ControlRoomBackendEvent) -> None:
         if isinstance(event, SnapshotUpdatedEvent):
-            self._view_snapshot = event.snapshot
-            self._apply_remote_snapshot(replace_activity=True)
             return
         if isinstance(event, DataUpdatedEvent):
             self._refresh_status()

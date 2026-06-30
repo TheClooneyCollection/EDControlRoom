@@ -482,6 +482,29 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(command_input.cursor_position, 4)
         self.assertEqual(command_input.placeholder, app._default_command_placeholder)
 
+    def test_observer_app_ignores_legacy_snapshot_backend_events(self) -> None:
+        updated_snapshot = replace(
+            _snapshot(),
+            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+        )
+        backend = self._backend(initial_snapshot=updated_snapshot)
+        app = self._app(backend=backend)
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
+
+        app._apply_view_snapshot_state()
+        command_input.value = "haul gold"
+        app._local_command_input_value = command_input.value
+        refreshed_snapshot = replace(
+            updated_snapshot,
+            ship=replace(updated_snapshot.ship, system_name="Achenar"),
+        )
+
+        app._apply_backend_event(SnapshotUpdatedEvent(snapshot=refreshed_snapshot))
+
+        self.assertEqual(app._view_snapshot.ship.system_name, "Sol")
+        self.assertEqual(command_input.value, "haul gold")
+
     def test_observer_app_preserves_prompt_draft_across_snapshot_refresh(self) -> None:
         updated_snapshot = replace(
             _snapshot(),
@@ -1578,7 +1601,7 @@ class ControlRoomClientTests(unittest.TestCase):
             ],
         )
 
-    def test_remote_backend_marks_snapshot_disconnected_on_connection_loss(self) -> None:
+    def test_remote_backend_preserves_cached_snapshot_on_connection_loss(self) -> None:
         target = ObserverServerTarget(
             host="bridge.local",
             port=8765,
@@ -1624,12 +1647,11 @@ class ControlRoomClientTests(unittest.TestCase):
 
         current = backend.current_snapshot()
         self.assertEqual(current.connected_clients, [])
-        self.assertIsNone(current.active_operator)
-        self.assertFalse(current.ui_state.routine_active)
-        self.assertIsNone(current.ui_state.active_routine_name)
-        self.assertIsInstance(received[0], SnapshotUpdatedEvent)
-        self.assertIsInstance(received[1], ActivityLogAppendedEvent)
-        self.assertEqual(received[1].entry.message_text, "Observer connection lost: ping timeout")
+        self.assertEqual(current.active_operator, snapshot.active_operator)
+        self.assertTrue(current.ui_state.routine_active)
+        self.assertEqual(current.ui_state.active_routine_name, "dock")
+        self.assertIsInstance(received[0], ActivityLogAppendedEvent)
+        self.assertEqual(received[0].entry.message_text, "Observer connection lost: ping timeout")
 
     def test_remote_backend_rejects_commands_when_disconnected(self) -> None:
         target = ObserverServerTarget(

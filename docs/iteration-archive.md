@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `152`
-- Latest generated iteration number: `285`
+- Generated iteration count: `153`
+- Latest generated iteration number: `286`
 
 ## Iteration 134
 
@@ -4240,3 +4240,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Remove the remaining explicit `request_snapshot()` protocol surface after the server/client observer compatibility tests are retired.
+
+## Iteration 286
+
+- When: `2026-06-30 18:33`
+- Area: `control-room`
+- Title: `connect-ignore-legacy-snapshots`
+- Source: [2026-06-30-18-33_control-room_connect-ignore-legacy-snapshots.md](iteration-logs/2026-06-30-18-33_control-room_connect-ignore-legacy-snapshots.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `connect-ignore-legacy-snapshots`
+- Started: `2026-06-30 18:33`
+
+## Summary
+
+- Stopped connect-mode UI state from being driven by legacy `state.snapshot` websocket messages.
+
+## Changes
+
+- Remote websocket receive now ignores `SnapshotUpdatedEvent` payloads instead of publishing them into the app.
+- Connection loss logs activity only; it no longer rewrites active operator, connected clients, or routine UI state from the transport layer.
+- `ObserverControlRoomApp` ignores any remaining manually emitted snapshot backend events.
+- Added regression coverage for ignored legacy snapshot events and connection-loss state preservation.
+
+## Follow-ups
+
+- Remove the old snapshot endpoint/message protocol once server compatibility tests are retired.
