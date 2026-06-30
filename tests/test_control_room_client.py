@@ -22,6 +22,7 @@ from edap.control_room.client.backend import (
     RemoteObserverBackend,
     _validate_remote_observer_capabilities,
 )
+from edap.control_room import commands as control_room_commands
 from edap.control_room.client.target import ObserverServerTarget, parse_observer_server_target
 from edap.control_room.models import TradeRoutePickerState, TradeRoutesData
 from edap.control_room.protocol import (
@@ -118,6 +119,16 @@ class _FakeContainerWidget:
     def __init__(self) -> None:
         self.styles = _WidgetStyles()
         self.border_title = ""
+
+
+class _KeyEvent:
+    def __init__(self, key: str, *, character: str | None = None) -> None:
+        self.key = key
+        self.character = character
+        self.prevented = False
+
+    def prevent_default(self) -> None:
+        self.prevented = True
 
 
 def _bind_observer_widgets(app: ObserverControlRoomApp, command_input: _FakeInputWidget) -> None:
@@ -879,7 +890,6 @@ class ControlRoomClientTests(unittest.TestCase):
             )
         )
         app = self._app(backend=backend)
-        app._controls = object()
         command_input = _FakeInputWidget()
         _bind_observer_widgets(app, command_input)
 
@@ -899,6 +909,36 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(message["payload"]["galaxy_map_settle"], 3.5)
         self.assertEqual(message["payload"]["raw_command"], "dest Achenar")
 
+    def test_observer_app_enter_on_dest_prompt_uses_default_locally(self) -> None:
+        backend = self._backend(
+            initial_snapshot=replace(
+                _snapshot(),
+                session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+            )
+        )
+        app = self._app(backend=backend)
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
+
+        class _Submitted:
+            def __init__(self, value: str) -> None:
+                self.value = value
+                self.input = type("_Input", (), {"value": value, "id": "cmd"})()
+
+        app.on_input_submitted(_Submitted("dest Sol"))
+        command_input.value = ""
+
+        event = _KeyEvent("enter")
+        app.on_key(event)
+
+        self.assertTrue(event.prevented)
+        message = backend._outgoing_messages.get_nowait()
+        self.assertEqual(message["message_type"], "command.dispatch_destination")
+        self.assertEqual(message["payload"]["destination"], "Sol")
+        self.assertEqual(message["payload"]["galaxy_map_settle"], 2.0)
+        self.assertEqual(message["payload"]["raw_command"], "dest Sol")
+        self.assertTrue(backend._outgoing_messages.empty())
+
     def test_observer_app_handles_haul_prompt_locally_then_dispatches_remote(self) -> None:
         backend = self._backend(
             initial_snapshot=replace(
@@ -912,7 +952,6 @@ class ControlRoomClientTests(unittest.TestCase):
             )
         )
         app = self._app(backend=backend)
-        app._controls = object()
         command_input = _FakeInputWidget()
         _bind_observer_widgets(app, command_input)
 

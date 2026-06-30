@@ -30,6 +30,7 @@ from edap.config import (
     TTSConfig,
 )
 from edap.control_room import error_text
+from edap.control_room import commands as control_room_commands
 from edap.control_room import prompts as control_room_prompts
 from edap.control_room.app import ActivityLog, _JOURNAL_ARTIFACT_LOG_FLUSH_EVERY
 from edap.control_room.backend import ControlRoomBackendEventHandler
@@ -2706,6 +2707,13 @@ class ControlRoomDispatchTests(unittest.TestCase):
         entry = self._last_history()
         self.assertEqual(entry.command, "quit")
         self.assertEqual(entry.raw, "exit")
+
+    def test_blank_command_is_ignored(self) -> None:
+        original_history_count = len(self.app._saved_state.history)
+
+        control_room_commands.dispatch(self.app, "")
+
+        self.assertEqual(len(self.app._saved_state.history), original_history_count)
 
     def test_verbose_on_toggles_state_and_records_history(self) -> None:
         self.app._dispatch_command("verbose on")

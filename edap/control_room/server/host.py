@@ -207,6 +207,13 @@ class HeadlessControlRoomHost(ControlRoomApp):
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None:
+        self._debug_log(
+            "server_dispatch_destination_received",
+            destination=destination,
+            galaxy_map_settle=galaxy_map_settle,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
         self._backend.dispatch_destination(
             destination,
             galaxy_map_settle,

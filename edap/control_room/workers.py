@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import traceback
 from typing import Any, Callable, Protocol
 
 from rich.markup import escape
@@ -194,6 +195,15 @@ def run_routine_thread(
     except RoutineCancelled:
         app.call_from_thread(app._log, "[yellow]Routine cancelled.[/]")
     except Exception as exc:
+        debug_log = getattr(app, "_debug_log", None)
+        if callable(debug_log):
+            debug_log(
+                "routine_thread_exception",
+                exception_type=type(exc).__name__,
+                exception_message=str(exc),
+                traceback=traceback.format_exc(),
+                active_routine_name=getattr(app, "_active_routine_name", None),
+            )
         message, suggestion = describe_routine_exception(exc, app._config)
         app.call_from_thread(app._log, f"[red]{escape(message)}[/]")
         if suggestion:

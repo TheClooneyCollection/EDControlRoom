@@ -14,6 +14,8 @@ from edap.control_room_state import CommandHistoryEntry
 from edap.platform.input.base import DEFAULT_AUTO_TARGET_PROCESS_NAME
 
 def dispatch(app: CommandHost, raw: str, *, skip_delay_override: bool | None = None) -> None:
+    if not raw.strip():
+        return
     app._log(f"[dim]Command: {escape(raw)}[/]")
     skip_delay = False
     command_raw = raw

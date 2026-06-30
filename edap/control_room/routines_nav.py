@@ -42,6 +42,17 @@ def dispatch_dest(
     time_fn = app._time_fn
     step_delay = app._config.controls.step_delay_seconds
     journal_dir = app._journal_dir
+    debug_log = getattr(app, "_debug_log", None)
+    if callable(debug_log):
+        debug_log(
+            "dispatch_dest_start",
+            destination=destination,
+            galaxy_map_settle=galaxy_map_settle,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+            journal_dir=str(journal_dir) if journal_dir is not None else None,
+            step_delay=step_delay,
+        )
 
     app._record_history_entry(CommandHistoryEntry(
         raw=raw_command or f"{'!' if skip_delay else ''}dest {destination}",

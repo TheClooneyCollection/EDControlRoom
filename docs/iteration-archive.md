@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `127`
-- Latest generated iteration number: `260`
+- Generated iteration count: `130`
+- Latest generated iteration number: `263`
 
 ## Iteration 134
 
@@ -3553,3 +3553,84 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-validate in a real `control_room connect` session that local prompt/help output remains visible while remote activity continues streaming underneath it.
+
+## Iteration 261
+
+- When: `2026-06-30 14:07`
+- Area: `control-room`
+- Title: `fix-connect-remote-routine-readiness`
+- Source: [2026-06-30-14-07_control-room_fix-connect-remote-routine-readiness.md](iteration-logs/2026-06-30-14-07_control-room_fix-connect-remote-routine-readiness.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `fix-connect-remote-routine-readiness`
+- Started: `2026-06-30 14:07`
+
+## Summary
+
+- Fixed `connect` mode so prompt-owning remote commands like `dest sol` no longer fail locally with `controls unavailable` before the client can collect prompt input.
+
+## Changes
+
+- Overrode observer routine readiness to check remote operator/routine state instead of local controls availability, which is intentionally absent on remote-only clients.
+- Tightened observer tests so `dest` and `haul` prompt flows must work without setting fake local controls on the client.
+- Live-validated against a real local `serve` process plus observer session: `dest sol` now opens the local settle-seconds prompt and does not log `controls unavailable`.
+
+## Follow-ups
+
+- Run one more manual pass against a real interactive `control_room connect` terminal to confirm the visible TUI behavior matches the automated observer-path probe.
+
+## Iteration 262
+
+- When: `2026-06-30 14:13`
+- Area: `control-room`
+- Title: `add-dest-remote-debug-logging`
+- Source: [2026-06-30-14-13_control-room_add-dest-remote-debug-logging.md](iteration-logs/2026-06-30-14-13_control-room_add-dest-remote-debug-logging.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `add-dest-remote-debug-logging`
+- Started: `2026-06-30 14:13`
+
+## Summary
+
+- Added targeted debug logging around the remote `dest` flow so the next manual `serve` + `connect` reproduction will show exactly where a post-prompt failure occurs.
+
+## Changes
+
+- Logged observer-side destination prompt resolution before `command.dispatch_destination` is sent.
+- Logged headless server receipt of destination dispatch payloads and routine-launch inputs for remote `dest` runs.
+- Logged full routine exception metadata and traceback into `artifacts/control-room-debug.log` when a background routine crashes.
+
+## Follow-ups
+
+- Reproduce the failing `dest sol` settle-seconds submission in a real interactive connect session, then inspect `artifacts/control-room-debug.log` for the new `observer_dest_prompt_dispatch_resolved`, `server_dispatch_destination_received`, and `routine_thread_exception` events.
+
+## Iteration 263
+
+- When: `2026-06-30 14:17`
+- Area: `control-room`
+- Title: `fix-connect-dest-default-enter`
+- Source: [2026-06-30-14-17_control-room_fix-connect-dest-default-enter.md](iteration-logs/2026-06-30-14-17_control-room_fix-connect-dest-default-enter.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `fix-connect-dest-default-enter`
+- Started: `2026-06-30 14:17`
+
+## Summary
+
+- Fixed the `connect`-mode `dest` default-Enter path so accepting the default settle seconds no longer sends a blank command to the server and crashes with `list index out of range`.
+
+## Changes
+
+- Handled Enter on observer-local prompt steps directly inside `ObserverControlRoomApp.on_key()` instead of falling through to the base prompt handler that calls `backend.submit_input(raw)`.
+- Hardened generic command dispatch so blank commands are ignored instead of indexing into an empty token list.
+- Added regression coverage for pressing Enter on a remote `dest` prompt with an empty field, asserting that the observer dispatches `command.dispatch_destination` with the configured default settle time.
+
+## Follow-ups
+
+- Re-run the manual `serve` + `connect` `dest sol` flow to confirm the default-Enter path now dispatches the destination routine instead of logging a blank command.

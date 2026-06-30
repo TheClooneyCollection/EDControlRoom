@@ -55,6 +55,15 @@ class ObserverControlRoomApp(ControlRoomApp):
         self._local_replay_open = False
         self._local_selected_resume_history_entry: CommandHistoryEntry | None = None
 
+    def _check_routine_ready(self) -> bool:
+        if self._view_snapshot.session.client_role != "active_operator":
+            self._log("[yellow]Observer session is read-only.[/]")
+            return False
+        if self._routine_active:
+            self._log("[yellow]A routine is already running — wait for it to finish[/]")
+            return False
+        return True
+
     def on_mount(self) -> None:
         self._configure_screen_widgets()
         self.title = (
@@ -401,6 +410,13 @@ class ObserverControlRoomApp(ControlRoomApp):
                 ),
             )
             if dispatch is not None:
+                self._debug_log(
+                    "observer_dest_prompt_dispatch_resolved",
+                    destination=dispatch.destination,
+                    galaxy_map_settle=dispatch.galaxy_map_settle,
+                    skip_delay=dispatch.skip_delay,
+                    raw_command=dispatch.raw_command,
+                )
                 command_input = self.query_one("#cmd", Input)
                 command_input.placeholder = self._default_command_placeholder
                 command_input.value = ""
@@ -705,6 +721,26 @@ class ObserverControlRoomApp(ControlRoomApp):
                 event.prevent_default()
                 self._resume_filter = self._resume_filter + event.character
                 self._refresh_resume_picker()
+            return
+        if self._exit_prompt_active and event.key == "enter":
+            event.prevent_default()
+            cmd_input = self.query_one("#cmd", Input)
+            raw = cmd_input.value
+            cmd_input.value = ""
+            self._local_command_input_value = ""
+            self._handle_exit_prompt_input(raw)
+            return
+        if (
+            self._haul_prompt_step
+            or self._haul_confirm_buy_station
+            or self._dest_prompt_destination
+        ) and event.key == "enter":
+            event.prevent_default()
+            cmd_input = self.query_one("#cmd", Input)
+            raw = cmd_input.value
+            cmd_input.value = ""
+            self._local_command_input_value = ""
+            self._handle_local_prompt(raw)
             return
         super().on_key(event)
 
