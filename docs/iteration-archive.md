@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `148`
-- Latest generated iteration number: `281`
+- Generated iteration count: `149`
+- Latest generated iteration number: `282`
 
 ## Iteration 134
 
@@ -4129,3 +4129,28 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Remove remaining `_sync_view_snapshot()` calls from read-only panel refresh paths.
 - Add websocket data update streaming so remote data sources hydrate continuously without snapshots.
+
+## Iteration 282
+
+- When: `2026-06-30 18:22`
+- Area: `control-room`
+- Title: `stop-panel-snapshot-sync`
+- Source: [2026-06-30-18-22_control-room_stop-panel-snapshot-sync.md](iteration-logs/2026-06-30-18-22_control-room_stop-panel-snapshot-sync.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `stop-panel-snapshot-sync`
+- Started: `2026-06-30 18:22`
+
+## Summary
+
+- Stopped read-only panel refreshes from synchronizing snapshot state before rendering.
+
+## Changes
+
+- Removed `_sync_view_snapshot()` calls from status, haul, and market refresh methods now that those panels render from data-source-backed view models.
+
+## Follow-ups
+
+- Continue removing snapshot sync from interactive surfaces after they move behind view actions and data sources.

@@ -971,13 +971,11 @@ class ControlRoomApp(App[None]):
     # ── Rendering ──────────────────────────────────────────────────────────────
 
     def _refresh_status(self) -> None:
-        self._sync_view_snapshot()
         self.query_one("#status", Static).update(
             Text.from_markup(_rendering.status_panel_markup(self._status_panel_view_model()))
         )
 
     def _refresh_haul_stats(self) -> None:
-        self._sync_view_snapshot()
         widget = self.query_one("#haul", Static)
         widget.update(Text.from_markup(
             _rendering.haul_panel_markup(
@@ -987,7 +985,6 @@ class ControlRoomApp(App[None]):
         ))
 
     def _refresh_market(self) -> None:
-        self._sync_view_snapshot()
         self._sync_presented_market_from_snapshot()
         view_model = self._market_panel_view_model()
         self.query_one("#market-content", Static).update(
