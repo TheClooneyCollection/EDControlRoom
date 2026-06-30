@@ -22,6 +22,8 @@
         "command.request_snapshot",
         "command.request_active_operator",
         "command.submit_input",
+        "command.dispatch_destination",
+        "command.dispatch_haul_loop",
         "command.load_trade_route",
         "command.open_replay_browser",
         "command.close_replay_browser",
@@ -84,6 +86,30 @@
       "then": {
         "properties": {
           "payload": { "$ref": "#/$defs/command_submit_input_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "command.dispatch_destination" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/command_dispatch_destination_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "command.dispatch_haul_loop" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/command_dispatch_haul_loop_payload" }
         }
       }
     },
@@ -327,6 +353,31 @@
       "properties": {
         "raw_input": { "type": "string" },
         "skip_delay": { "type": ["boolean", "null"] }
+      }
+    },
+    "command_dispatch_destination_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["destination", "galaxy_map_settle"],
+      "properties": {
+        "destination": { "type": "string", "minLength": 1 },
+        "galaxy_map_settle": { "type": "number" },
+        "skip_delay": { "type": "boolean" },
+        "raw_command": { "type": ["string", "null"] }
+      }
+    },
+    "command_dispatch_haul_loop_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "skip_delay": { "type": "boolean" },
+        "raw_command": { "type": ["string", "null"] }
       }
     },
     "command_load_trade_route_payload": {

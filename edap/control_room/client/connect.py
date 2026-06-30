@@ -6,6 +6,7 @@ from rich.markup import escape
 from textual.widgets import Input
 
 from edap.control_room.app import ActivityLog, ControlRoomApp, _ALL_ROUTINE_ACTIONS, _build_log_text
+from edap.control_room import commands as _commands
 from edap.control_room import prompts as _prompts
 from edap.control_room.backend import ControlRoomBackendEvent
 from edap.control_room.client.backend import RemoteObserverBackend, fetch_remote_observer_snapshot
@@ -26,7 +27,7 @@ from edap.control_room.routines_haul import (
     _set_trade_routes_loading,
 )
 from edap.control_room_state import CommandHistoryEntry
-from edap.inara.trade_routes import parse_trade_routes_url, search_trade_routes
+from edap.inara.trade_routes import search_trade_routes
 
 
 class ObserverControlRoomApp(ControlRoomApp):
@@ -44,7 +45,7 @@ class ObserverControlRoomApp(ControlRoomApp):
         self._client_name = client_name
         self._local_trade_routes = TradeRoutesData()
         self._local_trade_route_picker = TradeRoutePickerState()
-        self._local_search_prompt_state: PromptState | None = None
+        self._local_prompt_state: PromptState | None = None
 
     def on_mount(self) -> None:
         self._configure_screen_widgets()
@@ -89,8 +90,8 @@ class ObserverControlRoomApp(ControlRoomApp):
             local_trade_route_count=len(self._local_trade_routes.routes),
             local_picker_open=self._local_trade_route_picker.open,
             local_selected_trade_route_index=self._local_trade_route_picker.selected_route_index,
-            local_prompt_step=self._local_search_prompt_state.haul_prompt_step
-            if self._local_search_prompt_state is not None
+            local_prompt_step=self._local_prompt_state.haul_prompt_step
+            if self._local_prompt_state is not None
             else "",
         )
         self._sync_view_snapshot()
@@ -137,26 +138,26 @@ class ObserverControlRoomApp(ControlRoomApp):
         self._selected_trade_route_index = self._local_trade_route_picker.selected_route_index
         self._presented_trade_route_query_url = self._local_trade_route_picker.presented_query_url
         self._presented_trade_route_searched_at = self._local_trade_route_picker.presented_searched_at
-        if self._local_search_prompt_state is not None:
+        if self._local_prompt_state is not None:
             self._prompt_state = PromptState(
-                haul_params=dict(self._local_search_prompt_state.haul_params),
-                haul_search_params=dict(self._local_search_prompt_state.haul_search_params),
-                haul_prompt_defaults=dict(self._local_search_prompt_state.haul_prompt_defaults),
+                haul_params=dict(self._local_prompt_state.haul_params),
+                haul_search_params=dict(self._local_prompt_state.haul_search_params),
+                haul_prompt_defaults=dict(self._local_prompt_state.haul_prompt_defaults),
                 haul_search_prompt_defaults=dict(
-                    self._local_search_prompt_state.haul_search_prompt_defaults
+                    self._local_prompt_state.haul_search_prompt_defaults
                 ),
-                haul_prompt_step=self._local_search_prompt_state.haul_prompt_step,
-                haul_prompt_mode=self._local_search_prompt_state.haul_prompt_mode,
-                haul_confirm_buy_station=self._local_search_prompt_state.haul_confirm_buy_station,
-                haul_prompt_raw_command=self._local_search_prompt_state.haul_prompt_raw_command,
-                haul_prompt_skip_delay=self._local_search_prompt_state.haul_prompt_skip_delay,
-                dest_prompt_destination=self._local_search_prompt_state.dest_prompt_destination,
-                dest_prompt_settle_default=self._local_search_prompt_state.dest_prompt_settle_default,
-                dest_prompt_raw_command=self._local_search_prompt_state.dest_prompt_raw_command,
-                dest_prompt_skip_delay=self._local_search_prompt_state.dest_prompt_skip_delay,
-                command_input_prefill_active=self._local_search_prompt_state.command_input_prefill_active,
-                command_input_placeholder=self._local_search_prompt_state.command_input_placeholder,
-                command_input_value=self._local_search_prompt_state.command_input_value,
+                haul_prompt_step=self._local_prompt_state.haul_prompt_step,
+                haul_prompt_mode=self._local_prompt_state.haul_prompt_mode,
+                haul_confirm_buy_station=self._local_prompt_state.haul_confirm_buy_station,
+                haul_prompt_raw_command=self._local_prompt_state.haul_prompt_raw_command,
+                haul_prompt_skip_delay=self._local_prompt_state.haul_prompt_skip_delay,
+                dest_prompt_destination=self._local_prompt_state.dest_prompt_destination,
+                dest_prompt_settle_default=self._local_prompt_state.dest_prompt_settle_default,
+                dest_prompt_raw_command=self._local_prompt_state.dest_prompt_raw_command,
+                dest_prompt_skip_delay=self._local_prompt_state.dest_prompt_skip_delay,
+                command_input_prefill_active=self._local_prompt_state.command_input_prefill_active,
+                command_input_placeholder=self._local_prompt_state.command_input_placeholder,
+                command_input_value=self._local_prompt_state.command_input_value,
             )
         self._debug_log(
             "observer_apply_view_snapshot_state_local_override",
@@ -174,7 +175,7 @@ class ObserverControlRoomApp(ControlRoomApp):
         self._debug_log(
             "observer_input_submitted",
             raw=raw,
-            has_local_search_prompt=self._local_search_prompt_state is not None,
+            has_local_prompt=self._local_prompt_state is not None,
             haul_prompt_step=self._haul_prompt_step,
             haul_confirm_buy_station=self._haul_confirm_buy_station,
             dest_prompt_destination=self._dest_prompt_destination,
@@ -185,24 +186,24 @@ class ObserverControlRoomApp(ControlRoomApp):
             self._handle_exit_prompt_input(raw)
             return
 
-        if self._local_search_prompt_state is not None and self._haul_prompt_step:
+        if self._local_prompt_state is not None and self._haul_prompt_step:
             self._debug_log(
-                "observer_input_branch_local_search_prompt",
+                "observer_input_branch_local_prompt",
                 raw=raw,
                 haul_prompt_step=self._haul_prompt_step,
             )
-            self._handle_local_haul_search_prompt(raw)
+            self._handle_local_prompt(raw)
             return
 
         if self._haul_prompt_step or self._haul_confirm_buy_station or self._dest_prompt_destination:
             self._debug_log(
-                "observer_input_branch_remote_prompt_submit",
+                "observer_input_branch_local_prompt_resume",
                 raw=raw,
                 haul_prompt_step=self._haul_prompt_step,
                 haul_confirm_buy_station=self._haul_confirm_buy_station,
                 dest_prompt_destination=self._dest_prompt_destination,
             )
-            self._backend.submit_input(raw)
+            self._handle_local_prompt(raw)
             return
 
         raw = raw.strip()
@@ -210,8 +211,8 @@ class ObserverControlRoomApp(ControlRoomApp):
             self._debug_log("observer_input_branch_blank_after_strip")
             return
 
-        if self._try_handle_local_haul_search_command(raw):
-            self._debug_log("observer_input_branch_local_search_command_handled", raw=raw)
+        if self._try_handle_local_client_command(raw):
+            self._debug_log("observer_input_branch_local_client_command_handled", raw=raw)
             return
 
         if raw.lower() in {"replay", "history"}:
@@ -230,7 +231,7 @@ class ObserverControlRoomApp(ControlRoomApp):
         raw_command: str | None = None,
     ) -> None:
         query_url = self._build_local_query_url(system_name, query_params)
-        self._clear_local_search_prompt_state()
+        self._clear_local_prompt_state()
         history_params = {
             "mode": "search",
             "near_system": system_name,
@@ -292,10 +293,8 @@ class ObserverControlRoomApp(ControlRoomApp):
         if route is None:
             return
         self._close_trade_route_picker()
-        self._backend.load_trade_route(
-            route,
-            raw_command=f"haul route {route.from_station} -> {route.to_station}",
-        )
+        _commands.dispatch(self, f"haul route {route.index}")
+        self._sync_local_prompt_state()
 
     def _close_trade_route_picker(self) -> None:
         self._debug_log(
@@ -325,99 +324,77 @@ class ObserverControlRoomApp(ControlRoomApp):
         except Exception:
             return
 
-    def _handle_local_haul_search_prompt(self, value: str) -> None:
+    def _handle_local_prompt(self, value: str) -> None:
         self._debug_log(
-            "observer_handle_local_haul_search_prompt_start",
+            "observer_handle_local_prompt_start",
             value=value,
             haul_prompt_step=self._haul_prompt_step,
-        )
-        _prompts.handle_haul_prompt(
-            self,
-            value,
-            default_placeholder=self._default_command_placeholder,
+            haul_confirm_buy_station=self._haul_confirm_buy_station,
+            dest_prompt_destination=self._dest_prompt_destination,
         )
         if self._haul_prompt_step:
-            self._capture_local_search_prompt_state()
+            _prompts.handle_haul_prompt(
+                self,
+                value,
+                default_placeholder=self._default_command_placeholder,
+            )
+        elif self._haul_confirm_buy_station:
+            _prompts.handle_haul_confirm_prompt(
+                self,
+                value,
+                default_placeholder=self._default_command_placeholder,
+            )
+        elif self._dest_prompt_destination:
+            dispatch = _prompts.resolve_destination_prompt_submission(
+                self._prompt_state,
+                value,
+                parse_optional_nonnegative_float=lambda raw_value, default, label: (
+                    self._parse_optional_nonnegative_float(
+                        raw_value,
+                        default=default,
+                        label=label,
+                    )
+                ),
+            )
+            if dispatch is not None:
+                command_input = self.query_one("#cmd", Input)
+                command_input.placeholder = self._default_command_placeholder
+                command_input.value = ""
+                command_input.cursor_position = 0
+                self._dispatch_dest(
+                    dispatch.destination,
+                    dispatch.galaxy_map_settle,
+                    skip_delay=dispatch.skip_delay,
+                    raw_command=dispatch.raw_command,
+                )
+        self._sync_local_prompt_state()
+        if self._local_prompt_state is not None and self._haul_prompt_step:
             self._debug_log(
-                "observer_handle_local_haul_search_prompt_continue",
+                "observer_handle_local_prompt_continue",
                 next_haul_prompt_step=self._haul_prompt_step,
                 command_input_prefill_active=self._prompt_state.command_input_prefill_active,
             )
             return
-        self._debug_log("observer_handle_local_haul_search_prompt_dispatched_search")
+        self._debug_log("observer_handle_local_prompt_done")
 
-    def _try_handle_local_haul_search_command(self, raw: str) -> bool:
+    def _try_handle_local_client_command(self, raw: str) -> bool:
         command_raw = raw[1:].lstrip() if raw.startswith("!") else raw
         lowered = command_raw.lower()
         self._debug_log(
-            "observer_try_local_haul_search_command",
+            "observer_try_local_client_command",
             raw=raw,
             command_raw=command_raw,
             lowered=lowered,
         )
-        if lowered == "haul search" or lowered.startswith("haul search "):
-            self._start_or_dispatch_local_haul_search(raw=raw, command_raw=command_raw)
+        parts = lowered.split(None, 1)
+        verb = parts[0] if parts else ""
+        if verb in {"haul", "dest", "set_dest", "home"}:
+            self._sync_local_ship_context_from_snapshot()
+            _commands.dispatch(self, raw)
+            self._sync_local_prompt_state()
             return True
-        self._debug_log("observer_try_local_haul_search_command_not_matched", raw=raw)
+        self._debug_log("observer_try_local_client_command_not_matched", raw=raw)
         return False
-
-    def _start_or_dispatch_local_haul_search(self, *, raw: str, command_raw: str) -> None:
-        skip_delay = raw.startswith("!")
-        search_rest = command_raw[len("haul search") :].strip()
-        if search_rest.lower().startswith("url "):
-            query_url = search_rest[4:].strip()
-            if not query_url:
-                self._log("[red]Usage: haul search url <inara-url>[/]")
-                return
-            try:
-                system_name, query_params = parse_trade_routes_url(query_url)
-            except ValueError as exc:
-                self._log(f"[red]{escape(str(exc))}[/]")
-                return
-            self._debug_log(
-                "observer_try_local_haul_search_command_dispatch_url",
-                system_name=system_name,
-                query_url=query_url,
-            )
-            self._dispatch_haul_search(
-                system_name=system_name,
-                query_params=query_params,
-                skip_delay=skip_delay,
-                raw_command=raw,
-            )
-            return
-
-        system_name = search_rest or self._observer_ship_system()
-        if not system_name:
-            self._log(
-                "[red]haul search needs a system name, or the current ship system must be known.[/]"
-            )
-            self._debug_log("observer_try_local_haul_search_command_no_prompt")
-            return
-        self._sync_local_ship_context_from_snapshot()
-        defaults = _prompts.saved_haul_search_defaults(
-            self,
-            system_name=system_name,
-            seed=None,
-        )
-        query_params = {
-            str(key): str(value)
-            for key, value in defaults.items()
-            if key != "near_system"
-        }
-        self._clear_local_search_prompt_state()
-        self._debug_log(
-            "observer_try_local_haul_search_command_dispatch_defaults",
-            system_name=system_name,
-            cargo_capacity=self._ship.cargo_capacity,
-            query_params=query_params,
-        )
-        self._dispatch_haul_search(
-            system_name=system_name,
-            query_params=query_params,
-            skip_delay=skip_delay,
-            raw_command=raw,
-        )
 
     def _observer_ship_system(self) -> str:
         snapshot_system = getattr(self._view_snapshot.ship, "system_name", "") or ""
@@ -434,8 +411,8 @@ class ObserverControlRoomApp(ControlRoomApp):
 
         return build_trade_routes_url(system_name, query_params=query_params)
 
-    def _capture_local_search_prompt_state(self) -> None:
-        self._local_search_prompt_state = PromptState(
+    def _capture_local_prompt_state(self) -> None:
+        self._local_prompt_state = PromptState(
             haul_params=dict(self._prompt_state.haul_params),
             haul_search_params=dict(self._prompt_state.haul_search_params),
             haul_prompt_defaults=dict(self._prompt_state.haul_prompt_defaults),
@@ -454,9 +431,10 @@ class ObserverControlRoomApp(ControlRoomApp):
             command_input_value=self._prompt_state.command_input_value,
         )
 
-    def _clear_local_search_prompt_state(self) -> None:
-        self._local_search_prompt_state = None
+    def _clear_local_prompt_state(self) -> None:
+        self._local_prompt_state = None
         _prompts.clear_haul_prompt(self._prompt_state)
+        _prompts.clear_destination_prompt(self._prompt_state)
         try:
             command_input = self.query_one("#cmd", Input)
         except Exception:
@@ -464,6 +442,17 @@ class ObserverControlRoomApp(ControlRoomApp):
         command_input.placeholder = self._default_command_placeholder
         command_input.value = ""
         command_input.cursor_position = 0
+
+    def _sync_local_prompt_state(self) -> None:
+        if (
+            self._prompt_state.haul_prompt_step
+            or self._prompt_state.haul_confirm_buy_station
+            or self._prompt_state.dest_prompt_destination
+            or self._prompt_state.command_input_prefill_active
+        ):
+            self._capture_local_prompt_state()
+            return
+        self._clear_local_prompt_state()
 
     def _capture_local_trade_route_state(self) -> None:
         self._local_trade_routes = TradeRoutesData(

@@ -187,6 +187,36 @@ class HeadlessControlRoomHost(ControlRoomApp):
         )
         self._publish_snapshot()
 
+    def dispatch_destination(
+        self,
+        destination: str,
+        galaxy_map_settle: float,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self._backend.dispatch_destination(
+            destination,
+            galaxy_map_settle,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+        self._publish_snapshot()
+
+    def dispatch_haul_loop(
+        self,
+        *,
+        params: dict[str, str] | None = None,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self._backend.dispatch_haul_loop(
+            params=params,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+        self._publish_snapshot()
+
     def open_replay_browser(self) -> None:
         self._backend.open_replay_browser()
         self._publish_snapshot()

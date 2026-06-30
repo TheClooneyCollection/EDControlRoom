@@ -1906,6 +1906,7 @@ class ControlRoomApp(App[None]):
         raw_command: str | None = None,
     ) -> None:
         self._backend.dispatch_haul_loop(
+            params=dict(self._haul_params),
             skip_delay=skip_delay,
             raw_command=raw_command,
         )

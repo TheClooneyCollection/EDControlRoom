@@ -469,11 +469,11 @@ class ControlRoomClientTests(unittest.TestCase):
             initial_snapshot=replace(
                 _snapshot(),
                 session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+                ship=replace(_snapshot().ship, cargo_capacity=460),
             )
         )
         app = self._app(backend=backend)
         app._ship.system = "Praea Euq AK-A d25"
-        app._ship.cargo_capacity = 460
         app._controls = object()
         app._run_in_thread = lambda fn: fn()
         app.call_from_thread = lambda callback, *args, **kwargs: callback(*args, **kwargs)  # type: ignore[method-assign]
@@ -503,6 +503,10 @@ class ControlRoomClientTests(unittest.TestCase):
         _bind_observer_widgets(app, command_input)
         with patch("edap.control_room.client.connect.search_trade_routes", return_value=result):
             app.on_input_submitted(_Submitted("haul search Praea Euq AK-A d25"))
+            self.assertEqual(app._prompt_state.haul_prompt_mode, "search")
+            self.assertEqual(app._haul_prompt_step, "search_edit")
+            self.assertIn("cargo_capacity=460", command_input.value)
+            app.on_input_submitted(_Submitted(command_input.value))
 
         self.assertEqual(app._trade_routes.system_name, "Praea Euq AK-A d25")
         self.assertEqual(len(app._trade_routes.routes), 1)
@@ -551,6 +555,11 @@ class ControlRoomClientTests(unittest.TestCase):
         _bind_observer_widgets(app, command_input)
         with patch("edap.control_room.client.connect.search_trade_routes", return_value=result):
             app.on_input_submitted(_Submitted("haul search"))
+            self.assertEqual(app._prompt_state.haul_prompt_mode, "search")
+            self.assertEqual(app._haul_prompt_step, "search_edit")
+            self.assertIn("near_system='Zeta Trianguli Australis'", command_input.value)
+            self.assertIn("cargo_capacity=461", command_input.value)
+            app.on_input_submitted(_Submitted(command_input.value))
 
         self.assertEqual(app._trade_routes.system_name, "Zeta Trianguli Australis")
         self.assertEqual(len(app._trade_routes.routes), 1)
@@ -561,7 +570,7 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(command_input.value, "")
         self.assertEqual(command_input.placeholder, app._default_command_placeholder)
 
-    def test_observer_app_submits_selected_local_trade_route_to_remote(self) -> None:
+    def test_observer_app_loads_selected_local_trade_route_into_local_prompt(self) -> None:
         backend = self._backend(
             initial_snapshot=replace(
                 _snapshot(),
@@ -569,6 +578,8 @@ class ControlRoomClientTests(unittest.TestCase):
             )
         )
         app = self._app(backend=backend)
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
         app._local_trade_routes = TradeRoutesData(
             system_name="Praea Euq AK-A d25",
             routes=[
@@ -587,16 +598,86 @@ class ControlRoomClientTests(unittest.TestCase):
 
         app._load_selected_trade_route()
 
-        message = backend._outgoing_messages.get_nowait()
-        self.assertEqual(message["message_type"], "command.load_trade_route")
-        self.assertEqual(message["payload"]["route"]["from_station"], "Savitskaya Orbital")
-        self.assertEqual(message["payload"]["route"]["source_buy_commodity"], "Beryllium")
-        self.assertEqual(
-            message["payload"]["raw_command"],
-            "haul route Savitskaya Orbital -> Nyberg Vision",
-        )
+        self.assertTrue(app._prompt_state.haul_prompt_step)
+        self.assertEqual(app._haul_prompt_step, "station_1_buying")
+        self.assertEqual(command_input.value, "Beryllium")
+        self.assertEqual(app._prompt_state.haul_prompt_defaults["station_1"], "Savitskaya Orbital")
+        self.assertEqual(app._prompt_state.haul_prompt_defaults["station_2"], "Nyberg Vision")
+        self.assertEqual(app._prompt_state.haul_prompt_defaults["station_1_buying"], "Beryllium")
         self.assertFalse(app._local_trade_route_picker.open)
         self.assertFalse(app._trade_route_picker_open)
+
+    def test_observer_app_handles_dest_command_locally_then_dispatches_remote(self) -> None:
+        backend = self._backend(
+            initial_snapshot=replace(
+                _snapshot(),
+                session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+            )
+        )
+        app = self._app(backend=backend)
+        app._controls = object()
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
+
+        class _Submitted:
+            def __init__(self, value: str) -> None:
+                self.value = value
+                self.input = type("_Input", (), {"value": value})()
+
+        app.on_input_submitted(_Submitted("dest Achenar"))
+        self.assertEqual(app._dest_prompt_destination, "Achenar")
+        self.assertTrue(backend._outgoing_messages.empty())
+
+        app.on_input_submitted(_Submitted("3.5"))
+        message = backend._outgoing_messages.get_nowait()
+        self.assertEqual(message["message_type"], "command.dispatch_destination")
+        self.assertEqual(message["payload"]["destination"], "Achenar")
+        self.assertEqual(message["payload"]["galaxy_map_settle"], 3.5)
+        self.assertEqual(message["payload"]["raw_command"], "dest Achenar")
+
+    def test_observer_app_handles_haul_prompt_locally_then_dispatches_remote(self) -> None:
+        backend = self._backend(
+            initial_snapshot=replace(
+                _snapshot(),
+                session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+                ship=replace(
+                    _snapshot().ship,
+                    system_name="TSONGORIS",
+                    station_name="Savitskaya Orbital",
+                ),
+            )
+        )
+        app = self._app(backend=backend)
+        app._controls = object()
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
+
+        class _Submitted:
+            def __init__(self, value: str) -> None:
+                self.value = value
+                self.input = type("_Input", (), {"value": value})()
+
+        app.on_input_submitted(_Submitted("haul Silver"))
+        self.assertTrue(app._haul_prompt_step)
+        self.assertTrue(backend._outgoing_messages.empty())
+
+        app.on_input_submitted(_Submitted("Savitskaya Orbital"))
+        app.on_input_submitted(_Submitted("TSONGORIS"))
+        app.on_input_submitted(_Submitted(""))
+        app.on_input_submitted(_Submitted(""))
+        app.on_input_submitted(_Submitted("Nyberg Vision"))
+        app.on_input_submitted(_Submitted("NJOKUJINUN"))
+        app.on_input_submitted(_Submitted(""))
+        app.on_input_submitted(_Submitted(""))
+        app.on_input_submitted(_Submitted(""))
+        app.on_input_submitted(_Submitted(""))
+
+        message = backend._outgoing_messages.get_nowait()
+        self.assertEqual(message["message_type"], "command.dispatch_haul_loop")
+        self.assertEqual(message["payload"]["params"]["station_1_buying"], "Silver")
+        self.assertEqual(message["payload"]["params"]["station_1"], "Savitskaya Orbital")
+        self.assertEqual(message["payload"]["params"]["station_2"], "Nyberg Vision")
+        self.assertEqual(message["payload"]["raw_command"], "haul Silver")
 
     def test_parse_target_defaults_to_http_and_default_port(self) -> None:
         target = parse_observer_server_target("192.168.1.44")
@@ -741,6 +822,30 @@ class ControlRoomClientTests(unittest.TestCase):
             message["payload"]["raw_command"],
             "haul route Savitskaya Orbital -> Nyberg Vision",
         )
+
+    def test_remote_backend_enqueues_dispatch_destination_and_haul_loop(self) -> None:
+        backend = self._backend()
+
+        backend.dispatch_destination(
+            "Achenar",
+            3.5,
+            skip_delay=True,
+            raw_command="!dest Achenar",
+        )
+        backend.dispatch_haul_loop(
+            params={"station_1_buying": "Silver", "station_1": "Savitskaya Orbital"},
+            raw_command="haul Silver",
+        )
+
+        destination_message = backend._outgoing_messages.get_nowait()
+        haul_message = backend._outgoing_messages.get_nowait()
+        self.assertEqual(destination_message["message_type"], "command.dispatch_destination")
+        self.assertEqual(destination_message["payload"]["destination"], "Achenar")
+        self.assertEqual(destination_message["payload"]["galaxy_map_settle"], 3.5)
+        self.assertTrue(destination_message["payload"]["skip_delay"])
+        self.assertEqual(haul_message["message_type"], "command.dispatch_haul_loop")
+        self.assertEqual(haul_message["payload"]["params"]["station_1_buying"], "Silver")
+        self.assertEqual(haul_message["payload"]["raw_command"], "haul Silver")
 
     def test_remote_backend_enqueues_replay_commands(self) -> None:
         target = ObserverServerTarget(

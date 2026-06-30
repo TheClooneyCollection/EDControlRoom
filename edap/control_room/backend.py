@@ -55,6 +55,7 @@ class ControlRoomBackend(ControlRoomEventSink, Protocol):
     def dispatch_haul_loop(
         self,
         *,
+        params: dict[str, str] | None = None,
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None: ...
@@ -241,9 +242,12 @@ class LocalControlRoomBackend(ControlRoomEventSink):
     def dispatch_haul_loop(
         self,
         *,
+        params: dict[str, str] | None = None,
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None:
+        if params is not None:
+            self._host._haul_params = {str(key): str(value) for key, value in params.items()}
         self._host._facade.dispatch_haul_loop(
             skip_delay=skip_delay,
             raw_command=raw_command,

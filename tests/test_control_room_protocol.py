@@ -286,6 +286,7 @@ class _SnapshotBackend(ControlRoomBackend):
     def dispatch_haul_loop(
         self,
         *,
+        params: dict[str, str] | None = None,
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None:
@@ -332,6 +333,7 @@ class _IntentRecorderBackend(_SnapshotBackend):
     def __init__(self, snapshot: ControlRoomSnapshot) -> None:
         super().__init__(snapshot)
         self.dispatched_commands: list[tuple[str, bool | None]] = []
+        self.dispatched_hauls: list[tuple[dict[str, str] | None, bool, str | None]] = []
         self.submitted_inputs: list[str] = []
         self.opened_replay_browser = 0
         self.closed_replay_browser = 0
@@ -344,6 +346,15 @@ class _IntentRecorderBackend(_SnapshotBackend):
 
     def dispatch_command(self, raw: str, *, skip_delay: bool | None = None) -> None:
         self.dispatched_commands.append((raw, skip_delay))
+
+    def dispatch_haul_loop(
+        self,
+        *,
+        params: dict[str, str] | None = None,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self.dispatched_hauls.append((params, skip_delay, raw_command))
 
     def load_trade_route(self, route: TradeRoute, *, raw_command: str | None = None) -> None:
         self.loaded_trade_routes.append((route, raw_command))

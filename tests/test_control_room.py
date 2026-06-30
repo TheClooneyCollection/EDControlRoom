@@ -405,6 +405,7 @@ class _RemoteBackendStub:
     def dispatch_haul_loop(
         self,
         *,
+        params: dict[str, str] | None = None,
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None:

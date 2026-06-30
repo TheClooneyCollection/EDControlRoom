@@ -296,6 +296,96 @@ def _handle_session_message(
             correlation_message_id=correlation_message_id,
         )
 
+    if message_type == "command.dispatch_destination":
+        if client_role != "active_operator":
+            return _observer_read_only_error(correlation_message_id)
+        if command_handler is None:
+            return _transport_unavailable_error(correlation_message_id)
+        destination = payload.get("destination")
+        galaxy_map_settle = payload.get("galaxy_map_settle")
+        raw_command_value = payload.get("raw_command")
+        raw_command = raw_command_value if isinstance(raw_command_value, str) else None
+        if not isinstance(destination, str) or not destination.strip():
+            return protocol_message(
+                "response.error",
+                {
+                    "error_code": "invalid_command",
+                    "error_message": "Destination dispatch commands must include a destination string.",
+                    "recommended_action": "Send a non-empty destination value.",
+                    "retryable": True,
+                },
+                correlation_message_id=correlation_message_id,
+            )
+        if not isinstance(galaxy_map_settle, (int, float)):
+            return protocol_message(
+                "response.error",
+                {
+                    "error_code": "invalid_command",
+                    "error_message": "Destination dispatch commands must include a numeric galaxy_map_settle.",
+                    "recommended_action": "Send a numeric galaxy_map_settle value.",
+                    "retryable": True,
+                },
+                correlation_message_id=correlation_message_id,
+            )
+        try:
+            skip_delay_value = payload.get("skip_delay")
+            skip_delay = bool(skip_delay_value) if isinstance(skip_delay_value, bool) else False
+            command_handler.dispatch_destination(
+                destination.strip(),
+                float(galaxy_map_settle),
+                skip_delay=skip_delay,
+                raw_command=raw_command,
+            )
+        except Exception as exc:
+            return _command_execution_failed_error(exc, correlation_message_id)
+        return protocol_message(
+            "response.success",
+            {
+                "accepted": True,
+                "message_text": "Destination routine accepted.",
+                "result": {"destination": destination.strip()},
+            },
+            correlation_message_id=correlation_message_id,
+        )
+
+    if message_type == "command.dispatch_haul_loop":
+        if client_role != "active_operator":
+            return _observer_read_only_error(correlation_message_id)
+        if command_handler is None:
+            return _transport_unavailable_error(correlation_message_id)
+        params_value = payload.get("params", {})
+        if not isinstance(params_value, dict):
+            return protocol_message(
+                "response.error",
+                {
+                    "error_code": "invalid_command",
+                    "error_message": "Haul dispatch commands must include a params mapping.",
+                    "recommended_action": "Send string haul params as a JSON object.",
+                    "retryable": True,
+                },
+                correlation_message_id=correlation_message_id,
+            )
+        raw_command_value = payload.get("raw_command")
+        raw_command = raw_command_value if isinstance(raw_command_value, str) else None
+        try:
+            skip_delay_value = payload.get("skip_delay")
+            skip_delay = bool(skip_delay_value) if isinstance(skip_delay_value, bool) else False
+            command_handler.dispatch_haul_loop(
+                params={str(key): str(value) for key, value in params_value.items()},
+                skip_delay=skip_delay,
+                raw_command=raw_command,
+            )
+        except Exception as exc:
+            return _command_execution_failed_error(exc, correlation_message_id)
+        return protocol_message(
+            "response.success",
+            {
+                "accepted": True,
+                "message_text": "Haul routine accepted.",
+            },
+            correlation_message_id=correlation_message_id,
+        )
+
     if message_type == "command.load_trade_route":
         if client_role != "active_operator":
             return _observer_read_only_error(correlation_message_id)

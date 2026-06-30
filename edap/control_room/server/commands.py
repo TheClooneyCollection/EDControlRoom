@@ -9,6 +9,23 @@ from edap.inara.trade_routes import TradeRoute
 class ObserverSessionCommandHandler(Protocol):
     def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None: ...
 
+    def dispatch_destination(
+        self,
+        destination: str,
+        galaxy_map_settle: float,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None: ...
+
+    def dispatch_haul_loop(
+        self,
+        *,
+        params: dict[str, str] | None = None,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None: ...
+
     def load_trade_route(self, route: TradeRoute, *, raw_command: str | None = None) -> None: ...
 
     def cancel_active_routine(self) -> None: ...

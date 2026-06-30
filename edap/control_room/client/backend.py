@@ -134,15 +134,34 @@ class RemoteObserverBackend(ControlRoomBackend):
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None:
-        self._emit_local_message("Observer session is read-only.")
+        self._send_command(
+            "command.dispatch_destination",
+            {
+                "destination": destination,
+                "galaxy_map_settle": galaxy_map_settle,
+                "skip_delay": skip_delay,
+                "raw_command": raw_command,
+            },
+        )
 
     def dispatch_haul_loop(
         self,
         *,
+        params: dict[str, str] | None = None,
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None:
-        self._emit_local_message("Observer session is read-only.")
+        self._send_command(
+            "command.dispatch_haul_loop",
+            {
+                "params": {
+                    str(key): str(value)
+                    for key, value in (params or {}).items()
+                },
+                "skip_delay": skip_delay,
+                "raw_command": raw_command,
+            },
+        )
 
     def handle_haul_prompt(self, value: str) -> None:
         self._emit_local_message("Observer session is read-only.")

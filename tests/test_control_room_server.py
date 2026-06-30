@@ -276,6 +276,8 @@ class _SnapshotRecorder(ControlRoomEventSink):
 class _CommandHandlerRecorder(ObserverSessionCommandHandler):
     def __init__(self) -> None:
         self.submitted_inputs: list[tuple[str, bool | None]] = []
+        self.dispatched_destinations: list[tuple[str, float, bool, str | None]] = []
+        self.dispatched_hauls: list[tuple[dict[str, str] | None, bool, str | None]] = []
         self.loaded_trade_routes: list[tuple[object, str | None]] = []
         self.cancel_calls = 0
         self.opened_replay_browser = 0
@@ -287,6 +289,27 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
 
     def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None:
         self.submitted_inputs.append((raw_input, skip_delay))
+
+    def dispatch_destination(
+        self,
+        destination: str,
+        galaxy_map_settle: float,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self.dispatched_destinations.append(
+            (destination, galaxy_map_settle, skip_delay, raw_command)
+        )
+
+    def dispatch_haul_loop(
+        self,
+        *,
+        params: dict[str, str] | None = None,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self.dispatched_hauls.append((params, skip_delay, raw_command))
 
     def load_trade_route(self, route, *, raw_command: str | None = None) -> None:
         self.loaded_trade_routes.append((route, raw_command))
@@ -984,6 +1007,81 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(command_handler.submitted_inputs, [("", None)])
         self.assertEqual(response["message_type"], "response.success")
         self.assertEqual(response["correlation_message_id"], "message-blank")
+
+    def test_active_operator_dispatch_destination_calls_handler(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        command_handler = _CommandHandlerRecorder()
+
+        response = _handle_session_message(
+            {
+                "message_type": "command.dispatch_destination",
+                "message_id": "message-dest",
+                "payload": {
+                    "destination": "Achenar",
+                    "galaxy_map_settle": 3.5,
+                    "skip_delay": True,
+                    "raw_command": "!dest Achenar",
+                },
+            },
+            session_id="observer-dest",
+            client_role="active_operator",
+            snapshot_provider=_base_snapshot,
+            command_handler=command_handler,
+            broker=broker,
+        )
+
+        self.assertEqual(
+            command_handler.dispatched_destinations,
+            [("Achenar", 3.5, True, "!dest Achenar")],
+        )
+        self.assertEqual(response["message_type"], "response.success")
+        self.assertEqual(response["correlation_message_id"], "message-dest")
+
+    def test_active_operator_dispatch_haul_loop_calls_handler(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        command_handler = _CommandHandlerRecorder()
+
+        response = _handle_session_message(
+            {
+                "message_type": "command.dispatch_haul_loop",
+                "message_id": "message-haul",
+                "payload": {
+                    "params": {
+                        "station_1_buying": "Silver",
+                        "station_1": "Savitskaya Orbital",
+                        "station_1_system": "TSONGORIS",
+                        "station_2": "Nyberg Vision",
+                        "station_2_system": "NJOKUJINUN",
+                    },
+                    "skip_delay": False,
+                    "raw_command": "haul Silver",
+                },
+            },
+            session_id="observer-haul",
+            client_role="active_operator",
+            snapshot_provider=_base_snapshot,
+            command_handler=command_handler,
+            broker=broker,
+        )
+
+        self.assertEqual(
+            command_handler.dispatched_hauls,
+            [
+                (
+                    {
+                        "station_1_buying": "Silver",
+                        "station_1": "Savitskaya Orbital",
+                        "station_1_system": "TSONGORIS",
+                        "station_2": "Nyberg Vision",
+                        "station_2_system": "NJOKUJINUN",
+                    },
+                    False,
+                    "haul Silver",
+                )
+            ],
+        )
+        self.assertEqual(response["message_type"], "response.success")
+        self.assertEqual(response["correlation_message_id"], "message-haul")
 
     def test_active_operator_load_trade_route_calls_handler(self) -> None:
         broker = InMemoryObserverSessionBroker()
