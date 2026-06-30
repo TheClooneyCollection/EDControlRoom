@@ -47,6 +47,8 @@ class ObserverControlRoomApp(ControlRoomApp):
         self._local_trade_routes = TradeRoutesData()
         self._local_trade_route_picker = TradeRoutePickerState()
         self._local_prompt_state: PromptState | None = None
+        self._local_command_input_value = ""
+        self._local_prompt_prefill_signature = (False, "", "")
         self._local_replay_filter = ""
         self._local_replay_open = False
         self._local_selected_resume_history_entry: CommandHistoryEntry | None = None
@@ -190,6 +192,7 @@ class ObserverControlRoomApp(ControlRoomApp):
     def on_input_submitted(self, event: Input.Submitted) -> None:
         raw = event.value
         event.input.value = ""
+        self._local_command_input_value = ""
         self._debug_log(
             "observer_input_submitted",
             raw=raw,
@@ -463,6 +466,7 @@ class ObserverControlRoomApp(ControlRoomApp):
 
     def _clear_local_prompt_state(self) -> None:
         self._local_prompt_state = None
+        self._local_prompt_prefill_signature = (False, "", "")
         _prompts.clear_haul_prompt(self._prompt_state)
         _prompts.clear_destination_prompt(self._prompt_state)
         try:
@@ -472,6 +476,7 @@ class ObserverControlRoomApp(ControlRoomApp):
         command_input.placeholder = self._default_command_placeholder
         command_input.value = ""
         command_input.cursor_position = 0
+        self._local_command_input_value = ""
 
     def _sync_local_prompt_state(self) -> None:
         if (
@@ -604,6 +609,11 @@ class ObserverControlRoomApp(ControlRoomApp):
             return
         self._tts.announce(parsed_id, **event.message_values)
 
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if getattr(event.input, "id", None) not in {None, "cmd"}:
+            return
+        self._local_command_input_value = event.value
+
     def _refresh_remote_command_input(self) -> None:
         command_input = self.query_one("#cmd", Input)
         is_active_operator = self._view_snapshot.session.client_role == "active_operator"
@@ -611,14 +621,27 @@ class ObserverControlRoomApp(ControlRoomApp):
         if not is_active_operator:
             command_input.placeholder = "observer mode - read only"
             return
+        prompt_prefill_signature = (
+            self._prompt_state.command_input_prefill_active,
+            self._prompt_state.command_input_placeholder,
+            self._prompt_state.command_input_value,
+        )
         if self._prompt_state.command_input_prefill_active:
             command_input.placeholder = self._prompt_state.command_input_placeholder
-            command_input.value = self._prompt_state.command_input_value
-            command_input.cursor_position = len(command_input.value)
+            if prompt_prefill_signature != self._local_prompt_prefill_signature:
+                command_input.value = self._prompt_state.command_input_value
+                command_input.cursor_position = len(command_input.value)
+                self._local_command_input_value = command_input.value
+            elif command_input.value != self._local_command_input_value:
+                command_input.value = self._local_command_input_value
+                command_input.cursor_position = len(command_input.value)
+            self._local_prompt_prefill_signature = prompt_prefill_signature
             return
+        self._local_prompt_prefill_signature = prompt_prefill_signature
         command_input.placeholder = self._default_command_placeholder
-        command_input.value = ""
-        command_input.cursor_position = 0
+        if command_input.value != self._local_command_input_value:
+            command_input.value = self._local_command_input_value
+            command_input.cursor_position = len(command_input.value)
 
     def on_key(self, event) -> None:
         if self._resume_open:

@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `125`
-- Latest generated iteration number: `258`
+- Generated iteration count: `126`
+- Latest generated iteration number: `259`
 
 ## Iteration 134
 
@@ -3499,3 +3499,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - If market panel regressions need coverage again, prefer state or rendering tests that avoid `pilot.pause()` and widget animation timing.
+
+## Iteration 259
+
+- When: `2026-06-30 13:53`
+- Area: `control-room`
+- Title: `preserve-connect-command-draft`
+- Source: [2026-06-30-13-53_control-room_preserve-connect-command-draft.md](iteration-logs/2026-06-30-13-53_control-room_preserve-connect-command-draft.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `preserve-connect-command-draft`
+- Started: `2026-06-30 13:53`
+
+## Summary
+
+- Fixed a `connect`-mode regression where periodic remote snapshot refreshes could wipe the local command-bar draft while the active operator was typing.
+
+## Changes
+
+- Added observer-local command-input draft tracking so steady-state snapshot refreshes no longer clear freeform commands or partially edited local prompt values.
+- Seeded the draft only when a prompt prefill actually changes, so new local prompt steps still populate correctly without clobbering later edits.
+- Added regression coverage for both plain command typing and local prompt typing during remote snapshot updates.
+
+## Follow-ups
+
+- Live-validate the fix in a real `control_room connect` session to confirm Textual input-change events behave the same as the unit-test harness.

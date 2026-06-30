@@ -382,6 +382,68 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(command_input.value, "")
         self.assertEqual(command_input.cursor_position, 0)
 
+    def test_observer_app_preserves_freeform_command_draft_across_snapshot_refresh(self) -> None:
+        updated_snapshot = replace(
+            _snapshot(),
+            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+        )
+        backend = self._backend(initial_snapshot=updated_snapshot)
+        app = self._app(backend=backend)
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
+
+        app._apply_view_snapshot_state()
+        command_input.value = "haul gold"
+        command_input.cursor_position = len(command_input.value)
+        app._local_command_input_value = command_input.value
+
+        refreshed_snapshot = replace(
+            updated_snapshot,
+            ship=replace(updated_snapshot.ship, system_name="Achenar"),
+        )
+        backend.publish_snapshot(refreshed_snapshot)
+        app._view_snapshot = refreshed_snapshot
+        app._apply_view_snapshot_state()
+        app._refresh_remote_command_input()
+
+        self.assertEqual(command_input.value, "haul gold")
+        self.assertEqual(command_input.cursor_position, len("haul gold"))
+        self.assertEqual(command_input.placeholder, app._default_command_placeholder)
+
+    def test_observer_app_preserves_prompt_draft_across_snapshot_refresh(self) -> None:
+        updated_snapshot = replace(
+            _snapshot(),
+            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
+        )
+        backend = self._backend(initial_snapshot=updated_snapshot)
+        app = self._app(backend=backend)
+        command_input = _FakeInputWidget()
+        _bind_observer_widgets(app, command_input)
+
+        app._apply_view_snapshot_state()
+        app._prompt_state.command_input_prefill_active = True
+        app._prompt_state.command_input_placeholder = "station 1 buying..."
+        app._prompt_state.command_input_value = "Gold"
+        app._sync_local_prompt_state()
+        app._refresh_remote_command_input()
+
+        command_input.value = "Gol"
+        command_input.cursor_position = len(command_input.value)
+        app._local_command_input_value = command_input.value
+
+        refreshed_snapshot = replace(
+            updated_snapshot,
+            market=replace(updated_snapshot.market, station_name="Galileo"),
+        )
+        backend.publish_snapshot(refreshed_snapshot)
+        app._view_snapshot = refreshed_snapshot
+        app._apply_view_snapshot_state()
+        app._refresh_remote_command_input()
+
+        self.assertEqual(command_input.placeholder, "station 1 buying...")
+        self.assertEqual(command_input.value, "Gol")
+        self.assertEqual(command_input.cursor_position, len("Gol"))
+
     def test_observer_app_replay_browser_runs_locally_from_remote_history(self) -> None:
         updated_snapshot = replace(
             _snapshot(),
