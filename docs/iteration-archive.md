@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `143`
-- Latest generated iteration number: `276`
+- Generated iteration count: `144`
+- Latest generated iteration number: `277`
 
 ## Iteration 134
 
@@ -3989,3 +3989,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Continue moving remaining app/backend command paths, especially interrupt and replay/picker actions, toward explicit view actions and execution dependencies.
+
+## Iteration 277
+
+- When: `2026-06-30 18:11`
+- Area: `control-room`
+- Title: `add-data-hydrate-message`
+- Source: [2026-06-30-18-11_control-room_add-data-hydrate-message.md](iteration-logs/2026-06-30-18-11_control-room_add-data-hydrate-message.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `add-data-hydrate-message`
+- Started: `2026-06-30 18:11`
+
+## Summary
+
+- Added the first no-snapshot, source-oriented data protocol message for plan 0008.
+
+## Changes
+
+- Added `edap.control_room.protocol.data_messages` with a distinct data-message schema, supported source-oriented message types, and `control_room.hydrate` construction from `ControlRoomDataReadModel`.
+- Exported the data-message primitives from `edap.control_room.protocol`.
+- Added tests proving hydrate payloads contain data-source read models and omit UI-owned prompt/replay state.
+
+## Follow-ups
+
+- Wire `serve` to emit `control_room.hydrate` from `ControlRoomDependencies.data_source`.
+- Build remote data sources that consume hydrate/update messages directly instead of snapshots.
