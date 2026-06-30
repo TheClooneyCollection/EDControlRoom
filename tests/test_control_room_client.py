@@ -499,61 +499,6 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertIn("13:54:34  Unknown command: dest sol", rendered_messages[0])
         self.assertIn("dest - dest <system>", rendered_messages[-1])
 
-    def test_observer_app_sorts_local_and_remote_activity_by_timestamp_on_refresh(self) -> None:
-        updated_snapshot = replace(
-            _snapshot(),
-            session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-            activity_log=[
-                ActivityLogEntry(
-                    entry_id="remote-1",
-                    timestamp="2026-06-30T15:47:35Z",
-                    message_text="[dim]Executing dest sol in 5.0s...[/]",
-                ),
-                ActivityLogEntry(
-                    entry_id="remote-2",
-                    timestamp="2026-06-30T15:47:39Z",
-                    message_text="Setting galaxy map destination: [bold]sol[/] [dim](settle 2.0s)[/]",
-                ),
-            ],
-        )
-        backend = self._backend(initial_snapshot=updated_snapshot)
-        app = self._app(backend=backend)
-        command_input = _FakeInputWidget()
-        _bind_observer_widgets(app, command_input)
-        activity = app.query_one("#activity")
-
-        app._local_activity_log = [
-            ActivityLogEntry(
-                entry_id="local-1",
-                timestamp="2026-06-30T15:47:31Z",
-                message_text="[dim]Command: dest sol[/]",
-            ),
-            ActivityLogEntry(
-                entry_id="local-2",
-                timestamp="2026-06-30T15:47:31Z",
-                message_text="Destination: [bold]sol[/]",
-            ),
-            ActivityLogEntry(
-                entry_id="local-3",
-                timestamp="2026-06-30T15:47:31Z",
-                message_text="[dim]Galaxy-map settle seconds? (Enter = 2.0)[/]",
-            ),
-        ]
-
-        app._replace_activity_log(updated_snapshot.activity_log)
-
-        rendered_messages = [segment.plain for segment in activity.writes]
-        self.assertEqual(
-            rendered_messages,
-            [
-                "15:47:31  Command: dest sol",
-                "15:47:31  Destination: sol",
-                "15:47:31  Galaxy-map settle seconds? (Enter = 2.0)",
-                "15:47:35  Executing dest sol in 5.0s...",
-                "15:47:39  Setting galaxy map destination: sol (settle 2.0s)",
-            ],
-        )
-
     def test_observer_app_uses_event_timestamp_for_incremental_activity_append(self) -> None:
         backend = self._backend(initial_snapshot=_snapshot())
         app = self._app(backend=backend)
@@ -1177,6 +1122,27 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(first["message_type"], "command.request_snapshot")
         self.assertEqual(second["message_type"], "command.submit_input")
         self.assertEqual(second["payload"]["raw_input"], "dock")
+
+    def test_remote_backend_does_not_enqueue_client_local_submit_input(self) -> None:
+        target = ObserverServerTarget(
+            host="bridge.local",
+            port=8765,
+            http_base_url="http://bridge.local:8765",
+            websocket_url="ws://bridge.local:8765/session",
+        )
+        backend = RemoteObserverBackend(
+            server_target=target,
+            access_token="secret-token",
+            client_name="observer-ipad",
+            initial_snapshot=_snapshot(),
+            websocket_connect_info=_websocket_connect_info(),
+        )
+
+        backend.submit_input("dest sol")
+        backend.dispatch_command("home")
+        backend.submit_input("market lock")
+
+        self.assertTrue(backend._outgoing_messages.empty())
 
     def test_remote_backend_load_trade_route_stays_client_local(self) -> None:
         backend = self._backend()

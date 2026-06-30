@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `131`
-- Latest generated iteration number: `264`
+- Generated iteration count: `133`
+- Latest generated iteration number: `266`
 
 ## Iteration 134
 
@@ -3661,3 +3661,56 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Re-run a live `serve` + `connect` `dest sol` flow to confirm prompt lines and delayed execution lines now keep stable ordering under repeated snapshot refreshes.
+
+## Iteration 265
+
+- When: `2026-06-30 16:49`
+- Area: `control-room`
+- Title: `sort-remote-activity-merge`
+- Source: [2026-06-30-16-49_control-room_sort-remote-activity-merge.md](iteration-logs/2026-06-30-16-49_control-room_sort-remote-activity-merge.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `sort-remote-activity-merge`
+- Started: `2026-06-30 16:49`
+
+## Summary
+
+- Fixed observer activity-log refresh ordering so retained local prompt lines are merged back into remote snapshots by timestamp instead of being appended after newer remote routine output.
+
+## Changes
+
+- Sorted `ObserverControlRoomApp._replace_activity_log()` merges by parsed `ActivityLogEntry.timestamp` before trimming and repainting the widget.
+- Added a regression that reproduces the `dest sol` prompt/routine mix, proving `Command`, `Destination`, and settle-prompt lines stay ahead of later `Executing...` and destination routine logs after refresh.
+
+## Follow-ups
+
+- Re-run a live `serve` + `connect` `dest sol` session and confirm repeated snapshot refreshes no longer push retained local prompt lines below newer remote routine output.
+
+## Iteration 266
+
+- When: `2026-06-30 16:57`
+- Area: `control-room`
+- Title: `guard-observer-local-verbs`
+- Source: [2026-06-30-16-57_control-room_guard-observer-local-verbs.md](iteration-logs/2026-06-30-16-57_control-room_guard-observer-local-verbs.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `guard-observer-local-verbs`
+- Started: `2026-06-30 16:57`
+
+## Summary
+
+- Added a transport-level observer guard so client-local verbs like `dest` and `haul` cannot be serialized into `command.submit_input` and sent to the headless server.
+
+## Changes
+
+- Added `_is_client_local_command()` in the remote observer backend and short-circuited both `submit_input()` and `dispatch_command()` for client-local verbs.
+- Added a regression proving `dest sol`, `home`, and `market lock` do not enqueue any websocket command payloads from `RemoteObserverBackend`.
+- Reverted the partial observer-log filtering experiment so the fix stays at the transport seam rather than hiding server noise in the UI.
+
+## Follow-ups
+
+- Re-run a live `serve` + `connect` `dest sol` session and confirm the server activity stream no longer receives fresh `Command: dest sol` / `Unknown command: dest sol` entries from the observer client.

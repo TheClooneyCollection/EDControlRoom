@@ -32,6 +32,28 @@ from .target import ObserverServerTarget
 
 _RECONNECT_DELAY_SECONDS = 1.0
 _RECONNECT_DELAY_MAX_SECONDS = 30.0
+_CLIENT_LOCAL_COMMAND_VERBS = frozenset(
+    {
+        "haul",
+        "dest",
+        "set_dest",
+        "home",
+        "replay",
+        "history",
+        "commands",
+        "help",
+        "?",
+        "market",
+    }
+)
+
+
+def _is_client_local_command(raw: str) -> bool:
+    command_raw = raw[1:].lstrip() if raw.startswith("!") else raw
+    parts = command_raw.split(None, 1)
+    if not parts:
+        return False
+    return parts[0].lower() in _CLIENT_LOCAL_COMMAND_VERBS
 
 
 class RemoteObserverBackend(ControlRoomBackend):
@@ -108,6 +130,8 @@ class RemoteObserverBackend(ControlRoomBackend):
         self._emit(SnapshotUpdatedEvent(snapshot=snapshot))
 
     def submit_input(self, raw: str) -> None:
+        if _is_client_local_command(raw):
+            return
         self.dispatch_command(raw)
 
     def interrupt_active_routine(self) -> None:
@@ -117,6 +141,8 @@ class RemoteObserverBackend(ControlRoomBackend):
         return True
 
     def dispatch_command(self, raw: str, *, skip_delay: bool | None = None) -> None:
+        if _is_client_local_command(raw):
+            return
         self._send_command(
             "command.submit_input",
             {
