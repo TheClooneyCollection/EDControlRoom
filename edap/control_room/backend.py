@@ -109,6 +109,7 @@ class LocalBackendHost(Protocol):
     _dest_prompt_raw_command: str
     _dest_prompt_skip_delay: bool
     _default_command_placeholder: str
+    dependencies: Any
 
     def _log(self, msg: str) -> None: ...
     def _save_saved_state(self) -> None: ...
@@ -215,14 +216,14 @@ class LocalControlRoomBackend(ControlRoomEventSink):
         self.dispatch_command(raw)
 
     def interrupt_active_routine(self) -> None:
-        self._host._handle_interrupt("Ctrl-C")
+        self._host.dependencies.execution.cancel_active_routine()
         self.publish_snapshot(self.current_snapshot())
 
     def exit_detaches_remote_session(self) -> bool:
         return False
 
     def dispatch_command(self, raw: str, *, skip_delay: bool | None = None) -> None:
-        self._host._facade.dispatch_command(raw, skip_delay=skip_delay)
+        self._host.dependencies.execution.submit_command(raw, skip_delay=skip_delay)
 
     def dispatch_destination(
         self,
@@ -232,7 +233,7 @@ class LocalControlRoomBackend(ControlRoomEventSink):
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None:
-        self._host._facade.dispatch_dest(
+        self._host.dependencies.execution.dispatch_destination(
             destination,
             galaxy_map_settle,
             skip_delay=skip_delay,
@@ -246,9 +247,8 @@ class LocalControlRoomBackend(ControlRoomEventSink):
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None:
-        if params is not None:
-            self._host._haul_params = {str(key): str(value) for key, value in params.items()}
-        self._host._facade.dispatch_haul_loop(
+        self._host.dependencies.execution.dispatch_haul_loop(
+            params=params,
             skip_delay=skip_delay,
             raw_command=raw_command,
         )
@@ -259,16 +259,16 @@ class LocalControlRoomBackend(ControlRoomEventSink):
         *,
         raw_command: str | None = None,
     ) -> None:
-        self._host._facade.load_trade_route(
+        self._host.dependencies.execution.load_trade_route(
             route,
             raw_command=raw_command,
         )
 
     def handle_haul_prompt(self, value: str) -> None:
-        self._host._facade.handle_haul_prompt(value)
+        self._host.dependencies.execution.handle_haul_prompt(value)
 
     def handle_haul_confirm_prompt(self, value: str) -> None:
-        self._host._facade.handle_haul_confirm_prompt(value)
+        self._host.dependencies.execution.handle_haul_confirm_prompt(value)
 
     def open_replay_browser(self) -> None:
         _replay.show_resume_picker(self._host)

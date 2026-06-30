@@ -7,6 +7,7 @@ from edap.control_room.dependencies import (
     LocalControlRoomDataSource,
     LocalControlRoomExecution,
 )
+from edap.control_room.backend import LocalControlRoomBackend
 from edap.control_room.models import HaulStats, MarketData, RuntimeUIState, ShipState
 from edap.control_room.protocol import build_activity_log_entry
 from edap.control_room_state import ControlRoomState, CommandHistoryEntry
@@ -33,6 +34,32 @@ class _FakeFacade:
 
     def handle_haul_confirm_prompt(self, *args, **kwargs) -> None:
         self.calls.append(("handle_haul_confirm_prompt", args, kwargs))
+
+
+class _FakeExecution:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
+
+    def submit_command(self, *args, **kwargs) -> None:
+        self.calls.append(("submit_command", args, kwargs))
+
+    def dispatch_destination(self, *args, **kwargs) -> None:
+        self.calls.append(("dispatch_destination", args, kwargs))
+
+    def dispatch_haul_loop(self, *args, **kwargs) -> None:
+        self.calls.append(("dispatch_haul_loop", args, kwargs))
+
+    def load_trade_route(self, *args, **kwargs) -> None:
+        self.calls.append(("load_trade_route", args, kwargs))
+
+    def handle_haul_prompt(self, *args, **kwargs) -> None:
+        self.calls.append(("handle_haul_prompt", args, kwargs))
+
+    def handle_haul_confirm_prompt(self, *args, **kwargs) -> None:
+        self.calls.append(("handle_haul_confirm_prompt", args, kwargs))
+
+    def cancel_active_routine(self) -> None:
+        self.calls.append(("cancel_active_routine", (), {}))
 
 
 class ControlRoomDependenciesTests(unittest.TestCase):
@@ -114,3 +141,42 @@ class ControlRoomDependenciesTests(unittest.TestCase):
             ],
         )
         self.assertEqual(app._haul_params, {"commodity": "gold"})
+
+    def test_local_backend_dispatches_through_execution_dependency(self) -> None:
+        execution = _FakeExecution()
+        host = SimpleNamespace(
+            dependencies=SimpleNamespace(execution=execution),
+        )
+        backend = LocalControlRoomBackend(host)
+        route = object()
+
+        backend.dispatch_command("dest sol", skip_delay=True)
+        backend.dispatch_destination("Sol", 2.0, raw_command="dest sol")
+        backend.dispatch_haul_loop(params={"commodity": "gold"}, raw_command="haul")
+        backend.load_trade_route(route)
+        backend.handle_haul_prompt("gold")
+        backend.handle_haul_confirm_prompt("yes")
+
+        self.assertEqual(
+            [call[0] for call in execution.calls],
+            [
+                "submit_command",
+                "dispatch_destination",
+                "dispatch_haul_loop",
+                "load_trade_route",
+                "handle_haul_prompt",
+                "handle_haul_confirm_prompt",
+            ],
+        )
+        self.assertEqual(
+            execution.calls[2],
+            (
+                "dispatch_haul_loop",
+                (),
+                {
+                    "params": {"commodity": "gold"},
+                    "skip_delay": False,
+                    "raw_command": "haul",
+                },
+            ),
+        )
