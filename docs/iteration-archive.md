@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `156`
-- Latest generated iteration number: `289`
+- Generated iteration count: `157`
+- Latest generated iteration number: `290`
 
 ## Iteration 134
 
@@ -4353,3 +4353,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Continue moving remaining command bar, replay browser, and trade-route picker state away from internal snapshot compatibility.
+
+## Iteration 290
+
+- When: `2026-06-30 19:07`
+- Area: `control-room`
+- Title: `connect-apply-data-state`
+- Source: [2026-06-30-19-07_control-room_connect-apply-data-state.md](iteration-logs/2026-06-30-19-07_control-room_connect-apply-data-state.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `connect-apply-data-state`
+- Started: `2026-06-30 19:07`
+
+## Summary
+
+- Changed production connect mode to apply hydrated data directly for runtime/history/activity state instead of syncing a backend snapshot.
+
+## Changes
+
+- Added a remote data-state apply path that copies routine state, command history/defaults, activity log, ship context, and commander TTS from `ControlRoomDataReadModel`.
+- Kept the legacy snapshot apply path only as a fallback for tests/internal compatibility when no remote data source is supplied.
+- Extracted connect-local prompt/replay/trade-route overlay application so both data and fallback paths preserve local UI ownership.
+- Added regression coverage proving hydrate data updates local state without refreshing `_view_snapshot`.
+
+## Follow-ups
+
+- Remove the temporary legacy initial view snapshot once `ControlRoomApp` construction no longer requires a backend snapshot.

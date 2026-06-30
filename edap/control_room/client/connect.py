@@ -24,6 +24,7 @@ from edap.control_room.history import now_iso
 from edap.control_room.models import PromptState, TradeRoutePickerState, TradeRoutesData
 from edap.control_room.protocol import (
     ActivityLogAppendedEvent,
+    ActivityLogEntry,
     AnnouncementEvent,
     DataUpdatedEvent,
     SnapshotUpdatedEvent,
@@ -109,10 +110,7 @@ class ObserverControlRoomApp(ControlRoomApp):
         if isinstance(event, SnapshotUpdatedEvent):
             return
         if isinstance(event, DataUpdatedEvent):
-            self._refresh_status()
-            self._refresh_haul_stats()
-            self._refresh_market()
-            self._tts.set_commander_name(event.data.ship.commander)
+            self._apply_remote_data_state(event.data, replace_activity=True)
             return
         if isinstance(event, ActivityLogAppendedEvent):
             self._protocol_activity_log.append(event.entry)
@@ -148,6 +146,12 @@ class ObserverControlRoomApp(ControlRoomApp):
         return build_activity_log_entry(msg)
 
     def _apply_remote_snapshot(self, *, replace_activity: bool) -> None:
+        if self._remote_data_source is not None:
+            self._apply_remote_data_state(
+                self._remote_data_source.current(),
+                replace_activity=replace_activity,
+            )
+            return
         self._debug_log(
             "observer_remote_snapshot_apply_start",
             replace_activity=replace_activity,
@@ -183,6 +187,38 @@ class ObserverControlRoomApp(ControlRoomApp):
             visible_prompt_step=self._prompt_state.haul_prompt_step,
         )
 
+    def _apply_remote_data_state(self, data, *, replace_activity: bool) -> None:
+        self._runtime_state.routine_active = data.routine.routine_active
+        self._runtime_state.active_routine_name = data.routine.active_routine_name
+        self._runtime_state.haul_stop_requested = data.routine.haul_stop_requested
+        self._runtime_state.verbose_controls = data.routine.verbose_controls
+        self._runtime_state.instant_mode = data.routine.instant_mode
+        self._runtime_state.shutdown_requested = data.routine.shutdown_requested
+        self._runtime_state.shutdown_finalized = data.routine.shutdown_finalized
+        self._saved_state.default_haul = dict(data.command_history.default_haul)
+        self._saved_state.history = list(data.command_history.history_entries)
+        self._sync_local_ship_context()
+        self._tts.set_commander_name(data.ship.commander)
+        if replace_activity:
+            self._replace_activity_log(
+                [
+                    ActivityLogEntry(
+                        entry_id=entry.entry_id,
+                        timestamp=entry.timestamp,
+                        message_text=entry.message_text,
+                        severity=entry.severity,
+                    )
+                    for entry in data.activity_log.entries
+                ]
+            )
+        self._apply_local_view_state()
+        self._refresh_status()
+        self._refresh_haul_stats()
+        self._refresh_market()
+        self._refresh_trade_routes()
+        self._update_resume_detail()
+        self._refresh_remote_command_input()
+
     def _publish_protocol_snapshot(self) -> None:
         # Observer-local haul search state should not be fed back through the
         # remote snapshot backend; it is rendered locally and the remote side
@@ -197,6 +233,9 @@ class ObserverControlRoomApp(ControlRoomApp):
             remote_picker_open=self._trade_route_picker_open,
             remote_selected_trade_route_index=self._selected_trade_route_index,
         )
+        self._apply_local_view_state()
+
+    def _apply_local_view_state(self) -> None:
         self._trade_routes = TradeRoutesData(
             system_name=self._local_trade_routes.system_name,
             query_url=self._local_trade_routes.query_url,

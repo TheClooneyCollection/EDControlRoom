@@ -26,6 +26,7 @@ from edap.control_room.client.backend import (
     initial_remote_snapshot_from_data,
 )
 from edap.control_room.dependencies import (
+    ActivityLogItem,
     ActivityLogReadModel,
     CommandHistoryReadModel,
     ControlRoomDataReadModel,
@@ -33,6 +34,7 @@ from edap.control_room.dependencies import (
     ServerStatusReadModel,
     SessionReadModel,
 )
+from edap.control_room_state import CommandHistoryEntry
 from edap.control_room import commands as control_room_commands
 from edap.control_room.client.target import ObserverServerTarget, parse_observer_server_target
 from edap.control_room.models import TradeRoutePickerState, TradeRoutesData
@@ -151,6 +153,8 @@ def _bind_observer_widgets(app: ObserverControlRoomApp, command_input: _FakeInpu
     trade_route_help = _FakeStaticWidget()
     trade_route_detail = _FakeStaticWidget()
     trade_route_picker = _FakeContainerWidget()
+    status = _FakeStaticWidget()
+    haul = _FakeStaticWidget()
     market_content = _FakeStaticWidget()
     main = _FakeContainerWidget()
     resume_detail = _FakeStaticWidget()
@@ -166,6 +170,8 @@ def _bind_observer_widgets(app: ObserverControlRoomApp, command_input: _FakeInpu
             "#trade-route-help": trade_route_help,
             "#trade-route-detail": trade_route_detail,
             "#trade-route-picker": trade_route_picker,
+            "#status": status,
+            "#haul": haul,
             "#market-content": market_content,
             "#main": main,
             "#resume-detail": resume_detail,
@@ -1527,6 +1533,51 @@ class ControlRoomClientTests(unittest.TestCase):
 
         self.assertIs(app.dependencies.data_source, data_source)
         self.assertEqual(app.dependencies.data_source.current().ship.system, "Achenar")
+
+    def test_observer_app_applies_remote_data_without_refreshing_view_snapshot(self) -> None:
+        data = _data_read_model(system_name="Achenar")
+        data = replace(
+            data,
+            command_history=CommandHistoryReadModel(
+                default_haul={"station_1_buying": "Gold"},
+                history_entries=(
+                    CommandHistoryEntry(
+                        raw="haul Gold",
+                        command="haul",
+                        params={"station_1_buying": "Gold"},
+                        timestamp="2026-06-30T18:57:00Z",
+                    ),
+                ),
+                history_limit=20,
+            ),
+            activity_log=ActivityLogReadModel(
+                entries=(
+                    ActivityLogItem(
+                        entry_id="activity-1",
+                        timestamp="2026-06-30T18:57:01Z",
+                        message_text="Hydrated activity.",
+                    ),
+                )
+            ),
+            routine=replace(
+                data.routine,
+                routine_active=True,
+                active_routine_name="dock",
+            ),
+        )
+        data_source = RemoteObserverDataSource(data)
+        app = self._app(data_source=data_source)
+        _bind_observer_widgets(app, _FakeInputWidget())
+
+        app._apply_remote_snapshot(replace_activity=True)
+
+        self.assertEqual(app._view_snapshot.ship.system_name, "Sol")
+        self.assertEqual(app._ship.system, "Achenar")
+        self.assertTrue(app._runtime_state.routine_active)
+        self.assertEqual(app._runtime_state.active_routine_name, "dock")
+        self.assertEqual(app._saved_state.default_haul, {"station_1_buying": "Gold"})
+        self.assertEqual(app._saved_state.history[0].raw, "haul Gold")
+        self.assertEqual(app._protocol_activity_log[0].message_text, "Hydrated activity.")
 
     def test_remote_backend_replay_commands_stay_client_local(self) -> None:
         target = ObserverServerTarget(
