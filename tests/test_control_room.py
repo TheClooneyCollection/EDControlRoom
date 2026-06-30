@@ -60,6 +60,7 @@ from edap.inara.trade_routes import TradeRoute, TradeRouteSearchResult
 from edap.platform.input.base import InputTargetState
 from edap.version import GitHubRelease
 from rich.text import Text
+from textual.containers import VerticalScroll
 from textual.widgets import Static
 
 
@@ -1037,12 +1038,13 @@ class ControlRoomCommandTests(unittest.TestCase):
                     backend=_RemoteBackendStub(snapshot),
                 )
 
-                async with app.run_test():
+                async with app.run_test() as pilot:
                     app._view_snapshot = snapshot
                     app._refresh_market()
-                    market = app.query_one("#market", Static)
+                    await pilot.pause()
+                    market = app.query_one("#market", VerticalScroll)
 
-                    self.assertEqual(str(market.styles.overflow_y), "auto")
+                    self.assertTrue(market.show_vertical_scrollbar)
                     self.assertGreater(market.max_scroll_y, 0)
 
         asyncio.run(run())

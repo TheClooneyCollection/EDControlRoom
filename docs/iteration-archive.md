@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `122`
-- Latest generated iteration number: `255`
+- Generated iteration count: `123`
+- Latest generated iteration number: `256`
 
 ## Iteration 134
 
@@ -3417,3 +3417,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Trim the remote protocol snapshot/state model next so server-retained `prompt_state`, `replay_browser`, and related replay-filter/browser-open fields are no longer needed for `connect` compatibility.
+
+## Iteration 256
+
+- When: `2026-06-30 12:59`
+- Area: `control-room`
+- Title: `market-scrollbar-fix`
+- Source: [2026-06-30-12-59_control-room_market-scrollbar-fix.md](iteration-logs/2026-06-30-12-59_control-room_market-scrollbar-fix.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `market-scrollbar-fix`
+- Started: `2026-06-30 12:59`
+
+## Summary
+
+- Fixed the Control Room market panel so overflowing commodity lists show a real visible scrollbar again under Textual `8.2.7`.
+
+## Changes
+
+- Replaced the `#market` widget from a plain `Static` with a `VerticalScroll` container and moved the rendered market markup into an inner `#market-content` `Static`.
+- Tightened the regression test to wait for a layout tick and assert `show_vertical_scrollbar` instead of only checking that the widget had scrollable overflow.
+- Updated `docs/status/control-room.md` so the handoff notes the current Textual-specific scrollbar fix accurately.
+
+## Follow-ups
+
+- The full suite still exceeds the repo timing budget because Textual app tests dominate runtime; this fix adds one `pilot.pause()` to verify layout-driven scrollbar visibility and that test is now the slowest case in `tools/report_test_timing.py`.

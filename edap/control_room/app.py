@@ -51,7 +51,7 @@ from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
 from textual.app import ScreenStackError
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.events import MouseScrollDown, MouseScrollUp
 from textual.widgets import Footer, Header, Input, OptionList, RichLog, Static
 
@@ -346,7 +346,9 @@ class ControlRoomApp(App[None]):
         height: 1fr;
         border: solid $primary;
         padding: 0 1;
-        overflow-y: auto;
+    }
+    #market-content {
+        height: auto;
     }
     #trade-route-picker {
         display: none;
@@ -725,7 +727,8 @@ class ControlRoomApp(App[None]):
                         yield OptionList(id="resume-list")
                         yield Static(id="resume-detail")
             with Vertical(id="right"):
-                yield Static(id="market")
+                with VerticalScroll(id="market"):
+                    yield Static(id="market-content")
                 yield Static(id="haul")
         with Vertical(id="trade-route-picker"):
             yield Static(
@@ -753,7 +756,7 @@ class ControlRoomApp(App[None]):
         self._refresh_activity_title()
         self.query_one("#resume-browser", Vertical).border_title = "REPLAY HISTORY"
         self.query_one("#haul", Static).border_title = "HAUL"
-        self.query_one("#market", Static).border_title = "MARKET"
+        self.query_one("#market", VerticalScroll).border_title = "MARKET"
         self.query_one("#trade-route-picker", Vertical).border_title = "HAUL ROUTES"
 
     def _mount_local_runtime(self) -> None:
@@ -948,7 +951,7 @@ class ControlRoomApp(App[None]):
 
     def _refresh_market(self) -> None:
         self._sync_view_snapshot()
-        self.query_one("#market", Static).update(
+        self.query_one("#market-content", Static).update(
             Text.from_markup(
                 _rendering.market_markup(
                     self._view_market_data(),
