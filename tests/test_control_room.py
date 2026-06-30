@@ -42,8 +42,6 @@ from edap.control_room.protocol.snapshot import (
     ControlRoomSnapshot,
     HaulSessionSnapshot,
     MarketSnapshot,
-    PromptStateSnapshot,
-    ReplayBrowserSnapshot,
     ServerStatusSnapshot,
     SessionSnapshot,
     ShipSnapshot,
@@ -447,7 +445,6 @@ def _remote_snapshot(
     *,
     client_role: str = "active_operator",
     routine_active: bool = True,
-    prompt_state: PromptStateSnapshot | None = None,
 ) -> ControlRoomSnapshot:
     return ControlRoomSnapshot(
         session=SessionSnapshot(session_id="observer-1", client_role=client_role),
@@ -470,8 +467,6 @@ def _remote_snapshot(
             station_name="Jameson Memorial",
             system_name="Sol",
             market_timestamp="2026-06-18T13:00:00Z",
-            market_filter_text=None,
-            locked=False,
             items=[],
         ),
         haul_session=HaulSessionSnapshot(
@@ -503,13 +498,10 @@ def _remote_snapshot(
             verbose_controls=False,
             instant_mode=False,
             activity_auto_follow_paused=False,
-            replay_browser_open=False,
             shutdown_requested=False,
             shutdown_finalized=False,
         ),
         command_history=CommandHistorySnapshot(history_limit=20),
-        prompt_state=prompt_state or PromptStateSnapshot(),
-        replay_browser=ReplayBrowserSnapshot(open=False, filter_text=""),
         activity_log=[],
         server_status=ServerStatusSnapshot(
             server_name="ED Control Room",
@@ -792,22 +784,6 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertEqual(app.exit_calls, 0)
         self.assertIn("Exit cancelled", "\n".join(app.logged))
 
-    def test_remote_prompt_interrupt_routes_to_backend(self) -> None:
-        backend = _RemoteBackendStub(
-            _remote_snapshot(
-                routine_active=False,
-                prompt_state=PromptStateSnapshot(haul_prompt_step="station_1_system"),
-            )
-        )
-        app = _HarnessApp(_make_context(Path(self.tmpdir.name)))
-        app._backend = backend
-        app._sync_view_snapshot()
-
-        app.action_request_interrupt()
-
-        self.assertEqual(backend.interrupt_calls, 1)
-        self.assertNotIn("no active routine to cancel", "\n".join(app.logged))
-
     def test_bootstrap_ship_state_reads_balance_and_cargo_from_status_json(self) -> None:
         journal_dir = Path(self.tmpdir.name)
         (journal_dir / "Journal.240101000000.01.log").write_text(
@@ -1055,8 +1031,6 @@ class ControlRoomCommandTests(unittest.TestCase):
                         station_name="Jameson Memorial",
                         system_name="Sol",
                         market_timestamp="2026-06-29T12:00:00Z",
-                        market_filter_text=None,
-                        locked=False,
                         items=items,
                     ),
                 )
@@ -1086,8 +1060,6 @@ class ControlRoomCommandTests(unittest.TestCase):
                         station_name="Jameson Memorial",
                         system_name="Sol",
                         market_timestamp="2026-06-29T12:00:00Z",
-                        market_filter_text=None,
-                        locked=False,
                         items=[
                             {
                                 "Category": "Foods",
@@ -1784,9 +1756,6 @@ on_land = true
             self.assertEqual(self.app._haul_prompt_step, "search_edit")
             self.assertIn("near_system='Praea Euq AK-A d25'", self.app._command_input.value)
             self.assertIn("cargo_capacity=460", self.app._command_input.value)
-            snapshot = self.app._backend.current_snapshot()
-            self.assertTrue(snapshot.prompt_state.command_input_prefill_active)
-            self.assertIn("near_system='Praea Euq AK-A d25'", snapshot.prompt_state.command_input_value)
             self.app._handle_haul_prompt(self.app._command_input.value)
 
         self.assertEqual(self.app._trade_routes.system_name, "Praea Euq AK-A d25")

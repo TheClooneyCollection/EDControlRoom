@@ -3413,12 +3413,11 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - Switched `connect` replay/history browsing to the existing local replay helpers, so open/filter/selection/edit/default-haul behavior now stays client-side while the remote snapshot remains the source of executed history entries.
 - Removed the last remote prompt-prefill fallback in `connect`, so server snapshot prompt state no longer repopulates the local command bar when the client is not already in a local prompt flow.
 - Aligned market lock semantics so embedded mode still ingests fresh `Market.json` data while locked, `connect` handles `market` commands locally, and both modes now treat lock/unlock as display freeze/unfreeze over a continuously updating underlying market source.
-- Updated the checked-in control-room message schema plus client/server/protocol tests to cover the new dispatch commands and the new local-prompt/local-replay remote behavior.
+- Pruned the remote observer protocol/schema/server snapshot down to shared game/session state plus executable routine dispatch: removed wire-level `prompt_state`, `replay_browser`, replay-filter/browser-open command-history fields, and replay/load-route command message types, while keeping the client/backend surface intact with local-only stubs and updating the client/server/protocol tests to match.
+- Pruned the remaining remote market UI ownership from the observer snapshot/schema by removing wire-level `market_filter_text` and `locked`, so remote sessions now receive only live market payload data while `connect` keeps filter/lock state purely client-local.
+- Hardened the headless observer host so leaked client-local raw verbs now fall through the normal unknown-command path instead of being executed server-side; remote prompt and market flows must come through the client-local UX plus the dedicated haul/destination dispatch protocol commands.
 
 ## Follow-ups
-
-- Trim the remote protocol snapshot/state model next so server-retained `prompt_state`, `replay_browser`, and related replay-filter/browser-open fields are no longer needed for `connect` compatibility.
-- Consider the same cleanup for remote `market.locked` / remote market-filter snapshot fields now that `connect` owns those controls locally.
 
 ## Iteration 256
 

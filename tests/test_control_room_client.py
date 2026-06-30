@@ -247,8 +247,6 @@ def _snapshot() -> ControlRoomSnapshot:
             station_name="Jameson Memorial",
             system_name="Sol",
             market_timestamp="2026-06-18T13:00:00Z",
-            market_filter_text=None,
-            locked=False,
             items=[],
         ),
         haul_session=HaulSessionSnapshot(
@@ -280,13 +278,10 @@ def _snapshot() -> ControlRoomSnapshot:
             verbose_controls=False,
             instant_mode=False,
             activity_auto_follow_paused=False,
-            replay_browser_open=False,
             shutdown_requested=False,
             shutdown_finalized=False,
         ),
         command_history=CommandHistorySnapshot(history_limit=20),
-        prompt_state=PromptStateSnapshot(),
-        replay_browser=ReplayBrowserSnapshot(open=False, filter_text=""),
         activity_log=[
             ActivityLogEntry(
                 entry_id="activity-1",
@@ -368,15 +363,10 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertTrue(command_input.disabled)
         self.assertEqual(command_input.placeholder, "observer mode - read only")
 
-    def test_observer_app_ignores_remote_prompt_prefill_snapshot(self) -> None:
+    def test_observer_app_starts_with_clean_command_input_from_remote_snapshot(self) -> None:
         updated_snapshot = replace(
             _snapshot(),
             session=SessionSnapshot(session_id="observer-1", client_role="active_operator"),
-            prompt_state=PromptStateSnapshot(
-                command_input_prefill_active=True,
-                command_input_placeholder="commands | help dock | ...",
-                command_input_value="jump",
-            ),
         )
         backend = self._backend(initial_snapshot=updated_snapshot)
         app = self._app(backend=backend)
@@ -516,8 +506,6 @@ class ControlRoomClientTests(unittest.TestCase):
                 station_name="Jameson Memorial",
                 system_name="Sol",
                 market_timestamp="2026-06-30T12:00:00Z",
-                market_filter_text=None,
-                locked=False,
                 items=[{"Name": "gold", "Stock": 42}],
             ),
         )
@@ -545,8 +533,6 @@ class ControlRoomClientTests(unittest.TestCase):
                 station_name="Galileo",
                 system_name="Sol",
                 market_timestamp="2026-06-30T12:01:00Z",
-                market_filter_text=None,
-                locked=False,
                 items=[{"Name": "silver", "Stock": 99}],
             ),
         )
@@ -907,8 +893,6 @@ class ControlRoomClientTests(unittest.TestCase):
             haul_session=snapshot.haul_session,
             ui_state=snapshot.ui_state,
             command_history=snapshot.command_history,
-            prompt_state=snapshot.prompt_state,
-            replay_browser=snapshot.replay_browser,
             activity_log=snapshot.activity_log,
             server_status=snapshot.server_status,
         )
@@ -972,8 +956,10 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(second["message_type"], "command.submit_input")
         self.assertEqual(second["payload"]["raw_input"], "dock")
 
-    def test_remote_backend_enqueues_trade_route_load(self) -> None:
+    def test_remote_backend_load_trade_route_stays_client_local(self) -> None:
         backend = self._backend()
+        received: list[object] = []
+        backend.subscribe_events(received.append)
 
         backend.load_trade_route(
             TradeRoute(
@@ -987,14 +973,9 @@ class ControlRoomClientTests(unittest.TestCase):
             raw_command="haul route Savitskaya Orbital -> Nyberg Vision",
         )
 
-        message = backend._outgoing_messages.get_nowait()
-        self.assertEqual(message["message_type"], "command.load_trade_route")
-        self.assertEqual(message["payload"]["route"]["index"], 2)
-        self.assertEqual(message["payload"]["route"]["to_system"], "NJOKUJINUN")
-        self.assertEqual(
-            message["payload"]["raw_command"],
-            "haul route Savitskaya Orbital -> Nyberg Vision",
-        )
+        self.assertTrue(backend._outgoing_messages.empty())
+        self.assertIsInstance(received[0], ActivityLogAppendedEvent)
+        self.assertEqual(received[0].entry.message_text, "Observer route loading is client-local.")
 
     def test_remote_backend_enqueues_dispatch_destination_and_haul_loop(self) -> None:
         backend = self._backend()
@@ -1020,7 +1001,7 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(haul_message["payload"]["params"]["station_1_buying"], "Silver")
         self.assertEqual(haul_message["payload"]["raw_command"], "haul Silver")
 
-    def test_remote_backend_enqueues_replay_commands(self) -> None:
+    def test_remote_backend_replay_commands_stay_client_local(self) -> None:
         target = ObserverServerTarget(
             host="bridge.local",
             port=8765,
@@ -1034,6 +1015,8 @@ class ControlRoomClientTests(unittest.TestCase):
             initial_snapshot=_snapshot(),
             websocket_connect_info=_websocket_connect_info(),
         )
+        received: list[object] = []
+        backend.subscribe_events(received.append)
 
         backend.open_replay_browser()
         backend.set_replay_filter("haul")
@@ -1058,18 +1041,23 @@ class ControlRoomClientTests(unittest.TestCase):
         )
         backend.close_replay_browser()
 
-        self.assertEqual(backend._outgoing_messages.get_nowait()["message_type"], "command.open_replay_browser")
-        self.assertEqual(backend._outgoing_messages.get_nowait()["payload"]["filter_text"], "haul")
-        move_message = backend._outgoing_messages.get_nowait()
-        self.assertEqual(move_message["message_type"], "command.move_replay_selection")
-        self.assertEqual(move_message["payload"]["offset"], 1)
-        replay_message = backend._outgoing_messages.get_nowait()
-        self.assertEqual(replay_message["message_type"], "command.replay_history_entry")
-        self.assertTrue(replay_message["payload"]["edit"])
-        self.assertTrue(replay_message["payload"]["skip_delay"])
-        toggle_message = backend._outgoing_messages.get_nowait()
-        self.assertEqual(toggle_message["message_type"], "command.toggle_replay_default_haul")
-        self.assertEqual(backend._outgoing_messages.get_nowait()["message_type"], "command.close_replay_browser")
+        self.assertTrue(backend._outgoing_messages.empty())
+        messages = [
+            event.entry.message_text
+            for event in received
+            if isinstance(event, ActivityLogAppendedEvent)
+        ]
+        self.assertEqual(
+            messages,
+            [
+                "Observer replay browser is client-local.",
+                "Observer replay browser is client-local.",
+                "Observer replay browser is client-local.",
+                "Observer replay browser is client-local.",
+                "Observer replay browser is client-local.",
+                "Observer replay browser is client-local.",
+            ],
+        )
 
     def test_remote_backend_marks_snapshot_disconnected_on_connection_loss(self) -> None:
         target = ObserverServerTarget(
@@ -1095,13 +1083,10 @@ class ControlRoomClientTests(unittest.TestCase):
                 verbose_controls=False,
                 instant_mode=False,
                 activity_auto_follow_paused=False,
-                replay_browser_open=True,
                 shutdown_requested=False,
                 shutdown_finalized=False,
             ),
             command_history=_snapshot().command_history,
-            prompt_state=_snapshot().prompt_state,
-            replay_browser=_snapshot().replay_browser,
             activity_log=_snapshot().activity_log,
             server_status=_snapshot().server_status,
         )
@@ -1123,7 +1108,6 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertIsNone(current.active_operator)
         self.assertFalse(current.ui_state.routine_active)
         self.assertIsNone(current.ui_state.active_routine_name)
-        self.assertFalse(current.ui_state.replay_browser_open)
         self.assertIsInstance(received[0], SnapshotUpdatedEvent)
         self.assertIsInstance(received[1], ActivityLogAppendedEvent)
         self.assertEqual(received[1].entry.message_text, "Observer connection lost: ping timeout")

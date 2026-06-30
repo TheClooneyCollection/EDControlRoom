@@ -24,13 +24,6 @@
         "command.submit_input",
         "command.dispatch_destination",
         "command.dispatch_haul_loop",
-        "command.load_trade_route",
-        "command.open_replay_browser",
-        "command.close_replay_browser",
-        "command.set_replay_filter",
-        "command.move_replay_selection",
-        "command.replay_history_entry",
-        "command.toggle_replay_default_haul",
         "command.cancel_active_routine",
         "response.success",
         "response.error"
@@ -116,54 +109,6 @@
     {
       "if": {
         "properties": {
-          "message_type": { "const": "command.load_trade_route" }
-        }
-      },
-      "then": {
-        "properties": {
-          "payload": { "$ref": "#/$defs/command_load_trade_route_payload" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "message_type": { "const": "command.open_replay_browser" }
-        }
-      },
-      "then": {
-        "properties": {
-          "payload": { "$ref": "#/$defs/command_open_replay_browser_payload" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "message_type": { "const": "command.close_replay_browser" }
-        }
-      },
-      "then": {
-        "properties": {
-          "payload": { "$ref": "#/$defs/command_close_replay_browser_payload" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "message_type": { "const": "command.set_replay_filter" }
-        }
-      },
-      "then": {
-        "properties": {
-          "payload": { "$ref": "#/$defs/command_set_replay_filter_payload" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
           "message_type": { "const": "state.snapshot" }
         }
       },
@@ -182,42 +127,6 @@
       "then": {
         "properties": {
           "payload": { "$ref": "#/$defs/event_connection_ready_payload" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "message_type": { "const": "command.move_replay_selection" }
-        }
-      },
-      "then": {
-        "properties": {
-          "payload": { "$ref": "#/$defs/command_move_replay_selection_payload" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "message_type": { "const": "command.replay_history_entry" }
-        }
-      },
-      "then": {
-        "properties": {
-          "payload": { "$ref": "#/$defs/command_replay_history_entry_payload" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "message_type": { "const": "command.toggle_replay_default_haul" }
-        }
-      },
-      "then": {
-        "properties": {
-          "payload": { "$ref": "#/$defs/command_toggle_replay_default_haul_payload" }
         }
       }
     },
@@ -380,80 +289,6 @@
         "raw_command": { "type": ["string", "null"] }
       }
     },
-    "command_load_trade_route_payload": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["route"],
-      "properties": {
-        "route": {
-          "type": "object",
-          "additionalProperties": true,
-          "required": ["index", "from_station", "from_system", "to_station", "to_system"],
-          "properties": {
-            "index": { "type": "integer" },
-            "from_station": { "type": "string", "minLength": 1 },
-            "from_system": { "type": "string", "minLength": 1 },
-            "to_station": { "type": "string", "minLength": 1 },
-            "to_system": { "type": "string", "minLength": 1 }
-          }
-        },
-        "raw_command": { "type": ["string", "null"] }
-      }
-    },
-    "command_open_replay_browser_payload": {
-      "type": "object",
-      "additionalProperties": false
-    },
-    "command_close_replay_browser_payload": {
-      "type": "object",
-      "additionalProperties": false
-    },
-    "command_set_replay_filter_payload": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["filter_text"],
-      "properties": {
-        "filter_text": { "type": "string" }
-      }
-    },
-    "command_move_replay_selection_payload": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["offset"],
-      "properties": {
-        "offset": { "type": "integer" }
-      }
-    },
-    "command_replay_history_entry_payload": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["raw_command", "command_name", "arguments", "timestamp", "edit"],
-      "properties": {
-        "raw_command": { "type": "string", "minLength": 1 },
-        "command_name": { "type": "string", "minLength": 1 },
-        "arguments": {
-          "type": "object",
-          "additionalProperties": true
-        },
-        "timestamp": { "type": "string" },
-        "edit": { "type": "boolean" },
-        "skip_delay": { "type": "boolean" }
-      }
-    },
-    "command_toggle_replay_default_haul_payload": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["raw_command", "command_name", "arguments", "timestamp"],
-      "properties": {
-        "raw_command": { "type": "string", "minLength": 1 },
-        "command_name": { "type": "string", "minLength": 1 },
-        "arguments": {
-          "type": "object",
-          "additionalProperties": true
-        },
-        "timestamp": { "type": "string" }
-      }
-    },
     "command_cancel_active_routine_payload": {
       "type": "object",
       "additionalProperties": false
@@ -559,13 +394,11 @@
     "market_snapshot": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["station_name", "system_name", "market_timestamp", "market_filter_text", "locked", "items"],
+      "required": ["station_name", "system_name", "market_timestamp", "items"],
       "properties": {
         "station_name": { "type": "string" },
         "system_name": { "type": "string" },
         "market_timestamp": { "type": "string" },
-        "market_filter_text": { "type": ["string", "null"] },
-        "locked": { "type": "boolean" },
         "items": {
           "type": "array",
           "items": {
@@ -622,7 +455,6 @@
         "verbose_controls",
         "instant_mode",
         "activity_auto_follow_paused",
-        "replay_browser_open",
         "shutdown_requested",
         "shutdown_finalized"
       ],
@@ -633,7 +465,6 @@
         "verbose_controls": { "type": "boolean" },
         "instant_mode": { "type": "boolean" },
         "activity_auto_follow_paused": { "type": "boolean" },
-        "replay_browser_open": { "type": "boolean" },
         "shutdown_requested": { "type": "boolean" },
         "shutdown_finalized": { "type": "boolean" }
       }
@@ -641,7 +472,7 @@
     "command_history_snapshot": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["default_haul", "history_entries", "history_limit", "draft_command", "replay_filter_text"],
+      "required": ["default_haul", "history_entries", "history_limit"],
       "properties": {
         "default_haul": {
           "type": "object",
@@ -651,71 +482,49 @@
           "type": "array",
           "items": { "$ref": "#/$defs/command_history_entry" }
         },
-        "history_limit": { "type": "integer", "minimum": 1 },
-        "draft_command": { "type": "string" },
-        "replay_filter_text": { "type": "string" }
+        "history_limit": { "type": "integer", "minimum": 1 }
       }
     },
-    "prompt_state_snapshot": {
+    "trade_route_snapshot": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "haul_parameters",
-        "haul_prompt_defaults",
-        "haul_prompt_step",
-        "haul_confirm_buy_station",
-        "haul_prompt_raw_command",
-        "haul_prompt_skip_delay",
-        "destination_prompt_destination",
-        "destination_prompt_settle_default",
-        "destination_prompt_raw_command",
-        "destination_prompt_skip_delay"
-      ],
+      "required": ["index", "from_station", "from_system", "to_station", "to_system", "raw_text", "url_links"],
       "properties": {
-        "haul_parameters": {
-          "type": "object",
-          "additionalProperties": { "type": "string" }
-        },
-        "haul_prompt_defaults": {
-          "type": "object",
-          "additionalProperties": { "type": "string" }
-        },
-        "haul_prompt_step": { "type": "string" },
-        "haul_confirm_buy_station": { "type": "string" },
-        "haul_prompt_raw_command": { "type": "string" },
-        "haul_prompt_skip_delay": { "type": "boolean" },
-        "destination_prompt_destination": { "type": "string" },
-        "destination_prompt_settle_default": { "type": ["number", "null"] },
-        "destination_prompt_raw_command": { "type": "string" },
-        "destination_prompt_skip_delay": { "type": "boolean" }
-      }
-    },
-    "replay_entry_snapshot": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["label", "detail", "history_entry"],
-      "properties": {
-        "label": { "type": "string", "minLength": 1 },
-        "detail": { "type": "string", "minLength": 1 },
-        "history_entry": { "$ref": "#/$defs/command_history_entry" }
-      }
-    },
-    "replay_browser_snapshot": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["open", "filter_text", "visible_entries"],
-      "properties": {
-        "open": { "type": "boolean" },
-        "filter_text": { "type": "string" },
-        "visible_entries": {
+        "index": { "type": "integer" },
+        "from_station": { "type": "string", "minLength": 1 },
+        "from_system": { "type": "string", "minLength": 1 },
+        "to_station": { "type": "string", "minLength": 1 },
+        "to_system": { "type": "string", "minLength": 1 },
+        "source_buy_commodity": { "type": ["string", "null"] },
+        "target_buy_commodity": { "type": ["string", "null"] },
+        "from_station_distance": { "type": ["string", "null"] },
+        "to_station_distance": { "type": ["string", "null"] },
+        "distance_from_system": { "type": ["string", "null"] },
+        "route_distance": { "type": ["string", "null"] },
+        "profit_per_unit": { "type": ["string", "null"] },
+        "profit_per_trip": { "type": ["string", "null"] },
+        "profit_per_hour": { "type": ["string", "null"] },
+        "updated": { "type": ["string", "null"] },
+        "raw_text": { "type": "string" },
+        "url_links": {
           "type": "array",
-          "items": { "$ref": "#/$defs/replay_entry_snapshot" }
-        },
-        "selected_history_entry": {
-          "anyOf": [
-            { "$ref": "#/$defs/command_history_entry" },
-            { "type": "null" }
-          ]
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "trade_routes_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system_name", "query_url", "searched_at", "loading", "routes"],
+      "properties": {
+        "system_name": { "type": "string" },
+        "query_url": { "type": "string" },
+        "searched_at": { "type": "string" },
+        "loading": { "type": "boolean" },
+        "error": { "type": ["string", "null"] },
+        "routes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/trade_route_snapshot" }
         }
       }
     },
@@ -753,10 +562,9 @@
         "haul_session",
         "ui_state",
         "command_history",
-        "prompt_state",
-        "replay_browser",
         "activity_log",
-        "server_status"
+        "server_status",
+        "trade_routes"
       ],
       "properties": {
         "session": {
@@ -777,12 +585,6 @@
         "command_history": {
           "$ref": "#/$defs/command_history_snapshot"
         },
-        "prompt_state": {
-          "$ref": "#/$defs/prompt_state_snapshot"
-        },
-        "replay_browser": {
-          "$ref": "#/$defs/replay_browser_snapshot"
-        },
         "activity_log": {
           "type": "array",
           "items": { "$ref": "#/$defs/activity_log_entry" }
@@ -796,6 +598,9 @@
         },
         "active_operator": {
           "$ref": "#/$defs/active_operator"
+        },
+        "trade_routes": {
+          "$ref": "#/$defs/trade_routes_snapshot"
         }
       }
     },

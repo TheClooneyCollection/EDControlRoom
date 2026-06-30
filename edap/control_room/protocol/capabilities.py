@@ -16,13 +16,6 @@ SUPPORTED_COMMAND_MESSAGE_TYPES = [
     "command.submit_input",
     "command.dispatch_destination",
     "command.dispatch_haul_loop",
-    "command.load_trade_route",
-    "command.open_replay_browser",
-    "command.close_replay_browser",
-    "command.set_replay_filter",
-    "command.move_replay_selection",
-    "command.replay_history_entry",
-    "command.toggle_replay_default_haul",
     "command.cancel_active_routine",
 ]
 SUPPORTED_EVENT_MESSAGE_TYPES = [

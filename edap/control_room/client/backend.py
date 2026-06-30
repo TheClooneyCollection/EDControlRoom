@@ -27,7 +27,6 @@ from edap.control_room.protocol import (
 )
 from edap.control_room_state import CommandHistoryEntry
 from edap.inara.trade_routes import TradeRoute
-
 from .target import ObserverServerTarget
 
 
@@ -163,58 +162,34 @@ class RemoteObserverBackend(ControlRoomBackend):
             },
         )
 
-    def handle_haul_prompt(self, value: str) -> None:
-        self._emit_local_message("Observer session is read-only.")
-
-    def handle_haul_confirm_prompt(self, value: str) -> None:
-        self._emit_local_message("Observer session is read-only.")
-
     def load_trade_route(
         self,
         route: TradeRoute,
         *,
         raw_command: str | None = None,
     ) -> None:
-        self._send_command(
-            "command.load_trade_route",
-            {
-                "route": {
-                    "index": route.index,
-                    "from_station": route.from_station,
-                    "from_system": route.from_system,
-                    "to_station": route.to_station,
-                    "to_system": route.to_system,
-                    "source_buy_commodity": route.source_buy_commodity,
-                    "target_buy_commodity": route.target_buy_commodity,
-                    "from_station_distance": route.from_station_distance,
-                    "to_station_distance": route.to_station_distance,
-                    "distance_from_system": route.distance_from_system,
-                    "route_distance": route.route_distance,
-                    "profit_per_unit": route.profit_per_unit,
-                    "profit_per_trip": route.profit_per_trip,
-                    "profit_per_hour": route.profit_per_hour,
-                    "updated": route.updated,
-                    "raw_text": route.raw_text,
-                    "url_links": list(route.url_links),
-                },
-                "raw_command": raw_command,
-            },
-        )
+        self._emit_local_message("Observer route loading is client-local.")
+
+    def handle_haul_prompt(self, value: str) -> None:
+        self._emit_local_message("Observer session is read-only.")
+
+    def handle_haul_confirm_prompt(self, value: str) -> None:
+        self._emit_local_message("Observer session is read-only.")
 
     def open_replay_browser(self) -> None:
-        self._send_command("command.open_replay_browser", {})
+        self._emit_local_message("Observer replay browser is client-local.")
 
     def close_replay_browser(self) -> None:
-        self._send_command("command.close_replay_browser", {})
+        self._emit_local_message("Observer replay browser is client-local.")
 
     def refresh_replay_browser(self) -> None:
         self.request_snapshot()
 
     def set_replay_filter(self, filter_text: str) -> None:
-        self._send_command("command.set_replay_filter", {"filter_text": filter_text})
+        self._emit_local_message("Observer replay browser is client-local.")
 
     def move_replay_selection(self, offset: int) -> None:
-        self._send_command("command.move_replay_selection", {"offset": offset})
+        self._emit_local_message("Observer replay browser is client-local.")
 
     def replay_history_entry(
         self,
@@ -223,28 +198,10 @@ class RemoteObserverBackend(ControlRoomBackend):
         edit: bool,
         skip_delay: bool = False,
     ) -> None:
-        self._send_command(
-            "command.replay_history_entry",
-            {
-                "raw_command": entry.raw,
-                "command_name": entry.command,
-                "arguments": dict(entry.params),
-                "timestamp": entry.timestamp,
-                "edit": edit,
-                "skip_delay": skip_delay,
-            },
-        )
+        self._emit_local_message("Observer replay browser is client-local.")
 
     def toggle_replay_default_haul(self, entry: CommandHistoryEntry) -> None:
-        self._send_command(
-            "command.toggle_replay_default_haul",
-            {
-                "raw_command": entry.raw,
-                "command_name": entry.command,
-                "arguments": dict(entry.params),
-                "timestamp": entry.timestamp,
-            },
-        )
+        self._emit_local_message("Observer replay browser is client-local.")
 
     def _run_stream_loop(self) -> None:
         asyncio.run(self._stream_observer_session())
@@ -357,7 +314,6 @@ class RemoteObserverBackend(ControlRoomBackend):
                     stale_snapshot.ui_state,
                     routine_active=False,
                     active_routine_name=None,
-                    replay_browser_open=False,
                 ),
             )
         self._emit(SnapshotUpdatedEvent(snapshot=self._snapshot))

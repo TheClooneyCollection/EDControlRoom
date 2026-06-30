@@ -50,8 +50,6 @@ class MarketSnapshot:
     station_name: str
     system_name: str
     market_timestamp: str
-    market_filter_text: str | None
-    locked: bool
     items: list[dict[str, Any]] = field(default_factory=list)
 
 
@@ -87,7 +85,6 @@ class UiStateSnapshot:
     verbose_controls: bool
     instant_mode: bool
     activity_auto_follow_paused: bool
-    replay_browser_open: bool
     shutdown_requested: bool
     shutdown_finalized: bool
 
@@ -105,8 +102,6 @@ class CommandHistorySnapshot:
     default_haul: dict[str, str] = field(default_factory=dict)
     history_entries: list[CommandHistoryEntrySnapshot] = field(default_factory=list)
     history_limit: int = 1
-    draft_command: str = ""
-    replay_filter_text: str = ""
 
 
 @dataclass(frozen=True)
@@ -205,8 +200,6 @@ class ControlRoomSnapshot:
     haul_session: HaulSessionSnapshot
     ui_state: UiStateSnapshot
     command_history: CommandHistorySnapshot
-    prompt_state: PromptStateSnapshot
-    replay_browser: ReplayBrowserSnapshot
     activity_log: list[ActivityLogEntry]
     server_status: ServerStatusSnapshot
     trade_routes: TradeRoutesSnapshot = field(default_factory=TradeRoutesSnapshot)

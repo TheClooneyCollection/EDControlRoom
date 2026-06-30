@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Iterable, Protocol
 
-from edap.control_room.models import ReplaySelection
 from edap.control_room_state import CommandHistoryEntry
 
 from .snapshot import (
@@ -15,9 +14,6 @@ from .snapshot import (
     ControlRoomSnapshot,
     HaulSessionSnapshot,
     MarketSnapshot,
-    PromptStateSnapshot,
-    ReplayBrowserSnapshot,
-    ReplayEntrySnapshot,
     ServerStatusSnapshot,
     SessionSnapshot,
     ShipSnapshot,
@@ -38,15 +34,8 @@ class SnapshotHost(Protocol):
     _market: Any
     _haul_stats: Any
     _runtime_state: Any
-    _prompt_state: Any
-    _replay_state: Any
     _saved_state: Any
-    _resume_entries: list[ReplaySelection]
-    _history_draft: str
-    _resume_filter: str
-    _market_filter: str | None
     _trade_routes: Any
-    _selected_resume_history_entry: CommandHistoryEntry | None
     _protocol_activity_log: list[ActivityLogEntry]
     _config: Any
     _ctx: Any
@@ -94,8 +83,6 @@ def snapshot_from_app(
         haul_session=_haul_session_snapshot(app),
         ui_state=_ui_state_snapshot(app),
         command_history=_command_history_snapshot(app),
-        prompt_state=_prompt_state_snapshot(app),
-        replay_browser=_replay_browser_snapshot(app),
         activity_log=list(app._protocol_activity_log if activity_log is None else activity_log),
         server_status=_server_status_snapshot(
             app,
@@ -133,8 +120,6 @@ def _market_snapshot(app: SnapshotHost) -> MarketSnapshot:
         station_name=market.station,
         system_name=market.system,
         market_timestamp=market.timestamp,
-        market_filter_text=app._market_filter,
-        locked=market.locked,
         items=list(market.items),
     )
 
@@ -174,7 +159,6 @@ def _ui_state_snapshot(app: SnapshotHost) -> UiStateSnapshot:
         verbose_controls=state.verbose_controls,
         instant_mode=state.instant_mode,
         activity_auto_follow_paused=app._activity_auto_follow_paused(),
-        replay_browser_open=app._replay_state.open,
         shutdown_requested=state.shutdown_requested,
         shutdown_finalized=state.shutdown_finalized,
     )
@@ -188,61 +172,6 @@ def _command_history_snapshot(app: SnapshotHost) -> CommandHistorySnapshot:
             for entry in app._saved_state.history
         ],
         history_limit=app._config.control_room.history_limit,
-        draft_command=app._history_draft,
-        replay_filter_text=app._resume_filter,
-    )
-
-
-def _prompt_state_snapshot(app: SnapshotHost) -> PromptStateSnapshot:
-    state = app._prompt_state
-    command_input_placeholder = state.command_input_placeholder
-    command_input_value = state.command_input_value
-    if state.command_input_prefill_active:
-        try:
-            command_input = app.query_one("#cmd")
-        except Exception:
-            command_input = None
-        if command_input is not None:
-            command_input_placeholder = str(
-                getattr(command_input, "placeholder", command_input_placeholder)
-            )
-            command_input_value = str(
-                getattr(command_input, "value", command_input_value)
-            )
-    return PromptStateSnapshot(
-        haul_parameters=dict(state.haul_params),
-        haul_search_parameters=dict(state.haul_search_params),
-        haul_prompt_defaults=dict(state.haul_prompt_defaults),
-        haul_search_prompt_defaults=dict(state.haul_search_prompt_defaults),
-        haul_prompt_step=state.haul_prompt_step,
-        haul_prompt_mode=state.haul_prompt_mode,
-        haul_confirm_buy_station=state.haul_confirm_buy_station,
-        haul_prompt_raw_command=state.haul_prompt_raw_command,
-        haul_prompt_skip_delay=state.haul_prompt_skip_delay,
-        destination_prompt_destination=state.dest_prompt_destination,
-        destination_prompt_settle_default=state.dest_prompt_settle_default,
-        destination_prompt_raw_command=state.dest_prompt_raw_command,
-        destination_prompt_skip_delay=state.dest_prompt_skip_delay,
-        command_input_prefill_active=state.command_input_prefill_active,
-        command_input_placeholder=command_input_placeholder,
-        command_input_value=command_input_value,
-    )
-
-
-def _replay_browser_snapshot(app: SnapshotHost) -> ReplayBrowserSnapshot:
-    visible_entries = [
-        ReplayEntrySnapshot(
-            label=entry.label,
-            detail=entry.detail,
-            history_entry=_command_history_entry_snapshot(entry.entry),
-        )
-        for entry in app._resume_entries
-    ]
-    return ReplayBrowserSnapshot(
-        open=app._replay_state.open,
-        filter_text=app._replay_state.filter_text,
-        visible_entries=visible_entries,
-        selected_history_entry=_selected_replay_history_entry(app),
     )
 
 
@@ -304,12 +233,3 @@ def _command_history_entry_snapshot(entry: CommandHistoryEntry) -> CommandHistor
         arguments=dict(entry.params),
         timestamp=entry.timestamp,
     )
-
-
-def _selected_replay_history_entry(
-    app: SnapshotHost,
-) -> CommandHistoryEntrySnapshot | None:
-    selected_entry = app._selected_resume_history_entry
-    if not app._replay_state.open or selected_entry is None:
-        return None
-    return _command_history_entry_snapshot(selected_entry)

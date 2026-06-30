@@ -426,8 +426,6 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.app._market.system = "Sol"
         self.app._market.timestamp = "2026-06-15T15:01:00Z"
         self.app._market.items = [{"Name": "gold", "Stock": 42}]
-        self.app._market.locked = True
-        self.app._market_filter = "gold"
         self.app._haul_stats.station_1_buying = "gold"
         self.app._haul_stats.station_2_buying = "silver"
         self.app._haul_stats.station_1 = "Jameson Memorial"
@@ -492,8 +490,6 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot.session.session_id, "session-1")
         self.assertEqual(snapshot.ship.commander_name, "CMDR TEST")
         self.assertEqual(snapshot.ship.station_name, "Jameson Memorial")
-        self.assertEqual(snapshot.market.market_filter_text, "gold")
-        self.assertTrue(snapshot.market.locked)
         self.assertTrue(snapshot.haul_session.active)
         self.assertEqual(snapshot.haul_session.current_run_profit, 5000)
         self.assertTrue(snapshot.ui_state.routine_active)
@@ -501,128 +497,10 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.assertTrue(snapshot.ui_state.activity_auto_follow_paused)
         self.assertEqual(snapshot.command_history.default_haul, {"commodity": "gold"})
         self.assertEqual(snapshot.command_history.history_entries[0].raw_command, "haul gold")
-        self.assertEqual(snapshot.command_history.draft_command, "sell gold")
-        self.assertEqual(snapshot.prompt_state.destination_prompt_destination, "Achenar")
         self.assertEqual(snapshot.trade_routes.routes[0].from_station_distance, "82 Ls")
         self.assertEqual(snapshot.trade_routes.routes[0].to_station_distance, "5 Ls")
         self.assertEqual(snapshot.trade_routes.routes[0].distance_from_system, "~167 Ly")
-        self.assertTrue(snapshot.replay_browser.open)
-        self.assertEqual(snapshot.replay_browser.visible_entries[0].history_entry.command_name, "haul")
         self.assertEqual(snapshot.activity_log[0].message_text, "Docked at Jameson Memorial")
-
-    def test_snapshot_from_app_includes_selected_replay_history_entry(self) -> None:
-        entry = CommandHistoryEntry(
-            raw="haul gold",
-            command="haul",
-            params={"station_1_buying": "gold"},
-            timestamp="2026-06-15T15:00:00Z",
-        )
-        app = _RenderHarnessApp(_make_context(Path(self.tmpdir.name)))
-        app._replay_state.open = True
-        app._resume_entries = [
-            ReplaySelection(
-                entry=entry,
-                label="haul gold",
-                detail="haul detail",
-            )
-        ]
-        app._selected_resume_history_entry = entry
-
-        snapshot = snapshot_from_app(app)
-
-        self.assertIsNotNone(snapshot.replay_browser.selected_history_entry)
-        self.assertEqual(
-            snapshot.replay_browser.selected_history_entry.raw_command,
-            "haul gold",
-        )
-
-    def test_snapshot_from_app_prefers_live_command_input_during_prefill_prompt(self) -> None:
-        app = _RenderHarnessApp(_make_context(Path(self.tmpdir.name)))
-        app._prompt_state.command_input_prefill_active = True
-        app._prompt_state.command_input_placeholder = "stale placeholder"
-        app._prompt_state.command_input_value = "stale=value"
-        app._command_input_widget.placeholder = "edit Inara search params then press Enter..."
-        app._command_input_widget.value = "near_system=Sol cargo_capacity=512"
-
-        snapshot = snapshot_from_app(app)
-
-        self.assertTrue(snapshot.prompt_state.command_input_prefill_active)
-        self.assertEqual(
-            snapshot.prompt_state.command_input_placeholder,
-            "edit Inara search params then press Enter...",
-        )
-        self.assertEqual(
-            snapshot.prompt_state.command_input_value,
-            "near_system=Sol cargo_capacity=512",
-        )
-
-    def test_sync_view_snapshot_does_not_reset_cursor_for_unchanged_prefill(self) -> None:
-        app = _RenderHarnessApp(_make_context(Path(self.tmpdir.name)))
-        app._prompt_state.command_input_prefill_active = True
-        app._command_input_widget.placeholder = "edit Inara search params then press Enter..."
-        app._command_input_widget.value = "near_system=Sol cargo_capacity=512"
-        app._command_input_widget.cursor_position = 8
-        snapshot = snapshot_from_app(app)
-        app._backend = _SnapshotBackend(snapshot)
-
-        app._sync_view_snapshot()
-
-        self.assertEqual(app._command_input_widget.value, "near_system=Sol cargo_capacity=512")
-        self.assertEqual(app._command_input_widget.cursor_position, 8)
-
-    def test_remote_snapshot_apply_syncs_resume_widget_from_selected_history_entry(self) -> None:
-        entry = CommandHistoryEntry(
-            raw="haul gold",
-            command="haul",
-            params={"station_1_buying": "gold"},
-            timestamp="2026-06-15T15:00:00Z",
-        )
-        base_app = _ProtocolHarnessApp(_make_context(Path(self.tmpdir.name)))
-        base_snapshot = snapshot_from_app(base_app)
-        history_entry_snapshot = CommandHistoryEntrySnapshot(
-            raw_command=entry.raw,
-            command_name=entry.command,
-            arguments=entry.params,
-            timestamp=entry.timestamp,
-        )
-        snapshot = ControlRoomSnapshot(
-            session=base_snapshot.session,
-            connected_clients=base_snapshot.connected_clients,
-            active_operator=base_snapshot.active_operator,
-            ship=base_snapshot.ship,
-            market=base_snapshot.market,
-            haul_session=base_snapshot.haul_session,
-            ui_state=base_snapshot.ui_state,
-            command_history=base_snapshot.command_history,
-            prompt_state=base_snapshot.prompt_state,
-            replay_browser=ReplayBrowserSnapshot(
-                open=True,
-                filter_text="haul",
-                visible_entries=[
-                    ReplayEntrySnapshot(
-                        label="haul gold",
-                        detail="haul detail",
-                        history_entry=history_entry_snapshot,
-                    )
-                ],
-                selected_history_entry=history_entry_snapshot,
-            ),
-            activity_log=base_snapshot.activity_log,
-            server_status=base_snapshot.server_status,
-        )
-        app = _RenderHarnessApp(
-            _make_context(Path(self.tmpdir.name)),
-            backend=_SnapshotBackend(snapshot),
-        )
-
-        app._sync_view_snapshot()
-
-        self.assertEqual(app._selected_resume_history_entry, entry)
-        self.assertEqual(app._resume_list_widget.highlighted, 0)
-        self.assertEqual(app._resume_list_widget.options, ["haul gold"])
-        self.assertEqual(app._activity_widget.styles.display, "none")
-        self.assertEqual(app._resume_browser_widget.styles.display, "block")
-        self.assertEqual(app._resume_help_widget.updated.splitlines()[-1], "Filter: haul")
 
     def test_log_records_protocol_activity_entry_and_snapshot_uses_it_by_default(self) -> None:
         self.app._log("[yellow]Docked at Jameson Memorial[/]")

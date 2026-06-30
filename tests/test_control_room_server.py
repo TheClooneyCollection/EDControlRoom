@@ -32,12 +32,11 @@ from edap.control_room.protocol.sink import ControlRoomEventSink
 from edap.control_room.protocol.snapshot import (
     ActivityLogEntry,
     ActiveOperatorSnapshot,
+    CommandHistoryEntrySnapshot,
     CommandHistorySnapshot,
     ControlRoomSnapshot,
     HaulSessionSnapshot,
     MarketSnapshot,
-    PromptStateSnapshot,
-    ReplayBrowserSnapshot,
     ServerStatusSnapshot,
     SessionSnapshot,
     ShipSnapshot,
@@ -196,8 +195,6 @@ def _base_snapshot() -> ControlRoomSnapshot:
             station_name="Jameson Memorial",
             system_name="Sol",
             market_timestamp="2026-06-15T18:00:00Z",
-            market_filter_text=None,
-            locked=False,
             items=[],
         ),
         haul_session=HaulSessionSnapshot(
@@ -229,13 +226,10 @@ def _base_snapshot() -> ControlRoomSnapshot:
             verbose_controls=False,
             instant_mode=False,
             activity_auto_follow_paused=False,
-            replay_browser_open=False,
             shutdown_requested=False,
             shutdown_finalized=False,
         ),
         command_history=CommandHistorySnapshot(history_limit=20),
-        prompt_state=PromptStateSnapshot(),
-        replay_browser=ReplayBrowserSnapshot(open=False, filter_text=""),
         activity_log=[
             ActivityLogEntry(
                 entry_id="activity-000001",
@@ -356,7 +350,9 @@ class ControlRoomServerTests(unittest.TestCase):
 
             host.handle_remote_input("market filter gold")
 
-        self.assertEqual(host._market_filter, "Gold")
+        self.assertIsNone(host._market_filter)
+        self.assertIn("Unknown command: market filter gold", "\n".join(content.plain for content, _ in host._activity_widget.writes))
+        self.assertEqual(host._saved_state.history[-1].command, "market")
 
     def test_headless_host_submit_input_alias_accepts_simple_remote_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -364,7 +360,8 @@ class ControlRoomServerTests(unittest.TestCase):
 
             host.submit_input("market filter gold")
 
-        self.assertEqual(host._market_filter, "Gold")
+        self.assertIsNone(host._market_filter)
+        self.assertIn("Unknown command: market filter gold", "\n".join(content.plain for content, _ in host._activity_widget.writes))
 
     def test_headless_host_emits_announcement_events_without_local_speech(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -400,10 +397,7 @@ class ControlRoomServerTests(unittest.TestCase):
             host.handle_remote_input("market filter gold")
 
         self.assertTrue(sink.snapshots)
-        self.assertEqual(
-            sink.snapshots[-1].market.market_filter_text,
-            "Gold",
-        )
+        self.assertEqual(sink.snapshots[-1].command_history.history_entries[-1].raw_command, "market filter gold")
 
     def test_headless_host_remote_ctrl_c_cancels_prompt_flow_and_publishes_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -417,7 +411,7 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(host._dest_prompt_destination, "")
         self.assertIsNone(host._dest_prompt_settle_default)
         self.assertTrue(sink.snapshots)
-        self.assertEqual(sink.snapshots[-1].prompt_state.destination_prompt_destination, "")
+        self.assertEqual(sink.snapshots[-1].ship.commander_name, host.snapshot().ship.commander_name)
 
     def test_http_endpoints_and_websocket_observer_stream(self) -> None:
         broker = InMemoryObserverSessionBroker()
@@ -577,9 +571,6 @@ class ControlRoomServerTests(unittest.TestCase):
             self.assertIn("Control Room Remote Browser Probe", response.text)
             self.assertIn("command.submit_input", response.text)
             self.assertIn("command.cancel_active_routine", response.text)
-            self.assertIn("command.open_replay_browser", response.text)
-            self.assertIn("command.replay_history_entry", response.text)
-            self.assertIn("command.toggle_replay_default_haul", response.text)
             self.assertIn("Reconnecting in", response.text)
             self.assertIn("Observer connection restored.", response.text)
             self.assertIn("Observer mode: mutating controls disabled", response.text)
@@ -635,37 +626,7 @@ class ControlRoomServerTests(unittest.TestCase):
                         "bridge-mac",
                     )
 
-    def test_websocket_session_routes_replay_navigation_command(self) -> None:
-        broker = InMemoryObserverSessionBroker()
-        command_handler = _CommandHandlerRecorder()
-        app = build_observer_server_app(
-            snapshot_provider=_base_snapshot,
-            command_handler=command_handler,
-            broker=broker,
-            auth=SharedAccessTokenAuth("secret-token"),
-        )
-
-        with TestClient(app) as client:
-            with client.websocket_connect(
-                "/session?client_name=bridge-ipad&access_token=secret-token"
-            ) as websocket:
-                websocket.receive_json()
-                websocket.receive_json()
-
-                websocket.send_json(
-                    {
-                        "message_type": "command.move_replay_selection",
-                        "message_id": "message-move-1",
-                        "payload": {"offset": -1},
-                    }
-                )
-
-                response = websocket.receive_json()
-                self.assertEqual(response["message_type"], "response.success")
-                self.assertEqual(response["correlation_message_id"], "message-move-1")
-                self.assertEqual(command_handler.replay_selection_offsets, [-1])
-
-    def test_websocket_session_destination_prompt_flow_updates_headless_snapshot(self) -> None:
+    def test_websocket_session_client_local_command_is_treated_as_unknown(self) -> None:
         def _receive_until_message_type(websocket, expected_type: str) -> dict[str, object]:
             for _ in range(6):
                 message = websocket.receive_json()
@@ -681,14 +642,6 @@ class ControlRoomServerTests(unittest.TestCase):
                 server_state=server_state,
             )
             host._controls = object()
-            dispatched_destinations: list[tuple[str, float, bool, str | None]] = []
-            host._backend.dispatch_destination = (  # type: ignore[method-assign]
-                lambda destination, galaxy_map_settle, *, skip_delay=False, raw_command=None: (
-                    dispatched_destinations.append(
-                        (destination, galaxy_map_settle, skip_delay, raw_command)
-                    )
-                )
-            )
             app = build_observer_server_app(
                 snapshot_provider=host.snapshot,
                 command_handler=host,
@@ -706,41 +659,19 @@ class ControlRoomServerTests(unittest.TestCase):
                     websocket.send_json(
                         {
                             "message_type": "command.submit_input",
-                            "message_id": "message-dest-open",
-                            "payload": {"raw_input": "dest achenar"},
+                            "message_id": "message-market",
+                            "payload": {"raw_input": "market filter gold"},
                         }
                     )
                     response = _receive_until_message_type(websocket, "response.success")
-                    self.assertEqual(response["correlation_message_id"], "message-dest-open")
-                    current_snapshot = broker.current_snapshot(
-                        snapshot_provider=host.snapshot,
-                        session_id=next(iter(broker._sessions.keys())),
-                    )
-                    self.assertEqual(
-                        current_snapshot.prompt_state.destination_prompt_destination,
-                        "achenar",
-                    )
-
-                    websocket.send_json(
-                        {
-                            "message_type": "command.submit_input",
-                            "message_id": "message-dest-submit",
-                            "payload": {"raw_input": ""},
-                        }
-                    )
-                    response = _receive_until_message_type(websocket, "response.success")
-                    self.assertEqual(response["correlation_message_id"], "message-dest-submit")
-                    current_snapshot = broker.current_snapshot(
-                        snapshot_provider=host.snapshot,
-                        session_id=next(iter(broker._sessions.keys())),
-                    )
-                    self.assertEqual(
-                        current_snapshot.prompt_state.destination_prompt_destination,
-                        "",
-                    )
-                    self.assertEqual(
-                        dispatched_destinations,
-                        [("achenar", 2.0, False, "dest achenar")],
+                    self.assertEqual(response["correlation_message_id"], "message-market")
+                    self.assertIsNone(host._market_filter)
+                    self.assertIn(
+                        "Unknown command: market filter gold",
+                        "\n".join(
+                            content.plain
+                            for content, _ in host._activity_widget.writes
+                        ),
                     )
 
             host.close()
@@ -857,36 +788,35 @@ class ControlRoomServerTests(unittest.TestCase):
             ["arrival", "approaching_station"],
         )
 
-    def test_server_state_retains_remote_prompt_and_replay_session_state(self) -> None:
+    def test_server_state_retains_remote_command_history_session_state(self) -> None:
         server_state = ControlRoomServerState()
+        history_entry = CommandHistoryEntry(
+            raw="haul gold",
+            command="haul",
+            params={"station_1_buying": "gold"},
+            timestamp="2026-06-15T18:00:00Z",
+        )
         retained_snapshot = replace(
             _base_snapshot(),
             command_history=replace(
                 _base_snapshot().command_history,
-                draft_command="haul gold",
-                replay_filter_text="haul",
+                default_haul={"station_1_buying": "gold"},
+                history_entries=[
+                    CommandHistoryEntrySnapshot(
+                        raw_command=history_entry.raw,
+                        command_name=history_entry.command,
+                        arguments=history_entry.params,
+                        timestamp=history_entry.timestamp,
+                    )
+                ],
             ),
-            prompt_state=PromptStateSnapshot(
-                destination_prompt_destination="Achenar",
-                destination_prompt_settle_default=2.0,
-                destination_prompt_raw_command="dest achenar",
-            ),
-            replay_browser=ReplayBrowserSnapshot(
-                open=True,
-                filter_text="haul",
-            ),
-            ui_state=replace(_base_snapshot().ui_state, replay_browser_open=True),
         )
         server_state.capture_remote_session(retained_snapshot)
 
         merged = server_state.merge_snapshot(_base_snapshot())
 
-        self.assertEqual(merged.command_history.draft_command, "haul gold")
-        self.assertEqual(merged.command_history.replay_filter_text, "haul")
-        self.assertEqual(merged.prompt_state.destination_prompt_destination, "Achenar")
-        self.assertTrue(merged.replay_browser.open)
-        self.assertEqual(merged.replay_browser.filter_text, "haul")
-        self.assertTrue(merged.ui_state.replay_browser_open)
+        self.assertEqual(merged.command_history.default_haul, {"station_1_buying": "gold"})
+        self.assertEqual(merged.command_history.history_entries[0].raw_command, "haul gold")
 
     def test_request_snapshot_command_returns_correlated_snapshot(self) -> None:
         broker = InMemoryObserverSessionBroker()
@@ -924,8 +854,6 @@ class ControlRoomServerTests(unittest.TestCase):
             haul_session=_base_snapshot().haul_session,
             ui_state=_base_snapshot().ui_state,
             command_history=_base_snapshot().command_history,
-            prompt_state=_base_snapshot().prompt_state,
-            replay_browser=_base_snapshot().replay_browser,
             activity_log=_base_snapshot().activity_log,
             server_status=_base_snapshot().server_status,
         )
@@ -1082,215 +1010,6 @@ class ControlRoomServerTests(unittest.TestCase):
         )
         self.assertEqual(response["message_type"], "response.success")
         self.assertEqual(response["correlation_message_id"], "message-haul")
-
-    def test_active_operator_load_trade_route_calls_handler(self) -> None:
-        broker = InMemoryObserverSessionBroker()
-        command_handler = _CommandHandlerRecorder()
-
-        response = _handle_session_message(
-            {
-                "message_type": "command.load_trade_route",
-                "message_id": "message-route",
-                "payload": {
-                    "route": {
-                        "index": 2,
-                        "from_station": "Savitskaya Orbital",
-                        "from_system": "TSONGORIS",
-                        "to_station": "Nyberg Vision",
-                        "to_system": "NJOKUJINUN",
-                        "source_buy_commodity": "Beryllium",
-                    },
-                    "raw_command": "haul route Savitskaya Orbital -> Nyberg Vision",
-                },
-            },
-            session_id="observer-route",
-            client_role="active_operator",
-            snapshot_provider=_base_snapshot,
-            command_handler=command_handler,
-            broker=broker,
-        )
-
-        self.assertEqual(response["message_type"], "response.success")
-        self.assertEqual(len(command_handler.loaded_trade_routes), 1)
-        route, raw_command = command_handler.loaded_trade_routes[0]
-        self.assertEqual(route.from_station, "Savitskaya Orbital")
-        self.assertEqual(route.to_system, "NJOKUJINUN")
-        self.assertEqual(raw_command, "haul route Savitskaya Orbital -> Nyberg Vision")
-
-    def test_active_operator_replay_commands_call_handler(self) -> None:
-        broker = InMemoryObserverSessionBroker()
-        command_handler = _CommandHandlerRecorder()
-
-        open_response = _handle_session_message(
-            {
-                "message_type": "command.open_replay_browser",
-                "message_id": "message-open",
-                "payload": {},
-            },
-            session_id="observer-open",
-            client_role="active_operator",
-            snapshot_provider=_base_snapshot,
-            command_handler=command_handler,
-            broker=broker,
-        )
-        filter_response = _handle_session_message(
-            {
-                "message_type": "command.set_replay_filter",
-                "message_id": "message-filter",
-                "payload": {"filter_text": "haul"},
-            },
-            session_id="observer-open",
-            client_role="active_operator",
-            snapshot_provider=_base_snapshot,
-            command_handler=command_handler,
-            broker=broker,
-        )
-        move_response = _handle_session_message(
-            {
-                "message_type": "command.move_replay_selection",
-                "message_id": "message-move",
-                "payload": {"offset": 1},
-            },
-            session_id="observer-open",
-            client_role="active_operator",
-            snapshot_provider=_base_snapshot,
-            command_handler=command_handler,
-            broker=broker,
-        )
-        replay_response = _handle_session_message(
-            {
-                "message_type": "command.replay_history_entry",
-                "message_id": "message-replay",
-                "payload": {
-                    "raw_command": "haul gold",
-                    "command_name": "haul",
-                    "arguments": {"station_1_buying": "gold"},
-                    "timestamp": "2026-06-15T18:00:00Z",
-                    "edit": True,
-                    "skip_delay": True,
-                },
-            },
-            session_id="observer-open",
-            client_role="active_operator",
-            snapshot_provider=_base_snapshot,
-            command_handler=command_handler,
-            broker=broker,
-        )
-        toggle_response = _handle_session_message(
-            {
-                "message_type": "command.toggle_replay_default_haul",
-                "message_id": "message-toggle",
-                "payload": {
-                    "raw_command": "haul gold",
-                    "command_name": "haul",
-                    "arguments": {"station_1_buying": "gold"},
-                    "timestamp": "2026-06-15T18:00:00Z",
-                },
-            },
-            session_id="observer-open",
-            client_role="active_operator",
-            snapshot_provider=_base_snapshot,
-            command_handler=command_handler,
-            broker=broker,
-        )
-        close_response = _handle_session_message(
-            {
-                "message_type": "command.close_replay_browser",
-                "message_id": "message-close",
-                "payload": {},
-            },
-            session_id="observer-open",
-            client_role="active_operator",
-            snapshot_provider=_base_snapshot,
-            command_handler=command_handler,
-            broker=broker,
-        )
-
-        self.assertEqual(open_response["message_type"], "response.success")
-        self.assertEqual(filter_response["message_type"], "response.success")
-        self.assertEqual(move_response["message_type"], "response.success")
-        self.assertEqual(replay_response["message_type"], "response.success")
-        self.assertEqual(toggle_response["message_type"], "response.success")
-        self.assertEqual(close_response["message_type"], "response.success")
-        self.assertEqual(command_handler.opened_replay_browser, 1)
-        self.assertEqual(command_handler.closed_replay_browser, 1)
-        self.assertEqual(command_handler.replay_filters, ["haul"])
-        self.assertEqual(command_handler.replay_selection_offsets, [1])
-        self.assertEqual(
-            command_handler.replayed_entries,
-            [("haul gold", "haul", True, True)],
-        )
-        self.assertEqual(command_handler.toggled_default_hauls, ["haul gold"])
-
-    def test_headless_host_remote_replay_commands_update_snapshot(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
-            host._saved_state.history = [
-                CommandHistoryEntry(
-                    raw="haul gold",
-                    command="haul",
-                    params={
-                        "station_1_buying": "gold",
-                        "station_2_buying": "silver",
-                        "station_1": "Jameson Memorial",
-                        "station_2": "Hutton Orbital",
-                    },
-                    timestamp="2026-06-15T18:00:00Z",
-                )
-            ]
-            sink = _SnapshotRecorder()
-            host._protocol_event_sink = sink
-
-            host.open_replay_browser()
-            host.set_replay_filter("haul")
-            host.move_replay_selection(0)
-            host.toggle_replay_default_haul(host._saved_state.history[0])
-
-        self.assertTrue(sink.snapshots)
-        latest = sink.snapshots[-1]
-        self.assertTrue(latest.replay_browser.open)
-        self.assertEqual(latest.replay_browser.filter_text, "haul")
-        self.assertEqual(latest.command_history.default_haul["station_1_buying"], "gold")
-        self.assertIsNotNone(latest.replay_browser.selected_history_entry)
-        self.assertEqual(
-            latest.replay_browser.selected_history_entry.raw_command,
-            "haul gold",
-        )
-
-    def test_headless_host_replay_selection_moves_and_updates_snapshot(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
-            host._saved_state.history = [
-                CommandHistoryEntry(raw="dock", command="dock", timestamp="1"),
-                CommandHistoryEntry(raw="jump", command="jump", timestamp="2"),
-            ]
-            sink = _SnapshotRecorder()
-            host._protocol_event_sink = sink
-
-            host.open_replay_browser()
-            host.move_replay_selection(1)
-
-        initial = sink.snapshots[0]
-        latest = sink.snapshots[-1]
-        self.assertIsNotNone(initial.replay_browser.selected_history_entry)
-        self.assertIsNotNone(latest.replay_browser.selected_history_entry)
-        self.assertEqual(initial.replay_browser.selected_history_entry.raw_command, "jump")
-        self.assertEqual(latest.replay_browser.selected_history_entry.raw_command, "dock")
-
-    def test_headless_host_feeds_retained_server_session_state(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            server_state = ControlRoomServerState()
-            host = HeadlessControlRoomHost(
-                _make_context(Path(temp_dir)),
-                server_state=server_state,
-            )
-            host._start_dest_prompt("Achenar")
-            host._publish_snapshot()
-
-            merged = server_state.merge_snapshot(_base_snapshot())
-
-        self.assertEqual(merged.prompt_state.destination_prompt_destination, "Achenar")
-        self.assertEqual(merged.prompt_state.destination_prompt_raw_command, "dest Achenar")
 
     def test_active_operator_cancel_active_routine_calls_handler(self) -> None:
         broker = InMemoryObserverSessionBroker()

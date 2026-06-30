@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from edap.control_room_state import CommandHistoryEntry
 from edap.inara.trade_routes import TradeRoute
 
 
@@ -26,46 +25,7 @@ class ObserverSessionCommandHandler(Protocol):
         raw_command: str | None = None,
     ) -> None: ...
 
-    def load_trade_route(self, route: TradeRoute, *, raw_command: str | None = None) -> None: ...
-
     def cancel_active_routine(self) -> None: ...
-
-    def open_replay_browser(self) -> None: ...
-
-    def close_replay_browser(self) -> None: ...
-
-    def set_replay_filter(self, filter_text: str) -> None: ...
-
-    def move_replay_selection(self, offset: int) -> None: ...
-
-    def replay_history_entry(
-        self,
-        entry: CommandHistoryEntry,
-        *,
-        edit: bool,
-        skip_delay: bool = False,
-    ) -> None: ...
-
-    def toggle_replay_default_haul(self, entry: CommandHistoryEntry) -> None: ...
-
-
-def command_history_entry_from_payload(payload: dict[str, object]) -> CommandHistoryEntry | None:
-    raw_command = payload.get("raw_command")
-    command_name = payload.get("command_name")
-    arguments_value = payload.get("arguments", {})
-    timestamp = payload.get("timestamp", "")
-    if not isinstance(raw_command, str) or not isinstance(command_name, str):
-        return None
-    if not isinstance(arguments_value, dict):
-        return None
-    if not isinstance(timestamp, str):
-        timestamp = ""
-    return CommandHistoryEntry(
-        raw=raw_command,
-        command=command_name,
-        params={str(key): value for key, value in arguments_value.items()},
-        timestamp=timestamp,
-    )
 
 
 def trade_route_from_payload(payload: object) -> TradeRoute | None:

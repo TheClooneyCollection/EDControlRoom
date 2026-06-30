@@ -1083,58 +1083,6 @@ class ControlRoomApp(App[None]):
             )
             for entry in snapshot.command_history.history_entries
         ]
-        self._history_draft = snapshot.command_history.draft_command
-        self._resume_filter = snapshot.command_history.replay_filter_text
-        self._prompt_state.haul_params = dict(snapshot.prompt_state.haul_parameters)
-        self._prompt_state.haul_search_params = dict(snapshot.prompt_state.haul_search_parameters)
-        self._prompt_state.haul_prompt_defaults = dict(snapshot.prompt_state.haul_prompt_defaults)
-        self._prompt_state.haul_search_prompt_defaults = dict(
-            snapshot.prompt_state.haul_search_prompt_defaults
-        )
-        self._prompt_state.haul_prompt_step = snapshot.prompt_state.haul_prompt_step
-        self._prompt_state.haul_prompt_mode = snapshot.prompt_state.haul_prompt_mode
-        self._prompt_state.haul_confirm_buy_station = snapshot.prompt_state.haul_confirm_buy_station
-        self._prompt_state.haul_prompt_raw_command = snapshot.prompt_state.haul_prompt_raw_command
-        self._prompt_state.haul_prompt_skip_delay = snapshot.prompt_state.haul_prompt_skip_delay
-        self._prompt_state.dest_prompt_destination = snapshot.prompt_state.destination_prompt_destination
-        self._prompt_state.dest_prompt_settle_default = snapshot.prompt_state.destination_prompt_settle_default
-        self._prompt_state.dest_prompt_raw_command = snapshot.prompt_state.destination_prompt_raw_command
-        self._prompt_state.dest_prompt_skip_delay = snapshot.prompt_state.destination_prompt_skip_delay
-        self._prompt_state.command_input_prefill_active = (
-            snapshot.prompt_state.command_input_prefill_active
-        )
-        self._prompt_state.command_input_placeholder = (
-            snapshot.prompt_state.command_input_placeholder
-        )
-        self._prompt_state.command_input_value = snapshot.prompt_state.command_input_value
-        self._replay_state.open = snapshot.replay_browser.open
-        self._replay_state.filter_text = snapshot.replay_browser.filter_text
-        self._selected_resume_history_entry = (
-            CommandHistoryEntry(
-                raw=snapshot.replay_browser.selected_history_entry.raw_command,
-                command=snapshot.replay_browser.selected_history_entry.command_name,
-                params={
-                    str(key): str(value)
-                    for key, value in snapshot.replay_browser.selected_history_entry.arguments.items()
-                },
-                timestamp=snapshot.replay_browser.selected_history_entry.timestamp,
-            )
-            if snapshot.replay_browser.selected_history_entry is not None
-            else None
-        )
-        self._resume_entries = [
-            ReplaySelection(
-                entry=CommandHistoryEntry(
-                    raw=entry.history_entry.raw_command,
-                    command=entry.history_entry.command_name,
-                    params={str(key): str(value) for key, value in entry.history_entry.arguments.items()},
-                    timestamp=entry.history_entry.timestamp,
-                ),
-                label=entry.label,
-                detail=entry.detail,
-            )
-            for entry in snapshot.replay_browser.visible_entries
-        ]
         self._trade_routes = TradeRoutesData(
             system_name=snapshot.trade_routes.system_name,
             query_url=snapshot.trade_routes.query_url,

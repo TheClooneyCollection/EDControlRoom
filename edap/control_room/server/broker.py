@@ -141,10 +141,9 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
             haul_session=base_snapshot.haul_session,
             ui_state=base_snapshot.ui_state,
             command_history=base_snapshot.command_history,
-            prompt_state=base_snapshot.prompt_state,
-            replay_browser=base_snapshot.replay_browser,
             activity_log=base_snapshot.activity_log,
             server_status=base_snapshot.server_status,
+            trade_routes=base_snapshot.trade_routes,
         )
 
     def publish_activity_log(self, entry: ActivityLogEntry) -> None:

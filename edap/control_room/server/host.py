@@ -5,16 +5,32 @@ import time
 from pathlib import Path
 from typing import Any
 
+from rich.markup import escape
+
 from edap.control_room import bootstrap as _bootstrap
 from edap.control_room.app import ControlRoomApp
+from edap.control_room.history import now_iso
 from edap.control_room.protocol import snapshot_from_app
 from edap.control_room.protocol.snapshot import ControlRoomSnapshot
-from edap.control_room.routines_haul import load_haul_from_trade_route_entry
 from edap.control_room.server.state import ControlRoomServerState
-from edap.inara.trade_routes import TradeRoute
+from edap.control_room_state import CommandHistoryEntry
 from edap.runtime import RuntimeContext
 from edap.state import JournalWatcher
 from edap.tts import NullSpeechBackend, TTSAnnouncer
+
+
+_CLIENT_LOCAL_REMOTE_VERBS = {
+    "?",
+    "commands",
+    "dest",
+    "haul",
+    "help",
+    "history",
+    "home",
+    "market",
+    "replay",
+    "set_dest",
+}
 
 
 class _ActivityWidgetStub:
@@ -176,15 +192,11 @@ class HeadlessControlRoomHost(ControlRoomApp):
         resolved = raw_input
         if skip_delay is True and not raw_input.startswith("!"):
             resolved = f"!{raw_input}"
+        if self._is_client_local_remote_command(resolved):
+            self._record_unknown_remote_command(resolved)
+            self._publish_snapshot()
+            return
         self._backend.submit_input(resolved)
-        self._publish_snapshot()
-
-    def load_trade_route(self, route: TradeRoute, *, raw_command: str | None = None) -> None:
-        load_haul_from_trade_route_entry(
-            self,
-            route=route,
-            raw_command=raw_command,
-        )
         self._publish_snapshot()
 
     def dispatch_destination(
@@ -217,36 +229,6 @@ class HeadlessControlRoomHost(ControlRoomApp):
         )
         self._publish_snapshot()
 
-    def open_replay_browser(self) -> None:
-        self._backend.open_replay_browser()
-        self._publish_snapshot()
-
-    def close_replay_browser(self) -> None:
-        self._backend.close_replay_browser()
-        self._publish_snapshot()
-
-    def set_replay_filter(self, filter_text: str) -> None:
-        self._backend.set_replay_filter(filter_text)
-        self._publish_snapshot()
-
-    def move_replay_selection(self, offset: int) -> None:
-        self._backend.move_replay_selection(offset)
-        self._publish_snapshot()
-
-    def replay_history_entry(
-        self,
-        entry,
-        *,
-        edit: bool,
-        skip_delay: bool = False,
-    ) -> None:
-        self._backend.replay_history_entry(entry, edit=edit, skip_delay=skip_delay)
-        self._publish_snapshot()
-
-    def toggle_replay_default_haul(self, entry) -> None:
-        self._backend.toggle_replay_default_haul(entry)
-        self._publish_snapshot()
-
     def _publish_snapshot(self) -> None:
         snapshot = self.snapshot()
         if self._server_state is not None:
@@ -263,6 +245,29 @@ class HeadlessControlRoomHost(ControlRoomApp):
         sink = self._protocol_event_sink
         if sink is not None:
             sink.publish_snapshot(self.snapshot())
+
+    def _is_client_local_remote_command(self, raw: str) -> bool:
+        command_raw = raw[1:].lstrip() if raw.startswith("!") else raw
+        parts = command_raw.split(None, 1)
+        if not parts:
+            return False
+        return parts[0].lower() in _CLIENT_LOCAL_REMOTE_VERBS
+
+    def _record_unknown_remote_command(self, raw: str) -> None:
+        command_raw = raw[1:].lstrip() if raw.startswith("!") else raw
+        parts = command_raw.split(None, 1)
+        verb = parts[0].lower() if parts else ""
+        rest = parts[1].strip() if len(parts) > 1 else ""
+        self._log(f"[dim]Command: {escape(raw)}[/]")
+        self._record_history_entry(
+            CommandHistoryEntry(
+                raw=raw,
+                command=verb,
+                params={"value": rest} if rest else {},
+                timestamp=now_iso(),
+            )
+        )
+        self._log(f"[dim]Unknown command: {escape(raw)}[/]")
 
     def _start_watcher_loop(self) -> None:
         if self._watcher_thread is not None:

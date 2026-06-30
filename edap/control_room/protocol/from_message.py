@@ -10,9 +10,6 @@ from .snapshot import (
     ControlRoomSnapshot,
     HaulSessionSnapshot,
     MarketSnapshot,
-    PromptStateSnapshot,
-    ReplayBrowserSnapshot,
-    ReplayEntrySnapshot,
     ServerStatusSnapshot,
     SessionSnapshot,
     ShipSnapshot,
@@ -51,8 +48,6 @@ def snapshot_from_message(payload: dict[str, object]) -> ControlRoomSnapshot:
         haul_session=_haul_session_snapshot(_mapping(payload["haul_session"])),
         ui_state=_ui_state_snapshot(_mapping(payload["ui_state"])),
         command_history=_command_history_snapshot(_mapping(payload["command_history"])),
-        prompt_state=_prompt_state_snapshot(_mapping(payload["prompt_state"])),
-        replay_browser=_replay_browser_snapshot(_mapping(payload["replay_browser"])),
         activity_log=[
             _activity_log_entry(_mapping(entry))
             for entry in _sequence(payload["activity_log"])
@@ -105,8 +100,6 @@ def _market_snapshot(payload: dict[str, object]) -> MarketSnapshot:
         station_name=str(payload.get("station_name", "")),
         system_name=str(payload.get("system_name", "")),
         market_timestamp=str(payload.get("market_timestamp", "")),
-        market_filter_text=_optional_str(payload.get("market_filter_text")),
-        locked=bool(payload.get("locked", False)),
         items=[dict(_mapping(item)) for item in _sequence(payload.get("items", []))],
     )
 
@@ -144,7 +137,6 @@ def _ui_state_snapshot(payload: dict[str, object]) -> UiStateSnapshot:
         verbose_controls=bool(payload.get("verbose_controls", False)),
         instant_mode=bool(payload.get("instant_mode", False)),
         activity_auto_follow_paused=bool(payload.get("activity_auto_follow_paused", False)),
-        replay_browser_open=bool(payload.get("replay_browser_open", False)),
         shutdown_requested=bool(payload.get("shutdown_requested", False)),
         shutdown_finalized=bool(payload.get("shutdown_finalized", False)),
     )
@@ -160,50 +152,6 @@ def _command_history_snapshot(payload: dict[str, object]) -> CommandHistorySnaps
             for entry in _sequence(payload.get("history_entries", []))
         ],
         history_limit=int(payload.get("history_limit", 1)),
-        draft_command=str(payload.get("draft_command", "")),
-        replay_filter_text=str(payload.get("replay_filter_text", "")),
-    )
-
-
-def _prompt_state_snapshot(payload: dict[str, object]) -> PromptStateSnapshot:
-    return PromptStateSnapshot(
-        haul_parameters=_string_mapping(payload.get("haul_parameters", {})),
-        haul_search_parameters=_string_mapping(payload.get("haul_search_parameters", {})),
-        haul_prompt_defaults=_string_mapping(payload.get("haul_prompt_defaults", {})),
-        haul_search_prompt_defaults=_string_mapping(payload.get("haul_search_prompt_defaults", {})),
-        haul_prompt_step=str(payload.get("haul_prompt_step", "")),
-        haul_prompt_mode=str(payload.get("haul_prompt_mode", "")),
-        haul_confirm_buy_station=str(payload.get("haul_confirm_buy_station", "")),
-        haul_prompt_raw_command=str(payload.get("haul_prompt_raw_command", "")),
-        haul_prompt_skip_delay=bool(payload.get("haul_prompt_skip_delay", False)),
-        destination_prompt_destination=str(payload.get("destination_prompt_destination", "")),
-        destination_prompt_settle_default=_optional_float(payload.get("destination_prompt_settle_default")),
-        destination_prompt_raw_command=str(payload.get("destination_prompt_raw_command", "")),
-        destination_prompt_skip_delay=bool(payload.get("destination_prompt_skip_delay", False)),
-        command_input_prefill_active=bool(payload.get("command_input_prefill_active", False)),
-        command_input_placeholder=str(payload.get("command_input_placeholder", "")),
-        command_input_value=str(payload.get("command_input_value", "")),
-    )
-
-
-def _replay_browser_snapshot(payload: dict[str, object]) -> ReplayBrowserSnapshot:
-    selected_history_entry = payload.get("selected_history_entry")
-    return ReplayBrowserSnapshot(
-        open=bool(payload.get("open", False)),
-        filter_text=str(payload.get("filter_text", "")),
-        visible_entries=[
-            ReplayEntrySnapshot(
-                label=str(entry["label"]),
-                detail=str(entry["detail"]),
-                history_entry=_command_history_entry_snapshot(_mapping(entry["history_entry"])),
-            )
-            for entry in (_mapping(item) for item in _sequence(payload.get("visible_entries", [])))
-        ],
-        selected_history_entry=(
-            _command_history_entry_snapshot(_mapping(selected_history_entry))
-            if selected_history_entry is not None
-            else None
-        ),
     )
 
 
