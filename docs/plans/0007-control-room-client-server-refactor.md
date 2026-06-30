@@ -2,7 +2,11 @@
 
 ## Status
 
-In progress
+Superseded by [0008: Control Room Composable App Refactor](0008-control-room-composable-app-refactor.md)
+
+## Supersession Note
+
+This plan established the current snapshot-based `serve` / `connect` implementation, but that architecture is no longer the target. Future client/server work should follow plan 0008: one local-first app composed with data sources, view models, view actions, and execution dependencies, with no snapshot protocol compatibility path.
 
 ## Why
 

@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `137`
-- Latest generated iteration number: `270`
+- Generated iteration count: `138`
+- Latest generated iteration number: `271`
 
 ## Iteration 134
 
@@ -3824,3 +3824,29 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Reproduce the live `connect`-mode empty-prefill path with targeted debug logging around `Input.Submitted`, `Input.Changed`, and observer prompt-state capture so the actual Textual event ordering is visible.
+
+## Iteration 271
+
+- When: `2026-06-30 17:54`
+- Area: `control-room`
+- Title: `plan-no-snapshot-composable-app`
+- Source: [2026-06-30-17-54_control-room_plan-no-snapshot-composable-app.md](iteration-logs/2026-06-30-17-54_control-room_plan-no-snapshot-composable-app.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `plan-no-snapshot-composable-app`
+- Started: `2026-06-30 17:54`
+
+## Summary
+
+- Captured the replacement Control Room architecture: one local-first app composed with data sources, view models, view actions, and execution dependencies.
+
+## Changes
+
+- Added `docs/plans/0008-control-room-composable-app-refactor.md` with the no-snapshot target architecture, ownership rules, protocol direction, refactor sequence, and acceptance criteria.
+- Marked the older snapshot-based client/server refactor plan as superseded by plan 0008.
+
+## Follow-ups
+
+- Start implementation bottom-up by introducing dependency protocols and local wiring before replacing remote `serve` / `connect`.
