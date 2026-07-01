@@ -4821,4 +4821,4 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 ## Follow-ups
 
-- Tag `v1.17.0`, push, and publish the GitHub release.
+- `v1.17.0` was tagged, pushed, and published as `EDControlRoom v1.17.0 - Composable Control Room`.
