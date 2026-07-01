@@ -17,4 +17,4 @@
 
 ## Follow-ups
 
-- Tag, push, and publish `v1.18.0` as the next stable release after release-prep validation passes.
+- `v1.18.0` was tagged, pushed, and published as `EDControlRoom v1.18.0 - Config Defaults and Haul Recovery`.
