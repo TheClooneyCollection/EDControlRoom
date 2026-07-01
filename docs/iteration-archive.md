@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `178`
-- Latest generated iteration number: `311`
+- Generated iteration count: `179`
+- Latest generated iteration number: `312`
 
 ## Iteration 134
 
@@ -4958,3 +4958,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-validate the `1200s` haul docking timeout against slower carrier/station approaches and keep local `haul.toml` guidance aligned with operator feedback.
+
+## Iteration 312
+
+- When: `2026-07-01 14:49`
+- Area: `ci-release`
+- Title: `prepare-v1-18-0-release`
+- Source: [2026-07-01-14-49__ci-release__prepare-v1-18-0-release.md](iteration-logs/2026-07-01-14-49__ci-release__prepare-v1-18-0-release.md)
+
+# Iteration Log
+
+- Area: `ci-release`
+- Title: `prepare-v1-18-0-release`
+- Started: `2026-07-01 14:49`
+
+## Summary
+
+- Prepared the `v1.18.0` release after haul recovery fixes and the config-defaults refactor landed on `main`.
+
+## Changes
+
+- Bumped project metadata from `1.17.0` to `1.18.0`.
+- Refreshed `uv.lock` so package metadata matches the release version.
+- Updated CI/release handoff status for the new stable release target.
+- Passed `uv run python3 -m unittest discover -s tests` with `622` tests in `0.264s`, under the `0.3732s` timing budget.
+
+## Follow-ups
+
+- Tag, push, and publish `v1.18.0` as the next stable release after release-prep validation passes.

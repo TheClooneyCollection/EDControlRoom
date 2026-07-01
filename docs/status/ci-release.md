@@ -1,8 +1,8 @@
 # CI and Release Status
 ## Current
-- Latest stable release is `v1.17.0`, published from tag `v1.17.0` for the no-snapshot Control Room remote protocol, one-app connect collapse, remote hydrate data source, display-neutral ViewAction seam, and connect target wiring fixes.
-- The unittest timing budget now scales as `0.0006s` per executed test, so the current `599`-test suite budget is `0.3594s`; when a release-prep or CI run exceeds that computed ceiling, capture a timing report before wrapping up.
-- The latest full `uv run python3 -m unittest discover -s tests` release-prep run passed `614` tests in `0.264s`, under the `0.3684s` timing gate without needing a slow-test follow-up.
+- Latest stable release target is `v1.18.0`, prepared on `main` for layered config defaults, haul route-warning/empty-hold/pad-full recovery fixes, remote haul elapsed timer normalization, and stable connect activity-log ordering.
+- The unittest timing budget now scales as `0.0006s` per executed test, so the current `622`-test suite budget is `0.3732s`; when a release-prep or CI run exceeds that computed ceiling, capture a timing report before wrapping up.
+- The latest full `uv run python3 -m unittest discover -s tests` release-prep run passed `622` tests in `0.264s`, under the `0.3732s` timing gate without needing a slow-test follow-up.
 - The Discord workflow-failure notifier is now split into a checked-in Python script plus a thin workflow wrapper, so the same payload/fetch/post path can be dry-run locally against saved jobs JSON and exercised in CI without keeping the logic trapped inside inline workflow shell.
 - `main` is now the rolling-update branch, and stable features or releases are identified with tags instead of `dev -> main` promotion.
 - The legacy `.github/workflows/promote-dev-to-main.yml` automation has been removed; release/process automation now centers on `main`, semantic version tags, and manual GitHub release publishing.
