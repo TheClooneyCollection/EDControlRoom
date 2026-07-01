@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `173`
-- Latest generated iteration number: `306`
+- Generated iteration count: `174`
+- Latest generated iteration number: `307`
 
 ## Iteration 134
 
@@ -4822,3 +4822,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - `v1.17.0` was tagged, pushed, and published as `EDControlRoom v1.17.0 - Composable Control Room`.
+
+## Iteration 307
+
+- When: `2026-07-01 12:12`
+- Area: `control-room`
+- Title: `stabilize-activity-log-order`
+- Source: [2026-07-01-12-12_control-room_stabilize-activity-log-order.md](iteration-logs/2026-07-01-12-12_control-room_stabilize-activity-log-order.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `stabilize-activity-log-order`
+- Started: `2026-07-01 12:12`
+
+## Summary
+
+- Stabilized activity log ordering when connect mode mixes client-local prompt logs with server routine logs.
+
+## Changes
+
+- Added app-local first-observed display ordering for activity entries.
+- Changed activity redraws to preserve display order instead of re-sorting merged local/remote logs by wall-clock timestamp.
+- Added a regression covering server entries with earlier timestamps arriving after local prompt transcript entries.
+
+## Follow-ups
+
+- Live-check `dest` and `haul route` prompt/routine transcripts in connect mode against a remote server.

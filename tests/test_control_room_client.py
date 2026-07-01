@@ -372,21 +372,21 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertIn("13:54:34  Unknown command: dest sol", rendered_messages[0])
         self.assertIn("dest - dest <system>", rendered_messages[-1])
 
-    def test_observer_app_sorts_local_and_remote_activity_by_timestamp_on_refresh(self) -> None:
+    def test_observer_app_preserves_observed_activity_order_on_refresh(self) -> None:
         remote_activity = [
             ActivityLogEntry(
                 entry_id="remote-1",
-                timestamp="2026-06-30T15:57:35Z",
+                timestamp="2026-06-30T15:57:30Z",
                 message_text="[dim]Executing dest sol in 5.0s...[/]",
             ),
             ActivityLogEntry(
                 entry_id="remote-2",
-                timestamp="2026-06-30T15:57:38Z",
+                timestamp="2026-06-30T15:57:31Z",
                 message_text="[yellow]Remote Ctrl-C received — cancelling active routine.[/]",
             ),
             ActivityLogEntry(
                 entry_id="remote-3",
-                timestamp="2026-06-30T15:57:38Z",
+                timestamp="2026-06-30T15:57:31Z",
                 message_text="[yellow]Cancelled pending dest sol before execution.[/]",
             ),
         ]
@@ -396,7 +396,7 @@ class ControlRoomClientTests(unittest.TestCase):
         _bind_observer_widgets(app, command_input)
         activity = app.query_one("#activity")
 
-        app._local_activity_log = [
+        local_activity = [
             ActivityLogEntry(
                 entry_id="local-1",
                 timestamp="2026-06-30T15:57:34Z",
@@ -413,6 +413,9 @@ class ControlRoomClientTests(unittest.TestCase):
                 message_text="[dim]Galaxy-map settle seconds? (Enter = 2.0)[/]",
             ),
         ]
+        for entry in local_activity:
+            app._remember_activity_display_order(entry)
+        app._local_activity_log = local_activity
 
         app._replace_activity_log(remote_activity)
 
@@ -423,9 +426,9 @@ class ControlRoomClientTests(unittest.TestCase):
                 "15:57:34  Command: dest sol",
                 "15:57:34  Destination: sol",
                 "15:57:34  Galaxy-map settle seconds? (Enter = 2.0)",
-                "15:57:35  Executing dest sol in 5.0s...",
-                "15:57:38  Remote Ctrl-C received — cancelling active routine.",
-                "15:57:38  Cancelled pending dest sol before execution.",
+                "15:57:30  Executing dest sol in 5.0s...",
+                "15:57:31  Remote Ctrl-C received — cancelling active routine.",
+                "15:57:31  Cancelled pending dest sol before execution.",
             ],
         )
 

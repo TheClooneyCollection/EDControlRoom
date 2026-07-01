@@ -455,6 +455,8 @@ class ControlRoomApp(App[None]):
         self._debug_artifact_log_path = _DEBUG_ARTIFACT_LOG_PATH
         self._protocol_activity_log: list[ActivityLogEntry] = []
         self._local_activity_log: list[ActivityLogEntry] = []
+        self._activity_display_order: dict[tuple[str, str, str], int] = {}
+        self._next_activity_display_order = 0
         self._protocol_announcements: list[AnnouncementEvent] = []
         self._protocol_external_event_sink: ControlRoomEventSink | None = None
         self._saved_state = ControlRoomState()
@@ -852,6 +854,7 @@ class ControlRoomApp(App[None]):
             self._apply_data_state(event.data, replace_activity=True)
             return
         if isinstance(event, ActivityLogAppendedEvent):
+            self._remember_activity_display_order(event.entry)
             self._protocol_activity_log.append(event.entry)
             if len(self._protocol_activity_log) > self._activity_log_max_lines:
                 self._protocol_activity_log = self._protocol_activity_log[
@@ -1234,16 +1237,13 @@ class ControlRoomApp(App[None]):
         replay_browser.styles.display = "none"
 
     def _replace_activity_log(self, entries: list[ActivityLogEntry]) -> None:
+        entries = list(entries)
         if self._backend.exit_detaches_remote_session():
-            entries = list(entries) + list(self._local_activity_log)
-            entries.sort(
-                key=lambda entry: (
-                    entry.timestamp,
-                    entry.entry_id,
-                )
-            )
-            if len(entries) > self._activity_log_max_lines:
-                entries = entries[-self._activity_log_max_lines :]
+            entries += list(self._local_activity_log)
+        entries = self._activity_entries_in_display_order(entries)
+        if len(entries) > self._activity_log_max_lines:
+            entries = entries[-self._activity_log_max_lines :]
+        self._trim_activity_display_order(entries)
         activity = self.query_one("#activity", ActivityLog)
         clear = getattr(activity, "clear", None)
         if callable(clear):
@@ -1254,6 +1254,34 @@ class ControlRoomApp(App[None]):
             activity.write(_build_log_text(entry.message_text, timestamp=entry.timestamp))
         self._protocol_activity_log = list(entries)
         self._refresh_activity_title()
+
+    @staticmethod
+    def _activity_entry_key(entry: ActivityLogEntry) -> tuple[str, str, str]:
+        return (entry.entry_id, entry.timestamp, entry.message_text)
+
+    def _remember_activity_display_order(self, entry: ActivityLogEntry) -> None:
+        key = self._activity_entry_key(entry)
+        if key in self._activity_display_order:
+            return
+        self._activity_display_order[key] = self._next_activity_display_order
+        self._next_activity_display_order += 1
+
+    def _activity_entries_in_display_order(
+        self,
+        entries: list[ActivityLogEntry],
+    ) -> list[ActivityLogEntry]:
+        for entry in entries:
+            self._remember_activity_display_order(entry)
+        return sorted(
+            entries,
+            key=lambda entry: self._activity_display_order[self._activity_entry_key(entry)],
+        )
+
+    def _trim_activity_display_order(self, entries: list[ActivityLogEntry]) -> None:
+        retained = {self._activity_entry_key(entry) for entry in entries}
+        self._activity_display_order = {
+            key: order for key, order in self._activity_display_order.items() if key in retained
+        }
 
     def _is_active_operator(self) -> bool:
         return self._dependencies.data_source.current().session.client_role == "active_operator"
@@ -1337,6 +1365,7 @@ class ControlRoomApp(App[None]):
     def _log(self, msg: str) -> None:
         activity = self.query_one("#activity", ActivityLog)
         entry = build_activity_log_entry(msg)
+        self._remember_activity_display_order(entry)
         activity.write(_build_log_text(entry.message_text, timestamp=entry.timestamp))
         if self._backend.exit_detaches_remote_session():
             self._local_activity_log.append(entry)
