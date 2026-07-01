@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `172`
-- Latest generated iteration number: `305`
+- Generated iteration count: `173`
+- Latest generated iteration number: `306`
 
 ## Iteration 134
 
@@ -4795,3 +4795,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Continue moving prompt/replay/command-bar interactions behind the same display-neutral action dependency pattern.
+
+## Iteration 306
+
+- When: `2026-07-01 11:25`
+- Area: `ci-release`
+- Title: `prepare-v1-17-0-release`
+- Source: [2026-07-01-11-25__ci-release__prepare-v1-17-0-release.md](iteration-logs/2026-07-01-11-25__ci-release__prepare-v1-17-0-release.md)
+
+# Iteration Log
+
+- Area: `ci-release`
+- Title: `prepare-v1-17-0-release`
+- Started: `2026-07-01 11:25`
+
+## Summary
+
+- Prepared the `v1.17.0` release after the Control Room no-snapshot and composable one-app refactor work.
+
+## Changes
+
+- Bumped project metadata from `1.16.0` to `1.17.0`.
+- Updated CI/release handoff status to reflect the release scope.
+- Refreshed `uv.lock` and passed the release-prep full unittest suite.
+
+## Follow-ups
+
+- Tag `v1.17.0`, push, and publish the GitHub release.
