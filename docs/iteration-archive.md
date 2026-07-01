@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `171`
-- Latest generated iteration number: `304`
+- Generated iteration count: `172`
+- Latest generated iteration number: `305`
 
 ## Iteration 134
 
@@ -4767,3 +4767,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Re-run live `uv run control_room.py connect ...` against the server after this commit.
+
+## Iteration 305
+
+- When: `2026-07-01 10:13`
+- Area: `control-room`
+- Title: `decouple-view-actions`
+- Source: [2026-07-01-10-13_control-room_decouple-view-actions.md](iteration-logs/2026-07-01-10-13_control-room_decouple-view-actions.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `decouple-view-actions`
+- Started: `2026-07-01 10:13`
+
+## Summary
+
+- Decoupled the current market and trade-route picker ViewActions from `ControlRoomApp`/Textual display mechanics.
+
+## Changes
+
+- Updated plan 0008 so ViewActions are explicitly UI-neutral intent dispatchers backed by injected dependencies.
+- Replaced app-coupled market/trade-route action implementations with pure ViewAction classes and dependency protocols.
+- Added `app_view_actions.py` as the current Textual/ControlRoomApp adapter for logging, refresh, command dispatch, and focus behavior.
+- Reworked ViewAction tests to use dependency fakes instead of app/widget stubs.
+
+## Follow-ups
+
+- Continue moving prompt/replay/command-bar interactions behind the same display-neutral action dependency pattern.

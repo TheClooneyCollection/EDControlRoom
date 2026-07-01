@@ -30,8 +30,8 @@ The app is built from these layers:
 
 - `DataSource`: provides external read models such as ship, market, haul session, command history, activity, routine status, and session status
 - `ViewModel`: translates data source read models plus local UI state into exactly what each view needs
-- `View`: dumb Textual widgets that render supplied view models and call view actions
-- `ViewActions`: lightweight action dispatchers for each view; they update local UI state or call execution dependencies
+- `View`: dumb display adapters/widgets that render supplied view models and call view actions; Textual is the current adapter, not the architecture boundary
+- `ViewActions`: UI-neutral intent dispatchers for each view; they depend on injected action dependencies and do not know whether the caller is Textual, a browser UI, or an API
 - `Execution`: performs real side effects, either local routines/input-driver work or remote execution intents
 
 ## Ownership Rules
@@ -41,7 +41,9 @@ The app is built from these layers:
 - Remote messages never contain prompt state, command input text, cursor position, focus, route-picker open state, highlighted row, replay browser state, market filter, market tab, or market display lock.
 - Views do not know whether data is local or remote.
 - ViewModels do not perform side effects.
-- ViewActions are thin and testable; real side effects live behind execution dependencies.
+- ViewActions are thin and testable; they dispatch through injected dependencies, and real side effects live behind execution or view-action dependency adapters.
+- ViewActions must not import Textual/Rich widgets, call `query_one()`, manage focus directly, or know about `ControlRoomApp`.
+- Textual, browser, REST, and websocket surfaces should reuse the same ViewModels and ViewActions by supplying different view-action dependency implementations.
 - Freeform backend commands are allowed only when the command is intentionally server-owned.
 
 ## Protocol Direction
@@ -75,19 +77,23 @@ Make embedded local mode use the new interfaces first, while preserving current 
 
 Move panel rendering toward dumb view update methods fed by view models. Start with low-risk panels such as status, haul stats, and market before prompt-heavy surfaces.
 
-### 4. Move interaction state into local UI state objects
+### 4. Decouple view actions from display mechanisms
+
+Keep each action layer as UI-neutral intent code. Textual-specific behavior such as widget focus, Rich markup logging, and `query_one()` calls belongs in an adapter injected into the action layer, not in ViewActions themselves.
+
+### 5. Move interaction state into local UI state objects
 
 Command bar, prompts, replay browser, trade-route picker, and market presentation state should be local app/view-action state, not backend or transport state.
 
-### 5. Rebuild serve transport around data and execution
+### 6. Rebuild serve transport around data and execution
 
 Expose local data-source updates and accept explicit execution intents. Do not expose app state.
 
-### 6. Rebuild connect mode through dependencies
+### 7. Rebuild connect mode through dependencies
 
 Wire the same `ControlRoomApp` with remote data sources and remote execution. Delete `ObserverControlRoomApp` as a target architecture artifact.
 
-### 7. Delete snapshot-era code
+### 8. Delete snapshot-era code
 
 Remove `ControlRoomSnapshot`, snapshot serializers/deserializers, snapshot events, snapshot schema support, and snapshot-driven backend behavior once their replacements land.
 
@@ -98,7 +104,7 @@ Remove `ControlRoomSnapshot`, snapshot serializers/deserializers, snapshot event
 - No remote message can overwrite local command input, prompt state, picker selection, replay state, market presentation state, focus, or cursor position.
 - The server protocol contains data-source events and execution responses, not app snapshots.
 - Local mode, serve mode, and connect mode differ only by dependency wiring.
-- Tests can exercise view models and view actions without running a Textual app or a websocket server.
+- Tests can exercise view models and view actions without Textual, Rich widgets, `ControlRoomApp`, or a websocket server.
 
 ## Non-Goals
 

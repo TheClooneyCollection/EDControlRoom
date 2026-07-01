@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from typing import Protocol
 
-from rich.markup import escape
-
-if TYPE_CHECKING:
-    from edap.control_room.app import ControlRoomApp
+from edap.inara.trade_routes import TradeRoute
 
 
 class MarketPanelActions(Protocol):
@@ -31,82 +28,105 @@ class TradeRoutePickerActions(Protocol):
     def set_destination_for_selected(self) -> None: ...
 
 
+class MarketPanelActionDependencies(Protocol):
+    def current_tab(self) -> str: ...
+
+    def set_tab_state(self, side: str) -> None: ...
+
+    def set_display_locked(self, locked: bool) -> None: ...
+
+    def set_filter_state(self, value: str | None) -> None: ...
+
+    def append_notice(self, message_text: str) -> None: ...
+
+    def market_changed(self) -> None: ...
+
+
+class TradeRoutePickerActionDependencies(Protocol):
+    def route_indices(self) -> tuple[int, ...]: ...
+
+    def selected_route_index(self) -> int | None: ...
+
+    def set_selected_route_index(self, index: int | None) -> None: ...
+
+    def selected_route(self) -> TradeRoute | None: ...
+
+    def set_picker_open(self, is_open: bool) -> None: ...
+
+    def submit_command(self, raw: str) -> None: ...
+
+    def picker_changed(self) -> None: ...
+
+    def picker_closed(self) -> None: ...
+
+
 @dataclass(frozen=True)
 class ControlRoomViewActions:
     market: MarketPanelActions
     trade_routes: TradeRoutePickerActions
 
 
-class LocalMarketPanelActions:
-    def __init__(self, app: ControlRoomApp) -> None:
-        self._app = app
+class MarketPanelViewActions:
+    def __init__(self, dependencies: MarketPanelActionDependencies) -> None:
+        self._dependencies = dependencies
 
     def set_tab(self, side: str) -> None:
-        if side not in {"buy", "sell"} or self._app._runtime_state.market_panel_tab == side:
+        if side not in {"buy", "sell"} or self._dependencies.current_tab() == side:
             return
-        self._app._runtime_state.market_panel_tab = side
-        self._app._refresh_market()
+        self._dependencies.set_tab_state(side)
+        self._dependencies.market_changed()
 
     def lock_display(self) -> None:
-        self._app._market.locked = True
-        self._app._log("[dim]Market panel locked.[/]")
-        self._app._refresh_market()
+        self._dependencies.set_display_locked(True)
+        self._dependencies.append_notice("Market panel locked.")
+        self._dependencies.market_changed()
 
     def unlock_display(self) -> None:
-        self._app._market.locked = False
-        self._app._log("[dim]Market panel unlocked.[/]")
-        self._app._refresh_market()
+        self._dependencies.set_display_locked(False)
+        self._dependencies.append_notice("Market panel unlocked.")
+        self._dependencies.market_changed()
 
     def set_filter(self, value: str) -> None:
-        self._app._market_filter = value.title()
-        self._app._log(f"[dim]Market filter: {escape(self._app._market_filter)}[/]")
-        self._app._refresh_market()
+        market_filter = value.title()
+        self._dependencies.set_filter_state(market_filter)
+        self._dependencies.append_notice(f"Market filter: {market_filter}")
+        self._dependencies.market_changed()
 
     def clear_filter(self) -> None:
-        self._app._market_filter = None
-        self._app._log("[dim]Market filter cleared.[/]")
-        self._app._refresh_market()
+        self._dependencies.set_filter_state(None)
+        self._dependencies.append_notice("Market filter cleared.")
+        self._dependencies.market_changed()
 
 
-class LocalTradeRoutePickerActions:
-    def __init__(self, app: ControlRoomApp) -> None:
-        self._app = app
+class TradeRoutePickerViewActions:
+    def __init__(self, dependencies: TradeRoutePickerActionDependencies) -> None:
+        self._dependencies = dependencies
 
     def close(self) -> None:
-        self._app._trade_route_picker_state.open = False
-        self._app._refresh_trade_route_picker()
-        try:
-            self._app.set_focus(self._app.query_one("#cmd"))
-        except Exception:
-            return
+        self._dependencies.set_picker_open(False)
+        self._dependencies.picker_changed()
+        self._dependencies.picker_closed()
 
     def move_selection(self, offset: int) -> None:
-        if not self._app._trade_routes.routes or offset == 0:
+        route_indices = self._dependencies.route_indices()
+        if not route_indices or offset == 0:
             return
-        route_indices = [route.index for route in self._app._trade_routes.routes]
-        selected_index = self._app._trade_route_picker_state.selected_route_index
+        selected_index = self._dependencies.selected_route_index()
         current_position = route_indices.index(selected_index) if selected_index in route_indices else 0
         next_position = max(0, min(len(route_indices) - 1, current_position + offset))
-        self._app._trade_route_picker_state.selected_route_index = route_indices[next_position]
-        self._app._refresh_trade_route_picker()
+        self._dependencies.set_selected_route_index(route_indices[next_position])
+        self._dependencies.picker_changed()
 
     def load_selected(self) -> None:
-        route = self._app._selected_trade_route()
+        route = self._dependencies.selected_route()
         if route is None:
             return
         self.close()
-        self._app._dispatch_command(f"haul route {route.index}")
+        self._dependencies.submit_command(f"haul route {route.index}")
 
     def set_destination_for_selected(self) -> None:
-        route = self._app._selected_trade_route()
+        route = self._dependencies.selected_route()
         if route is None or not route.from_system:
             return
         self.close()
-        self._app._dispatch_command(f"dest {route.from_system}")
-
-
-def build_local_control_room_view_actions(app: ControlRoomApp) -> ControlRoomViewActions:
-    return ControlRoomViewActions(
-        market=LocalMarketPanelActions(app),
-        trade_routes=LocalTradeRoutePickerActions(app),
-    )
+        self._dependencies.submit_command(f"dest {route.from_system}")

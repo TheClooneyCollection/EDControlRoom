@@ -95,10 +95,8 @@ from edap.control_room.models import (
     TradeRoutesData,
 )
 from edap.control_room import view_models as _view_models
-from edap.control_room.view_actions import (
-    ControlRoomViewActions,
-    build_local_control_room_view_actions,
-)
+from edap.control_room.app_view_actions import build_control_room_app_view_actions
+from edap.control_room.view_actions import ControlRoomViewActions
 from edap.control_room.protocol.adapters import (
     build_activity_log_entry,
     build_announcement_event,
@@ -474,7 +472,7 @@ class ControlRoomApp(App[None]):
             reloadable_modules=_RELOADABLE_MODULES,
         )
         self._dependencies = dependencies or build_local_control_room_dependencies(self)
-        self._view_actions = view_actions or build_local_control_room_view_actions(self)
+        self._view_actions = view_actions or build_control_room_app_view_actions(self)
         self._backend: ControlRoomBackend = backend or LocalControlRoomBackend(self)
         self._backend_event_unsubscribe: Callable[[], None] | None = None
         self._title_override = title_override
