@@ -444,6 +444,8 @@ def _detect_start_phase(
             return Phase.DEPART_STATION_1_SYSTEM
         if ship_status == "normal_space":
             return Phase.DEPART_STATION_1_SYSTEM
+        if not has_station_1_cargo and station_1.buy_commodity:
+            return Phase.TRANSIT_TO_STATION_1
         return Phase.TRANSIT_TO_STATION_2
 
     if current_system_lower and station_2_system_lower and current_system_lower == station_2_system_lower:
@@ -453,6 +455,8 @@ def _detect_start_phase(
             return Phase.DEPART_STATION_2_SYSTEM
         if ship_status == "normal_space":
             return Phase.DEPART_STATION_2_SYSTEM
+        if not has_station_2_cargo and station_2.buy_commodity:
+            return Phase.TRANSIT_TO_STATION_2
         return Phase.TRANSIT_TO_STATION_1
 
     if has_station_1_cargo:

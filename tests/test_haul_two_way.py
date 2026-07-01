@@ -169,6 +169,69 @@ class TwoWayHaulLoopTests(unittest.TestCase):
 
         self.assertEqual(phase, Phase.UNDOCK_STATION_2)
 
+    def test_detect_start_phase_in_station_1_system_supercruise_with_empty_hold_returns_to_station_1_buy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_journal(
+                journal_dir,
+                {"event": "Location", "Docked": False, "StarSystem": _SYSTEM_1},
+                {"event": "SupercruiseEntry", "StarSystem": _SYSTEM_1},
+            )
+            _write_cargo(journal_dir, [])
+
+            phase = _detect_start_phase(
+                journal_dir,
+                station_1=_station_1_leg(),
+                station_2=_station_2_leg(),
+                progress_fn=noop_progress,
+            )
+
+        self.assertEqual(phase, Phase.TRANSIT_TO_STATION_1)
+
+    def test_detect_start_phase_in_station_2_system_supercruise_with_empty_hold_returns_to_station_2_buy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_journal(
+                journal_dir,
+                {"event": "Location", "Docked": False, "StarSystem": _SYSTEM_2},
+                {"event": "SupercruiseEntry", "StarSystem": _SYSTEM_2},
+            )
+            _write_cargo(journal_dir, [])
+
+            phase = _detect_start_phase(
+                journal_dir,
+                station_1=_station_1_leg(),
+                station_2=_station_2_leg(),
+                progress_fn=noop_progress,
+            )
+
+        self.assertEqual(phase, Phase.TRANSIT_TO_STATION_2)
+
+    def test_detect_start_phase_in_station_1_system_supercruise_without_station_1_buy_continues_to_station_2(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_journal(
+                journal_dir,
+                {"event": "Location", "Docked": False, "StarSystem": _SYSTEM_1},
+                {"event": "SupercruiseEntry", "StarSystem": _SYSTEM_1},
+            )
+            _write_cargo(journal_dir, [])
+
+            phase = _detect_start_phase(
+                journal_dir,
+                station_1=StationLeg(
+                    index=1,
+                    station=_STATION_1,
+                    system=_SYSTEM_1,
+                    buy_commodity="",
+                    sell_commodity=_CARGO_2,
+                ),
+                station_2=_station_2_leg(),
+                progress_fn=noop_progress,
+            )
+
+        self.assertEqual(phase, Phase.TRANSIT_TO_STATION_2)
+
     def test_detect_start_phase_docked_at_unknown_station_returns_error_result(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             journal_dir = Path(tmp)
