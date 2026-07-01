@@ -21,7 +21,13 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
         app = SimpleNamespace(
             _ship=ShipState(system="Sol"),
             _market=MarketData(station="Galileo"),
-            _haul_stats=HaulStats(completed_runs=3),
+            _haul_stats=HaulStats(
+                completed_runs=3,
+                session_started_at=50.0,
+                active=True,
+                current_run_started_at=75.0,
+                clean_run_active=True,
+            ),
             _saved_state=ControlRoomState(),
             _config=SimpleNamespace(
                 control_room=SimpleNamespace(history_limit=20),
@@ -35,6 +41,7 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
                 bindings=SimpleNamespace(cli_source_status=lambda: "configured"),
                 binding_lookup=None,
             ),
+            _time_fn=lambda: 125.0,
         )
 
         message = hydrate_message(LocalControlRoomDataSource(app).current())
@@ -46,6 +53,10 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
         self.assertEqual(message["payload"]["ship"]["system"], "Sol")
         self.assertEqual(message["payload"]["market"]["station"], "Galileo")
         self.assertEqual(message["payload"]["haul_session"]["completed_runs"], 3)
+        self.assertIsNone(message["payload"]["haul_session"]["session_started_at"])
+        self.assertEqual(message["payload"]["haul_session"]["session_elapsed_s"], 75.0)
+        self.assertIsNone(message["payload"]["haul_session"]["current_run_started_at"])
+        self.assertEqual(message["payload"]["haul_session"]["current_run_elapsed_s"], 50.0)
         self.assertNotIn("prompt_state", message["payload"])
         self.assertNotIn("replay_browser", message["payload"])
 
@@ -54,3 +65,5 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
         self.assertEqual(parsed.ship.system, "Sol")
         self.assertEqual(parsed.market.station, "Galileo")
         self.assertEqual(parsed.haul_session.completed_runs, 3)
+        self.assertIsNone(parsed.haul_session.session_started_at)
+        self.assertEqual(parsed.haul_session.session_elapsed_s, 75.0)

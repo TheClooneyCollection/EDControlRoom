@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `175`
-- Latest generated iteration number: `308`
+- Generated iteration count: `176`
+- Latest generated iteration number: `309`
 
 ## Iteration 134
 
@@ -4876,3 +4876,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-validate the normal-space empty-hold resume case separately before changing it, because that branch currently overlaps with launch/escape resume behavior.
+
+## Iteration 309
+
+- When: `2026-07-01 12:31`
+- Area: `control-room`
+- Title: `remote-haul-elapsed-read-model`
+- Source: [2026-07-01-12-31_control-room_remote-haul-elapsed-read-model.md](iteration-logs/2026-07-01-12-31_control-room_remote-haul-elapsed-read-model.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `remote-haul-elapsed-read-model`
+- Started: `2026-07-01 12:31`
+
+## Summary
+
+- Fixed connect/serve haul panel time tracking by preventing hydrate/read-model data from exporting server-local monotonic start timestamps.
+
+## Changes
+
+- Updated `LocalControlRoomDataSource` haul copying to compute `session_elapsed_s` and `current_run_elapsed_s` at read time and clear `session_started_at` / `current_run_started_at` from the read model.
+- Added dependency and hydrate protocol regressions so remote-safe elapsed values are serialized instead of process-local timer origins.
+- Verified `uv run python3 -m unittest tests/test_control_room_dependencies.py tests/test_control_room_data_messages.py tests/test_control_room_client.py` and `uv run python3 -m unittest discover -s tests` (`618` tests, `0.305s`).
+
+## Follow-ups
+
+- Live-check a running `control_room.py serve` + `connect` haul session to confirm elapsed values advance acceptably with the current hydrate/update cadence.

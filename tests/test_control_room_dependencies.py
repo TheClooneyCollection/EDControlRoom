@@ -110,6 +110,43 @@ class ControlRoomDependenciesTests(unittest.TestCase):
         self.assertEqual(data.ship.cargo_inventory, [{"Name": "gold"}])
         self.assertEqual(data.market.items, [{"name": "Gold"}])
 
+    def test_local_data_source_exports_haul_elapsed_without_local_clock_start_times(self) -> None:
+        app = SimpleNamespace(
+            _ship=ShipState(system="Sol"),
+            _market=MarketData(station="Galileo"),
+            _haul_stats=HaulStats(
+                station_1_buying="Gallium",
+                station_2_buying="Bauxite",
+                session_started_at=100.0,
+                session_elapsed_s=0.0,
+                active=True,
+                clean_run_active=True,
+                current_run_started_at=160.0,
+                current_run_elapsed_s=None,
+            ),
+            _saved_state=ControlRoomState(),
+            _config=SimpleNamespace(
+                control_room=SimpleNamespace(history_limit=20),
+                runtime=SimpleNamespace(platform="macos"),
+            ),
+            _protocol_activity_log=[],
+            _runtime_state=RuntimeUIState(),
+            _current_version="1.2.3",
+            _ctx=SimpleNamespace(
+                journal=SimpleNamespace(cli_source_status=lambda: "configured"),
+                bindings=SimpleNamespace(cli_source_status=lambda: "configured"),
+                binding_lookup=object(),
+            ),
+            _time_fn=lambda: 400.0,
+        )
+
+        data = LocalControlRoomDataSource(app).current()
+
+        self.assertIsNone(data.haul_session.session_started_at)
+        self.assertEqual(data.haul_session.session_elapsed_s, 300.0)
+        self.assertIsNone(data.haul_session.current_run_started_at)
+        self.assertEqual(data.haul_session.current_run_elapsed_s, 240.0)
+
     def test_local_execution_delegates_to_facade(self) -> None:
         facade = _FakeFacade()
         app = SimpleNamespace(

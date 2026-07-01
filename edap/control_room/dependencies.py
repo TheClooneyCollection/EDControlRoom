@@ -124,10 +124,12 @@ class LocalControlRoomDataSource:
 
     def current(self) -> ControlRoomDataReadModel:
         app = self._app
+        time_fn = getattr(app, "_time_fn", None)
+        now = time_fn() if callable(time_fn) else None
         return ControlRoomDataReadModel(
             ship=_copy_ship_state(app._ship),
             market=_copy_market_data(app._market),
-            haul_session=_copy_haul_stats(app._haul_stats),
+            haul_session=_copy_haul_stats(app._haul_stats, now=now),
             command_history=CommandHistoryReadModel(
                 default_haul=dict(app._saved_state.default_haul),
                 history_entries=tuple(app._saved_state.history),
@@ -261,22 +263,35 @@ def _copy_market_data(market: MarketData) -> MarketData:
     )
 
 
-def _copy_haul_stats(haul: HaulStats) -> HaulStats:
+def _copy_haul_stats(haul: HaulStats, *, now: float | None = None) -> HaulStats:
+    session_started_at = haul.session_started_at
+    session_elapsed_s = haul.session_elapsed_s
+    if now is not None and session_started_at is not None:
+        session_elapsed_s = max(0.0, now - session_started_at)
+        session_started_at = None
+
+    current_run_started_at = haul.current_run_started_at
+    current_run_elapsed_s = haul.current_run_elapsed_s
+    if now is not None:
+        if current_run_started_at is not None and not haul.docked_back_at_station_1:
+            current_run_elapsed_s = max(0.0, now - current_run_started_at)
+        current_run_started_at = None
+
     return HaulStats(
         station_1_buying=haul.station_1_buying,
         station_2_buying=haul.station_2_buying,
         station_1=haul.station_1,
         station_2=haul.station_2,
-        session_started_at=haul.session_started_at,
-        session_elapsed_s=haul.session_elapsed_s,
+        session_started_at=session_started_at,
+        session_elapsed_s=session_elapsed_s,
         session_active=haul.session_active,
         active=haul.active,
         clean_run_active=haul.clean_run_active,
         waiting_for_station_1_departure=haul.waiting_for_station_1_departure,
         resumed_mid_run=haul.resumed_mid_run,
         docked_back_at_station_1=haul.docked_back_at_station_1,
-        current_run_started_at=haul.current_run_started_at,
-        current_run_elapsed_s=haul.current_run_elapsed_s,
+        current_run_started_at=current_run_started_at,
+        current_run_elapsed_s=current_run_elapsed_s,
         current_run_profit=haul.current_run_profit,
         completed_runs=haul.completed_runs,
         accumulated_profit=haul.accumulated_profit,
