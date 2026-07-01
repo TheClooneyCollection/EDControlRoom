@@ -563,6 +563,93 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(result.trigger_event, {"event": "Docked", "StationName": "Big Station"})
         self.assertIn(5.0, sleep_calls)
 
+    def test_dock_uses_pad_full_retry_budget_for_no_space_denial(self) -> None:
+        controls = FakeShipControls(
+            set_speed_zero_result=ActionDispatchResult(
+                action="SetSpeedZero",
+                status="ok",
+                binding=NormalizedBinding(key="x", modifier=None),
+            )
+        )
+        watcher = FakeWatcher(
+            [
+                [],
+                [{"event": "DockingDenied", "Reason": "NoSpace", "StationName": "Busy Station"}],
+                [{"event": "DockingGranted", "LandingPad": 4, "StationName": "Busy Station"}],
+                [{"event": "Docked", "StationName": "Busy Station"}],
+            ]
+        )
+        time_values = iter([0.0, 0.1, 0.1, 0.2, 0.2, 0.3])
+        sleep_calls: list[float] = []
+        announcements: list[tuple[AnnouncementId, dict[str, object]]] = []
+
+        result = dock(
+            controls,
+            watcher,
+            wait_for_supercruise_exit=False,
+            auto_refuel=False,
+            max_retries=1,
+            request_timeout_s=10.0,
+            dock_timeout_s=60.0,
+            pad_full_retry_delay_s=12.0,
+            pad_full_max_retries=2,
+            time_fn=lambda: next(time_values),
+            sleeper=sleep_calls.append,
+            announce_fn=lambda message_id, **values: announcements.append((message_id, values)),
+            announce_station_name="Busy Station",
+        )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(result.trigger_event, {"event": "Docked", "StationName": "Busy Station"})
+        self.assertIn(12.0, sleep_calls)
+        self.assertEqual(
+            [call for call in controls.calls if call["action"] == "SetSpeedZero"],
+            [
+                {"action": "SetSpeedZero", "repeat": 2, "hold_s": 0.0},
+                {"action": "SetSpeedZero", "repeat": 2, "hold_s": 0.0},
+            ],
+        )
+        self.assertEqual(
+            announcements,
+            [
+                (AnnouncementId.DOCKING_REQUEST, {"station_name": "Busy Station"}),
+                (AnnouncementId.DOCKING_PAD_FULL, {"station_name": "Busy Station"}),
+                (AnnouncementId.AUTO_DOCKING_ENGAGED, {}),
+            ],
+        )
+
+    def test_dock_reports_pad_full_when_no_space_retry_budget_is_exhausted(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher(
+            [
+                [],
+                [{"event": "DockingDenied", "Reason": "NoSpace", "StationName": "Busy Station"}],
+                [{"event": "DockingDenied", "Reason": "NoSpace", "StationName": "Busy Station"}],
+            ]
+        )
+        time_values = iter([0.0, 0.1, 0.1, 0.2])
+
+        result = dock(
+            controls,
+            watcher,
+            wait_for_supercruise_exit=False,
+            auto_refuel=False,
+            max_retries=1,
+            request_timeout_s=10.0,
+            dock_timeout_s=60.0,
+            pad_full_retry_delay_s=12.0,
+            pad_full_max_retries=2,
+            time_fn=lambda: next(time_values),
+            sleeper=lambda _: None,
+        )
+
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertEqual(
+            result.dispatch.reason,
+            "docking denied because station pads stayed full before retry budget was exhausted",
+        )
+        self.assertEqual(result.details["pad_full_attempts"], 2)
+
     def test_dock_announces_request_once_before_retries(self) -> None:
         controls = FakeShipControls(
             set_speed_zero_result=ActionDispatchResult(

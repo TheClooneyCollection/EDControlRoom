@@ -22,6 +22,15 @@ from edap.routines.callbacks import AnnouncementCallback, ProgressCallback
 from edap.tts import AnnouncementId
 
 
+def _is_pad_full_docking_denial(reason: object) -> bool:
+    normalized = "".join(ch for ch in str(reason or "").strip().lower() if ch.isalnum())
+    if not normalized:
+        return False
+    if normalized in {"nospace", "padsfull", "landingpadsfull", "dockingpadsfull"}:
+        return True
+    return "nospace" in normalized or ("pad" in normalized and "full" in normalized)
+
+
 def station_refuel_menu_sequence(
     controls: SupportsStationMenuControls,
     *,
@@ -202,6 +211,8 @@ def dock(
     supercruise_exit_settle_s: float = 3.0,
     boost_settle_s: float = 3.0,
     deny_retry_delay_s: float = 5.0,
+    pad_full_retry_delay_s: float = 30.0,
+    pad_full_max_retries: int = 20,
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
     progress_fn: ProgressCallback,
@@ -225,6 +236,10 @@ def dock(
         raise ValueError("boost_settle_s must be non-negative")
     if deny_retry_delay_s < 0:
         raise ValueError("deny_retry_delay_s must be non-negative")
+    if pad_full_retry_delay_s < 0:
+        raise ValueError("pad_full_retry_delay_s must be non-negative")
+    if pad_full_max_retries < 1:
+        raise ValueError("pad_full_max_retries must be at least 1")
 
     supercruise_exit_event: dict[str, object] | None = None
     queued_events = list(pending_events or [])
@@ -268,17 +283,23 @@ def dock(
 
     request_event: dict[str, object] | None = None
     zero_dispatch: ActionDispatchResult | None = None
+    standard_attempts = 0
+    request_attempts = 0
+    pad_full_attempts = 0
+    pad_full_announced = False
+    last_denial_reason = ""
     if announce_station_name:
         announce_fn(AnnouncementId.DOCKING_REQUEST, station_name=announce_station_name)
-    for attempt in range(1, max_retries + 1):
-        progress_fn(f"Sending dock request (attempt {attempt}/{max_retries})...")
+    while standard_attempts < max_retries:
+        request_attempts += 1
+        progress_fn(f"Sending dock request (attempt {request_attempts})...")
         request_dispatch = docking_request_sequence(controls, step_delay_s=step_delay_s, sleeper=sleeper)
         if request_dispatch.status != "ok":
             return RoutineResult(
                 action=request_dispatch.action,
                 dispatch=request_dispatch,
                 trigger_event=supercruise_exit_event,
-                details={"phase": "dispatch", "attempt": attempt, "max_retries": max_retries},
+                details={"phase": "dispatch", "attempt": request_attempts, "max_retries": max_retries},
             )
 
         progress_fn("Waiting for docking response...")
@@ -290,11 +311,30 @@ def dock(
             pending_events=queued_events,
         )
         if response_event is None:
+            standard_attempts += 1
             progress_fn("No docking response, retrying...")
             continue
 
         if response_event.get("event") == "DockingDenied":
             reason = response_event.get("Reason", "")
+            last_denial_reason = str(reason)
+            if _is_pad_full_docking_denial(reason):
+                pad_full_attempts += 1
+                progress_fn(
+                    f"DockingDenied: {reason} -- station pads full; holding position and "
+                    f"retrying in {pad_full_retry_delay_s:.0f}s "
+                    f"(pad-full attempt {pad_full_attempts}/{pad_full_max_retries})..."
+                )
+                controls.set_speed_zero(repeat=2)
+                if not pad_full_announced:
+                    station_name = str(response_event.get("StationName", "") or announce_station_name)
+                    announce_fn(AnnouncementId.DOCKING_PAD_FULL, station_name=station_name or "station")
+                    pad_full_announced = True
+                if pad_full_attempts >= pad_full_max_retries:
+                    break
+                sleeper(pad_full_retry_delay_s)
+                continue
+            standard_attempts += 1
             progress_fn(f"DockingDenied: {reason} -- retrying in {deny_retry_delay_s:.0f}s...")
             sleeper(deny_retry_delay_s)
             continue
@@ -308,15 +348,21 @@ def dock(
         break
 
     if request_event is None:
+        reason = "docking request/grant was not observed before retry budget was exhausted"
+        details = {"phase": "wait_for_docking_request", "attempts": request_attempts}
+        if pad_full_attempts:
+            reason = "docking denied because station pads stayed full before retry budget was exhausted"
+            details["last_denial_reason"] = last_denial_reason
+            details["pad_full_attempts"] = pad_full_attempts
         return RoutineResult(
             action="DockingRequested",
             dispatch=ActionDispatchResult(
                 action="DockingRequested",
                 status="error",
-                reason="docking request/grant was not observed before retry budget was exhausted",
+                reason=reason,
             ),
             trigger_event=supercruise_exit_event,
-            details={"phase": "wait_for_docking_request", "attempts": max_retries},
+            details=details,
         )
 
     progress_fn("Waiting for Docked...")

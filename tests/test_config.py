@@ -92,6 +92,10 @@ class LoadConfigTests(unittest.TestCase):
                 "Ship is fully fueled up and repaired, {title}.",
             )
             self.assertEqual(
+                config.tts.phrases["docking_pad_full"],
+                "Docking denied at {station_name}. Pads are full. Holding position and retrying.",
+            )
+            self.assertEqual(
                 config.error_messages.templates["station_mismatch_message"],
                 "Station mismatch: market data indicates {market_station}, but we are docked at {docked_station}.",
             )
