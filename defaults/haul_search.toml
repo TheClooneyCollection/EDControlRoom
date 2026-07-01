@@ -1,0 +1,11 @@
+[haul_search]
+cargo_capacity = 460
+max_route_distance_ly = "500"
+max_price_age_hours = "8"
+min_landing_pad = "large"
+max_station_distance_ls = "any"
+use_surface_stations = "no"
+min_supply = "5000"
+min_demand = "5000"
+include_round_trips = true
+order_by = "best_profit_per_hour_estimate"

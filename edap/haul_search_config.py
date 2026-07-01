@@ -5,6 +5,7 @@ import tomllib
 
 
 DEFAULT_HAUL_SEARCH_CONFIG_PATH = Path("haul_search.toml")
+DEFAULT_HAUL_SEARCH_DEFAULTS_PATH = Path(__file__).resolve().parent.parent / "defaults" / "haul_search.toml"
 
 _STRING_FIELDS = (
     "max_route_distance_ly",

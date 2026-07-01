@@ -1,0 +1,58 @@
+[controls]
+start_hotkey = "home"
+stop_hotkey = "end"
+scanner_mode = "off"
+
+[controls.hold]
+minimum_action_seconds = 0.1
+continuous_action_seconds = 0.2
+
+[controls.sequence]
+step_delay_seconds = 0.3
+
+[controls.galaxy_map]
+settle_seconds = 2.0
+
+[controls.dock]
+supercruise_exit_settle_seconds = 3.0
+
+[controls.haul]
+dock_timeout_seconds = 1200.0
+post_sell_settle_seconds = 2.0
+
+[controls.haul.two_way]
+auto_hyperspace_engage = true
+open_nav_panel_after_hyperspace_arrival = true
+nav_panel_open_delay_seconds = 3.0
+
+[controls.undock]
+timeout_seconds = 30.0
+no_track_timeout_seconds = 600.0
+in_space_timeout_seconds = 180.0
+
+[controls.mass_lock]
+boost_delay_seconds = 5.0
+
+[controls.market]
+nav_delay_seconds = 0.1
+trade_max_attempts = 3
+buy_max_hold_seconds = 20.0
+sell_quantity_restore_taps = 5
+sell_quantity_restore_tap_delay_seconds = 0.05
+critical_level_multiplier = 10.0
+
+[[controls.market.buy_hold_segments]]
+start = 0
+function = "flat"
+hold_seconds = 3.0
+
+[[controls.market.buy_hold_segments]]
+start = 100
+function = "flat"
+hold_seconds = 5.0
+
+[[controls.market.buy_hold_segments]]
+start = 301
+function = "log"
+base_seconds = -12.5627
+multiplier = 3.0756

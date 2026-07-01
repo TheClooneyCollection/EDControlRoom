@@ -33,7 +33,7 @@ See [docs/status/README.md](docs/status/README.md) for the maintained status ent
     
 Once you have control room up and running:
 - use `haul` to haul from A <-> B as the main end-to-end workflow
-- edit `haul.toml` and run `haul load` if you want one text-editable saved haul route instead of stepping through the prompt each time
+- edit ignored local `haul.toml` and run `haul load` if you want one text-editable saved haul route instead of stepping through the prompt each time
 - run `home set <system>` once if you want a one-word reusable route command later via `home`; if Control Room already knows your current system, bare `home set` also works
 - for setup details, platform-specific notes, and more commands, continue to [docs/getting-started/quickstart.md](docs/getting-started/quickstart.md)
 - use [docs/operators/control-room.md](docs/operators/control-room.md) for day-to-day operation
@@ -63,7 +63,7 @@ That makes it directly useful for high-volume A-to-B cargo work such as communit
 
 Around that primary flow, the active routine surface also includes `dock`, `undock`, `jump`, `buy`, `sell`, `dest`, and `home`.
 
-If you want a reusable route without stepping through the interactive haul prompt each time, edit `haul.toml` in the repo root and run `haul load` from Control Room. The operator doc now includes a concrete example profile.
+If you want a reusable route without stepping through the interactive haul prompt each time, edit ignored local `haul.toml` in the repo root and run `haul load` from Control Room. The operator doc includes a concrete example profile.
 
 These are built to be manually exercised against a live Elite session, not left unattended.
 

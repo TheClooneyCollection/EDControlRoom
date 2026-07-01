@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `177`
-- Latest generated iteration number: `310`
+- Generated iteration count: `178`
+- Latest generated iteration number: `311`
 
 ## Iteration 134
 
@@ -4930,3 +4930,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-validate the actual Elite journal reason string for full pads under CrossOver and tune the default `30s x 20` pad-full retry window if it feels too slow or too persistent.
+
+## Iteration 311
+
+- When: `2026-07-01 14:07`
+- Area: `runtime`
+- Title: `unify-config-defaults`
+- Source: [2026-07-01-14-07___runtime____unify-config-defaults.md](iteration-logs/2026-07-01-14-07___runtime____unify-config-defaults.md)
+
+# Iteration Log
+
+- Area: `runtime`
+- Title: `unify-config-defaults`
+- Started: `2026-07-01 14:07`
+
+## Summary
+
+- Unified shipped app defaults under `defaults/*.toml` and kept ignored local TOML files as override layers.
+- Stopped tracking repo-root `haul.toml` while preserving `haul load` as the local profile workflow.
+
+## Changes
+
+- Added default category files for paths, runtime, controls, screen, haul, and haul search; expanded `defaults/control_room.toml` to carry the full Control Room defaults.
+- Changed `edap.config.load_config()` to merge local config over shipped category defaults before validation, so minimal `config.toml` files only need explicit overrides.
+- Converted `config.example.toml` into an override skeleton, moved Inara search defaults to `defaults/haul_search.toml`, and raised the default haul docking timeout to `1200s`.
+
+## Follow-ups
+
+- Live-validate the `1200s` haul docking timeout against slower carrier/station approaches and keep local `haul.toml` guidance aligned with operator feedback.

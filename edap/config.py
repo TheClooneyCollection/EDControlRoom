@@ -17,6 +17,10 @@ from edap.timing import (
 
 DEFAULT_CONFIG_PATH = Path("config.toml")
 EXAMPLE_CONFIG_PATH = Path("config.example.toml")
+DEFAULT_PATHS_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "paths.toml"
+DEFAULT_RUNTIME_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "runtime.toml"
+DEFAULT_CONTROLS_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "controls.toml"
+DEFAULT_SCREEN_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "screen.toml"
 DEFAULT_CONTROL_ROOM_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "control_room.toml"
 DEFAULT_TIMING_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "timing.toml"
 DEFAULT_TTS_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "tts.toml"
@@ -83,6 +87,24 @@ class ControlsConfig:
     haul_two_way_auto_hyperspace_engage: bool
     haul_two_way_open_nav_panel_after_hyperspace_arrival: bool
     haul_two_way_nav_panel_open_delay_seconds: float
+
+
+@dataclass(frozen=True)
+class HaulRoutineDefaults:
+    market_buy_hold_segments: tuple[MarketBuyHoldSegmentConfig, ...]
+    market_sell_quantity_restore_taps: int
+    market_sell_quantity_restore_tap_delay_seconds: float
+    dock_timeout_seconds: float
+    undock_timeout_seconds: float
+    undock_no_track_timeout_seconds: float
+    galaxy_map_settle_seconds: float
+    dock_supercruise_exit_settle_seconds: float
+    mass_lock_boost_delay_seconds: float
+    haul_post_sell_settle_seconds: float
+    haul_two_way_auto_hyperspace_engage: bool
+    haul_two_way_open_nav_panel_after_hyperspace_arrival: bool
+    haul_two_way_nav_panel_open_delay_seconds: float
+    market_critical_level_multiplier: float
 
 
 @dataclass(frozen=True)
@@ -171,40 +193,50 @@ class ConfigError(ValueError):
     """Raised when config parsing or validation fails."""
 
 
-@lru_cache(maxsize=1)
-def _load_default_control_room_table() -> dict[str, object]:
-    with DEFAULT_CONTROL_ROOM_CONFIG_PATH.open("rb") as handle:
+def _load_default_toml_section(path: Path, section: str, label: str) -> dict[str, object]:
+    with path.open("rb") as handle:
         raw = tomllib.load(handle)
     if not isinstance(raw, dict):
-        raise ConfigError("Default control-room config root must be a TOML table.")
-    value = raw.get("control_room", {})
+        raise ConfigError(f"Default {label} config root must be a TOML table.")
+    value = raw.get(section, {})
     if not isinstance(value, dict):
-        raise ConfigError("Default control-room config section `control_room` must be a table.")
+        raise ConfigError(f"Default {label} config section `{section}` must be a table.")
     return value
+
+
+@lru_cache(maxsize=1)
+def _load_default_paths_table() -> dict[str, object]:
+    return _load_default_toml_section(DEFAULT_PATHS_CONFIG_PATH, "paths", "paths")
+
+
+@lru_cache(maxsize=1)
+def _load_default_runtime_table() -> dict[str, object]:
+    return _load_default_toml_section(DEFAULT_RUNTIME_CONFIG_PATH, "runtime", "runtime")
+
+
+@lru_cache(maxsize=1)
+def _load_default_controls_table() -> dict[str, object]:
+    return _load_default_toml_section(DEFAULT_CONTROLS_CONFIG_PATH, "controls", "controls")
+
+
+@lru_cache(maxsize=1)
+def _load_default_screen_table() -> dict[str, object]:
+    return _load_default_toml_section(DEFAULT_SCREEN_CONFIG_PATH, "screen", "screen")
+
+
+@lru_cache(maxsize=1)
+def _load_default_control_room_table() -> dict[str, object]:
+    return _load_default_toml_section(DEFAULT_CONTROL_ROOM_CONFIG_PATH, "control_room", "control-room")
 
 
 @lru_cache(maxsize=1)
 def _load_default_tts_table() -> dict[str, object]:
-    with DEFAULT_TTS_CONFIG_PATH.open("rb") as handle:
-        raw = tomllib.load(handle)
-    if not isinstance(raw, dict):
-        raise ConfigError("Default TTS config root must be a TOML table.")
-    value = raw.get("tts", {})
-    if not isinstance(value, dict):
-        raise ConfigError("Default TTS config section `tts` must be a table.")
-    return value
+    return _load_default_toml_section(DEFAULT_TTS_CONFIG_PATH, "tts", "TTS")
 
 
 @lru_cache(maxsize=1)
 def _load_default_timing_table() -> dict[str, object]:
-    with DEFAULT_TIMING_CONFIG_PATH.open("rb") as handle:
-        raw = tomllib.load(handle)
-    if not isinstance(raw, dict):
-        raise ConfigError("Default timing config root must be a TOML table.")
-    value = raw.get("timing", {})
-    if not isinstance(value, dict):
-        raise ConfigError("Default timing config section `timing` must be a table.")
-    return value
+    return _load_default_toml_section(DEFAULT_TIMING_CONFIG_PATH, "timing", "timing")
 
 
 @lru_cache(maxsize=1)
@@ -257,6 +289,71 @@ def _optional_table(raw: dict[str, object], key: str) -> dict[str, object]:
     if not isinstance(value, dict):
         raise ConfigError(f"Config section `{key}` must be a table.")
     return value
+
+
+def _merge_tables(defaults: dict[str, object], overrides: dict[str, object]) -> dict[str, object]:
+    merged = dict(defaults)
+    for key, value in overrides.items():
+        current = merged.get(key)
+        if isinstance(current, dict) and isinstance(value, dict):
+            merged[key] = _merge_tables(current, value)
+            continue
+        merged[key] = value
+    return merged
+
+
+def _default_app_config_table() -> dict[str, object]:
+    return {
+        "paths": _load_default_paths_table(),
+        "runtime": _load_default_runtime_table(),
+        "controls": _load_default_controls_table(),
+        "screen": _load_default_screen_table(),
+        "control_room": _load_default_control_room_table(),
+        "timing": _load_default_timing_table(),
+        "tts": _load_default_tts_table(),
+    }
+
+
+def _with_default_app_config(raw: dict[str, object]) -> dict[str, object]:
+    return _merge_tables(_default_app_config_table(), raw)
+
+
+def default_haul_routine_defaults() -> HaulRoutineDefaults:
+    controls = _load_default_controls_table()
+    controls_flat = _flatten_table(controls)
+    controls_market = _optional_table(controls, "market")
+    return HaulRoutineDefaults(
+        market_buy_hold_segments=_market_buy_hold_segments(controls_market, "buy_hold_segments"),
+        market_sell_quantity_restore_taps=_integer(controls_flat, "market.sell_quantity_restore_taps", 0),
+        market_sell_quantity_restore_tap_delay_seconds=_float(
+            controls_flat,
+            "market.sell_quantity_restore_tap_delay_seconds",
+            0.0,
+        ),
+        dock_timeout_seconds=_float(controls_flat, "haul.dock_timeout_seconds", 0.0),
+        undock_timeout_seconds=_float(controls_flat, "undock.timeout_seconds", 0.0),
+        undock_no_track_timeout_seconds=_float(controls_flat, "undock.no_track_timeout_seconds", 0.0),
+        galaxy_map_settle_seconds=_float(controls_flat, "galaxy_map.settle_seconds", 0.0),
+        dock_supercruise_exit_settle_seconds=_float(controls_flat, "dock.supercruise_exit_settle_seconds", 0.0),
+        mass_lock_boost_delay_seconds=_float(controls_flat, "mass_lock.boost_delay_seconds", 0.0),
+        haul_post_sell_settle_seconds=_float(controls_flat, "haul.post_sell_settle_seconds", 0.0),
+        haul_two_way_auto_hyperspace_engage=_boolean(
+            controls_flat,
+            "haul.two_way.auto_hyperspace_engage",
+            False,
+        ),
+        haul_two_way_open_nav_panel_after_hyperspace_arrival=_boolean(
+            controls_flat,
+            "haul.two_way.open_nav_panel_after_hyperspace_arrival",
+            False,
+        ),
+        haul_two_way_nav_panel_open_delay_seconds=_float(
+            controls_flat,
+            "haul.two_way.nav_panel_open_delay_seconds",
+            0.0,
+        ),
+        market_critical_level_multiplier=_float(controls_flat, "market.critical_level_multiplier", 0.0),
+    )
 
 
 def _lookup_value(raw: dict[str, object], key: str, aliases: tuple[str, ...] = ()) -> object | None:
@@ -663,6 +760,8 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     if not isinstance(raw, dict):
         raise ConfigError("Config root must be a TOML table.")
 
+    raw = _with_default_app_config(raw)
+
     paths = _require_table(raw, "paths")
     controls = _require_table(raw, "controls")
     controls_market = _optional_table(controls, "market")
@@ -679,6 +778,11 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     timing_delay = _optional_table(timing, "delay")
     timing_hold = _optional_table(timing, "hold")
     timing_typing = _optional_table(timing, "typing")
+    default_controls = _load_default_controls_table()
+    default_controls_flat = _flatten_table(default_controls)
+    default_screen = _load_default_screen_table()
+    default_screen_capture = _optional_table(default_screen, "capture")
+    default_runtime = _load_default_runtime_table()
     default_tts = _load_default_tts_table()
     default_control_room = _load_default_control_room_table()
     default_timing = _load_default_timing_table()
@@ -716,132 +820,132 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             bindings_file=_optional_path(paths.get("bindings_file")),
         ),
         controls=ControlsConfig(
-            start_hotkey=_string(controls_flat, "start_hotkey", "home"),
-            stop_hotkey=_string(controls_flat, "stop_hotkey", "end"),
-            scanner_mode=_string(controls_flat, "scanner_mode", "off"),
+            start_hotkey=_string(controls_flat, "start_hotkey", _string(default_controls_flat, "start_hotkey", "")),
+            stop_hotkey=_string(controls_flat, "stop_hotkey", _string(default_controls_flat, "stop_hotkey", "")),
+            scanner_mode=_string(controls_flat, "scanner_mode", _string(default_controls_flat, "scanner_mode", "")),
             minimum_action_hold_seconds=_float(
                 controls_flat,
                 "minimum_action_hold_seconds",
-                0.1,
+                _float(default_controls_flat, "minimum_action_hold_seconds", 0.0),
                 aliases=("hold.minimum_action_seconds",),
             ),
             continuous_action_hold_seconds=_float(
                 controls_flat,
                 "continuous_action_hold_seconds",
-                0.2,
+                _float(default_controls_flat, "continuous_action_hold_seconds", 0.0),
                 aliases=("hold.continuous_action_seconds",),
             ),
             step_delay_seconds=_float(
                 controls_flat,
                 "step_delay_seconds",
-                0.3,
+                _float(default_controls_flat, "step_delay_seconds", 0.0),
                 aliases=("sequence.step_delay_seconds",),
             ),
             galaxy_map_settle_seconds=_float(
                 controls_flat,
                 "galaxy_map_settle_seconds",
-                2.0,
+                _float(default_controls_flat, "galaxy_map_settle_seconds", 0.0),
                 aliases=("galaxy_map.settle_seconds",),
             ),
             dock_supercruise_exit_settle_seconds=_float(
                 controls_flat,
                 "dock_supercruise_exit_settle_seconds",
-                3.0,
+                _float(default_controls_flat, "dock_supercruise_exit_settle_seconds", 0.0),
                 aliases=("dock.supercruise_exit_settle_seconds",),
             ),
             haul_dock_timeout_seconds=_float(
                 controls_flat,
                 "haul_dock_timeout_seconds",
-                600.0,
+                _float(default_controls_flat, "haul_dock_timeout_seconds", 0.0),
                 aliases=("haul.dock_timeout_seconds",),
             ),
             undock_timeout_seconds=_float(
                 controls_flat,
                 "undock_timeout_seconds",
-                30.0,
+                _float(default_controls_flat, "undock_timeout_seconds", 0.0),
                 aliases=("undock.timeout_seconds",),
             ),
             undock_no_track_timeout_seconds=_float(
                 controls_flat,
                 "undock_no_track_timeout_seconds",
-                600.0,
+                _float(default_controls_flat, "undock_no_track_timeout_seconds", 0.0),
                 aliases=("undock.no_track_timeout_seconds",),
             ),
             mass_lock_boost_delay_seconds=_float(
                 controls_flat,
                 "mass_lock_boost_delay_seconds",
-                5.0,
+                _float(default_controls_flat, "mass_lock_boost_delay_seconds", 0.0),
                 aliases=("mass_lock.boost_delay_seconds",),
             ),
             market_nav_delay_seconds=_float(
                 controls_flat,
                 "market_nav_delay_seconds",
-                0.1,
+                _float(default_controls_flat, "market_nav_delay_seconds", 0.0),
                 aliases=("market.nav_delay_seconds",),
             ),
             market_trade_max_attempts=_integer(
                 controls_flat,
                 "market_trade_max_attempts",
-                3,
+                _integer(default_controls_flat, "market_trade_max_attempts", 0),
                 aliases=("market.trade_max_attempts",),
             ),
             market_buy_max_hold_seconds=_float(
                 controls_flat,
                 "market_buy_max_hold_seconds",
-                20.0,
+                _float(default_controls_flat, "market_buy_max_hold_seconds", 0.0),
                 aliases=("market.buy_max_hold_seconds",),
             ),
             market_buy_hold_segments=_market_buy_hold_segments(controls_market, "buy_hold_segments"),
             market_sell_quantity_restore_taps=_integer(
                 controls_flat,
                 "market_sell_quantity_restore_taps",
-                5,
+                _integer(default_controls_flat, "market_sell_quantity_restore_taps", 0),
                 aliases=("market.sell_quantity_restore_taps",),
             ),
             market_sell_quantity_restore_tap_delay_seconds=_float(
                 controls_flat,
                 "market_sell_quantity_restore_tap_delay_seconds",
-                0.05,
+                _float(default_controls_flat, "market_sell_quantity_restore_tap_delay_seconds", 0.0),
                 aliases=("market.sell_quantity_restore_tap_delay_seconds",),
             ),
             market_critical_level_multiplier=_float(
                 controls_flat,
                 "market_critical_level_multiplier",
-                10.0,
+                _float(default_controls_flat, "market_critical_level_multiplier", 0.0),
                 aliases=("market.critical_level_multiplier",),
             ),
             haul_post_sell_settle_seconds=_float(
                 controls_flat,
                 "haul_post_sell_settle_seconds",
-                2.0,
+                _float(default_controls_flat, "haul_post_sell_settle_seconds", 0.0),
                 aliases=("haul.post_sell_settle_seconds",),
             ),
             haul_two_way_auto_hyperspace_engage=_boolean(
                 controls_flat,
                 "haul_two_way_auto_hyperspace_engage",
-                True,
+                _boolean(default_controls_flat, "haul_two_way_auto_hyperspace_engage", False),
                 aliases=("haul.two_way.auto_hyperspace_engage",),
             ),
             haul_two_way_open_nav_panel_after_hyperspace_arrival=_boolean(
                 controls_flat,
                 "haul_two_way_open_nav_panel_after_hyperspace_arrival",
-                True,
+                _boolean(default_controls_flat, "haul_two_way_open_nav_panel_after_hyperspace_arrival", False),
                 aliases=("haul.two_way.open_nav_panel_after_hyperspace_arrival",),
             ),
             haul_two_way_nav_panel_open_delay_seconds=_float(
                 controls_flat,
                 "haul_two_way_nav_panel_open_delay_seconds",
-                3.0,
+                _float(default_controls_flat, "haul_two_way_nav_panel_open_delay_seconds", 0.0),
                 aliases=("haul.two_way.nav_panel_open_delay_seconds",),
             ),
         ),
         screen=ScreenConfig(
-            resolution_width=_integer(screen, "resolution_width", 1920),
-            resolution_height=_integer(screen, "resolution_height", 1080),
-            scale=_float(screen, "scale", 1.0),
+            resolution_width=_integer(screen, "resolution_width", _integer(default_screen, "resolution_width", 0)),
+            resolution_height=_integer(screen, "resolution_height", _integer(default_screen, "resolution_height", 0)),
+            scale=_float(screen, "scale", _float(default_screen, "scale", 0.0)),
             capture_debug_path=_optional_path(screen.get("capture_debug_path")),
             capture=CaptureConfig(
-                mode=_string(screen_capture, "mode", "fullscreen"),
+                mode=_string(screen_capture, "mode", _string(default_screen_capture, "mode", "")),
                 base_region=_capture_region(
                     screen_capture,
                     (0.0, 0.0, 1.0, 1.0),
@@ -851,7 +955,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
         ),
         runtime=RuntimeConfig(
             platform=_string(runtime, "platform", default_runtime_platform()),
-            debug=_boolean(runtime, "debug", True),
+            debug=_boolean(runtime, "debug", _boolean(default_runtime, "debug", True)),
         ),
         timing=TimingConfig(
             enabled=_boolean(timing, "enabled", _boolean(default_timing, "enabled", True)),
@@ -865,13 +969,31 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             typing=_timing_channel(timing_typing, default_timing_typing),
         ),
         control_room=ControlRoomConfig(
-            state_file=Path(_string(control_room, "state_file", ".control_room_state.json")).expanduser(),
-            history_limit=_integer(control_room, "history_limit", 20),
-            activity_log_max_lines=_integer(control_room, "activity_log_max_lines", 2000),
-            command_delay_seconds=_float(control_room, "command_delay_seconds", 5.0),
-            status_refresh_seconds=_float(control_room, "status_refresh_seconds", 2.0),
-            check_for_updates=_boolean(control_room, "check_for_updates", True),
-            home_system=_string(control_room, "home_system", ""),
+            state_file=Path(
+                _string(control_room, "state_file", _string(default_control_room, "state_file", ""))
+            ).expanduser(),
+            history_limit=_integer(control_room, "history_limit", _integer(default_control_room, "history_limit", 0)),
+            activity_log_max_lines=_integer(
+                control_room,
+                "activity_log_max_lines",
+                _integer(default_control_room, "activity_log_max_lines", 0),
+            ),
+            command_delay_seconds=_float(
+                control_room,
+                "command_delay_seconds",
+                _float(default_control_room, "command_delay_seconds", 0.0),
+            ),
+            status_refresh_seconds=_float(
+                control_room,
+                "status_refresh_seconds",
+                _float(default_control_room, "status_refresh_seconds", 0.0),
+            ),
+            check_for_updates=_boolean(
+                control_room,
+                "check_for_updates",
+                _boolean(default_control_room, "check_for_updates", True),
+            ),
+            home_system=_string(control_room, "home_system", _string(default_control_room, "home_system", "")),
             clear_session_on_launch=_boolean(
                 control_room,
                 "clear_session_on_launch",

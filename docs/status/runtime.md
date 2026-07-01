@@ -1,6 +1,6 @@
 # Runtime Status
 ## Current
-- Runtime timing now flows through a shared config-backed sampler: delays, repeat gaps, command-launch waits, key holds, and typing cadence can all use a clamped log-normal distribution from `defaults/timing.toml` / `[timing]`, while non-human infrastructure timing like journal polling stays deterministic.
+- Runtime config now layers ignored local `config.toml` over shipped category defaults in `defaults/*.toml`; timing still flows through a shared config-backed sampler for human-facing delays, repeat gaps, command-launch waits, key holds, and typing cadence while non-human infrastructure timing like journal polling stays deterministic.
 - The macOS input backend now lazily builds its pid-targeted Quartz poster, so non-macOS test runners can still construct the controller for injected-unit-test paths without failing before any pid-targeted dispatch is attempted.
 - macOS `set_pid` auto-detect now falls back from `ps ... comm` to the full `ps ... command` line, so CrossOver/Wine launches that only expose `EliteDangerous64.exe` in their arguments can still resolve the game pid.
 - Input backends now keep a shared foreground-by-default target model across macOS, Windows, and Linux; macOS can switch to pid-targeted Quartz posting, Windows can switch to pid/hwnd-targeted window-message dispatch, and the default auto-detect filter is `EliteDangerous64.exe`.

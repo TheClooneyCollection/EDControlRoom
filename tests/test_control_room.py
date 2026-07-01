@@ -1486,7 +1486,7 @@ on_land = true
                 "station_2_system": "Achenar",
                 "station_2_on_land": "false",
                 "galaxy_map_settle": "2.0",
-                "dock_timeout": "600.0",
+                "dock_timeout": "1200.0",
             }
 
         self.app._controls = object()
@@ -3581,7 +3581,7 @@ class ControlRoomPromptStateTests(unittest.TestCase):
             current_station="Jameson Memorial",
             current_system="Sol",
             configured_galaxy_map_settle_default=2.0,
-            configured_dock_timeout_default=600.0,
+            configured_dock_timeout_default=1200.0,
             default_placeholder="cmd...",
             render_error=lambda key, **kwargs: key,
             parse_optional_nonnegative_float=lambda raw, default, label: default,
@@ -3613,7 +3613,7 @@ class ControlRoomPromptStateTests(unittest.TestCase):
             current_station="Jameson Memorial",
             current_system="Sol",
             configured_galaxy_map_settle_default=2.0,
-            configured_dock_timeout_default=600.0,
+            configured_dock_timeout_default=1200.0,
             default_placeholder="cmd...",
             render_error=lambda key, **kwargs: key,
             parse_optional_nonnegative_float=lambda raw, default, label: default,
@@ -3629,7 +3629,7 @@ class ControlRoomPromptStateTests(unittest.TestCase):
     def test_advance_haul_prompt_finishes_and_requests_dispatch(self) -> None:
         prompt_state = PromptState(
             haul_params={"dock_timeout": ""},
-            haul_prompt_defaults={"dock_timeout": "600.0"},
+            haul_prompt_defaults={"dock_timeout": "1200.0"},
             haul_prompt_step="dock_timeout",
             haul_prompt_raw_command="haul gold",
             haul_prompt_skip_delay=True,
@@ -3641,7 +3641,7 @@ class ControlRoomPromptStateTests(unittest.TestCase):
             current_station="Jameson Memorial",
             current_system="Sol",
             configured_galaxy_map_settle_default=2.0,
-            configured_dock_timeout_default=600.0,
+            configured_dock_timeout_default=1200.0,
             default_placeholder="cmd...",
             render_error=lambda key, **kwargs: key,
             parse_optional_nonnegative_float=lambda raw, default, label: default,
@@ -3649,7 +3649,7 @@ class ControlRoomPromptStateTests(unittest.TestCase):
 
         self.assertEqual(prompt_state.haul_prompt_step, "")
         self.assertEqual(prompt_state.haul_prompt_defaults, {})
-        self.assertEqual(prompt_state.haul_params["dock_timeout"], "600.0")
+        self.assertEqual(prompt_state.haul_params["dock_timeout"], "1200.0")
         self.assertTrue(transition.launch_haul_loop)
         self.assertTrue(transition.skip_delay)
         self.assertEqual(transition.raw_command, "haul gold")

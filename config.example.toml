@@ -1,195 +1,44 @@
+# Local override example.
+#
+# Shipped defaults live under defaults/*.toml. Copy only the settings you want
+# to override into ignored repo-root config.toml.
+
 [paths]
-# Leave these blank to use platform auto-detection.
-journal_dir = ""
-bindings_file = ""
+# Leave unset to use platform auto-detection.
+# journal_dir = "/path/to/Saved Games/Frontier Developments/Elite Dangerous"
+# bindings_file = "/path/to/Custom.binds"
 
 [runtime]
-# Optional override. When omitted, the runtime defaults to the host OS:
-# macOS -> "macos", Windows -> "windows".
-# Set this explicitly only when you need to override or make the mode obvious in shared configs.
-debug = true
-
-[timing]
-# Human-facing waits and input dwell use a clamped log-normal distribution so the
-# randomization stays positive and slightly long-tailed instead of mechanically uniform.
-enabled = true
-distribution = "log_normal"
-
-[timing.delay]
-# Used for routine sleeps, repeat gaps, command delays, and similar non-polling pauses.
-sigma = 0.18
-min_factor = 0.85
-max_factor = 1.35
-min_seconds = 0.0
-
-[timing.hold]
-# Used for per-key hold durations when taps intentionally dwell before release.
-sigma = 0.12
-min_factor = 0.9
-max_factor = 1.2
-min_seconds = 0.02
-
-[timing.typing]
-# Used for inter-character typing cadence. The wider spread keeps text entry from
-# looking metronomic while still respecting a minimum practical delay.
-sigma = 0.28
-min_factor = 0.65
-max_factor = 1.75
-min_seconds = 0.02
+# Omit platform to default to the host OS.
+# platform = "macos"
+# debug = true
 
 [control_room]
-state_file = ".control_room_state.json"
-history_limit = 20
-# Maximum retained lines in the ACTIVITY pane before old lines are discarded.
-activity_log_max_lines = 2000
-# Delay before ship-affecting control-room commands begin execution.
-command_delay_seconds = 5.0
-# Poll cadence for Status.json refreshes and market/haul panel upkeep.
-status_refresh_seconds = 2.0
-# Check the latest GitHub release on startup and log a gentle notice when an update exists.
-check_for_updates = true
-# Optional reusable destination for the `home` command and `home set <system>` updates.
-home_system = ""
-# When true, launch starts a fresh persisted haul session instead of restoring the previous one.
-clear_session_on_launch = false
+# home_system = "Sol"
+# command_delay_seconds = 5.0
+
+[controls]
+# start_hotkey = "home"
+# stop_hotkey = "end"
+
+[controls.market]
+# nav_delay_seconds = 0.1
+# buy_max_hold_seconds = 20.0
+
+[timing]
+# enabled = true
 
 [tts]
-enabled = true
-title_mode = "custom"
-title = "captain"
-# title_mode:
-#   "commander"      -> always uses the literal word "commander"
-#   "custom"         -> uses the `title` string above
-#   "commander_name" -> uses the detected CMDR name when available, else falls back to "commander"
-# List message IDs here to suppress them while still keeping their phrase text
-# available for future re-enabling or customization.
-disabled_messages = []
+# title_mode = "custom"
+# title = "captain"
+# disabled_messages = []
 
 [tts.phrases]
-# Override only the lines you want to change. Unspecified phrases still come
-# from defaults/tts.toml.
 # destination_set = "Setting destination to {system_name}."
 
 [messages.templates]
-# Override only the operator-facing non-error lines you want to change. Unspecified
-# entries still come from defaults/messages.yaml.
 # dest_usage = "Usage: dest <system name>"
 
-[error_messages.templates]
-# Override only the operator-facing error lines you want to change. Unspecified
-# entries still come from defaults/error_messages.yaml. Paired error entries use
-# nested tables so message/suggestion text stays grouped together.
-#
-# [error_messages.templates.station_mismatch]
+[error_messages.templates.station_mismatch]
 # message = "Station mismatch: market data indicates {market_station}, but we are docked at {docked_station}."
 # suggestion = "Open replay history with Ctrl-R, press e to edit the station name, then rerun."
-
-[controls]
-start_hotkey = "home"
-stop_hotkey = "end"
-scanner_mode = "off"
-
-[controls.hold]
-# Minimum dwell for any synthetic key activation.
-minimum_action_seconds = 0.1
-# Default dwell used for continuous controls like roll/pitch/yaw.
-continuous_action_seconds = 0.2
-
-[controls.sequence]
-# Delay between individual key presses in any sequence.
-step_delay_seconds = 0.3
-
-[controls.galaxy_map]
-# Shared settle delay for galaxy-map result loading and route plotting.
-settle_seconds = 2.0
-
-[controls.dock]
-# Delay after `SupercruiseExit` before the docking approach boost.
-supercruise_exit_settle_seconds = 3.0
-
-[controls.haul]
-# Default docking timeout for haul-loop station arrivals.
-dock_timeout_seconds = 600.0
-# Settle pause after the two-way haul sell phase before the buy phase presses UI_Select.
-# The sell phase ends with UI_Back x2 back to the station services menu, and the buy phase
-# immediately presses UI_Select to re-enter it; without this pause the Select can land on
-# stale UI before the menu has redrawn. Set to 0 to disable.
-post_sell_settle_seconds = 2.0
-
-[controls.haul.two_way]
-# After two-way haul clears mass lock on departure, tap raw key "k" to engage hyperspace FSD.
-auto_hyperspace_engage = true
-# After the hyperspace jump completes and the ship enters the destination system, open the left
-# external panel so the navigation page is ready before the station approach.
-open_nav_panel_after_hyperspace_arrival = true
-# Delay after hyperspace arrival before opening the left external/nav panel.
-nav_panel_open_delay_seconds = 3.0
-
-[controls.undock]
-# Default time to wait for the launch command to produce an Undocked event.
-timeout_seconds = 30.0
-# Time to wait after Undocked for the music NoTrack event that confirms the ship has cleared the station.
-no_track_timeout_seconds = 600.0
-# Default time to wait after Undocked for a stricter in-space confirmation event.
-in_space_timeout_seconds = 180.0
-
-[controls.mass_lock]
-# Delay between each boost attempt while waiting for FSD mass lock to clear.
-boost_delay_seconds = 5.0
-
-[controls.market]
-# Delay after each UI_Down tap in buy/sell market navigation (covers both the item-list scroll and single down taps).
-nav_delay_seconds = 0.1
-# Maximum buy/sell attempts before aborting when the matching MarketBuy/MarketSell journal event is not observed.
-trade_max_attempts = 3
-# Hard cap for any buy `MAX` hold duration, regardless of which segment matches.
-buy_max_hold_seconds = 20.0
-# For sell `MAX`, restore the quantity with rapid right taps instead of a long hold.
-sell_quantity_restore_taps = 5
-sell_quantity_restore_tap_delay_seconds = 0.05
-# Treat station supply/demand below this cargo-capacity multiplier as critically low for warning/TTS.
-critical_level_multiplier = 10.0
-
-[[controls.market.buy_hold_segments]]
-# Segment starts are inclusive and evaluated in ascending `start` order.
-start = 0
-function = "flat"
-hold_seconds = 3.0
-
-[[controls.market.buy_hold_segments]]
-start = 100
-function = "flat"
-hold_seconds = 5.0
-
-[[controls.market.buy_hold_segments]]
-start = 301
-function = "log"
-base_seconds = -12.5627
-multiplier = 3.0756
-
-[screen]
-resolution_width = 1920
-resolution_height = 1080
-scale = 1.0
-capture_debug_path = "artifacts/diagnostics-screen.png"
-
-[screen.capture]
-# "fullscreen" keeps the current diagnostic behavior.
-# "region" captures only the configured base region below.
-mode = "fullscreen"
-left = 0.0
-top = 0.0
-right = 1.0
-bottom = 1.0
-
-[screen.capture.regions.center]
-left = 0.333333
-top = 0.333333
-right = 0.666667
-bottom = 0.666667
-
-[screen.capture.regions.compass]
-left = 0.3125
-top = 0.625
-right = 0.5
-bottom = 0.9375

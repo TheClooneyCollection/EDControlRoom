@@ -1,7 +1,6 @@
 [haul]
-# Edit this file, then run `haul load` in Control Room.
 galaxy_map_settle = 2.0
-dock_timeout = 600.0
+dock_timeout = 1200.0
 
 [haul.station_1]
 buying = ""

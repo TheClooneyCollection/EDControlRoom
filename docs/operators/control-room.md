@@ -48,7 +48,7 @@ EDControlRoom works by sending keyboard input to Elite Dangerous. After you fire
 ## Haul
 
 - `haul [commodity]` runs the active two-way haul loop used by `tools/run_routine.py --routine haul_loop`
-- `haul load [path]` loads repo-root `haul.toml` by default, or a custom TOML path if you provide one
+- `haul load [path]` loads ignored repo-root `haul.toml` by default, or a custom TOML path if you provide one
 - haul is aimed at commanders who want the station-side repetition handled for them: after a drop near station it requests docking, runs station services, buys or sells cargo, refuels, repairs, routes the next leg, launches, clears mass lock, and primes the FSD
 - haul does not auto-align for the next jump; after station clearance it uses TTS to call the commander by title or name and announce that the ship is ready to jump as the handoff cue
 - haul resumes from current journal and sidecar state rather than assuming a fresh start
@@ -57,7 +57,7 @@ EDControlRoom works by sending keyboard input to Elite Dangerous. After you fire
 
 ### `haul.toml` Example
 
-If you want one text-editable haul profile instead of walking through the interactive prompt each time, edit repo-root `haul.toml` and run:
+If you want one text-editable haul profile instead of walking through the interactive prompt each time, edit ignored repo-root `haul.toml` and run:
 
 ```sh
 haul load
@@ -68,7 +68,7 @@ Example:
 ```toml
 [haul]
 galaxy_map_settle = 2.0
-dock_timeout = 600.0
+dock_timeout = 1200.0
 
 [haul.station_1]
 buying = "Aluminium"

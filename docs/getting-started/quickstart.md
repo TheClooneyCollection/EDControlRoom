@@ -2,7 +2,7 @@
 
 ## Setup
 
-`config.example.toml` is the full reference config. Create a local `config.toml` only if you want overrides; EDControlRoom auto-loads it when present, and otherwise falls back to platform defaults plus auto-detection.
+Shipped defaults live in `defaults/*.toml`. `config.example.toml` is an override skeleton. Create a local `config.toml` only if you want overrides; EDControlRoom auto-loads it when present, and otherwise falls back to shipped defaults plus auto-detection.
 
 When you do create `config.toml`, keep it minimal:
 
@@ -85,7 +85,7 @@ python control_room.py
 
 For day-to-day usage, haul behavior, replay/history, and interrupt semantics, see [../operators/control-room.md](../operators/control-room.md).
 
-If you want a reusable two-station haul setup in a text file, edit repo-root `haul.toml` and use `haul load` in Control Room. See the example in [../operators/control-room.md](../operators/control-room.md).
+If you want a reusable two-station haul setup in a text file, edit ignored repo-root `haul.toml` and use `haul load` in Control Room. See the example in [../operators/control-room.md](../operators/control-room.md).
 
 If you want a reusable destination, run `home set <system>` once in Control Room. If the current system is already known, bare `home set` also works. Either form writes `control_room.home_system` into config so later you can route with plain `home`.
 

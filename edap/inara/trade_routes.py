@@ -7,6 +7,7 @@ import urllib.parse
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
+from edap.haul_search_config import DEFAULT_HAUL_SEARCH_DEFAULTS_PATH, load_haul_search_config
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_PROFILE_DIR = _REPO_ROOT / "artifacts" / "playwright" / "inara-profile"
@@ -20,18 +21,7 @@ DEFAULT_TRADE_ROUTE_QUERY_PARAMS: dict[str, str] = {
     "pi15": "0",
 }
 
-DEFAULT_TRADE_ROUTE_SEARCH_PARAMS: dict[str, str] = {
-    "cargo_capacity": "460",
-    "max_route_distance_ly": "500",
-    "max_price_age_hours": "8",
-    "min_landing_pad": "large",
-    "max_station_distance_ls": "500",
-    "use_surface_stations": "no",
-    "min_supply": "5000",
-    "min_demand": "5000",
-    "include_round_trips": "true",
-    "order_by": "best_profit_per_hour_estimate",
-}
+DEFAULT_TRADE_ROUTE_SEARCH_PARAMS: dict[str, str] = load_haul_search_config(DEFAULT_HAUL_SEARCH_DEFAULTS_PATH)
 
 _LANDING_PAD_TO_QUERY = {
     "small": "1",

@@ -1,2 +1,9 @@
 [control_room]
+state_file = ".control_room_state.json"
+history_limit = 20
+activity_log_max_lines = 2000
+command_delay_seconds = 5.0
+status_refresh_seconds = 2.0
+check_for_updates = true
+home_system = ""
 clear_session_on_launch = false

@@ -7,7 +7,7 @@ from time import monotonic, sleep
 from typing import Callable
 
 from edap.actions import ActionDispatchResult
-from edap.config import MarketBuyHoldSegmentConfig
+from edap.config import MarketBuyHoldSegmentConfig, default_haul_routine_defaults
 from edap.multi_leg_haul import CargoTransfer, MultiLegHaulDefinition, RouteEndpoint, RouteStop, build_route_stops
 from edap.routines._base import RoutineResult, SupportsHaulControls, SupportsPollEvents, _is_in_supercruise_event
 from edap.routines.callbacks import AnnouncementCallback, ProgressCallback
@@ -23,6 +23,9 @@ from edap.routines.haul_two_way import (
 from edap.routines.market import market_buy, market_sell
 from edap.state import get_latest_journal_log, read_ship_state
 from edap.tts import AnnouncementId
+
+
+_DEFAULT_HAUL_ROUTINE = default_haul_routine_defaults()
 
 
 class Phase(Enum):
@@ -523,30 +526,32 @@ def multi_leg_haul(
     journal_dir: Path,
     step_delay_s: float = 1.0,
     max_hold_s: float = 10.0,
-    market_buy_hold_segments: tuple[MarketBuyHoldSegmentConfig, ...] = (
-        MarketBuyHoldSegmentConfig(start=0, function="flat", hold_seconds=3.0),
-        MarketBuyHoldSegmentConfig(start=100, function="flat", hold_seconds=5.0),
-        MarketBuyHoldSegmentConfig(start=301, function="log", base_seconds=-12.5627, multiplier=3.0756),
+    market_buy_hold_segments: tuple[
+        MarketBuyHoldSegmentConfig, ...
+    ] = _DEFAULT_HAUL_ROUTINE.market_buy_hold_segments,
+    market_sell_quantity_restore_taps: int = _DEFAULT_HAUL_ROUTINE.market_sell_quantity_restore_taps,
+    market_sell_quantity_restore_tap_delay_s: float = (
+        _DEFAULT_HAUL_ROUTINE.market_sell_quantity_restore_tap_delay_seconds
     ),
-    market_sell_quantity_restore_taps: int = 5,
-    market_sell_quantity_restore_tap_delay_s: float = 0.05,
-    dock_timeout_s: float = 600.0,
+    dock_timeout_s: float = _DEFAULT_HAUL_ROUTINE.dock_timeout_seconds,
     request_timeout_s: float = 20.0,
-    undock_timeout_s: float = 30.0,
-    undock_no_track_timeout_s: float = 600.0,
+    undock_timeout_s: float = _DEFAULT_HAUL_ROUTINE.undock_timeout_seconds,
+    undock_no_track_timeout_s: float = _DEFAULT_HAUL_ROUTINE.undock_no_track_timeout_seconds,
     trade_timeout_s: float = 30.0,
     settle_s: float = 2.0,
-    galaxy_map_settle_s: float = 2.0,
-    supercruise_exit_settle_s: float = 3.0,
+    galaxy_map_settle_s: float = _DEFAULT_HAUL_ROUTINE.galaxy_map_settle_seconds,
+    supercruise_exit_settle_s: float = _DEFAULT_HAUL_ROUTINE.dock_supercruise_exit_settle_seconds,
     boost_settle_s: float = 3.0,
     deny_retry_delay_s: float = 5.0,
-    mass_lock_boost_delay_s: float = 5.0,
-    post_sell_settle_s: float = 2.0,
-    auto_hyperspace_engage: bool = True,
-    open_nav_panel_after_hyperspace_arrival: bool = True,
-    nav_panel_open_delay_s: float = 3.0,
+    mass_lock_boost_delay_s: float = _DEFAULT_HAUL_ROUTINE.mass_lock_boost_delay_seconds,
+    post_sell_settle_s: float = _DEFAULT_HAUL_ROUTINE.haul_post_sell_settle_seconds,
+    auto_hyperspace_engage: bool = _DEFAULT_HAUL_ROUTINE.haul_two_way_auto_hyperspace_engage,
+    open_nav_panel_after_hyperspace_arrival: bool = (
+        _DEFAULT_HAUL_ROUTINE.haul_two_way_open_nav_panel_after_hyperspace_arrival
+    ),
+    nav_panel_open_delay_s: float = _DEFAULT_HAUL_ROUTINE.haul_two_way_nav_panel_open_delay_seconds,
     max_dock_retries: int = 3,
-    market_critical_level_multiplier: float = 10.0,
+    market_critical_level_multiplier: float = _DEFAULT_HAUL_ROUTINE.market_critical_level_multiplier,
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
     progress_fn: ProgressCallback,

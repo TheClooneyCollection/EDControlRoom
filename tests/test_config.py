@@ -42,7 +42,7 @@ class LoadConfigTests(unittest.TestCase):
             self.assertEqual(config.controls.continuous_action_hold_seconds, 0.2)
             self.assertEqual(config.controls.galaxy_map_settle_seconds, 2.0)
             self.assertEqual(config.controls.dock_supercruise_exit_settle_seconds, 3.0)
-            self.assertEqual(config.controls.haul_dock_timeout_seconds, 600.0)
+            self.assertEqual(config.controls.haul_dock_timeout_seconds, 1200.0)
             self.assertEqual(config.controls.undock_timeout_seconds, 30.0)
             self.assertEqual(config.controls.undock_no_track_timeout_seconds, 600.0)
             self.assertEqual(config.controls.market_buy_max_hold_seconds, 20.0)
