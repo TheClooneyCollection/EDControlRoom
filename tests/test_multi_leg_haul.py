@@ -27,6 +27,13 @@ from edap.tts import AnnouncementId
 from tests.fakes import FakeShipControls, FakeWatcher
 
 
+def _write_navroute(journal_dir: Path, destination: str) -> None:
+    (journal_dir / "NavRoute.json").write_text(
+        f'{{"Route":[{{"StarSystem":"{destination}"}}]}}\n',
+        encoding="utf-8",
+    )
+
+
 def multi_leg_haul(*args, **kwargs):
     kwargs.setdefault("progress_fn", noop_progress)
     kwargs.setdefault("announce_fn", noop_announce)
@@ -200,6 +207,72 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
             announcements,
         )
 
+    def test_departure_warns_and_continues_when_galaxy_map_route_is_unconfirmed(self) -> None:
+        controls = FakeShipControls()
+        sleep_calls: list[float] = []
+        messages: list[str] = []
+        announcements: list[tuple[AnnouncementId, dict[str, object]]] = []
+        watcher = FakeWatcher([
+            [],
+            [{"event": "Undocked", "StationName": "Pawelczyk Dock"}],
+            [{"event": "Music", "MusicTrack": "NoTrack"}],
+            [{"event": "FSDJump", "StarSystem": "HIP 68076"}],
+        ])
+        definition = _definition()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            (journal_dir / "Market.json").write_text(
+                '{"StationName":"Pawelczyk Dock","StarSystem":"HIP 58412","Items":[]}\n',
+                encoding="utf-8",
+            )
+            (journal_dir / "Cargo.json").write_text(
+                '{"Inventory":[{"Name":"water purifiers","Name_Localised":"Water Purifiers","Count":460,"Stolen":0}]}\n',
+                encoding="utf-8",
+            )
+            route_failure = RoutineResult(
+                action="GalaxyMapOpen",
+                dispatch=ActionDispatchResult(
+                    action="GalaxyMapOpen",
+                    status="error",
+                    reason="route mismatch: expected 'HIP 68076', got 'HIP 58412'",
+                ),
+            )
+            with (
+                patch("edap.routines.haul_two_way.set_gal_map_destination", side_effect=[route_failure, route_failure]) as route_mock,
+                patch("edap.routines.haul_multi_leg.dock") as dock_mock,
+            ):
+                dock_mock.return_value = RoutineResult(
+                    action="dock",
+                    dispatch=ActionDispatchResult(action="dock", status="error", reason="stop after manual jump"),
+                )
+                result = multi_leg_haul(
+                    controls,
+                    watcher,
+                    definition=definition,
+                    journal_dir=journal_dir,
+                    step_delay_s=0.0,
+                    settle_s=0.0,
+                    supercruise_exit_settle_s=0.0,
+                    boost_settle_s=0.0,
+                    dock_timeout_s=30.0,
+                    request_timeout_s=10.0,
+                    undock_timeout_s=10.0,
+                    trade_timeout_s=10.0,
+                    time_fn=_ticking_clock(),
+                    sleeper=lambda s: sleep_calls.append(s),
+                    progress_fn=messages.append,
+                    announce_fn=lambda message_id, **values: announcements.append((message_id, values)),
+                )
+
+        self.assertEqual(result.dispatch.reason, "stop after manual jump")
+        self.assertEqual(route_mock.call_count, 2)
+        dock_mock.assert_called_once()
+        self.assertTrue(any("route to HIP 68076 is unconfirmed" in message for message in messages))
+        self.assertTrue(any("Skipping automatic FSD engage" in message for message in messages))
+        self.assertIn((AnnouncementId.ROUTE_UNCONFIRMED, {"system_name": "HIP 68076"}), announcements)
+        self.assertNotIn("HyperSuperCombination", [call["action"] for call in controls.calls])
+
     def test_arrival_wait_ignores_intermediate_jump_systems(self) -> None:
         watcher = FakeWatcher([
             [{"event": "FSDJump", "StarSystem": "HIP 58412"}],
@@ -298,6 +371,7 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
                 '{"Inventory":[{"Name":"water purifiers","Name_Localised":"Water Purifiers","Count":460,"Stolen":0}]}\n',
                 encoding="utf-8",
             )
+            _write_navroute(journal_dir, "HIP 58412")
             with patch("edap.routines.haul_multi_leg.market_sell") as market_sell_mock, patch(
                 "edap.routines.haul_multi_leg.market_buy"
             ) as market_buy_mock:

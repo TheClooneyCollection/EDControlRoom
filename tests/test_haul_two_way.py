@@ -62,6 +62,13 @@ def _write_journal(journal_dir: Path, *events: dict[str, object]) -> None:
     (journal_dir / "Journal.240101000000.01.log").write_text(f"{lines}\n", encoding="utf-8")
 
 
+def _write_navroute(journal_dir: Path, destination: str) -> None:
+    (journal_dir / "NavRoute.json").write_text(
+        json.dumps({"Route": [{"StarSystem": destination}]}),
+        encoding="utf-8",
+    )
+
+
 def _station_1_leg() -> StationLeg:
     return StationLeg(index=1, station=_STATION_1, system=_SYSTEM_1, buy_commodity=_CARGO_1, sell_commodity=_CARGO_2)
 
@@ -593,6 +600,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                     {"Category": "Minerals", "Name": "bertrandite", "Name_Localised": _CARGO_2, "DemandBracket": 1, "Stock": 1000},
                 ],
             )
+            _write_navroute(journal_dir, _SYSTEM_1)
             result = haul_loop_two_way(
                 controls,
                 watcher,
@@ -634,6 +642,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                     {"Category": "Minerals", "Name": "bertrandite", "Name_Localised": _CARGO_2, "DemandBracket": 1, "Stock": 1000},
                 ],
             )
+            _write_navroute(journal_dir, _SYSTEM_2)
             _write_cargo(journal_dir, [])
             (journal_dir / "Status.json").write_text(json.dumps({"Flags": 0}), encoding="utf-8")
 
@@ -718,6 +727,79 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 )
 
         self.assertEqual(result.dispatch.status, "error")
+        self.assertNotIn("HyperSuperCombination", [call["action"] for call in controls.calls])
+
+    def test_departure_warns_and_continues_when_galaxy_map_route_is_unconfirmed(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher([
+            [],
+            [{"event": "Undocked", "StationName": _STATION_1}],
+            [{"event": "Music", "MusicTrack": "NoTrack"}],
+            [{"event": "FSDJump", "StarSystem": _SYSTEM_2}],
+        ])
+        messages: list[str] = []
+        announcements: list[tuple[AnnouncementId, dict[str, object]]] = []
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_market(
+                journal_dir,
+                _STATION_1,
+                [
+                    {"Category": "Metals", "Name": "aluminium", "Name_Localised": _CARGO_1, "DemandBracket": 1, "Stock": 1000},
+                    {"Category": "Minerals", "Name": "bertrandite", "Name_Localised": _CARGO_2, "DemandBracket": 1, "Stock": 1000},
+                ],
+            )
+            _write_cargo(journal_dir, [])
+            (journal_dir / "Status.json").write_text(json.dumps({"Flags": 0}), encoding="utf-8")
+            route_failure = RoutineResult(
+                action="GalaxyMapOpen",
+                dispatch=ActionDispatchResult(
+                    action="GalaxyMapOpen",
+                    status="error",
+                    reason="route mismatch: expected 'Achenar', got 'Sol'",
+                ),
+            )
+
+            with (
+                patch("edap.routines.haul_two_way.set_gal_map_destination", side_effect=[route_failure, route_failure]) as route_mock,
+                patch("edap.routines.haul_two_way.dock") as dock_mock,
+            ):
+                dock_mock.return_value = RoutineResult(
+                    action="dock",
+                    dispatch=ActionDispatchResult(action="dock", status="error", reason="stop after manual jump"),
+                )
+                result = haul_loop_two_way(
+                    controls,
+                    watcher,
+                    journal_dir=journal_dir,
+                    station_1=_STATION_1,
+                    station_1_buying=_CARGO_1,
+                    station_1_system=_SYSTEM_1,
+                    station_2=_STATION_2,
+                    station_2_buying=_CARGO_2,
+                    station_2_system=_SYSTEM_2,
+                    iterations=1,
+                    start_phase=Phase.UNDOCK_STATION_1,
+                    step_delay_s=0.0,
+                    settle_s=0.0,
+                    boost_settle_s=0.0,
+                    dock_timeout_s=30.0,
+                    request_timeout_s=10.0,
+                    undock_timeout_s=10.0,
+                    trade_timeout_s=10.0,
+                    time_fn=_ticking_clock(),
+                    sleeper=lambda _: None,
+                    progress_fn=messages.append,
+                    announce_fn=lambda message_id, **values: announcements.append((message_id, values)),
+                )
+
+        self.assertEqual(result.dispatch.reason, "stop after manual jump")
+        self.assertEqual(route_mock.call_count, 2)
+        dock_mock.assert_called_once()
+        self.assertTrue(any("route to Achenar is unconfirmed" in message for message in messages))
+        self.assertTrue(any("Skipping automatic FSD engage" in message for message in messages))
+        self.assertIn((AnnouncementId.ROUTE_UNCONFIRMED, {"system_name": _SYSTEM_2}), announcements)
         self.assertNotIn("HyperSuperCombination", [call["action"] for call in controls.calls])
 
     def test_transit_opens_nav_panel_after_hyperspace_arrival_by_default(self) -> None:
@@ -1561,6 +1643,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                     {"Category": "Minerals", "Name": "bertrandite", "Name_Localised": _CARGO_2, "DemandBracket": 1, "Stock": 1000},
                 ],
             )
+            _write_navroute(journal_dir, _SYSTEM_2)
             _write_cargo(journal_dir, [])
             (journal_dir / "Status.json").write_text(json.dumps({"Flags": 0}), encoding="utf-8")
 

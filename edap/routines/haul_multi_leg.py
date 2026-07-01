@@ -13,11 +13,11 @@ from edap.routines._base import RoutineResult, SupportsHaulControls, SupportsPol
 from edap.routines.callbacks import AnnouncementCallback, ProgressCallback
 from edap.routines.docking import _undock_until_undocked, _wait_for_clear_of_station, dock, station_refuel_menu
 from edap.routines.escape import escape_mass_lock
-from edap.routines.galaxy_map import set_gal_map_destination
 from edap.routines.haul_two_way import (
     _read_cargo_json,
     _read_latest_journal_events,
     _read_market_station,
+    _set_galaxy_map_destination_for_haul,
     _sellable_cargo,
 )
 from edap.routines.market import market_buy, market_sell
@@ -356,17 +356,19 @@ def _undock_and_route(ctx: _Ctx, stop: RouteStop, next_stop: RouteStop) -> Routi
     )
     if result.dispatch.status != "ok":
         return result
+    route_confirmed = True
     if next_stop.endpoint.system:
         ctx.progress_fn(f"Setting galaxy map destination: {next_stop.endpoint.system}...")
         ctx.announce_fn(AnnouncementId.DESTINATION_SET, system_name=next_stop.endpoint.system)
-        set_gal_map_destination(
-            ctx.controls,
-            destination=next_stop.endpoint.system,
+        route_confirmed = _set_galaxy_map_destination_for_haul(
+            controls=ctx.controls,
+            destination_system=next_stop.endpoint.system,
             journal_dir=ctx.journal_dir,
             step_delay_s=ctx.step_delay_s,
-            map_settle_s=ctx.galaxy_map_settle_s,
+            galaxy_map_settle_s=ctx.galaxy_map_settle_s,
             sleeper=ctx.sleeper,
             progress_fn=ctx.progress_fn,
+            announce_fn=ctx.announce_fn,
         )
     clear_result = _wait_for_clear_of_station(
         ctx.watcher,
@@ -388,23 +390,28 @@ def _undock_and_route(ctx: _Ctx, stop: RouteStop, next_stop: RouteStop) -> Routi
         sleeper=ctx.sleeper,
         progress_fn=ctx.progress_fn,
     )
-    _engage_hyperspace_after_escape(ctx)
+    if route_confirmed:
+        _engage_hyperspace_after_escape(ctx)
+    else:
+        ctx.progress_fn("Skipping automatic FSD engage because the galaxy-map route is unconfirmed.")
     return clear_result
 
 
 def _depart_system(ctx: _Ctx, stop: RouteStop, next_stop: RouteStop) -> RoutineResult:
     ctx.progress_fn(f"Departing {stop.label} system in normal space...")
+    route_confirmed = True
     if next_stop.endpoint.system:
         ctx.progress_fn(f"Setting galaxy map destination: {next_stop.endpoint.system}...")
         ctx.announce_fn(AnnouncementId.DESTINATION_SET, system_name=next_stop.endpoint.system)
-        set_gal_map_destination(
-            ctx.controls,
-            destination=next_stop.endpoint.system,
+        route_confirmed = _set_galaxy_map_destination_for_haul(
+            controls=ctx.controls,
+            destination_system=next_stop.endpoint.system,
             journal_dir=ctx.journal_dir,
             step_delay_s=ctx.step_delay_s,
-            map_settle_s=ctx.galaxy_map_settle_s,
+            galaxy_map_settle_s=ctx.galaxy_map_settle_s,
             sleeper=ctx.sleeper,
             progress_fn=ctx.progress_fn,
+            announce_fn=ctx.announce_fn,
         )
     escape_mass_lock(
         ctx.controls,
@@ -414,7 +421,10 @@ def _depart_system(ctx: _Ctx, stop: RouteStop, next_stop: RouteStop) -> RoutineR
         sleeper=ctx.sleeper,
         progress_fn=ctx.progress_fn,
     )
-    _engage_hyperspace_after_escape(ctx)
+    if route_confirmed:
+        _engage_hyperspace_after_escape(ctx)
+    else:
+        ctx.progress_fn("Skipping automatic FSD engage because the galaxy-map route is unconfirmed.")
     return RoutineResult(action="depart_system", dispatch=ActionDispatchResult(action="depart_system", status="ok"))
 
 

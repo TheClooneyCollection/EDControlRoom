@@ -11,6 +11,7 @@ station_cleared = "Station cleared. Frame shift drive online, {title}. Ready to 
 haul_aborted = "Haul aborted."
 haul_cancelled = "Haul cancelled."
 haul_stop_after_run = "Roger {title}, we will stop hauling after this run."
+route_unconfirmed = "Route to {system_name} was not confirmed. Set route manually."
 buying_cargo = "Buying full cargo of {commodity_name}."
 selling_cargo = "Selling {commodity_name}."
 sale_profit = "Sale complete. Revenue: {revenue_short}."
