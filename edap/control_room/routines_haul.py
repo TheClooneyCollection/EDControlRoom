@@ -19,6 +19,8 @@ from edap.inara.trade_routes import (
 )
 from edap.multi_leg_haul import load_multi_leg_haul_definition
 from edap.routines import haul_loop_two_way, multi_leg_haul
+from edap.routines.haul_support import HaulMarketSettings, HaulRuntime, HaulTiming, HaulTravelSettings
+from edap.routines.haul_two_way import StationLeg, TwoWayHaulRoute
 
 
 def _haul_param_as_bool(value: str, *, default: bool = False) -> bool:
@@ -26,6 +28,63 @@ def _haul_param_as_bool(value: str, *, default: bool = False) -> bool:
     if not raw:
         return default
     return raw in {"1", "true", "y", "yes", "land", "surface"}
+
+
+def _build_haul_runtime(
+    app: HaulHost,
+    *,
+    controls,
+    watcher,
+    sleeper,
+    time_fn,
+    progress_fn,
+    dock_timeout_s: float,
+    galaxy_map_settle_s: float,
+    request_timeout_s: float = 20.0,
+    trade_timeout_s: float = 30.0,
+    settle_s: float = 2.0,
+    boost_settle_s: float = 3.0,
+    deny_retry_delay_s: float = 5.0,
+) -> HaulRuntime:
+    cfg = app._config.controls
+    return HaulRuntime(
+        controls=controls,
+        watcher=watcher,
+        journal_dir=app._journal_dir,
+        market_path=app._journal_dir / "Market.json",
+        timing=HaulTiming(
+            step_delay_s=cfg.step_delay_seconds,
+            max_hold_s=cfg.market_buy_max_hold_seconds,
+            dock_timeout_s=dock_timeout_s,
+            request_timeout_s=request_timeout_s,
+            undock_timeout_s=cfg.undock_timeout_seconds,
+            undock_no_track_timeout_s=cfg.undock_no_track_timeout_seconds,
+            trade_timeout_s=trade_timeout_s,
+            settle_s=settle_s,
+            galaxy_map_settle_s=galaxy_map_settle_s,
+            supercruise_exit_settle_s=cfg.dock_supercruise_exit_settle_seconds,
+            boost_settle_s=boost_settle_s,
+            deny_retry_delay_s=deny_retry_delay_s,
+            mass_lock_boost_delay_s=cfg.mass_lock_boost_delay_seconds,
+            post_sell_settle_s=cfg.haul_post_sell_settle_seconds,
+            nav_panel_open_delay_s=cfg.haul_two_way_nav_panel_open_delay_seconds,
+        ),
+        market=HaulMarketSettings(
+            buy_hold_segments=cfg.market_buy_hold_segments,
+            sell_quantity_restore_taps=cfg.market_sell_quantity_restore_taps,
+            sell_quantity_restore_tap_delay_s=cfg.market_sell_quantity_restore_tap_delay_seconds,
+            critical_level_multiplier=cfg.market_critical_level_multiplier,
+        ),
+        travel=HaulTravelSettings(
+            auto_hyperspace_engage=cfg.haul_two_way_auto_hyperspace_engage,
+            open_nav_panel_after_hyperspace_arrival=cfg.haul_two_way_open_nav_panel_after_hyperspace_arrival,
+            max_dock_retries=3,
+        ),
+        time_fn=time_fn,
+        sleeper=sleeper,
+        progress_fn=progress_fn,
+        announce_fn=app._announce_tts,
+    )
 
 
 def cmd_haul(
@@ -357,9 +416,6 @@ def dispatch_haul_loop(
     controls = app._make_controls(progress)
     sleeper = app._make_sleeper()
     time_fn = app._time_fn
-    step_delay = app._config.controls.step_delay_seconds
-    undock_timeout = app._config.controls.undock_timeout_seconds
-    undock_no_track_timeout = app._config.controls.undock_no_track_timeout_seconds
     galaxy_map_settle = (
         float(galaxy_map_settle_raw)
         if galaxy_map_settle_raw
@@ -372,6 +428,34 @@ def dispatch_haul_loop(
     )
     journal_dir = app._journal_dir
     watcher = app._make_watcher()
+    runtime = _build_haul_runtime(
+        app,
+        controls=controls,
+        watcher=watcher,
+        sleeper=sleeper,
+        time_fn=time_fn,
+        progress_fn=progress,
+        dock_timeout_s=dock_timeout,
+        galaxy_map_settle_s=galaxy_map_settle,
+    )
+    route = TwoWayHaulRoute(
+        station_1=StationLeg(
+            index=1,
+            station=station_1,
+            system=station_1_system,
+            on_land=station_1_on_land,
+            buy_commodity=station_1_buying,
+            sell_commodity=station_2_buying,
+        ),
+        station_2=StationLeg(
+            index=2,
+            station=station_2,
+            system=station_2_system,
+            on_land=station_2_on_land,
+            buy_commodity=station_2_buying,
+            sell_commodity=station_1_buying,
+        ),
+    )
     app._clear_pending_haul_stop()
 
     app._record_history_entry(CommandHistoryEntry(
@@ -429,41 +513,8 @@ def dispatch_haul_loop(
         start_message="",
         skip_delay=skip_delay,
         fn=lambda: haul_loop_two_way(
-            controls,
-            watcher,
-            journal_dir=journal_dir,
-            station_1=station_1,
-            station_1_buying=station_1_buying,
-            station_1_system=station_1_system,
-            station_1_on_land=station_1_on_land,
-            station_2=station_2,
-            station_2_buying=station_2_buying,
-            station_2_system=station_2_system,
-            station_2_on_land=station_2_on_land,
-            step_delay_s=step_delay,
-            max_hold_s=app._config.controls.market_buy_max_hold_seconds,
-            dock_timeout_s=dock_timeout,
-            undock_timeout_s=undock_timeout,
-            undock_no_track_timeout_s=undock_no_track_timeout,
-            galaxy_map_settle_s=galaxy_map_settle,
-            supercruise_exit_settle_s=app._config.controls.dock_supercruise_exit_settle_seconds,
-            mass_lock_boost_delay_s=app._config.controls.mass_lock_boost_delay_seconds,
-            post_sell_settle_s=app._config.controls.haul_post_sell_settle_seconds,
-            auto_hyperspace_engage=app._config.controls.haul_two_way_auto_hyperspace_engage,
-            open_nav_panel_after_hyperspace_arrival=(
-                app._config.controls.haul_two_way_open_nav_panel_after_hyperspace_arrival
-            ),
-            nav_panel_open_delay_s=app._config.controls.haul_two_way_nav_panel_open_delay_seconds,
-            market_buy_hold_segments=app._config.controls.market_buy_hold_segments,
-            market_sell_quantity_restore_taps=app._config.controls.market_sell_quantity_restore_taps,
-            market_sell_quantity_restore_tap_delay_s=(
-                app._config.controls.market_sell_quantity_restore_tap_delay_seconds
-            ),
-            market_critical_level_multiplier=app._config.controls.market_critical_level_multiplier,
-            time_fn=time_fn,
-            sleeper=sleeper,
-            progress_fn=progress,
-            announce_fn=app._announce_tts,
+            runtime,
+            route=route,
             stop_requested_fn=lambda: app._haul_stop_requested,
         ),
         active_routine_name="haul",
@@ -510,6 +561,17 @@ def dispatch_multi_leg_haul(
     sleeper = app._make_sleeper()
     time_fn = app._time_fn
     watcher = app._make_watcher()
+    runtime = _build_haul_runtime(
+        app,
+        controls=controls,
+        watcher=watcher,
+        sleeper=sleeper,
+        time_fn=time_fn,
+        progress_fn=progress,
+        dock_timeout_s=app._config.controls.haul_dock_timeout_seconds,
+        galaxy_map_settle_s=app._config.controls.galaxy_map_settle_seconds,
+        request_timeout_s=20.0,
+    )
     app._clear_pending_haul_stop()
     app._record_history_entry(CommandHistoryEntry(
         raw=raw_command or f"{'!' if skip_delay else ''}multi_leg_haul {source}",
@@ -533,35 +595,8 @@ def dispatch_multi_leg_haul(
         start_message="",
         skip_delay=skip_delay,
         fn=lambda: multi_leg_haul(
-            controls,
-            watcher,
+            runtime,
             definition=definition,
-            journal_dir=app._journal_dir,
-            step_delay_s=app._config.controls.step_delay_seconds,
-            max_hold_s=app._config.controls.market_buy_max_hold_seconds,
-            dock_timeout_s=app._config.controls.haul_dock_timeout_seconds,
-            undock_timeout_s=app._config.controls.undock_timeout_seconds,
-            undock_no_track_timeout_s=app._config.controls.undock_no_track_timeout_seconds,
-            request_timeout_s=20.0,
-            galaxy_map_settle_s=app._config.controls.galaxy_map_settle_seconds,
-            supercruise_exit_settle_s=app._config.controls.dock_supercruise_exit_settle_seconds,
-            mass_lock_boost_delay_s=app._config.controls.mass_lock_boost_delay_seconds,
-            post_sell_settle_s=app._config.controls.haul_post_sell_settle_seconds,
-            auto_hyperspace_engage=app._config.controls.haul_two_way_auto_hyperspace_engage,
-            open_nav_panel_after_hyperspace_arrival=(
-                app._config.controls.haul_two_way_open_nav_panel_after_hyperspace_arrival
-            ),
-            nav_panel_open_delay_s=app._config.controls.haul_two_way_nav_panel_open_delay_seconds,
-            market_buy_hold_segments=app._config.controls.market_buy_hold_segments,
-            market_sell_quantity_restore_taps=app._config.controls.market_sell_quantity_restore_taps,
-            market_sell_quantity_restore_tap_delay_s=(
-                app._config.controls.market_sell_quantity_restore_tap_delay_seconds
-            ),
-            market_critical_level_multiplier=app._config.controls.market_critical_level_multiplier,
-            time_fn=time_fn,
-            sleeper=sleeper,
-            progress_fn=progress,
-            announce_fn=app._announce_tts,
             stop_requested_fn=lambda: app._haul_stop_requested,
         ),
         active_routine_name="multi_leg_haul",

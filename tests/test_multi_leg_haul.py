@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from edap.actions import ActionDispatchResult
+from edap.config import default_haul_routine_defaults
 from edap.multi_leg_haul import (
     EXTERNAL_SCHEMA,
     CargoTransfer,
@@ -18,6 +19,7 @@ from edap.multi_leg_haul import (
 )
 from edap.routines import RoutineResult
 from edap.routines.callbacks import noop_announce, noop_progress
+from edap.routines.haul_support import HaulMarketSettings, HaulRuntime, HaulTiming, HaulTravelSettings
 from edap.routines.haul_multi_leg import (
     Phase,
     _wait_for_arrival_or_approach_event,
@@ -25,6 +27,9 @@ from edap.routines.haul_multi_leg import (
 )
 from edap.tts import AnnouncementId
 from tests.fakes import FakeShipControls, FakeWatcher
+
+
+_DEFAULTS = default_haul_routine_defaults()
 
 
 def _write_navroute(journal_dir: Path, destination: str) -> None:
@@ -35,9 +40,78 @@ def _write_navroute(journal_dir: Path, destination: str) -> None:
 
 
 def multi_leg_haul(*args, **kwargs):
-    kwargs.setdefault("progress_fn", noop_progress)
-    kwargs.setdefault("announce_fn", noop_announce)
-    return _multi_leg_haul(*args, **kwargs)
+    controls, watcher = args
+    definition = kwargs.pop("definition")
+    journal_dir = kwargs.pop("journal_dir")
+    runtime = HaulRuntime(
+        controls=controls,
+        watcher=watcher,
+        journal_dir=journal_dir,
+        market_path=journal_dir / "Market.json",
+        timing=HaulTiming(
+            step_delay_s=kwargs.pop("step_delay_s", 1.0),
+            max_hold_s=kwargs.pop("max_hold_s", 10.0),
+            dock_timeout_s=kwargs.pop("dock_timeout_s", _DEFAULTS.dock_timeout_seconds),
+            request_timeout_s=kwargs.pop("request_timeout_s", 20.0),
+            undock_timeout_s=kwargs.pop("undock_timeout_s", _DEFAULTS.undock_timeout_seconds),
+            undock_no_track_timeout_s=kwargs.pop(
+                "undock_no_track_timeout_s",
+                _DEFAULTS.undock_no_track_timeout_seconds,
+            ),
+            trade_timeout_s=kwargs.pop("trade_timeout_s", 30.0),
+            settle_s=kwargs.pop("settle_s", 2.0),
+            galaxy_map_settle_s=kwargs.pop("galaxy_map_settle_s", _DEFAULTS.galaxy_map_settle_seconds),
+            supercruise_exit_settle_s=kwargs.pop(
+                "supercruise_exit_settle_s",
+                _DEFAULTS.dock_supercruise_exit_settle_seconds,
+            ),
+            boost_settle_s=kwargs.pop("boost_settle_s", 3.0),
+            deny_retry_delay_s=kwargs.pop("deny_retry_delay_s", 5.0),
+            mass_lock_boost_delay_s=kwargs.pop(
+                "mass_lock_boost_delay_s",
+                _DEFAULTS.mass_lock_boost_delay_seconds,
+            ),
+            post_sell_settle_s=kwargs.pop("post_sell_settle_s", _DEFAULTS.haul_post_sell_settle_seconds),
+            nav_panel_open_delay_s=kwargs.pop(
+                "nav_panel_open_delay_s",
+                _DEFAULTS.haul_two_way_nav_panel_open_delay_seconds,
+            ),
+        ),
+        market=HaulMarketSettings(
+            buy_hold_segments=kwargs.pop("market_buy_hold_segments", _DEFAULTS.market_buy_hold_segments),
+            sell_quantity_restore_taps=kwargs.pop(
+                "market_sell_quantity_restore_taps",
+                _DEFAULTS.market_sell_quantity_restore_taps,
+            ),
+            sell_quantity_restore_tap_delay_s=kwargs.pop(
+                "market_sell_quantity_restore_tap_delay_s",
+                _DEFAULTS.market_sell_quantity_restore_tap_delay_seconds,
+            ),
+            critical_level_multiplier=kwargs.pop(
+                "market_critical_level_multiplier",
+                _DEFAULTS.market_critical_level_multiplier,
+            ),
+        ),
+        travel=HaulTravelSettings(
+            auto_hyperspace_engage=kwargs.pop(
+                "auto_hyperspace_engage",
+                _DEFAULTS.haul_two_way_auto_hyperspace_engage,
+            ),
+            open_nav_panel_after_hyperspace_arrival=kwargs.pop(
+                "open_nav_panel_after_hyperspace_arrival",
+                _DEFAULTS.haul_two_way_open_nav_panel_after_hyperspace_arrival,
+            ),
+            max_dock_retries=kwargs.pop("max_dock_retries", 3),
+        ),
+        time_fn=kwargs.pop("time_fn", _ticking_clock()),
+        sleeper=kwargs.pop("sleeper", lambda _seconds: None),
+        progress_fn=kwargs.pop("progress_fn", noop_progress),
+        announce_fn=kwargs.pop("announce_fn", noop_announce),
+    )
+    stop_requested_fn = kwargs.pop("stop_requested_fn", None)
+    if kwargs:
+        raise AssertionError(f"Unhandled multi-leg haul test kwargs: {sorted(kwargs)}")
+    return _multi_leg_haul(runtime, definition=definition, stop_requested_fn=stop_requested_fn)
 
 
 def _ticking_clock(step: float = 0.01):
@@ -239,7 +313,7 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
                 ),
             )
             with (
-                patch("edap.routines.haul_two_way.set_gal_map_destination", side_effect=[route_failure, route_failure]) as route_mock,
+                patch("edap.routines.haul_support.set_gal_map_destination", side_effect=[route_failure, route_failure]) as route_mock,
                 patch("edap.routines.haul_multi_leg.dock") as dock_mock,
             ):
                 dock_mock.return_value = RoutineResult(

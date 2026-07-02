@@ -6,10 +6,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from edap.config import default_haul_routine_defaults
 from edap.routines.callbacks import noop_announce, noop_progress
+from edap.routines.haul_support import HaulMarketSettings, HaulRuntime, HaulTiming, HaulTravelSettings
 from edap.routines.haul_two_way import (
     Phase,
     StationLeg,
+    TwoWayHaulRoute,
     _detect_start_phase,
     _wait_for_arrival_or_approach_event,
     haul_loop_two_way as _haul_loop_two_way,
@@ -24,12 +27,109 @@ _SYSTEM_1 = "Sol"
 _SYSTEM_2 = "Achenar"
 _CARGO_1 = "Aluminium"
 _CARGO_2 = "Bertrandite"
+_DEFAULTS = default_haul_routine_defaults()
 
 
 def haul_loop_two_way(*args, **kwargs):
-    kwargs.setdefault("progress_fn", noop_progress)
-    kwargs.setdefault("announce_fn", noop_announce)
-    return _haul_loop_two_way(*args, **kwargs)
+    controls, watcher = args
+    journal_dir = kwargs.pop("journal_dir")
+    station_1_buying = kwargs.pop("station_1_buying")
+    station_2_buying = kwargs.pop("station_2_buying")
+    runtime = HaulRuntime(
+        controls=controls,
+        watcher=watcher,
+        journal_dir=journal_dir,
+        market_path=journal_dir / "Market.json",
+        timing=HaulTiming(
+            step_delay_s=kwargs.pop("step_delay_s", 1.0),
+            max_hold_s=kwargs.pop("max_hold_s", 10.0),
+            dock_timeout_s=kwargs.pop("dock_timeout_s", _DEFAULTS.dock_timeout_seconds),
+            request_timeout_s=kwargs.pop("request_timeout_s", 20.0),
+            undock_timeout_s=kwargs.pop("undock_timeout_s", _DEFAULTS.undock_timeout_seconds),
+            undock_no_track_timeout_s=kwargs.pop(
+                "undock_no_track_timeout_s",
+                _DEFAULTS.undock_no_track_timeout_seconds,
+            ),
+            trade_timeout_s=kwargs.pop("trade_timeout_s", 30.0),
+            settle_s=kwargs.pop("settle_s", 2.0),
+            galaxy_map_settle_s=kwargs.pop("galaxy_map_settle_s", _DEFAULTS.galaxy_map_settle_seconds),
+            supercruise_exit_settle_s=kwargs.pop(
+                "supercruise_exit_settle_s",
+                _DEFAULTS.dock_supercruise_exit_settle_seconds,
+            ),
+            boost_settle_s=kwargs.pop("boost_settle_s", 3.0),
+            deny_retry_delay_s=kwargs.pop("deny_retry_delay_s", 5.0),
+            mass_lock_boost_delay_s=kwargs.pop(
+                "mass_lock_boost_delay_s",
+                _DEFAULTS.mass_lock_boost_delay_seconds,
+            ),
+            post_sell_settle_s=kwargs.pop("post_sell_settle_s", _DEFAULTS.haul_post_sell_settle_seconds),
+            nav_panel_open_delay_s=kwargs.pop(
+                "nav_panel_open_delay_s",
+                _DEFAULTS.haul_two_way_nav_panel_open_delay_seconds,
+            ),
+        ),
+        market=HaulMarketSettings(
+            buy_hold_segments=kwargs.pop("market_buy_hold_segments", _DEFAULTS.market_buy_hold_segments),
+            sell_quantity_restore_taps=kwargs.pop(
+                "market_sell_quantity_restore_taps",
+                _DEFAULTS.market_sell_quantity_restore_taps,
+            ),
+            sell_quantity_restore_tap_delay_s=kwargs.pop(
+                "market_sell_quantity_restore_tap_delay_s",
+                _DEFAULTS.market_sell_quantity_restore_tap_delay_seconds,
+            ),
+            critical_level_multiplier=kwargs.pop(
+                "market_critical_level_multiplier",
+                _DEFAULTS.market_critical_level_multiplier,
+            ),
+        ),
+        travel=HaulTravelSettings(
+            auto_hyperspace_engage=kwargs.pop(
+                "auto_hyperspace_engage",
+                _DEFAULTS.haul_two_way_auto_hyperspace_engage,
+            ),
+            open_nav_panel_after_hyperspace_arrival=kwargs.pop(
+                "open_nav_panel_after_hyperspace_arrival",
+                _DEFAULTS.haul_two_way_open_nav_panel_after_hyperspace_arrival,
+            ),
+            max_dock_retries=kwargs.pop("max_dock_retries", 3),
+        ),
+        time_fn=kwargs.pop("time_fn", _ticking_clock()),
+        sleeper=kwargs.pop("sleeper", lambda _seconds: None),
+        progress_fn=kwargs.pop("progress_fn", noop_progress),
+        announce_fn=kwargs.pop("announce_fn", noop_announce),
+    )
+    route = TwoWayHaulRoute(
+        station_1=StationLeg(
+            index=1,
+            station=kwargs.pop("station_1"),
+            system=kwargs.pop("station_1_system", ""),
+            on_land=kwargs.pop("station_1_on_land", False),
+            buy_commodity=station_1_buying,
+            sell_commodity=station_2_buying,
+        ),
+        station_2=StationLeg(
+            index=2,
+            station=kwargs.pop("station_2"),
+            system=kwargs.pop("station_2_system", ""),
+            on_land=kwargs.pop("station_2_on_land", False),
+            buy_commodity=station_2_buying,
+            sell_commodity=station_1_buying,
+        ),
+    )
+    iterations = kwargs.pop("iterations", 0)
+    start_phase = kwargs.pop("start_phase", None)
+    stop_requested_fn = kwargs.pop("stop_requested_fn", None)
+    if kwargs:
+        raise AssertionError(f"Unhandled haul test kwargs: {sorted(kwargs)}")
+    return _haul_loop_two_way(
+        runtime,
+        route=route,
+        iterations=iterations,
+        start_phase=start_phase,
+        stop_requested_fn=stop_requested_fn,
+    )
 
 
 def _ticking_clock(step: float = 0.01):
@@ -762,7 +862,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             )
 
             with (
-                patch("edap.routines.haul_two_way.set_gal_map_destination", side_effect=[route_failure, route_failure]) as route_mock,
+                patch("edap.routines.haul_support.set_gal_map_destination", side_effect=[route_failure, route_failure]) as route_mock,
                 patch("edap.routines.haul_two_way.dock") as dock_mock,
             ):
                 dock_mock.return_value = RoutineResult(
@@ -1066,7 +1166,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             _write_cargo(journal_dir, [{"Name": "bertrandite", "Count": 64, "Stolen": 0}])
             with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
                 "edap.routines.haul_two_way.market_buy"
-            ) as market_buy_mock, patch("edap.routines.haul_two_way.set_gal_map_destination") as set_destination_mock:
+            ) as market_buy_mock, patch("edap.routines.haul_support.set_gal_map_destination") as set_destination_mock:
                 market_sell_mock.return_value = RoutineResult(
                     action="market_sell",
                     dispatch=ActionDispatchResult(action="market_sell", status="error", reason="stop after same-system undock transit"),
@@ -1130,7 +1230,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             )
             _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 64, "Stolen": 0}])
             with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
-                "edap.routines.haul_two_way.set_gal_map_destination"
+                "edap.routines.haul_support.set_gal_map_destination"
             ) as set_destination_mock:
                 market_sell_mock.return_value = RoutineResult(
                     action="market_sell",

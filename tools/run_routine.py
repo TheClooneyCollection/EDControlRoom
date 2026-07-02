@@ -5,12 +5,14 @@ import json
 import math
 import sys
 from pathlib import Path
-from time import sleep
+from time import monotonic, sleep
 
 from edap.binding_lookup import BindingLookup
 from edap.config import ConfigError, DEFAULT_CONFIG_PATH
 from edap.progress_controls import ProgressShipControls
 from edap.routines import auto_zero_throttle_on_arrival, dock, haul_loop_two_way, jump, market_buy, market_sell, set_gal_map_destination, station_refuel_menu, undock
+from edap.routines.haul_support import HaulMarketSettings, HaulRuntime, HaulTiming, HaulTravelSettings
+from edap.routines.haul_two_way import StationLeg, TwoWayHaulRoute
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.ship_controls import ShipControls
 from edap.state import JournalWatcher
@@ -43,6 +45,10 @@ DEFAULT_EVENT_LOG_PATH = Path("artifacts/run-routine-events.log")
 def _progress(message: str) -> None:
     sys.stderr.write(f"{message}\n")
     sys.stderr.flush()
+
+
+def _announce(*_args, **_kwargs) -> None:
+    return None
 
 
 def _make_logging_sleeper(progress_fn, timing_sampler: TimingSampler):
@@ -675,12 +681,13 @@ def main() -> int:
                 amount=parsed_amount,
                 step_delay_s=step_delay_seconds,
                 max_hold_s=args.max_hold_seconds,
-                buy_hold_seconds_per_ton=loaded.config.controls.market_buy_hold_seconds_per_ton,
+                buy_hold_segments=loaded.config.controls.market_buy_hold_segments,
                 trade_timeout_s=args.trade_timeout_seconds,
                 skip_station_check=args.skip_station_check,
                 critical_level_multiplier=loaded.config.controls.market_critical_level_multiplier,
                 sleeper=logging_sleeper,
                 progress_fn=_progress,
+                announce_fn=_announce,
             )
         elif args.routine == ROUTINE_MARKET_SELL:
             result = market_sell(
@@ -691,47 +698,81 @@ def main() -> int:
                 amount=parsed_amount,
                 step_delay_s=step_delay_seconds,
                 max_hold_s=args.max_hold_seconds,
-                buy_hold_seconds_per_ton=loaded.config.controls.market_buy_hold_seconds_per_ton,
+                buy_hold_segments=loaded.config.controls.market_buy_hold_segments,
+                sell_quantity_restore_taps=loaded.config.controls.market_sell_quantity_restore_taps,
+                sell_quantity_restore_tap_delay_s=loaded.config.controls.market_sell_quantity_restore_tap_delay_seconds,
                 trade_timeout_s=args.trade_timeout_seconds,
                 skip_station_check=args.skip_station_check,
                 critical_level_multiplier=loaded.config.controls.market_critical_level_multiplier,
                 sleeper=logging_sleeper,
                 progress_fn=_progress,
+                announce_fn=_announce,
             )
         elif args.routine == ROUTINE_HAUL_LOOP:
-            result = haul_loop_two_way(
-                logging_controls,
-                watcher,
+            haul_runtime = HaulRuntime(
+                controls=logging_controls,
+                watcher=watcher,
                 journal_dir=journal_dir,
-                station_1=args.station_1,
-                station_1_buying=args.station_1_buying,
-                station_1_system=args.station_1_system,
-                station_2=args.station_2,
-                station_2_buying=args.station_2_buying,
-                station_2_system=args.station_2_system,
-                iterations=args.iterations,
-                step_delay_s=step_delay_seconds,
-                max_hold_s=args.max_hold_seconds,
-                market_buy_hold_seconds_per_ton=loaded.config.controls.market_buy_hold_seconds_per_ton,
-                dock_timeout_s=dock_timeout_seconds,
-                request_timeout_s=args.request_timeout_seconds,
-                undock_timeout_s=undock_timeout_seconds,
-                undock_no_track_timeout_s=undock_no_track_timeout_seconds,
-                trade_timeout_s=args.trade_timeout_seconds,
-                settle_s=args.settle_seconds,
-                galaxy_map_settle_s=(
-                    args.galaxy_map_settle_seconds
-                    if args.galaxy_map_settle_seconds is not None
-                    else loaded.config.controls.galaxy_map_settle_seconds
+                market_path=journal_dir / "Market.json",
+                timing=HaulTiming(
+                    step_delay_s=step_delay_seconds,
+                    max_hold_s=args.max_hold_seconds,
+                    dock_timeout_s=dock_timeout_seconds,
+                    request_timeout_s=args.request_timeout_seconds,
+                    undock_timeout_s=undock_timeout_seconds,
+                    undock_no_track_timeout_s=undock_no_track_timeout_seconds,
+                    trade_timeout_s=args.trade_timeout_seconds,
+                    settle_s=args.settle_seconds,
+                    galaxy_map_settle_s=(
+                        args.galaxy_map_settle_seconds
+                        if args.galaxy_map_settle_seconds is not None
+                        else loaded.config.controls.galaxy_map_settle_seconds
+                    ),
+                    supercruise_exit_settle_s=loaded.config.controls.dock_supercruise_exit_settle_seconds,
+                    boost_settle_s=args.boost_settle_seconds,
+                    deny_retry_delay_s=args.deny_retry_delay_seconds,
+                    mass_lock_boost_delay_s=loaded.config.controls.mass_lock_boost_delay_seconds,
+                    post_sell_settle_s=loaded.config.controls.haul_post_sell_settle_seconds,
+                    nav_panel_open_delay_s=loaded.config.controls.haul_two_way_nav_panel_open_delay_seconds,
                 ),
-                supercruise_exit_settle_s=loaded.config.controls.dock_supercruise_exit_settle_seconds,
-                boost_settle_s=args.boost_settle_seconds,
-                deny_retry_delay_s=args.deny_retry_delay_seconds,
-                mass_lock_boost_delay_s=loaded.config.controls.mass_lock_boost_delay_seconds,
-                max_dock_retries=args.max_retries,
-                market_critical_level_multiplier=loaded.config.controls.market_critical_level_multiplier,
+                market=HaulMarketSettings(
+                    buy_hold_segments=loaded.config.controls.market_buy_hold_segments,
+                    sell_quantity_restore_taps=loaded.config.controls.market_sell_quantity_restore_taps,
+                    sell_quantity_restore_tap_delay_s=loaded.config.controls.market_sell_quantity_restore_tap_delay_seconds,
+                    critical_level_multiplier=loaded.config.controls.market_critical_level_multiplier,
+                ),
+                travel=HaulTravelSettings(
+                    auto_hyperspace_engage=loaded.config.controls.haul_two_way_auto_hyperspace_engage,
+                    open_nav_panel_after_hyperspace_arrival=(
+                        loaded.config.controls.haul_two_way_open_nav_panel_after_hyperspace_arrival
+                    ),
+                    max_dock_retries=args.max_retries,
+                ),
+                time_fn=monotonic,
                 sleeper=logging_sleeper,
                 progress_fn=_progress,
+                announce_fn=_announce,
+            )
+            route = TwoWayHaulRoute(
+                station_1=StationLeg(
+                    index=1,
+                    station=args.station_1,
+                    system=args.station_1_system,
+                    buy_commodity=args.station_1_buying,
+                    sell_commodity=args.station_2_buying,
+                ),
+                station_2=StationLeg(
+                    index=2,
+                    station=args.station_2,
+                    system=args.station_2_system,
+                    buy_commodity=args.station_2_buying,
+                    sell_commodity=args.station_1_buying,
+                ),
+            )
+            result = haul_loop_two_way(
+                haul_runtime,
+                route=route,
+                iterations=args.iterations,
             )
         elif args.routine == ROUTINE_SET_GAL_MAP_DESTINATION:
             result = set_gal_map_destination(

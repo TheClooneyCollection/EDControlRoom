@@ -2,30 +2,32 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from pathlib import Path
-from time import monotonic, sleep
 from typing import Callable
 
 from edap.actions import ActionDispatchResult
-from edap.config import MarketBuyHoldSegmentConfig, default_haul_routine_defaults
-from edap.multi_leg_haul import CargoTransfer, MultiLegHaulDefinition, RouteEndpoint, RouteStop, build_route_stops
-from edap.routines._base import RoutineResult, SupportsHaulControls, SupportsPollEvents, _is_in_supercruise_event
-from edap.routines.callbacks import AnnouncementCallback, ProgressCallback
+from edap.multi_leg_haul import CargoTransfer, MultiLegHaulDefinition, RouteStop, build_route_stops
+from edap.routines._base import RoutineResult
 from edap.routines.docking import _undock_until_undocked, _wait_for_clear_of_station, dock, station_refuel_menu
 from edap.routines.escape import escape_mass_lock
-from edap.routines.haul_two_way import (
-    _read_cargo_json,
-    _read_latest_journal_events,
-    _read_market_station,
-    _set_galaxy_map_destination_for_haul,
-    _sellable_cargo,
+from edap.routines.haul_support import (
+    HaulRuntime,
+    TransitResumeState,
+    detect_transit_resume_state,
+    engage_hyperspace_after_escape,
+    is_manual_landing_result,
+    manual_landing_result,
+    open_navigation_panel_after_arrival,
+    read_cargo_json,
+    read_latest_journal_events,
+    read_market_station,
+    sellable_cargo,
+    set_galaxy_map_destination_for_haul,
+    wait_for_arrival_or_approach_event,
+    wait_for_on_land_handoff,
 )
 from edap.routines.market import market_buy, market_sell
 from edap.state import get_latest_journal_log, read_ship_state
 from edap.tts import AnnouncementId
-
-
-_DEFAULT_HAUL_ROUTINE = default_haul_routine_defaults()
 
 
 class Phase(Enum):
@@ -37,50 +39,16 @@ class Phase(Enum):
     COMPLETE = auto()
 
 
-class _TransitResumeState(Enum):
-    NONE = auto()
-    ARRIVED_IN_DESTINATION_SYSTEM = auto()
-    POST_DROP_NEAR_STATION = auto()
-    AWAITING_DOCKED = auto()
-
-
 @dataclass
 class _Ctx:
-    controls: SupportsHaulControls
-    watcher: SupportsPollEvents
+    runtime: HaulRuntime
     definition: MultiLegHaulDefinition
     stops: tuple[RouteStop, ...]
-    journal_dir: Path
-    market_path: Path
-    step_delay_s: float
-    max_hold_s: float
-    market_buy_hold_segments: tuple[MarketBuyHoldSegmentConfig, ...]
-    market_sell_quantity_restore_taps: int
-    market_sell_quantity_restore_tap_delay_s: float
-    dock_timeout_s: float
-    request_timeout_s: float
-    undock_timeout_s: float
-    undock_no_track_timeout_s: float
-    trade_timeout_s: float
-    settle_s: float
-    galaxy_map_settle_s: float
-    supercruise_exit_settle_s: float
-    boost_settle_s: float
-    deny_retry_delay_s: float
-    mass_lock_boost_delay_s: float
-    post_sell_settle_s: float
-    auto_hyperspace_engage: bool
-    open_nav_panel_after_hyperspace_arrival: bool
-    nav_panel_open_delay_s: float
-    max_dock_retries: int
-    market_critical_level_multiplier: float
-    time_fn: Callable[[], float]
-    sleeper: Callable[[float], None]
-    progress_fn: ProgressCallback
-    announce_fn: AnnouncementCallback
 
 
-_MANUAL_LANDING_REASON = "manual landing required"
+_read_cargo_json = read_cargo_json
+_read_market_station = read_market_station
+_wait_for_arrival_or_approach_event = wait_for_arrival_or_approach_event
 
 
 def _inventory_count(inventory: list[dict], commodity: str) -> int:
@@ -106,93 +74,6 @@ def _has_all_cargo(inventory: list[dict], cargo: tuple[CargoTransfer, ...]) -> b
 
 def _has_any_cargo(inventory: list[dict], cargo: tuple[CargoTransfer, ...]) -> bool:
     return any(_inventory_count(inventory, item.commodity) > 0 for item in cargo)
-
-
-def _detect_transit_resume_state(events: list[dict], destination: RouteEndpoint) -> _TransitResumeState:
-    destination_station = destination.station.lower()
-    destination_system = destination.system.lower()
-    for event in reversed(events):
-        evt_name = str(event.get("event", ""))
-        if evt_name in {"DockingRequested", "DockingGranted"}:
-            station_name = str(event.get("StationName", "")).lower()
-            return _TransitResumeState.AWAITING_DOCKED if station_name == destination_station else _TransitResumeState.NONE
-        if evt_name == "SupercruiseExit":
-            body_type = str(event.get("BodyType", "")).lower()
-            system_name = str(event.get("StarSystem", "")).lower()
-            if not destination.on_land and body_type != "station":
-                return _TransitResumeState.NONE
-            return _TransitResumeState.POST_DROP_NEAR_STATION if not destination_system or system_name == destination_system else _TransitResumeState.NONE
-        if evt_name in {"SupercruiseEntry", "FSDJump"}:
-            system_name = str(event.get("StarSystem", "")).lower()
-            return _TransitResumeState.ARRIVED_IN_DESTINATION_SYSTEM if not destination_system or system_name == destination_system else _TransitResumeState.NONE
-        if evt_name == "Undocked":
-            return _TransitResumeState.NONE
-    return _TransitResumeState.NONE
-
-
-def _wait_for_arrival_or_approach_event(
-    watcher: SupportsPollEvents,
-    *,
-    destination_system: str,
-    deadline: float,
-    time_fn: Callable[[], float],
-) -> tuple[bool, list[dict[str, object]]]:
-    approach_events = {"SupercruiseExit", "DockingRequested", "DockingGranted", "Docked"}
-    destination_system_lower = destination_system.lower()
-    while time_fn() <= deadline:
-        batch = watcher.poll()
-        for index, event in enumerate(batch):
-            if _is_in_supercruise_event(event):
-                system_name = str(event.get("StarSystem", "")).lower()
-                if destination_system_lower and system_name and system_name != destination_system_lower:
-                    continue
-                return True, batch[index + 1:]
-            if event.get("event") in approach_events:
-                return False, batch[index:]
-    return False, []
-
-
-def _wait_for_on_land_handoff(
-    watcher: SupportsPollEvents,
-    *,
-    destination: RouteEndpoint,
-    pending_events: list[dict[str, object]],
-    deadline: float,
-    time_fn: Callable[[], float],
-) -> dict[str, object] | None:
-    queued_events = list(pending_events)
-    destination_system_lower = destination.system.lower()
-    while time_fn() <= deadline:
-        batch = queued_events if queued_events else watcher.poll()
-        queued_events = []
-        for event in batch:
-            if event.get("event") != "SupercruiseExit":
-                continue
-            system_name = str(event.get("StarSystem", "")).lower()
-            if destination_system_lower and system_name and system_name != destination_system_lower:
-                continue
-            return event
-    return None
-
-
-def _manual_landing_result(stop: RouteStop) -> RoutineResult:
-    return RoutineResult(
-        action="manual_landing",
-        dispatch=ActionDispatchResult(
-            action="manual_landing",
-            status="ok",
-            reason=_MANUAL_LANDING_REASON,
-        ),
-        details={
-            "station": stop.endpoint.station,
-            "system": stop.endpoint.system,
-            "on_land": True,
-        },
-    )
-
-
-def _is_manual_landing_result(result: RoutineResult | None) -> bool:
-    return result is not None and result.dispatch.reason == _MANUAL_LANDING_REASON
 
 
 def _read_ship_position(journal_dir: Path) -> tuple[str, str, str]:
@@ -227,12 +108,13 @@ def _read_ship_position(journal_dir: Path) -> tuple[str, str, str]:
 
 
 def _detect_start_state(ctx: _Ctx) -> tuple[int, Phase]:
-    inventory = _read_cargo_json(ctx.journal_dir)
-    ship_status, current_station, current_system = _read_ship_position(ctx.journal_dir)
+    runtime = ctx.runtime
+    inventory = _read_cargo_json(runtime.journal_dir)
+    ship_status, current_station, current_system = _read_ship_position(runtime.journal_dir)
     current_station_lower = current_station.lower()
     current_system_lower = current_system.lower()
 
-    ctx.progress_fn(
+    runtime.progress_fn(
         "Multi-leg phase detect: "
         f"status={ship_status}, station={current_station!r}, system={current_system!r}"
     )
@@ -257,89 +139,69 @@ def _detect_start_state(ctx: _Ctx) -> tuple[int, Phase]:
     return 0, Phase.BUY if ctx.stops and ctx.stops[0].outbound else Phase.COMPLETE
 
 
-def _engage_hyperspace_after_escape(ctx: _Ctx) -> None:
-    if not ctx.auto_hyperspace_engage:
-        return
-    ctx.progress_fn("Mass lock cleared - engaging hyperspace...")
-    ctx.announce_fn(AnnouncementId.STATION_CLEARED)
-    ctx.controls.hyper_super_combination()
-
-
-def _open_navigation_panel_after_arrival(ctx: _Ctx, *, station_name: str = "") -> None:
-    if not ctx.open_nav_panel_after_hyperspace_arrival:
-        return
-    if ctx.nav_panel_open_delay_s > 0:
-        ctx.progress_fn(f"Waiting {ctx.nav_panel_open_delay_s:.1f}s before opening navigation panel...")
-        ctx.sleeper(ctx.nav_panel_open_delay_s)
-    if station_name:
-        ctx.announce_fn(AnnouncementId.ARRIVAL_NEXT_STATION, station_name=station_name)
-    ctx.progress_fn("Hyperspace complete - opening left panel for navigation...")
-    dispatch = ctx.controls.focus_left_panel()
-    if dispatch.status != "ok":
-        ctx.progress_fn(f"Warning: could not open left panel ({dispatch.reason or dispatch.status}); continuing")
-
-
 def _run_sell(ctx: _Ctx, stop: RouteStop) -> RoutineResult:
-    if not stop.inbound or not _sellable_cargo(_read_cargo_json(ctx.journal_dir)):
+    runtime = ctx.runtime
+    if not stop.inbound or not sellable_cargo(_read_cargo_json(runtime.journal_dir)):
         return RoutineResult(action="market_sell", dispatch=ActionDispatchResult(action="market_sell", status="ok", reason="nothing to sell"))
     for cargo in stop.inbound:
-        available = _inventory_count(_read_cargo_json(ctx.journal_dir), cargo.commodity)
+        available = _inventory_count(_read_cargo_json(runtime.journal_dir), cargo.commodity)
         if available <= 0:
-            ctx.progress_fn(f"{cargo.commodity} already absent at {stop.label} - skipping sell.")
+            runtime.progress_fn(f"{cargo.commodity} already absent at {stop.label} - skipping sell.")
             continue
-        ctx.progress_fn(f"Selling {cargo.amount}t {cargo.commodity} at {stop.label}...")
-        ctx.announce_fn(AnnouncementId.SELLING_CARGO, commodity_name=cargo.commodity)
+        runtime.progress_fn(f"Selling {cargo.amount}t {cargo.commodity} at {stop.label}...")
+        runtime.announce_fn(AnnouncementId.SELLING_CARGO, commodity_name=cargo.commodity)
         result = market_sell(
-            ctx.controls,
-            ctx.watcher,
-            market_path=ctx.market_path,
+            runtime.controls,
+            runtime.watcher,
+            market_path=runtime.market_path,
             target=cargo.commodity,
             amount=str(min(available, cargo.amount)),
-            step_delay_s=ctx.step_delay_s,
-            max_hold_s=ctx.max_hold_s,
-            buy_hold_segments=ctx.market_buy_hold_segments,
-            sell_quantity_restore_taps=ctx.market_sell_quantity_restore_taps,
-            sell_quantity_restore_tap_delay_s=ctx.market_sell_quantity_restore_tap_delay_s,
-            trade_timeout_s=ctx.trade_timeout_s,
-            time_fn=ctx.time_fn,
-            sleeper=ctx.sleeper,
-            progress_fn=ctx.progress_fn,
-            announce_fn=ctx.announce_fn,
-            critical_level_multiplier=ctx.market_critical_level_multiplier,
+            step_delay_s=runtime.timing.step_delay_s,
+            max_hold_s=runtime.timing.max_hold_s,
+            buy_hold_segments=runtime.market.buy_hold_segments,
+            sell_quantity_restore_taps=runtime.market.sell_quantity_restore_taps,
+            sell_quantity_restore_tap_delay_s=runtime.market.sell_quantity_restore_tap_delay_s,
+            trade_timeout_s=runtime.timing.trade_timeout_s,
+            time_fn=runtime.time_fn,
+            sleeper=runtime.sleeper,
+            progress_fn=runtime.progress_fn,
+            announce_fn=runtime.announce_fn,
+            critical_level_multiplier=runtime.market.critical_level_multiplier,
         )
         if result.dispatch.status != "ok":
             return result
-        if ctx.post_sell_settle_s > 0:
-            ctx.sleeper(ctx.post_sell_settle_s)
+        if runtime.timing.post_sell_settle_s > 0:
+            runtime.sleeper(runtime.timing.post_sell_settle_s)
     return RoutineResult(action="market_sell", dispatch=ActionDispatchResult(action="market_sell", status="ok"))
 
 
 def _run_buy(ctx: _Ctx, stop: RouteStop) -> RoutineResult:
+    runtime = ctx.runtime
     if not stop.outbound:
         return RoutineResult(action="market_buy", dispatch=ActionDispatchResult(action="market_buy", status="ok", reason="no outbound cargo"))
     for cargo in stop.outbound:
-        already_loaded = _inventory_count(_read_cargo_json(ctx.journal_dir), cargo.commodity)
+        already_loaded = _inventory_count(_read_cargo_json(runtime.journal_dir), cargo.commodity)
         remaining = max(0, cargo.amount - already_loaded)
         if remaining <= 0:
-            ctx.progress_fn(f"{cargo.commodity} already loaded for departure from {stop.label} - skipping buy.")
+            runtime.progress_fn(f"{cargo.commodity} already loaded for departure from {stop.label} - skipping buy.")
             continue
-        ctx.progress_fn(f"Buying {remaining}t {cargo.commodity} at {stop.label}...")
-        ctx.announce_fn(AnnouncementId.BUYING_CARGO, commodity_name=cargo.commodity)
+        runtime.progress_fn(f"Buying {remaining}t {cargo.commodity} at {stop.label}...")
+        runtime.announce_fn(AnnouncementId.BUYING_CARGO, commodity_name=cargo.commodity)
         result = market_buy(
-            ctx.controls,
-            ctx.watcher,
-            market_path=ctx.market_path,
+            runtime.controls,
+            runtime.watcher,
+            market_path=runtime.market_path,
             target=cargo.commodity,
             amount=str(remaining),
-            step_delay_s=ctx.step_delay_s,
-            max_hold_s=ctx.max_hold_s,
-            buy_hold_segments=ctx.market_buy_hold_segments,
-            trade_timeout_s=ctx.trade_timeout_s,
-            time_fn=ctx.time_fn,
-            sleeper=ctx.sleeper,
-            progress_fn=ctx.progress_fn,
-            announce_fn=ctx.announce_fn,
-            critical_level_multiplier=ctx.market_critical_level_multiplier,
+            step_delay_s=runtime.timing.step_delay_s,
+            max_hold_s=runtime.timing.max_hold_s,
+            buy_hold_segments=runtime.market.buy_hold_segments,
+            trade_timeout_s=runtime.timing.trade_timeout_s,
+            time_fn=runtime.time_fn,
+            sleeper=runtime.sleeper,
+            progress_fn=runtime.progress_fn,
+            announce_fn=runtime.announce_fn,
+            critical_level_multiplier=runtime.market.critical_level_multiplier,
         )
         if result.dispatch.status != "ok":
             return result
@@ -347,139 +209,130 @@ def _run_buy(ctx: _Ctx, stop: RouteStop) -> RoutineResult:
 
 
 def _undock_and_route(ctx: _Ctx, stop: RouteStop, next_stop: RouteStop) -> RoutineResult:
-    ctx.progress_fn(f"Undocking from {stop.label}...")
+    runtime = ctx.runtime
+    runtime.progress_fn(f"Undocking from {stop.label}...")
     result, pending_events = _undock_until_undocked(
-        ctx.controls,
-        ctx.watcher,
-        undock_timeout_s=ctx.undock_timeout_s,
-        step_delay_s=ctx.step_delay_s,
-        time_fn=ctx.time_fn,
-        sleeper=ctx.sleeper,
-        progress_fn=ctx.progress_fn,
+        runtime.controls,
+        runtime.watcher,
+        undock_timeout_s=runtime.timing.undock_timeout_s,
+        step_delay_s=runtime.timing.step_delay_s,
+        time_fn=runtime.time_fn,
+        sleeper=runtime.sleeper,
+        progress_fn=runtime.progress_fn,
     )
     if result.dispatch.status != "ok":
         return result
     route_confirmed = True
     if next_stop.endpoint.system:
-        ctx.progress_fn(f"Setting galaxy map destination: {next_stop.endpoint.system}...")
-        ctx.announce_fn(AnnouncementId.DESTINATION_SET, system_name=next_stop.endpoint.system)
-        route_confirmed = _set_galaxy_map_destination_for_haul(
-            controls=ctx.controls,
+        runtime.progress_fn(f"Setting galaxy map destination: {next_stop.endpoint.system}...")
+        runtime.announce_fn(AnnouncementId.DESTINATION_SET, system_name=next_stop.endpoint.system)
+        route_confirmed = set_galaxy_map_destination_for_haul(
+            runtime=runtime,
             destination_system=next_stop.endpoint.system,
-            journal_dir=ctx.journal_dir,
-            step_delay_s=ctx.step_delay_s,
-            galaxy_map_settle_s=ctx.galaxy_map_settle_s,
-            sleeper=ctx.sleeper,
-            progress_fn=ctx.progress_fn,
-            announce_fn=ctx.announce_fn,
         )
     clear_result = _wait_for_clear_of_station(
-        ctx.watcher,
+        runtime.watcher,
         undocked_event=result.trigger_event,
-        no_track_timeout_s=ctx.undock_no_track_timeout_s,
-        time_fn=ctx.time_fn,
-        progress_fn=ctx.progress_fn,
+        no_track_timeout_s=runtime.timing.undock_no_track_timeout_s,
+        time_fn=runtime.time_fn,
+        progress_fn=runtime.progress_fn,
         pending_events=pending_events,
     )
     if clear_result.dispatch.status != "ok":
-        ctx.progress_fn(f"Error: {clear_result.dispatch.reason}; haul aborted. You can resume with replay / ctrl-r.")
-        ctx.announce_fn(AnnouncementId.HAUL_ABORTED)
+        runtime.progress_fn(f"Error: {clear_result.dispatch.reason}; haul aborted. You can resume with replay / ctrl-r.")
+        runtime.announce_fn(AnnouncementId.HAUL_ABORTED)
         return clear_result
     escape_mass_lock(
-        ctx.controls,
-        journal_dir=ctx.journal_dir,
-        step_delay_s=ctx.step_delay_s,
-        boost_delay_s=ctx.mass_lock_boost_delay_s,
-        sleeper=ctx.sleeper,
-        progress_fn=ctx.progress_fn,
+        runtime.controls,
+        journal_dir=runtime.journal_dir,
+        step_delay_s=runtime.timing.step_delay_s,
+        boost_delay_s=runtime.timing.mass_lock_boost_delay_s,
+        sleeper=runtime.sleeper,
+        progress_fn=runtime.progress_fn,
     )
     if route_confirmed:
-        _engage_hyperspace_after_escape(ctx)
+        engage_hyperspace_after_escape(runtime, progress_message="Mass lock cleared - engaging hyperspace...")
     else:
-        ctx.progress_fn("Skipping automatic FSD engage because the galaxy-map route is unconfirmed.")
+        runtime.progress_fn("Skipping automatic FSD engage because the galaxy-map route is unconfirmed.")
     return clear_result
 
 
 def _depart_system(ctx: _Ctx, stop: RouteStop, next_stop: RouteStop) -> RoutineResult:
-    ctx.progress_fn(f"Departing {stop.label} system in normal space...")
+    runtime = ctx.runtime
+    runtime.progress_fn(f"Departing {stop.label} system in normal space...")
     route_confirmed = True
     if next_stop.endpoint.system:
-        ctx.progress_fn(f"Setting galaxy map destination: {next_stop.endpoint.system}...")
-        ctx.announce_fn(AnnouncementId.DESTINATION_SET, system_name=next_stop.endpoint.system)
-        route_confirmed = _set_galaxy_map_destination_for_haul(
-            controls=ctx.controls,
+        runtime.progress_fn(f"Setting galaxy map destination: {next_stop.endpoint.system}...")
+        runtime.announce_fn(AnnouncementId.DESTINATION_SET, system_name=next_stop.endpoint.system)
+        route_confirmed = set_galaxy_map_destination_for_haul(
+            runtime=runtime,
             destination_system=next_stop.endpoint.system,
-            journal_dir=ctx.journal_dir,
-            step_delay_s=ctx.step_delay_s,
-            galaxy_map_settle_s=ctx.galaxy_map_settle_s,
-            sleeper=ctx.sleeper,
-            progress_fn=ctx.progress_fn,
-            announce_fn=ctx.announce_fn,
         )
     escape_mass_lock(
-        ctx.controls,
-        journal_dir=ctx.journal_dir,
-        step_delay_s=ctx.step_delay_s,
-        boost_delay_s=ctx.mass_lock_boost_delay_s,
-        sleeper=ctx.sleeper,
-        progress_fn=ctx.progress_fn,
+        runtime.controls,
+        journal_dir=runtime.journal_dir,
+        step_delay_s=runtime.timing.step_delay_s,
+        boost_delay_s=runtime.timing.mass_lock_boost_delay_s,
+        sleeper=runtime.sleeper,
+        progress_fn=runtime.progress_fn,
     )
     if route_confirmed:
-        _engage_hyperspace_after_escape(ctx)
+        engage_hyperspace_after_escape(runtime, progress_message="Mass lock cleared - engaging hyperspace...")
     else:
-        ctx.progress_fn("Skipping automatic FSD engage because the galaxy-map route is unconfirmed.")
+        runtime.progress_fn("Skipping automatic FSD engage because the galaxy-map route is unconfirmed.")
     return RoutineResult(action="depart_system", dispatch=ActionDispatchResult(action="depart_system", status="ok"))
 
 
 def _run_transit(ctx: _Ctx, next_stop: RouteStop) -> RoutineResult:
-    recent_events = _read_latest_journal_events(ctx.journal_dir)
-    resume_state = _detect_transit_resume_state(recent_events, next_stop.endpoint)
+    runtime = ctx.runtime
+    recent_events = read_latest_journal_events(runtime.journal_dir)
+    resume_state = detect_transit_resume_state(recent_events, next_stop.endpoint)
     pending_events: list[dict[str, object]] = []
-    if resume_state == _TransitResumeState.AWAITING_DOCKED:
-        ctx.progress_fn(f"Docking already in progress for {next_stop.label} - waiting for Docked.")
+    if resume_state == TransitResumeState.AWAITING_DOCKED:
+        runtime.progress_fn(f"Docking already in progress for {next_stop.label} - waiting for Docked.")
         return station_refuel_menu(
-            ctx.controls,
-            ctx.watcher,
-            dock_timeout_s=ctx.dock_timeout_s,
-            settle_s=ctx.settle_s,
-            time_fn=ctx.time_fn,
-            sleeper=ctx.sleeper,
-            progress_fn=ctx.progress_fn,
+            runtime.controls,
+            runtime.watcher,
+            dock_timeout_s=runtime.timing.dock_timeout_s,
+            settle_s=runtime.timing.settle_s,
+            time_fn=runtime.time_fn,
+            sleeper=runtime.sleeper,
+            progress_fn=runtime.progress_fn,
         )
-    if resume_state == _TransitResumeState.NONE:
+    if resume_state == TransitResumeState.NONE:
         arrival_observed, pending_events = _wait_for_arrival_or_approach_event(
-            ctx.watcher,
+            runtime.watcher,
             destination_system=next_stop.endpoint.system,
-            deadline=ctx.time_fn() + ctx.dock_timeout_s,
-            time_fn=ctx.time_fn,
+            deadline=runtime.time_fn() + runtime.timing.dock_timeout_s,
+            time_fn=runtime.time_fn,
         )
         if arrival_observed:
-            ctx.progress_fn("Arrived in destination system")
-            _open_navigation_panel_after_arrival(ctx, station_name=next_stop.endpoint.station)
-    elif resume_state == _TransitResumeState.ARRIVED_IN_DESTINATION_SYSTEM:
-        _open_navigation_panel_after_arrival(ctx, station_name=next_stop.endpoint.station)
-    elif resume_state == _TransitResumeState.POST_DROP_NEAR_STATION:
+            runtime.progress_fn("Arrived in destination system")
+            open_navigation_panel_after_arrival(runtime, station_name=next_stop.endpoint.station)
+    elif resume_state == TransitResumeState.ARRIVED_IN_DESTINATION_SYSTEM:
+        open_navigation_panel_after_arrival(runtime, station_name=next_stop.endpoint.station)
+    elif resume_state == TransitResumeState.POST_DROP_NEAR_STATION:
         if next_stop.endpoint.on_land:
-            ctx.progress_fn(f"Already in normal space near on-land {next_stop.label} - handing off for manual landing.")
+            runtime.progress_fn(f"Already in normal space near on-land {next_stop.label} - handing off for manual landing.")
         else:
-            ctx.progress_fn(f"Already in normal space near {next_stop.label} - skipping drop wait.")
+            runtime.progress_fn(f"Already in normal space near {next_stop.label} - skipping drop wait.")
 
     if next_stop.endpoint.on_land:
-        if resume_state == _TransitResumeState.POST_DROP_NEAR_STATION:
-            ctx.progress_fn(
+        if resume_state == TransitResumeState.POST_DROP_NEAR_STATION:
+            runtime.progress_fn(
                 f"{next_stop.label} is marked on-land; manual landing required from normal space. "
                 "Resume multi-leg haul after landing."
             )
-            return _manual_landing_result(next_stop)
-        ctx.progress_fn(
+            return manual_landing_result(next_stop.endpoint)
+        runtime.progress_fn(
             f"{next_stop.label} is marked on-land; waiting for SupercruiseExit before handing off."
         )
-        drop_event = _wait_for_on_land_handoff(
-            ctx.watcher,
+        drop_event = wait_for_on_land_handoff(
+            runtime.watcher,
             destination=next_stop.endpoint,
             pending_events=pending_events,
-            deadline=ctx.time_fn() + ctx.dock_timeout_s,
-            time_fn=ctx.time_fn,
+            deadline=runtime.time_fn() + runtime.timing.dock_timeout_s,
+            time_fn=runtime.time_fn,
         )
         if drop_event is None:
             return RoutineResult(
@@ -490,115 +343,48 @@ def _run_transit(ctx: _Ctx, next_stop: RouteStop) -> RoutineResult:
                     reason=f"timed out waiting for SupercruiseExit near {next_stop.endpoint.station}",
                 ),
             )
-        ctx.progress_fn(
+        runtime.progress_fn(
             f"Reached normal space near on-land {next_stop.label}; manual landing required. "
             "Resume multi-leg haul after landing."
         )
-        return _manual_landing_result(next_stop)
+        return manual_landing_result(next_stop.endpoint)
 
     return dock(
-        ctx.controls,
-        ctx.watcher,
-        wait_for_supercruise_exit=resume_state != _TransitResumeState.POST_DROP_NEAR_STATION,
+        runtime.controls,
+        runtime.watcher,
+        wait_for_supercruise_exit=resume_state != TransitResumeState.POST_DROP_NEAR_STATION,
         auto_refuel=True,
-        max_retries=ctx.max_dock_retries,
-        request_timeout_s=ctx.request_timeout_s,
-        dock_timeout_s=ctx.dock_timeout_s,
-        settle_s=ctx.settle_s,
-        step_delay_s=ctx.step_delay_s,
-        supercruise_exit_settle_s=ctx.supercruise_exit_settle_s,
-        boost_settle_s=ctx.boost_settle_s,
-        deny_retry_delay_s=ctx.deny_retry_delay_s,
-        time_fn=ctx.time_fn,
-        sleeper=ctx.sleeper,
-        progress_fn=ctx.progress_fn,
+        max_retries=runtime.travel.max_dock_retries,
+        request_timeout_s=runtime.timing.request_timeout_s,
+        dock_timeout_s=runtime.timing.dock_timeout_s,
+        settle_s=runtime.timing.settle_s,
+        step_delay_s=runtime.timing.step_delay_s,
+        supercruise_exit_settle_s=runtime.timing.supercruise_exit_settle_s,
+        boost_settle_s=runtime.timing.boost_settle_s,
+        deny_retry_delay_s=runtime.timing.deny_retry_delay_s,
+        time_fn=runtime.time_fn,
+        sleeper=runtime.sleeper,
+        progress_fn=runtime.progress_fn,
         pending_events=pending_events,
-        announce_fn=ctx.announce_fn,
+        announce_fn=runtime.announce_fn,
         announce_station_name=next_stop.endpoint.station,
     )
 
 
 def multi_leg_haul(
-    controls: SupportsHaulControls,
-    watcher: SupportsPollEvents,
+    runtime: HaulRuntime,
     *,
     definition: MultiLegHaulDefinition,
-    journal_dir: Path,
-    step_delay_s: float = 1.0,
-    max_hold_s: float = 10.0,
-    market_buy_hold_segments: tuple[
-        MarketBuyHoldSegmentConfig, ...
-    ] = _DEFAULT_HAUL_ROUTINE.market_buy_hold_segments,
-    market_sell_quantity_restore_taps: int = _DEFAULT_HAUL_ROUTINE.market_sell_quantity_restore_taps,
-    market_sell_quantity_restore_tap_delay_s: float = (
-        _DEFAULT_HAUL_ROUTINE.market_sell_quantity_restore_tap_delay_seconds
-    ),
-    dock_timeout_s: float = _DEFAULT_HAUL_ROUTINE.dock_timeout_seconds,
-    request_timeout_s: float = 20.0,
-    undock_timeout_s: float = _DEFAULT_HAUL_ROUTINE.undock_timeout_seconds,
-    undock_no_track_timeout_s: float = _DEFAULT_HAUL_ROUTINE.undock_no_track_timeout_seconds,
-    trade_timeout_s: float = 30.0,
-    settle_s: float = 2.0,
-    galaxy_map_settle_s: float = _DEFAULT_HAUL_ROUTINE.galaxy_map_settle_seconds,
-    supercruise_exit_settle_s: float = _DEFAULT_HAUL_ROUTINE.dock_supercruise_exit_settle_seconds,
-    boost_settle_s: float = 3.0,
-    deny_retry_delay_s: float = 5.0,
-    mass_lock_boost_delay_s: float = _DEFAULT_HAUL_ROUTINE.mass_lock_boost_delay_seconds,
-    post_sell_settle_s: float = _DEFAULT_HAUL_ROUTINE.haul_post_sell_settle_seconds,
-    auto_hyperspace_engage: bool = _DEFAULT_HAUL_ROUTINE.haul_two_way_auto_hyperspace_engage,
-    open_nav_panel_after_hyperspace_arrival: bool = (
-        _DEFAULT_HAUL_ROUTINE.haul_two_way_open_nav_panel_after_hyperspace_arrival
-    ),
-    nav_panel_open_delay_s: float = _DEFAULT_HAUL_ROUTINE.haul_two_way_nav_panel_open_delay_seconds,
-    max_dock_retries: int = 3,
-    market_critical_level_multiplier: float = _DEFAULT_HAUL_ROUTINE.market_critical_level_multiplier,
-    time_fn: Callable[[], float] = monotonic,
-    sleeper: Callable[[float], None] = sleep,
-    progress_fn: ProgressCallback,
-    announce_fn: AnnouncementCallback,
     stop_requested_fn: Callable[[], bool] | None = None,
 ) -> RoutineResult:
     stops = build_route_stops(definition)
     if not stops:
         raise ValueError("Multi-leg haul definition has no stops")
-    ctx = _Ctx(
-        controls=controls,
-        watcher=watcher,
-        definition=definition,
-        stops=stops,
-        journal_dir=journal_dir,
-        market_path=journal_dir / "Market.json",
-        step_delay_s=step_delay_s,
-        max_hold_s=max_hold_s,
-        market_buy_hold_segments=market_buy_hold_segments,
-        market_sell_quantity_restore_taps=market_sell_quantity_restore_taps,
-        market_sell_quantity_restore_tap_delay_s=market_sell_quantity_restore_tap_delay_s,
-        dock_timeout_s=dock_timeout_s,
-        request_timeout_s=request_timeout_s,
-        undock_timeout_s=undock_timeout_s,
-        undock_no_track_timeout_s=undock_no_track_timeout_s,
-        trade_timeout_s=trade_timeout_s,
-        settle_s=settle_s,
-        galaxy_map_settle_s=galaxy_map_settle_s,
-        supercruise_exit_settle_s=supercruise_exit_settle_s,
-        boost_settle_s=boost_settle_s,
-        deny_retry_delay_s=deny_retry_delay_s,
-        mass_lock_boost_delay_s=mass_lock_boost_delay_s,
-        post_sell_settle_s=post_sell_settle_s,
-        auto_hyperspace_engage=auto_hyperspace_engage,
-        open_nav_panel_after_hyperspace_arrival=open_nav_panel_after_hyperspace_arrival,
-        nav_panel_open_delay_s=nav_panel_open_delay_s,
-        max_dock_retries=max_dock_retries,
-        market_critical_level_multiplier=market_critical_level_multiplier,
-        time_fn=time_fn,
-        sleeper=sleeper,
-        progress_fn=progress_fn,
-        announce_fn=announce_fn,
-    )
+    ctx = _Ctx(runtime=runtime, definition=definition, stops=stops)
 
     stop_index, phase = _detect_start_state(ctx)
     if phase != Phase.BUY or stop_index != 0:
-        progress_fn(f"Resuming multi-leg haul from stop {stop_index + 1} phase {phase.name}")
+        runtime.progress_fn(f"Resuming multi-leg haul from stop {stop_index + 1} phase {phase.name}")
     last_result = RoutineResult(action="multi_leg_haul", dispatch=ActionDispatchResult(action="multi_leg_haul", status="ok"))
 
     while stop_index < len(stops):
@@ -607,7 +393,7 @@ def multi_leg_haul(
         if phase == Phase.COMPLETE:
             return last_result
         if stop_requested_fn is not None and stop_requested_fn() and phase in {Phase.BUY, Phase.UNDOCK, Phase.DEPART_SYSTEM}:
-            progress_fn(f"Stop requested at {stop.label}; halting before departure.")
+            runtime.progress_fn(f"Stop requested at {stop.label}; halting before departure.")
             return last_result
         if phase == Phase.SELL:
             last_result = _run_sell(ctx, stop)
@@ -641,7 +427,7 @@ def multi_leg_haul(
             if next_stop is None:
                 return last_result
             last_result = _run_transit(ctx, next_stop)
-            if _is_manual_landing_result(last_result):
+            if is_manual_landing_result(last_result):
                 return last_result
             if last_result.dispatch.status != "ok":
                 return last_result

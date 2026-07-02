@@ -1320,9 +1320,10 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.app._make_watcher = lambda: object()
         self.app._run_in_thread = lambda fn: fn()
 
-        def fake_haul_loop(controls, watcher, **kwargs):
-            captured["controls"] = controls
-            captured["watcher"] = watcher
+        def fake_haul_loop(runtime, *, route, stop_requested_fn=None, **kwargs):
+            captured["runtime"] = runtime
+            captured["route"] = route
+            captured["stop_requested_fn"] = stop_requested_fn
             captured["kwargs"] = kwargs
             return RoutineResult(
                 action="haul_loop",
@@ -1332,16 +1333,17 @@ class ControlRoomBindingsTests(unittest.TestCase):
         with patch("edap.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
             self.app._dispatch_haul_loop()
 
-        self.assertIn("kwargs", captured)
-        self.assertEqual(captured["kwargs"]["undock_timeout_s"], 30.0)
-        self.assertEqual(captured["kwargs"]["undock_no_track_timeout_s"], 600.0)
-        self.assertEqual(captured["kwargs"]["max_hold_s"], 10.0)
-        self.assertEqual(len(captured["kwargs"]["market_buy_hold_segments"]), 3)
-        self.assertEqual(captured["kwargs"]["market_buy_hold_segments"][0].function, "flat")
-        self.assertEqual(captured["kwargs"]["market_sell_quantity_restore_taps"], 5)
-        self.assertFalse(captured["kwargs"]["stop_requested_fn"]())
+        self.assertIn("runtime", captured)
+        runtime = captured["runtime"]
+        self.assertEqual(runtime.timing.undock_timeout_s, 30.0)
+        self.assertEqual(runtime.timing.undock_no_track_timeout_s, 600.0)
+        self.assertEqual(runtime.timing.max_hold_s, 10.0)
+        self.assertEqual(len(runtime.market.buy_hold_segments), 3)
+        self.assertEqual(runtime.market.buy_hold_segments[0].function, "flat")
+        self.assertEqual(runtime.market.sell_quantity_restore_taps, 5)
+        self.assertFalse(captured["stop_requested_fn"]())
         self.app._haul_stop_requested = True
-        self.assertTrue(captured["kwargs"]["stop_requested_fn"]())
+        self.assertTrue(captured["stop_requested_fn"]())
         self.assertIn("Starting haul loop:", "\n".join(self.app.logged))
         self.assertEqual(self.app._active_routine_name, "haul")
         self.assertEqual(self.app._haul_stats.station_1_buying, "Aluminium")
@@ -1371,8 +1373,8 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.app._make_watcher = lambda: object()
         self.app._run_in_thread = lambda fn: fn()
 
-        def fake_haul_loop(controls, watcher, **kwargs):
-            captured["kwargs"] = kwargs
+        def fake_haul_loop(runtime, *, route, **kwargs):
+            captured["route"] = route
             return RoutineResult(
                 action="haul_loop",
                 dispatch=ActionDispatchResult(action="haul_loop", status="ok"),
@@ -1381,9 +1383,9 @@ class ControlRoomBindingsTests(unittest.TestCase):
         with patch("edap.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
             self.app._dispatch_haul_loop()
 
-        self.assertEqual(captured["kwargs"]["station_1"], "Mystery Base")
-        self.assertEqual(captured["kwargs"]["station_1_system"], "Sol")
-        self.assertFalse(captured["kwargs"]["station_1_on_land"])
+        self.assertEqual(captured["route"].station_1.station, "Mystery Base")
+        self.assertEqual(captured["route"].station_1.system, "Sol")
+        self.assertFalse(captured["route"].station_1.on_land)
         self.assertIn("Station 1 defaulting to current station", "\n".join(self.app.logged))
 
     def test_haul_dispatch_allows_empty_station_2_buying(self) -> None:
@@ -1409,8 +1411,8 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.app._make_watcher = lambda: object()
         self.app._run_in_thread = lambda fn: fn()
 
-        def fake_haul_loop(controls, watcher, **kwargs):
-            captured["kwargs"] = kwargs
+        def fake_haul_loop(runtime, *, route, **kwargs):
+            captured["route"] = route
             return RoutineResult(
                 action="haul_loop",
                 dispatch=ActionDispatchResult(action="haul_loop", status="ok"),
@@ -1419,7 +1421,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
         with patch("edap.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
             self.app._dispatch_haul_loop()
 
-        self.assertEqual(captured["kwargs"]["station_2_buying"], "")
+        self.assertEqual(captured["route"].station_2.buy_commodity, "")
         self.assertIn("station 2 [cyan]Trevithick Dock[/]: [dim]no buy[/]", "\n".join(self.app.logged))
 
     def test_haul_load_dispatches_from_config_file(self) -> None:
@@ -1453,8 +1455,9 @@ on_land = true
         self.app._make_watcher = lambda: object()
         self.app._run_in_thread = lambda fn: fn()
 
-        def fake_haul_loop(controls, watcher, **kwargs):
-            captured["kwargs"] = kwargs
+        def fake_haul_loop(runtime, *, route, **kwargs):
+            captured["runtime"] = runtime
+            captured["route"] = route
             return RoutineResult(
                 action="haul_loop",
                 dispatch=ActionDispatchResult(action="haul_loop", status="ok"),
@@ -1463,11 +1466,11 @@ on_land = true
         with patch("edap.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
             self.app._cmd_haul(f"load {config_path}", raw_command=f"haul load {config_path}")
 
-        self.assertEqual(captured["kwargs"]["station_1_buying"], "Aluminium")
-        self.assertEqual(captured["kwargs"]["station_2_buying"], "Bertrandite")
-        self.assertEqual(captured["kwargs"]["galaxy_map_settle_s"], 4.5)
-        self.assertEqual(captured["kwargs"]["dock_timeout_s"], 900.0)
-        self.assertTrue(captured["kwargs"]["station_2_on_land"])
+        self.assertEqual(captured["route"].station_1.buy_commodity, "Aluminium")
+        self.assertEqual(captured["route"].station_2.buy_commodity, "Bertrandite")
+        self.assertEqual(captured["runtime"].timing.galaxy_map_settle_s, 4.5)
+        self.assertEqual(captured["runtime"].timing.dock_timeout_s, 900.0)
+        self.assertTrue(captured["route"].station_2.on_land)
         self.assertEqual(self.app._saved_state.history[-1].raw, f"haul load {config_path}")
         self.assertIn("Loaded haul config", "\n".join(self.app.logged))
 
@@ -1496,7 +1499,7 @@ on_land = true
         self.app._make_watcher = lambda: object()
         self.app._run_in_thread = lambda fn: fn()
 
-        def fake_haul_loop(controls, watcher, **kwargs):
+        def fake_haul_loop(runtime, *, route, **kwargs):
             return RoutineResult(
                 action="haul_loop",
                 dispatch=ActionDispatchResult(action="haul_loop", status="ok"),
@@ -1675,8 +1678,8 @@ on_land = true
         self.app._make_watcher = lambda: object()
         self.app._run_in_thread = lambda fn: fn()
 
-        def fake_haul_loop(controls, watcher, **kwargs):
-            captured["kwargs"] = kwargs
+        def fake_haul_loop(runtime, *, route, **kwargs):
+            captured["route"] = route
             return RoutineResult(
                 action="haul_loop",
                 dispatch=ActionDispatchResult(action="haul_loop", status="ok"),
@@ -1685,8 +1688,8 @@ on_land = true
         with patch("edap.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
             self.app._dispatch_haul_loop()
 
-        self.assertFalse(captured["kwargs"]["station_1_on_land"])
-        self.assertTrue(captured["kwargs"]["station_2_on_land"])
+        self.assertFalse(captured["route"].station_1.on_land)
+        self.assertTrue(captured["route"].station_2.on_land)
         self.assertIn("station 2 landing: [cyan]on land[/]", "\n".join(self.app.logged))
 
     def test_multi_leg_haul_dispatch_loads_route_and_starts_routine(self) -> None:
@@ -1704,7 +1707,7 @@ on_land = true
         self.app._make_watcher = lambda: object()
         self.app._run_in_thread = lambda fn: fn()
 
-        def fake_multi_leg_haul(controls, watcher, **kwargs):
+        def fake_multi_leg_haul(runtime, **kwargs):
             captured["kwargs"] = kwargs
             return RoutineResult(
                 action="multi_leg_haul",
