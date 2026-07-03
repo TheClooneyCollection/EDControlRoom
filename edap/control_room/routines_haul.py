@@ -136,7 +136,13 @@ def cmd_haul(
                 raw_command=raw_command or f"{'!' if skip_delay else ''}haul search url {query_url}".strip(),
             )
             return
-        system_name = search_rest if search_rest else (app._ship.system or "").strip()
+        if search_rest.lower() == "home":
+            system_name = app._config.control_room.home_system.strip()
+            if not system_name:
+                app._log(f"[red]{escape(error_text.render(app._config, 'home_not_set'))}[/]")
+                return
+        else:
+            system_name = search_rest if search_rest else (app._ship.system or "").strip()
         if not system_name:
             app._log("[red]haul search needs a system name, or the current ship system must be known.[/]")
             return

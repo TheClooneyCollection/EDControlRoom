@@ -1599,6 +1599,28 @@ on_land = true
 
         self.assertIn("haul search needs a system name", "\n".join(self.app.logged))
 
+    def test_haul_search_home_uses_saved_home_system(self) -> None:
+        self.app._config = replace(
+            self.app._config,
+            control_room=replace(
+                self.app._config.control_room,
+                home_system="Achenar",
+            ),
+        )
+
+        self.app._cmd_haul("search home", raw_command="haul search home")
+
+        self.assertEqual(self.app._prompt_state.haul_prompt_mode, "search")
+        self.assertEqual(self.app._haul_prompt_step, "search_edit")
+        self.assertIn("near_system=Achenar", self.app._command_input.value)
+        self.assertEqual(self.app._prompt_state.haul_prompt_raw_command, "haul search home")
+
+    def test_haul_search_home_requires_saved_home_system(self) -> None:
+        self.app._cmd_haul("search home", raw_command="haul search home")
+
+        self.assertIn("Home system is not set", "\n".join(self.app.logged))
+        self.assertNotEqual(self.app._prompt_state.haul_prompt_mode, "search")
+
     def test_haul_search_url_fetches_directly(self) -> None:
         self.app._controls = object()
         self.app._run_in_thread = lambda fn: fn()

@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `180`
-- Latest generated iteration number: `313`
+- Generated iteration count: `181`
+- Latest generated iteration number: `314`
 
 ## Iteration 134
 
@@ -5015,3 +5015,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Split very large haul behavior test files once the new production module boundaries have settled.
+
+## Iteration 314
+
+- When: `2026-07-03 10:18`
+- Area: `haul`
+- Title: `home-search-alias`
+- Source: [2026-07-03-10-18_____haul_____home-search-alias.md](iteration-logs/2026-07-03-10-18_____haul_____home-search-alias.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `home-search-alias`
+- Started: `2026-07-03 10:18`
+
+## Summary
+
+- Added `haul search home` as an alias for the saved `control_room.home_system`, so operators can reuse the configured home system as the Inara search center.
+
+## Changes
+
+- Resolved the `home` alias inside the haul-search command parser before opening the editable Inara search prompt, while preserving the raw command as `haul search home` for prompt/history context.
+- Reported the existing home-not-set guidance when the alias is used without a saved home system instead of treating `home` as a literal system name.
+- Updated command help, operator docs, and haul status handoff, and added Control Room regression coverage for saved and missing home-system alias cases.
+
+## Follow-ups
+
+- Live-check one `haul search home` run after `home set` in the real TUI to confirm the prompt prefill and route picker feel correct with live Inara results.
