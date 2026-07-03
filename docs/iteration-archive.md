@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `182`
-- Latest generated iteration number: `315`
+- Generated iteration count: `183`
+- Latest generated iteration number: `316`
 
 ## Iteration 134
 
@@ -5069,3 +5069,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-check `dest home` after `home set` in the real TUI to confirm the NavRoute mismatch shown in the failed run no longer appears.
+
+## Iteration 316
+
+- When: `2026-07-03 14:39`
+- Area: `control-room`
+- Title: `lan-serve-flag`
+- Source: [2026-07-03-14-39_control-room_lan-serve-flag.md](iteration-logs/2026-07-03-14-39_control-room_lan-serve-flag.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `lan-serve-flag`
+- Started: `2026-07-03 14:39`
+
+## Summary
+
+- Added `control_room.py serve --lan` so LAN serving can bind to the detected non-loopback IPv4 address without manually passing `--host`.
+
+## Changes
+
+- Added LAN host detection in the Control Room CLI using UDP route probing with hostname-address fallback.
+- Made `serve --lan` and `serve --host` mutually exclusive, preserving the default local bind of `127.0.0.1`.
+- Updated remote observer operator docs to recommend `--lan` for same-network clients while retaining explicit `--host 0.0.0.0` guidance.
+- Added focused CLI tests for LAN detection, serve wiring, and conflict handling.
+
+## Follow-ups
+
+- Live LAN validation should confirm the chosen bind address is the operator-visible address on the current macOS/CrossOver host.

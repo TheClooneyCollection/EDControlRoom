@@ -24,8 +24,11 @@ Start a server on the machine that owns the Elite runtime:
 
 ```sh
 uv run python3 control_room.py serve --token 1001
+uv run python3 control_room.py serve --lan --port 8765 --token 1001
 uv run python3 control_room.py serve --host 0.0.0.0 --port 8765 --token 1001
 ```
+
+Use `--lan` when clients should connect from the same network and you want Control Room to bind to the detected non-loopback IPv4 address. Use `--host` for an explicit bind address, including `0.0.0.0` for all interfaces.
 
 Connect from a client:
 

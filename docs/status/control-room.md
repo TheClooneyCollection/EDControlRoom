@@ -1,6 +1,6 @@
 # Control Room Status
 ## Current
-- Plan 0008 is the active Control Room architecture target: one local-first `ControlRoomApp` composed with data sources, view models, view actions, and execution dependencies; `connect` now bootstraps that same app with remote data/execution dependencies rather than using an observer subclass, and `serve` exposes authenticated no-snapshot HTTP/websocket hydrate messages on initial load and live data changes.
+- Plan 0008 is the active Control Room architecture target: one local-first `ControlRoomApp` composed with data sources, view models, view actions, and execution dependencies; `connect` now bootstraps that same app with remote data/execution dependencies, and `serve --lan` binds to the detected non-loopback IPv4 while `serve` exposes authenticated no-snapshot hydrate messages.
 - Snapshot protocol support is removed: `serve` no longer advertises or serves `/snapshot`, websocket `state.snapshot`, or `command.request_snapshot`; snapshot dataclasses, `snapshot_from_app`, snapshot schema defs, and backend/server retained snapshot paths are gone.
 - `ControlRoomApp` no longer stores/applies backend snapshots, the backend contract no longer exposes `current_snapshot()`, and `ControlRoomEventSink` uses explicit `publish_data_refresh()` to fan out data-source hydrate messages.
 - Status, haul, market, and trade-route picker rendering now pass through explicit ViewModels; market and trade-route picker interactions use display-neutral ViewActions with the current Textual app behind injected adapters.

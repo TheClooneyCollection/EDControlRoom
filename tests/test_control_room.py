@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import replace
+import io
 import json
 import os
 import tempfile
@@ -14,6 +15,7 @@ from control_room import (
     _ALL_ROUTINE_ACTIONS,
     _build_log_text,
     _cargo_summary_lines,
+    main,
 )
 from edap.actions import ActionDispatchResult
 from edap.binding_lookup import build_binding_lookup
@@ -32,7 +34,7 @@ from edap.config import (
 from edap.control_room import error_text
 from edap.control_room import commands as control_room_commands
 from edap.control_room import prompts as control_room_prompts
-from edap.control_room.app import ActivityLog, _JOURNAL_ARTIFACT_LOG_FLUSH_EVERY
+from edap.control_room.app import ActivityLog, _JOURNAL_ARTIFACT_LOG_FLUSH_EVERY, _detect_lan_host
 from edap.control_room.backend import ControlRoomBackendEventHandler
 from edap.control_room.failure_messages import describe_routine_failure
 from edap.control_room.events import apply_ship_event
@@ -442,6 +444,62 @@ class _EventSinkStub:
 
     def publish_data_refresh(self) -> None:
         self.data_refresh_count += 1
+
+
+class ControlRoomCliTests(unittest.TestCase):
+    def test_detect_lan_host_uses_udp_route_address(self) -> None:
+        class FakeSocket:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb) -> None:
+                pass
+
+            def connect(self, address) -> None:
+                self.address = address
+
+            def getsockname(self):
+                return ("192.168.1.42", 53621)
+
+        fake_socket = FakeSocket()
+        with patch("edap.control_room.app.socket.socket", return_value=fake_socket), patch(
+            "edap.control_room.app.socket.getaddrinfo",
+            return_value=[],
+        ):
+            self.assertEqual(_detect_lan_host(), "192.168.1.42")
+        self.assertEqual(fake_socket.address, ("8.8.8.8", 80))
+
+    def test_detect_lan_host_falls_back_to_hostname_address(self) -> None:
+        with patch("edap.control_room.app.socket.socket") as socket_factory, patch(
+            "edap.control_room.app.socket.getaddrinfo",
+            return_value=[
+                (None, None, None, None, ("127.0.0.1", 0)),
+                (None, None, None, None, ("10.0.0.12", 0)),
+            ],
+        ):
+            socket_factory.return_value.__enter__.return_value.connect.side_effect = OSError("no route")
+            self.assertEqual(_detect_lan_host(), "10.0.0.12")
+
+    def test_serve_lan_passes_detected_host(self) -> None:
+        with patch("sys.argv", ["control_room.py", "serve", "--lan", "--token", "1001"]), patch(
+            "edap.control_room.app._detect_lan_host",
+            return_value="192.168.1.42",
+        ), patch("edap.control_room.server.serve.serve_observer_mode") as serve:
+            main()
+
+        serve.assert_called_once_with(
+            config_path="config.toml",
+            host="192.168.1.42",
+            port=8765,
+            access_token="1001",
+        )
+
+    def test_serve_lan_rejects_explicit_host(self) -> None:
+        argv = ["control_room.py", "serve", "--lan", "--host", "0.0.0.0", "--token", "1001"]
+        with patch("sys.argv", argv), patch("sys.stderr", io.StringIO()), self.assertRaises(SystemExit) as raised:
+            main()
+
+        self.assertEqual(raised.exception.code, 2)
 
 
 class ControlRoomCommandTests(unittest.TestCase):

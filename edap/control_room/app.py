@@ -41,6 +41,7 @@ from __future__ import annotations
 import argparse
 import json
 import signal
+import socket
 import sys
 import time
 from pathlib import Path
@@ -2044,13 +2045,44 @@ class ControlRoomApp(App[None]):
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 
+def _is_loopback_ipv4(host: str) -> bool:
+    return host.startswith("127.")
+
+
+def _detect_lan_host() -> str:
+    candidates: list[str] = []
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("8.8.8.8", 80))
+            candidates.append(probe.getsockname()[0])
+    except OSError:
+        pass
+
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET, socket.SOCK_STREAM):
+            candidates.append(info[4][0])
+    except OSError:
+        pass
+
+    for host in candidates:
+        if host and not _is_loopback_ipv4(host):
+            return host
+
+    raise RuntimeError("could not determine a LAN IPv4 address; use --host explicitly")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="ED AutoPilot Control Room — live TUI")
     parser.add_argument("mode", nargs="?", choices=["serve", "connect"])
     parser.add_argument("target", nargs="?", help="server host[:port] for connect mode")
     parser.add_argument("--config", default="config.toml")
     parser.add_argument("--market", metavar="FILTER", help="initial market filter (e.g. --market aluminium)")
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--host", help="serve bind host (default: 127.0.0.1)")
+    parser.add_argument(
+        "--lan",
+        action="store_true",
+        help="serve on the detected non-loopback LAN IPv4 address",
+    )
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--token", help="shared access token for serve/connect observer mode")
     parser.add_argument("--client-name", help="observer client name for connect mode")
@@ -2061,14 +2093,23 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    if args.lan and args.mode != "serve":
+        parser.error("--lan is only valid with serve")
+
     if args.mode == "serve":
         from edap.control_room.server.serve import serve_observer_mode
 
+        if args.lan and args.host:
+            parser.error("serve --lan cannot be combined with --host")
         if not args.token:
             parser.error("serve requires --token")
+        try:
+            host = _detect_lan_host() if args.lan else args.host or "127.0.0.1"
+        except RuntimeError as exc:
+            parser.error(str(exc))
         serve_observer_mode(
             config_path=args.config,
-            host=args.host,
+            host=host,
             port=args.port,
             access_token=args.token,
         )
