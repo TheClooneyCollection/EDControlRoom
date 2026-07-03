@@ -61,9 +61,9 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
     ),
     CommandHelp(
         name="dest",
-        usage="dest <system>",
+        usage="dest <system> | dest home",
         summary="Open the galaxy map and plot a route to a named system.",
-        detail="Opens the galaxy map, types the destination into search, plots the route, verifies NavRoute.json, and closes the map again. Control room also prompts for the galaxy-map settle delay, with Enter accepting the configured default.",
+        detail="Opens the galaxy map, types the destination into search, plots the route, verifies NavRoute.json, and closes the map again. Use `dest home` to route to the saved `control_room.home_system`. Control room also prompts for the galaxy-map settle delay, with Enter accepting the configured default.",
         aliases=("set_dest",),
     ),
     CommandHelp(

@@ -2467,6 +2467,30 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertEqual(captured["destination"], "Achenar")
         self.assertEqual(captured["raw_command"], "home")
 
+    def test_dest_home_routes_to_saved_system(self) -> None:
+        self.app._controls = object()
+        self.app._config = replace(
+            self.app._config,
+            control_room=replace(
+                self.app._config.control_room,
+                home_system="Achenar",
+            ),
+        )
+
+        self.app._dispatch_command("dest home")
+
+        self.assertEqual(self.app._prompt_state.dest_prompt_destination, "Achenar")
+        self.assertEqual(self.app._prompt_state.dest_prompt_raw_command, "dest home")
+
+    def test_dest_home_requires_saved_home_system(self) -> None:
+        self.app._controls = object()
+
+        self.app._dispatch_command("dest home")
+
+        output = "\n".join(self.app.logged)
+        self.assertIn("Home system is not set", output)
+        self.assertEqual(self.app._prompt_state.dest_prompt_destination, "")
+
     def test_home_set_updates_config_file_and_runtime_config(self) -> None:
         config_path = Path(self.tmpdir.name) / "config.toml"
         config_path.write_text(

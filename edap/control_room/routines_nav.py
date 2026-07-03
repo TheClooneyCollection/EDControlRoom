@@ -21,6 +21,11 @@ def cmd_dest(
     if not destination:
         app._log(f"[red]{escape(error_text.render(app._config, 'dest_usage'))}[/]")
         return
+    if destination.strip().lower() == "home":
+        destination = app._config.control_room.home_system.strip()
+        if not destination:
+            app._log(f"[red]{escape(error_text.render(app._config, 'home_not_set'))}[/]")
+            return
     app._start_dest_prompt(
         destination,
         skip_delay=skip_delay,

@@ -116,6 +116,7 @@ Interrupt behavior during `haul` is special:
 ## Home Routing
 
 - `home` reuses the saved `control_room.home_system` value and then runs the normal `dest` flow, including the galaxy-map settle prompt.
+- `dest home` is accepted as a destination alias for the saved home system.
 - `home set <system>` updates that setting in the active config file so the next `home` command is one word.
 - Bare `home set` uses the current ship system when Control Room already knows it from live journal/status state.
 - `haul search home` uses the saved home system as the Inara search center.
