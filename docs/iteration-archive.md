@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `200`
-- Latest generated iteration number: `333`
+- Generated iteration count: `201`
+- Latest generated iteration number: `334`
 
 ## Iteration 134
 
@@ -5560,3 +5560,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Backend pagination is not needed yet; the v1 page still receives the full search result payload and paginates locally.
+
+## Iteration 334
+
+- When: `2026-07-04 10:45`
+- Area: `web`
+- Title: `show-inara-distance`
+- Source: [2026-07-04-10-45_____web______show-inara-distance.md](iteration-logs/2026-07-04-10-45_____web______show-inara-distance.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `show-inara-distance`
+- Started: `2026-07-04 10:45`
+
+## Summary
+
+- Surfaced Inara `DISTANCE` in the haul v1 web route results instead of hiding it behind the backend payload.
+
+## Changes
+
+- Added a separate route-table distance column backed by `distance_from_system`.
+- Added the same Inara distance to selected route details.
+- Stopped using Inara distance as a fallback for route distance so the two fields remain distinct.
+
+## Follow-ups
+
+- Confirm live Inara result rows still have enough horizontal room after the extra distance column.

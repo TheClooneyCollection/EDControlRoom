@@ -1035,6 +1035,7 @@
                     <th>Cargo</th>
                     <th>Station 1</th>
                     <th>Station 2</th>
+                    <th class="num">Distance</th>
                     <th class="num">Route</th>
                   </tr>
                 </thead>
@@ -1104,7 +1105,8 @@
         sellStation: route.to_station || "",
         sellSystem: route.to_system || "",
         sellStationDistance: route.to_station_distance || "-",
-        routeDistance: route.route_distance || route.distance_from_system || "-",
+        distanceFromSystem: route.distance_from_system || "-",
+        routeDistance: route.route_distance || "-",
         stationDistance: stationDistances.length ? stationDistances.join(" / ") : "-"
       };
     }
@@ -1393,7 +1395,7 @@
         const message = hasSearchedRoutes
           ? "No station/carrier routes found."
           : "Search routes to load station/carrier results.";
-        tbody.innerHTML = `<tr><td colspan="6" class="route-sub">${message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="route-sub">${message}</td></tr>`;
         routePage = 1;
         updateRoutePager(0, 0, 0, 1);
         return;
@@ -1417,6 +1419,7 @@
             <div class="route-main">${escapeHtml(route.sellStation)}</div>
             <div class="route-sub mono">${escapeHtml(route.sellSystem)} / ${escapeHtml(route.sellStationDistance)}</div>
           </td>
+          <td class="num">${escapeHtml(route.distanceFromSystem)}</td>
           <td class="num">${escapeHtml(route.routeDistance)}</td>
         </tr>
       `).join("");
@@ -1443,6 +1446,7 @@
         <div class="stat-row"><span class="k">Station 2 buy</span><span class="v">${escapeHtml(route.targetCommodity || "No buy commodity")}</span></div>
         <div class="stat-row"><span class="k">Profit / hour</span><span class="v profit mono">${escapeHtml(profitHourLabel(route))}</span></div>
         <div class="stat-row"><span class="k">Profit / trip</span><span class="v mono">${escapeHtml(route.profitTrip)}</span></div>
+        <div class="stat-row"><span class="k">Inara distance</span><span class="v mono">${escapeHtml(route.distanceFromSystem)}</span></div>
         <div class="stat-row"><span class="k">Route distance</span><span class="v mono">${escapeHtml(route.routeDistance)}</span></div>
         <div class="stat-row"><span class="k">Station distance</span><span class="v mono">${escapeHtml(route.stationDistance)}</span></div>
         <div class="stat-row"><span class="k">Surface support</span><span class="v">disabled</span></div>
