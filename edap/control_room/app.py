@@ -2069,6 +2069,9 @@ class ControlRoomApp(App[None]):
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 
+DEFAULT_OBSERVER_ACCESS_TOKEN = "edcr"
+
+
 def _is_loopback_ipv4(host: str) -> bool:
     return host.startswith("127.")
 
@@ -2125,8 +2128,8 @@ def main() -> None:
 
         if args.lan and args.host:
             parser.error("serve --lan cannot be combined with --host")
-        if not args.token:
-            parser.error("serve requires --token")
+        access_token = args.token or DEFAULT_OBSERVER_ACCESS_TOKEN
+        web_default_access_token = "" if args.token else DEFAULT_OBSERVER_ACCESS_TOKEN
         try:
             host = _detect_lan_host() if args.lan else args.host or "127.0.0.1"
         except RuntimeError as exc:
@@ -2135,7 +2138,8 @@ def main() -> None:
             config_path=args.config,
             host=host,
             port=args.port,
-            access_token=args.token,
+            access_token=access_token,
+            web_default_access_token=web_default_access_token,
         )
         return
     if args.mode == "connect":

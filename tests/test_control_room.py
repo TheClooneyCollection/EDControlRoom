@@ -34,7 +34,12 @@ from edap.config import (
 from edap.control_room import error_text
 from edap.control_room import commands as control_room_commands
 from edap.control_room import prompts as control_room_prompts
-from edap.control_room.app import ActivityLog, _JOURNAL_ARTIFACT_LOG_FLUSH_EVERY, _detect_lan_host
+from edap.control_room.app import (
+    DEFAULT_OBSERVER_ACCESS_TOKEN,
+    ActivityLog,
+    _JOURNAL_ARTIFACT_LOG_FLUSH_EVERY,
+    _detect_lan_host,
+)
 from edap.control_room.backend import ControlRoomBackendEventHandler
 from edap.control_room.failure_messages import describe_routine_failure
 from edap.control_room.events import apply_ship_event
@@ -492,6 +497,21 @@ class ControlRoomCliTests(unittest.TestCase):
             host="192.168.1.42",
             port=8765,
             access_token="1001",
+            web_default_access_token="",
+        )
+
+    def test_serve_uses_default_token_when_token_is_omitted(self) -> None:
+        with patch("sys.argv", ["control_room.py", "serve"]), patch(
+            "edap.control_room.server.serve.serve_observer_mode"
+        ) as serve:
+            main()
+
+        serve.assert_called_once_with(
+            config_path="config.toml",
+            host="127.0.0.1",
+            port=8765,
+            access_token=DEFAULT_OBSERVER_ACCESS_TOKEN,
+            web_default_access_token=DEFAULT_OBSERVER_ACCESS_TOKEN,
         )
 
     def test_serve_lan_rejects_explicit_host(self) -> None:

@@ -52,6 +52,7 @@ def build_observer_server_app(
     command_handler: ObserverSessionCommandHandler | None,
     broker: InMemoryObserverSessionBroker,
     auth: ObserverServerAuth,
+    web_default_access_token: str = "",
 ) -> Starlette:
     def unauthorized_response() -> JSONResponse:
         return JSONResponse(
@@ -110,7 +111,11 @@ def build_observer_server_app(
         return HTMLResponse(CONTROL_ROOM_BROWSER_PROBE_HTML)
 
     async def haul_web(request):
-        return HTMLResponse(CONTROL_ROOM_HAUL_V1_HTML)
+        html = CONTROL_ROOM_HAUL_V1_HTML.replace(
+            'const SERVER_DEFAULT_ACCESS_TOKEN = "";',
+            f"const SERVER_DEFAULT_ACCESS_TOKEN = {json.dumps(web_default_access_token)};",
+        )
+        return HTMLResponse(html)
 
     async def session(websocket: WebSocket) -> None:
         if not auth.is_websocket_authorized(websocket):

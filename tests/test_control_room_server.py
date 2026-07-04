@@ -523,6 +523,28 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertIn("Two-way haul control", response.text)
         self.assertIn("Set destination", response.text)
         self.assertIn("Start route", response.text)
+        self.assertIn('id="token-dialog"', response.text)
+        self.assertIn("showAccessTokenPrompt", response.text)
+        self.assertIn("handleAccessTokenRejected", response.text)
+        self.assertIn("Access token rejected", response.text)
+        self.assertNotIn("window.prompt", response.text)
+        self.assertIn('const SERVER_DEFAULT_ACCESS_TOKEN = "";', response.text)
+
+    def test_haul_web_endpoint_can_inject_implicit_serve_token(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        app = build_observer_server_app(
+            data_provider=_base_data_read_model,
+            command_handler=None,
+            broker=broker,
+            auth=SharedAccessTokenAuth("edcr"),
+            web_default_access_token="edcr",
+        )
+
+        with TestClient(app) as client:
+            response = client.get(HAUL_WEB_URL_PATH)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('const SERVER_DEFAULT_ACCESS_TOKEN = "edcr";', response.text)
 
     def test_haul_rest_action_endpoints_are_not_registered(self) -> None:
         broker = InMemoryObserverSessionBroker()

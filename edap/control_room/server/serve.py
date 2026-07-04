@@ -24,6 +24,7 @@ def serve_observer_mode(
     host: str,
     port: int,
     access_token: str,
+    web_default_access_token: str = "",
 ) -> None:
     loaded = load_config_with_fallback(config_path)
     ctx = build_runtime_context(
@@ -64,6 +65,7 @@ def serve_observer_mode(
         command_handler=runtime_host,
         broker=broker,
         auth=SharedAccessTokenAuth(access_token),
+        web_default_access_token=web_default_access_token,
     )
     try:
         uvicorn.run(app, host=host, port=port, log_level="info")

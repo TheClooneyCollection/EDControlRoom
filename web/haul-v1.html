@@ -256,6 +256,53 @@
       cursor: pointer;
     }
 
+    .token-dialog {
+      width: min(420px, calc(100vw - 32px));
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      background: var(--bg-1);
+      color: var(--text-1);
+      padding: 0;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
+    }
+
+    .token-dialog::backdrop {
+      background: rgba(4, 8, 13, 0.72);
+    }
+
+    .token-dialog-card {
+      padding: 18px;
+    }
+
+    .token-dialog-title {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 650;
+    }
+
+    .token-dialog-text {
+      margin: 8px 0 14px;
+      color: var(--text-3);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .token-dialog-text.warning {
+      color: var(--amber);
+    }
+
+    .token-dialog .token-input {
+      width: 100%;
+      border-radius: 6px;
+    }
+
+    .token-dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
     main {
       padding: 22px 24px 34px;
       max-width: 1480px;
@@ -1019,6 +1066,18 @@
     </div>
   </div>
 
+  <dialog class="token-dialog" id="token-dialog" aria-labelledby="token-dialog-title">
+    <div class="token-dialog-card">
+      <h2 class="token-dialog-title" id="token-dialog-title">Connect to Control Room</h2>
+      <p class="token-dialog-text" id="token-dialog-message">Enter the shared access token for this server.</p>
+      <input class="token-input" id="prompt-access-token" type="password" placeholder="Access token" autocomplete="off" aria-label="Access token">
+      <div class="token-dialog-actions">
+        <button class="btn ghost" id="cancel-token-prompt" type="button">Cancel</button>
+        <button class="btn primary" id="connect-token-prompt" type="button">Connect</button>
+      </div>
+    </div>
+  </dialog>
+
   <script>
     let routes = [];
     let selectedRouteIndex = 0;
@@ -1026,8 +1085,10 @@
     let routePage = 1;
     const ROUTES_PER_PAGE = 12;
     const TOKEN_STORAGE_KEY = "edcr.haul.accessToken";
+    const SERVER_DEFAULT_ACCESS_TOKEN = "";
     const queryAccessToken = new URLSearchParams(window.location.search).get("access_token") || "";
-    let accessToken = queryAccessToken || window.localStorage.getItem(TOKEN_STORAGE_KEY) || "";
+    const cachedAccessToken = window.localStorage.getItem(TOKEN_STORAGE_KEY) || "";
+    let accessToken = queryAccessToken || cachedAccessToken || SERVER_DEFAULT_ACCESS_TOKEN;
     let socket = null;
     let clientRole = "observer";
     let commandSequence = 1;
@@ -1136,23 +1197,34 @@
       }
       const existingSocket = socket;
       socket = null;
+      existingSocket.edcrIntentionalClose = true;
       existingSocket.close();
     }
 
     function connectWebsocket() {
       if (!accessToken) {
-        appendActivity("Enter and save an access token to connect backend.", "Session", "warning");
+        showAccessTokenPrompt("Enter the shared access token for this server.");
+        appendActivity("Set an access token to connect backend.", "Session", "warning");
         updateOperatorState();
         return;
       }
       disconnectWebsocket();
       socket = new WebSocket(websocketUrl());
+      let receivedConnectionReady = false;
       socket.addEventListener("open", () => {
         appendActivity("Websocket connected.", "Session", "success");
         updateOperatorState();
       });
-      socket.addEventListener("close", () => {
+      socket.addEventListener("close", (event) => {
+        if (event.currentTarget.edcrIntentionalClose) {
+          return;
+        }
         clientRole = "observer";
+        if (accessToken && (event.code === 4401 || !receivedConnectionReady)) {
+          handleAccessTokenRejected();
+          updateOperatorState();
+          return;
+        }
         appendActivity("Websocket disconnected.", "Session", "warning");
         updateOperatorState();
       });
@@ -1162,6 +1234,7 @@
       socket.addEventListener("message", (event) => {
         const message = JSON.parse(event.data);
         if (message.message_type === "event.connection_ready") {
+          receivedConnectionReady = true;
           clientRole = message.payload.client_role || "observer";
           appendActivity(`Connected as ${clientRole.replace("_", " ")}.`, "Session", "success");
           updateOperatorState();
@@ -1206,6 +1279,55 @@
         window.localStorage.removeItem(TOKEN_STORAGE_KEY);
         appendActivity("Access token cleared.", "Session", "warning");
       }
+      clientRole = "observer";
+      updateOperatorState();
+      connectWebsocket();
+    }
+
+    function setAccessTokenPromptMessage(message, badgeClass = "neutral") {
+      const promptMessage = document.getElementById("token-dialog-message");
+      promptMessage.textContent = message;
+      promptMessage.classList.toggle("warning", badgeClass === "warning");
+    }
+
+    function showAccessTokenPrompt(message = "Enter the shared access token for this server.", badgeClass = "neutral") {
+      const dialog = document.getElementById("token-dialog");
+      setAccessTokenPromptMessage(message, badgeClass);
+      if (dialog.open) {
+        return;
+      }
+      document.getElementById("prompt-access-token").value = accessToken;
+      dialog.showModal();
+      window.requestAnimationFrame(() => document.getElementById("prompt-access-token").focus());
+    }
+
+    function closeAccessTokenPrompt() {
+      const dialog = document.getElementById("token-dialog");
+      if (dialog.open) {
+        dialog.close();
+      }
+    }
+
+    function handleAccessTokenRejected() {
+      accessToken = "";
+      window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+      document.getElementById("access-token").value = "";
+      document.getElementById("prompt-access-token").value = "";
+      appendActivity("Access token rejected by backend. Enter the shared token for this server.", "Session", "warning");
+      showAccessTokenPrompt("Access token rejected. Enter the shared token for this server.", "warning");
+    }
+
+    function submitAccessTokenPrompt() {
+      accessToken = document.getElementById("prompt-access-token").value.trim();
+      document.getElementById("access-token").value = accessToken;
+      if (!accessToken) {
+        appendActivity("Access token is required to connect backend.", "Session", "warning");
+        updateOperatorState();
+        return;
+      }
+      window.localStorage.setItem(TOKEN_STORAGE_KEY, accessToken);
+      appendActivity("Access token saved locally.", "Session", "success");
+      closeAccessTokenPrompt();
       clientRole = "observer";
       updateOperatorState();
       connectWebsocket();
@@ -1595,6 +1717,14 @@
     document.getElementById("galaxy-settle").addEventListener("input", updateCommandPreview);
     document.getElementById("dock-timeout").addEventListener("input", updateCommandPreview);
     document.getElementById("save-token").addEventListener("click", saveAccessToken);
+    document.getElementById("connect-token-prompt").addEventListener("click", submitAccessTokenPrompt);
+    document.getElementById("cancel-token-prompt").addEventListener("click", closeAccessTokenPrompt);
+    document.getElementById("prompt-access-token").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        submitAccessTokenPrompt();
+      }
+    });
     document.getElementById("access-token").addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
