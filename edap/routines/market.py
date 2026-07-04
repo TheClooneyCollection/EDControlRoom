@@ -6,7 +6,10 @@ from pathlib import Path
 from time import monotonic, sleep
 from typing import Callable
 
-from edap.cargo_manifest import read_cargo_inventory as read_cargo_inventory_with_retry
+from edap.cargo_manifest import (
+    cargo_item_matches_commodity,
+    read_cargo_inventory as read_cargo_inventory_with_retry,
+)
 from edap.actions import ActionDispatchResult
 from edap.config import MarketBuyHoldSegmentConfig
 from edap.routines._base import (
@@ -257,14 +260,10 @@ def _read_sell_quantity(journal_dir: Path, target: str) -> int | None:
     inventory = _read_cargo_inventory(journal_dir)
     if inventory is None:
         return None
-    target_lower = target.lower()
     for item in inventory:
         if not isinstance(item, dict):
             return None
-        if (
-            str(item.get("Name", "")).lower() != target_lower
-            and str(item.get("Name_Localised", "")).lower() != target_lower
-        ):
+        if not cargo_item_matches_commodity(item, target):
             continue
         count = item.get("Count", 0)
         if isinstance(count, bool) or not isinstance(count, (int, float)) or count < 0:

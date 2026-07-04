@@ -8,6 +8,27 @@ from typing import Any, Callable
 from edap.status import read_status
 
 
+def commodity_name_key(value: object) -> str:
+    raw = str(value or "").strip().lower()
+    if raw.startswith("$"):
+        raw = raw[1:]
+    if raw.endswith(";"):
+        raw = raw[:-1]
+    if raw.endswith("_name"):
+        raw = raw[:-5]
+    return "".join(ch for ch in raw if ch.isalnum())
+
+
+def cargo_item_matches_commodity(item: dict[str, Any], commodity: str) -> bool:
+    target_key = commodity_name_key(commodity)
+    if not target_key:
+        return False
+    return any(
+        commodity_name_key(item.get(key)) == target_key
+        for key in ("Name", "Name_Localised")
+    )
+
+
 def _read_cargo_inventory_once(journal_dir: Path) -> list[dict[str, Any]]:
     cargo_path = journal_dir / "Cargo.json"
     try:

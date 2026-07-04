@@ -96,6 +96,11 @@ class LoadConfigTests(unittest.TestCase):
                 "Docking denied at {station_name}. Pads are full. Holding position and retrying.",
             )
             self.assertEqual(
+                config.tts.phrases["haul_cargo_state_stale"],
+                "{title}, cargo hold already has {cargo_count} tonnes, but cargo details are stale. "
+                "Please relog, then resume haul.",
+            )
+            self.assertEqual(
                 config.error_messages.templates["station_mismatch_message"],
                 "Station mismatch: market data indicates {market_station}, but we are docked at {docked_station}.",
             )

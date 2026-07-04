@@ -280,6 +280,29 @@ class TwoWayHaulLoopTests(unittest.TestCase):
 
         self.assertEqual(phase, Phase.UNDOCK_STATION_2)
 
+    def test_detect_start_phase_matches_elite_raw_cargo_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_journal(
+                journal_dir,
+                {
+                    "event": "Docked",
+                    "StationName": _STATION_2,
+                    "StarSystem": _SYSTEM_2,
+                    "CargoCapacity": 64,
+                },
+            )
+            _write_cargo(journal_dir, [{"Name": "$aluminium_name;", "Count": 64, "Stolen": 0}])
+
+            phase = _detect_start_phase(
+                journal_dir,
+                station_1=_station_1_leg(),
+                station_2=_station_2_leg(),
+                progress_fn=noop_progress,
+            )
+
+        self.assertEqual(phase, Phase.AT_STATION_2_SELL)
+
     def test_detect_start_phase_docked_at_station_1_with_partial_station_1_cargo_stays_in_buy(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             journal_dir = Path(tmp)
@@ -654,6 +677,43 @@ class TwoWayHaulLoopTests(unittest.TestCase):
         self.assertEqual(calls, [("buy", _CARGO_1), ("sell", "Gold"), ("buy", _CARGO_1)])
         self.assertIn("Wrong cargo sold; retrying intended buy.", progress)
         self.assertIn((AnnouncementId.SELLING_CARGO, {"commodity_name": "Gold"}), announcements)
+
+    def test_buy_phase_aborts_when_status_reports_cargo_but_manifest_is_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_cargo(journal_dir, [])
+            (journal_dir / "Status.json").write_text(
+                json.dumps({"Flags": 0, "Cargo": 429}),
+                encoding="utf-8",
+            )
+            controls = FakeShipControls()
+            watcher = FakeWatcher([])
+            progress: list[str] = []
+            announcements: list[tuple[AnnouncementId, dict[str, object]]] = []
+            ctx = _HaulCtx(
+                runtime=_test_haul_runtime(
+                    journal_dir,
+                    controls,
+                    watcher,
+                    progress_fn=progress.append,
+                    announce_fn=lambda message_id, **values: announcements.append((message_id, values)),
+                ),
+                station_1=_station_1_leg(),
+                station_2=_station_2_leg(),
+            )
+
+            with patch("edap.routines.haul_two_way._read_cargo_json", return_value=[]), patch(
+                "edap.routines.haul_two_way.market_buy"
+            ) as market_buy_mock:
+                result, next_phase = _run_market_buy(ctx, leg=ctx.station_1, next_phase=Phase.UNDOCK_STATION_1)
+
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertEqual(next_phase, Phase.UNDOCK_STATION_1)
+        market_buy_mock.assert_not_called()
+        self.assertIn("cargo hold already reports 429t loaded", result.dispatch.reason or "")
+        self.assertIn("relog", result.dispatch.reason or "")
+        self.assertTrue(any("cargo hold already reports 429t loaded" in line for line in progress))
+        self.assertIn((AnnouncementId.HAUL_CARGO_STATE_STALE, {"cargo_count": 429}), announcements)
 
     def test_buy_phase_aborts_after_second_wrong_cargo_recovery(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

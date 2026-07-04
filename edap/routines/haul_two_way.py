@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Callable
 
 from edap.actions import ActionDispatchResult
+from edap.cargo_manifest import cargo_item_matches_commodity, commodity_name_key
 from edap.routines._base import RoutineResult
 from edap.routines.callbacks import ProgressCallback
 from edap.routines.docking import _undock_until_undocked, _wait_for_clear_of_station, dock, station_refuel_menu
@@ -29,6 +30,7 @@ from edap.routines.haul_support import (
 )
 from edap.routines.market import market_buy, market_sell
 from edap.state import get_latest_journal_log, read_ship_state
+from edap.status import read_status
 from edap.tts import AnnouncementId
 
 
@@ -45,13 +47,9 @@ _is_manual_landing_result = is_manual_landing_result
 def _inventory_has_commodity(inventory: list[dict], commodity: str) -> bool:
     if not commodity:
         return False
-    commodity_lower = commodity.lower()
     return any(
         item.get("Count", 0) > 0
-        and (
-            str(item.get("Name", "")).lower() == commodity_lower
-            or str(item.get("Name_Localised", "")).lower() == commodity_lower
-        )
+        and cargo_item_matches_commodity(item, commodity)
         for item in inventory
     )
 
@@ -59,26 +57,18 @@ def _inventory_has_commodity(inventory: list[dict], commodity: str) -> bool:
 def _inventory_commodity_count(inventory: list[dict], commodity: str) -> int:
     if not commodity:
         return 0
-    commodity_lower = commodity.lower()
     total = 0
     for item in inventory:
         count = item.get("Count", 0)
         if isinstance(count, bool) or not isinstance(count, (int, float)):
             continue
-        if (
-            str(item.get("Name", "")).lower() == commodity_lower
-            or str(item.get("Name_Localised", "")).lower() == commodity_lower
-        ):
+        if cargo_item_matches_commodity(item, commodity):
             total += max(0, int(count))
     return total
 
 
 def _inventory_item_matches(item: dict, commodity: str) -> bool:
-    commodity_lower = commodity.lower()
-    return (
-        str(item.get("Name", "")).lower() == commodity_lower
-        or str(item.get("Name_Localised", "")).lower() == commodity_lower
-    )
+    return cargo_item_matches_commodity(item, commodity)
 
 
 def _inventory_item_display_name(item: dict) -> str:
@@ -119,6 +109,25 @@ def _inventory_has_full_commodity_load(
     commodity_count = _inventory_commodity_count(inventory, commodity)
     used_capacity = _inventory_used_capacity(inventory)
     return commodity_count >= cargo_capacity and used_capacity == commodity_count
+
+
+def _status_cargo_count(journal_dir: Path) -> int | None:
+    try:
+        status = read_status(journal_dir)
+    except Exception:
+        return None
+    if status is None or status.cargo is None:
+        return None
+    return int(status.cargo)
+
+
+def _stale_cargo_state_before_buy(journal_dir: Path) -> int | None:
+    status_count = _status_cargo_count(journal_dir)
+    if status_count is None or status_count <= 0:
+        return None
+    if _sellable_cargo(_read_cargo_json(journal_dir)):
+        return None
+    return status_count
 
 
 class Phase(Enum):
@@ -366,6 +375,16 @@ def _run_market_buy(
             ),
             next_phase,
         )
+    stale_cargo_count = _stale_cargo_state_before_buy(runtime.journal_dir)
+    if stale_cargo_count is not None:
+        reason = (
+            f"Cannot buy {leg.buy_commodity} at {leg.label}: the cargo hold already reports "
+            f"{stale_cargo_count}t loaded, but Elite did not report what cargo it is. "
+            "Cargo data may be stale; relog or reopen the cargo/market screen, then resume haul."
+        )
+        runtime.progress_fn(f"Error: {reason}")
+        runtime.announce_fn(AnnouncementId.HAUL_CARGO_STATE_STALE, cargo_count=stale_cargo_count)
+        return _error_routine_result(reason), next_phase
     while True:
         runtime.progress_fn(f"Buying {leg.buy_commodity} at {leg.label} (MAX)...")
         runtime.announce_fn(AnnouncementId.BUYING_CARGO, commodity_name=leg.buy_commodity)
@@ -425,7 +444,7 @@ def _wrong_buy_commodity_after_buy(
     if (result.details or {}).get("phase") != "wrong_item":
         return ""
     wrong_commodity = str((result.details or {}).get("wrong_commodity", "")).strip()
-    if wrong_commodity and wrong_commodity.lower() != expected_commodity.lower():
+    if wrong_commodity and commodity_name_key(wrong_commodity) != commodity_name_key(expected_commodity):
         return wrong_commodity
     return ""
 

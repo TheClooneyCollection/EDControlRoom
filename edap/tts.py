@@ -20,6 +20,7 @@ class AnnouncementId(str, Enum):
     HAUL_CANCELLED = "haul_cancelled"
     HAUL_STOP_AFTER_RUN = "haul_stop_after_run"
     HAUL_WRONG_CARGO_ABORTED = "haul_wrong_cargo_aborted"
+    HAUL_CARGO_STATE_STALE = "haul_cargo_state_stale"
     ROUTE_UNCONFIRMED = "route_unconfirmed"
     BUYING_CARGO = "buying_cargo"
     SELLING_CARGO = "selling_cargo"
