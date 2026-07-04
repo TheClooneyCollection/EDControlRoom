@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from edap.control_room.routine_stop import RoutineStopMode
 from edap.inara.trade_routes import TradeRoute
 
 
@@ -25,7 +26,7 @@ class ObserverSessionCommandHandler(Protocol):
         raw_command: str | None = None,
     ) -> None: ...
 
-    def cancel_active_routine(self) -> None: ...
+    def cancel_active_routine(self, *, stop_mode: RoutineStopMode = "toggle") -> None: ...
 
 
 def trade_route_from_payload(payload: object) -> TradeRoute | None:

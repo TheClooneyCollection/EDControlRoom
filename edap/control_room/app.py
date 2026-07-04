@@ -109,6 +109,7 @@ from edap.control_room.protocol.events import (
     DataUpdatedEvent,
 )
 from edap.control_room.protocol.sink import ControlRoomEventSink
+from edap.control_room.routine_stop import RoutineStopMode
 from edap.inara.trade_routes import TradeRoute
 
 # Modules eligible for in-place hot reload via the `reload` command.
@@ -1671,7 +1672,18 @@ class ControlRoomApp(App[None]):
             return
         self._cancel_active_routine(source)
 
-    def _cancel_active_routine(self, source: str) -> None:
+    def _handle_routine_stop_request(self, source: str, *, stop_mode: RoutineStopMode) -> None:
+        if self._cancel_prompt_flow(source):
+            return
+        self._cancel_active_routine(source, stop_mode=stop_mode)
+
+    def _cancel_active_routine(self, source: str, *, stop_mode: RoutineStopMode = "toggle") -> None:
+        if stop_mode == "after_run":
+            self._request_deferred_haul_stop(source)
+            return
+        if stop_mode == "now":
+            self._cancel_active_routine_now(source)
+            return
         if self._routine_worker is None:
             if self._backend.exit_detaches_remote_session() and self._routine_active:
                 self._dependencies.execution.cancel_active_routine()
@@ -1707,6 +1719,64 @@ class ControlRoomApp(App[None]):
             self._log(f"[yellow]{escape(source)} received — cancelling active routine.[/]")
             if self._active_routine_name in {"haul", "multi_leg_haul"}:
                 self._announce_tts(AnnouncementId.HAUL_CANCELLED)
+        self._routine_worker.cancel()
+
+    def _request_deferred_haul_stop(self, source: str) -> None:
+        if self._routine_worker is None:
+            if self._backend.exit_detaches_remote_session() and self._routine_active:
+                self._dependencies.execution.cancel_active_routine(stop_mode="after_run")
+                self._log(f"[yellow]{escape(source)} received — requesting haul stop after this run.[/]")
+                return
+            self._routine_active = False
+            self._active_routine_name = None
+            self._clear_pending_haul_stop()
+            self._log(f"[yellow]{escape(source)} received — no active routine to stop.[/]")
+            return
+        if self._active_routine_name == "haul":
+            if self._haul_stop_requested:
+                self._log(f"[yellow]{escape(source)} received — haul stop after this run is already pending.[/]")
+                return
+            self._haul_stop_requested = True
+            self._log(
+                f"[yellow]{escape(source)} received — haul will stop after this run at station 1 before a new cycle.[/]"
+            )
+            self._announce_tts(AnnouncementId.HAUL_STOP_AFTER_RUN)
+            return
+        if self._active_routine_name == "multi_leg_haul":
+            if self._haul_stop_requested:
+                self._log(f"[yellow]{escape(source)} received — multi-leg haul stop is already pending.[/]")
+                return
+            self._haul_stop_requested = True
+            self._log(
+                f"[yellow]{escape(source)} received — multi-leg haul will stop at the next station boundary before departure.[/]"
+            )
+            return
+        self._log(
+            f"[yellow]{escape(source)} received — deferred stop is only available for haul routines; cancelling active routine now.[/]"
+        )
+        self._cancel_active_routine_now(source)
+
+    def _cancel_active_routine_now(self, source: str) -> None:
+        if self._routine_worker is None:
+            if self._backend.exit_detaches_remote_session() and self._routine_active:
+                self._dependencies.execution.cancel_active_routine(stop_mode="now")
+                self._log(f"[yellow]{escape(source)} received — cancelling active routine immediately.[/]")
+                return
+            self._routine_active = False
+            self._active_routine_name = None
+            self._clear_pending_haul_stop()
+            self._log(f"[yellow]{escape(source)} received — no active routine to cancel.[/]")
+            return
+        active_name = self._active_routine_name
+        self._clear_pending_haul_stop()
+        if active_name == "haul":
+            self._log(f"[yellow]{escape(source)} received — cancelling haul immediately.[/]")
+            self._announce_tts(AnnouncementId.HAUL_CANCELLED)
+        elif active_name == "multi_leg_haul":
+            self._log(f"[yellow]{escape(source)} received — cancelling multi-leg haul immediately.[/]")
+            self._announce_tts(AnnouncementId.HAUL_CANCELLED)
+        else:
+            self._log(f"[yellow]{escape(source)} received — cancelling active routine immediately.[/]")
         self._routine_worker.cancel()
 
     def _clear_pending_haul_stop(self) -> None:

@@ -429,7 +429,9 @@ Payload:
 
 ### `command.cancel_active_routine`
 
-Payload: empty object
+Payload:
+
+- `mode` optional: `toggle` preserves legacy Ctrl-C behavior, `after_run` requests the haul boundary stop, and `now` cancels the active routine immediately.
 
 ### `response.success`
 

@@ -355,7 +355,7 @@ class _ExecutionRecorder:
     def handle_haul_confirm_prompt(self, value: str) -> None:
         return None
 
-    def cancel_active_routine(self) -> None:
+    def cancel_active_routine(self, *, stop_mode="toggle") -> None:
         return None
 
 

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
 from edap.control_room.models import HaulStats, MarketData, ShipState
+from edap.control_room.routine_stop import RoutineStopMode
 from edap.control_room_state import CommandHistoryEntry
 from edap.inara.trade_routes import TradeRoute
 
@@ -111,7 +112,7 @@ class ControlRoomExecution(Protocol):
 
     def handle_haul_confirm_prompt(self, value: str) -> None: ...
 
-    def cancel_active_routine(self) -> None: ...
+    def cancel_active_routine(self, *, stop_mode: RoutineStopMode = "toggle") -> None: ...
 
 
 @dataclass(frozen=True)
@@ -236,8 +237,11 @@ class LocalControlRoomExecution:
     def handle_haul_confirm_prompt(self, value: str) -> None:
         self._app._facade.handle_haul_confirm_prompt(value)
 
-    def cancel_active_routine(self) -> None:
-        self._app._handle_interrupt("Ctrl-C")
+    def cancel_active_routine(self, *, stop_mode: RoutineStopMode = "toggle") -> None:
+        if stop_mode == "toggle":
+            self._app._handle_interrupt("Ctrl-C")
+            return
+        self._app._handle_routine_stop_request("Ctrl-C", stop_mode=stop_mode)
 
 
 def build_local_control_room_dependencies(app: ControlRoomApp) -> ControlRoomDependencies:

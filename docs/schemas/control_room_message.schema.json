@@ -289,7 +289,13 @@
     },
     "command_cancel_active_routine_payload": {
       "type": "object",
-      "additionalProperties": false
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["toggle", "after_run", "now"]
+        }
+      }
     },
     "response_capabilities_payload": {
       "type": "object",

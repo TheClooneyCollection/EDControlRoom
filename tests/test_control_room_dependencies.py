@@ -58,8 +58,8 @@ class _FakeExecution:
     def handle_haul_confirm_prompt(self, *args, **kwargs) -> None:
         self.calls.append(("handle_haul_confirm_prompt", args, kwargs))
 
-    def cancel_active_routine(self) -> None:
-        self.calls.append(("cancel_active_routine", (), {}))
+    def cancel_active_routine(self, *, stop_mode="toggle") -> None:
+        self.calls.append(("cancel_active_routine", (), {"stop_mode": stop_mode}))
 
 
 class ControlRoomDependenciesTests(unittest.TestCase):

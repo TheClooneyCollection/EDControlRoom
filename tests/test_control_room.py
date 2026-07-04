@@ -608,6 +608,36 @@ class ControlRoomCommandTests(unittest.TestCase):
         )
         self.assertIn("stop after this run", "\n".join(self.app.logged))
 
+    def test_explicit_stop_after_run_on_haul_schedules_stop_after_run(self) -> None:
+        worker = _FakeWorker()
+        self.app._routine_active = True
+        self.app._routine_worker = worker
+        self.app._active_routine_name = "haul"
+        self.app._tts = _FakeTTS()
+
+        self.app._handle_routine_stop_request("Web stop", stop_mode="after_run")
+
+        self.assertFalse(worker.cancelled)
+        self.assertTrue(self.app._haul_stop_requested)
+        self.assertIn(
+            (AnnouncementId.HAUL_STOP_AFTER_RUN, {}),
+            self.app._tts.calls,
+        )
+
+    def test_explicit_stop_now_on_haul_cancels_immediately_without_pending_stop(self) -> None:
+        worker = _FakeWorker()
+        self.app._routine_active = True
+        self.app._routine_worker = worker
+        self.app._active_routine_name = "haul"
+        self.app._tts = _FakeTTS()
+
+        self.app._handle_routine_stop_request("Web stop", stop_mode="now")
+
+        self.assertTrue(worker.cancelled)
+        self.assertFalse(self.app._haul_stop_requested)
+        self.assertIn((AnnouncementId.HAUL_CANCELLED, {}), self.app._tts.calls)
+        self.assertIn("cancelling haul immediately", "\n".join(self.app.logged))
+
     def test_request_interrupt_on_haul_cancels_immediately_when_stop_already_pending(self) -> None:
         worker = _FakeWorker()
         self.app._routine_active = True

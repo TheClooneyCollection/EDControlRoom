@@ -231,7 +231,7 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
         self.dispatched_destinations: list[tuple[str, float, bool, str | None]] = []
         self.dispatched_hauls: list[tuple[dict[str, str] | None, bool, str | None]] = []
         self.loaded_trade_routes: list[tuple[object, str | None]] = []
-        self.cancel_calls = 0
+        self.cancel_modes: list[str] = []
 
     def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None:
         self.submitted_inputs.append((raw_input, skip_delay))
@@ -260,8 +260,8 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
     def load_trade_route(self, route, *, raw_command: str | None = None) -> None:
         self.loaded_trade_routes.append((route, raw_command))
 
-    def cancel_active_routine(self) -> None:
-        self.cancel_calls += 1
+    def cancel_active_routine(self, *, stop_mode="toggle") -> None:
+        self.cancel_modes.append(stop_mode)
 
 
 class ControlRoomServerTests(unittest.TestCase):
@@ -1117,9 +1117,49 @@ class ControlRoomServerTests(unittest.TestCase):
             broker=broker,
         )
 
-        self.assertEqual(command_handler.cancel_calls, 1)
+        self.assertEqual(command_handler.cancel_modes, ["toggle"])
         self.assertEqual(response["message_type"], "response.success")
         self.assertEqual(response["correlation_message_id"], "message-cancel")
+
+    def test_active_operator_cancel_active_routine_passes_stop_mode(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        command_handler = _CommandHandlerRecorder()
+
+        response = _handle_session_message(
+            {
+                "message_type": "command.cancel_active_routine",
+                "message_id": "message-stop-after-run",
+                "payload": {"mode": "after_run"},
+            },
+            session_id="observer-stop-after-run",
+            client_role="active_operator",
+            command_handler=command_handler,
+            broker=broker,
+        )
+
+        self.assertEqual(command_handler.cancel_modes, ["after_run"])
+        self.assertEqual(response["message_type"], "response.success")
+        self.assertEqual(response["payload"]["message_text"], "Routine stop-after-run requested.")
+
+    def test_active_operator_cancel_active_routine_passes_now_mode(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        command_handler = _CommandHandlerRecorder()
+
+        response = _handle_session_message(
+            {
+                "message_type": "command.cancel_active_routine",
+                "message_id": "message-stop-now",
+                "payload": {"mode": "now"},
+            },
+            session_id="observer-stop-now",
+            client_role="active_operator",
+            command_handler=command_handler,
+            broker=broker,
+        )
+
+        self.assertEqual(command_handler.cancel_modes, ["now"])
+        self.assertEqual(response["message_type"], "response.success")
+        self.assertEqual(response["payload"]["message_text"], "Routine cancellation requested.")
 
     def test_observer_cancel_active_routine_is_rejected(self) -> None:
         broker = InMemoryObserverSessionBroker()

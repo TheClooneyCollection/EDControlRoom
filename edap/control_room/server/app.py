@@ -29,6 +29,7 @@ from edap.control_room.protocol import (
     build_remote_observer_capabilities_payload,
     hydrate_message,
 )
+from edap.control_room.routine_stop import normalize_routine_stop_mode
 from edap.control_room.server.messages import protocol_message
 
 MESSAGE_SCHEMA_URL_PATH = "/schema/control_room_message.json"
@@ -667,8 +668,9 @@ def _handle_session_message(
                 },
                 correlation_message_id=correlation_message_id,
             )
+        stop_mode = normalize_routine_stop_mode(payload.get("mode"))
         try:
-            command_handler.cancel_active_routine()
+            command_handler.cancel_active_routine(stop_mode=stop_mode)
         except Exception as exc:
             return protocol_message(
                 "response.error",
@@ -684,7 +686,11 @@ def _handle_session_message(
             "response.success",
             {
                 "accepted": True,
-                "message_text": "Routine cancellation requested.",
+                "message_text": (
+                    "Routine stop-after-run requested."
+                    if stop_mode == "after_run"
+                    else "Routine cancellation requested."
+                ),
             },
             correlation_message_id=correlation_message_id,
         )

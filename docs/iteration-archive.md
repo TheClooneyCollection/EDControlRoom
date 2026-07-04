@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `205`
-- Latest generated iteration number: `338`
+- Generated iteration count: `206`
+- Latest generated iteration number: `339`
 
 ## Iteration 134
 
@@ -5697,3 +5697,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-check `/haul` from both `serve` and `serve --token ...` sessions to confirm the browser token prompt/default feels right.
+
+## Iteration 339
+
+- When: `2026-07-04 11:47`
+- Area: `web`
+- Title: `explicit-routine-stop-controls`
+- Source: [2026-07-04-11-47_____web______explicit-routine-stop-controls.md](iteration-logs/2026-07-04-11-47_____web______explicit-routine-stop-controls.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `explicit-routine-stop-controls`
+- Started: `2026-07-04 11:47`
+
+## Summary
+
+- Replaced the passive Haul Web emergency-stop chip with explicit `Stop after run` and `Stop now` controls backed by websocket stop modes.
+
+## Changes
+
+- Extended `command.cancel_active_routine` with optional `mode` values: legacy `toggle`, deferred haul `after_run`, and immediate `now`.
+- Routed explicit stop modes through remote backend, server command handler, headless host, and local execution dependencies into `ControlRoomApp`.
+- Added app/server/client/static-web regression coverage for the new stop-mode payloads and controls.
+
+## Follow-ups
+
+- Live-check `Stop after run` and `Stop now` from `/haul` against an active `control_room.py serve` session to confirm operator feedback and TTS feel right in-game.

@@ -25,6 +25,7 @@ from edap.control_room.protocol import (
     protocol_timestamp_now,
     validate_remote_observer_capabilities_payload,
 )
+from edap.control_room.routine_stop import RoutineStopMode
 from edap.control_room_state import CommandHistoryEntry
 from edap.inara.trade_routes import TradeRoute
 from .target import ObserverServerTarget
@@ -131,8 +132,9 @@ class RemoteObserverBackend(ControlRoomBackend):
             return
         self.dispatch_command(raw)
 
-    def interrupt_active_routine(self) -> None:
-        self._send_command("command.cancel_active_routine", {})
+    def interrupt_active_routine(self, *, stop_mode: RoutineStopMode = "toggle") -> None:
+        payload = {} if stop_mode == "toggle" else {"mode": stop_mode}
+        self._send_command("command.cancel_active_routine", payload)
 
     def exit_detaches_remote_session(self) -> bool:
         return True
@@ -398,8 +400,8 @@ class RemoteObserverExecution:
             default_placeholder=app._default_command_placeholder,
         )
 
-    def cancel_active_routine(self) -> None:
-        self._backend.interrupt_active_routine()
+    def cancel_active_routine(self, *, stop_mode: RoutineStopMode = "toggle") -> None:
+        self._backend.interrupt_active_routine(stop_mode=stop_mode)
 
     def _require_app(self) -> ControlRoomApp:
         if self._app is None:

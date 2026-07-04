@@ -10,6 +10,7 @@ from rich.markup import escape
 from edap.control_room import bootstrap as _bootstrap
 from edap.control_room.app import ControlRoomApp
 from edap.control_room.history import now_iso
+from edap.control_room.routine_stop import RoutineStopMode
 from edap.control_room_state import CommandHistoryEntry
 from edap.runtime import RuntimeContext
 from edap.state import JournalWatcher
@@ -229,8 +230,11 @@ class HeadlessControlRoomHost(ControlRoomApp):
     def handle_remote_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None:
         self.submit_input(raw_input, skip_delay=skip_delay)
 
-    def cancel_active_routine(self) -> None:
-        self._handle_interrupt("Remote Ctrl-C")
+    def cancel_active_routine(self, *, stop_mode: RoutineStopMode = "toggle") -> None:
+        if stop_mode == "toggle":
+            self._handle_interrupt("Remote Ctrl-C")
+        else:
+            self._handle_routine_stop_request("Remote Ctrl-C", stop_mode=stop_mode)
         sink = self._protocol_event_sink
         if sink is not None:
             sink.publish_data_refresh()

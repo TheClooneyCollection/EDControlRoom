@@ -11,6 +11,7 @@ from edap.control_room.protocol import (
     DataUpdatedEvent,
     ActivityLogEntry,
 )
+from edap.control_room.routine_stop import RoutineStopMode
 from edap.inara.trade_routes import TradeRoute
 
 
@@ -26,7 +27,7 @@ class ControlRoomBackend(ControlRoomEventSink, Protocol):
 
     def submit_input(self, raw: str) -> None: ...
 
-    def interrupt_active_routine(self) -> None: ...
+    def interrupt_active_routine(self, *, stop_mode: RoutineStopMode = "toggle") -> None: ...
 
     def exit_detaches_remote_session(self) -> bool: ...
 
@@ -174,8 +175,8 @@ class LocalControlRoomBackend(ControlRoomEventSink):
         _prompts.clear_command_input_prefill(self._host._prompt_state)
         self.dispatch_command(raw)
 
-    def interrupt_active_routine(self) -> None:
-        self._host.dependencies.execution.cancel_active_routine()
+    def interrupt_active_routine(self, *, stop_mode: RoutineStopMode = "toggle") -> None:
+        self._host.dependencies.execution.cancel_active_routine(stop_mode=stop_mode)
 
     def exit_detaches_remote_session(self) -> bool:
         return False

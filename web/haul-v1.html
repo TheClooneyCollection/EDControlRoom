@@ -221,6 +221,34 @@
       background: var(--red-dim);
     }
 
+    .stop-controls {
+      display: flex;
+      gap: 6px;
+    }
+
+    .stop-button {
+      height: 30px;
+      border: 1px solid rgba(214, 91, 91, 0.65);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--red);
+      padding: 0 10px;
+      font-size: 11.5px;
+      font-weight: 650;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .stop-button.secondary {
+      border-color: rgba(232, 145, 43, 0.6);
+      color: var(--amber);
+    }
+
+    .stop-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+
     .token-control {
       display: grid;
       grid-template-columns: 150px auto;
@@ -854,7 +882,10 @@
             <input class="token-input" id="access-token" type="password" placeholder="Access token" autocomplete="off" aria-label="Access token">
             <button class="token-button" id="save-token" type="button">Save</button>
           </div>
-          <div class="chip danger">Emergency stop</div>
+          <div class="stop-controls" aria-label="Routine stop controls">
+            <button class="stop-button secondary" id="stop-after-run" type="button">Stop after run</button>
+            <button class="stop-button" id="stop-now" type="button">Stop now</button>
+          </div>
         </div>
       </header>
 
@@ -1093,6 +1124,7 @@
     let clientRole = "observer";
     let commandSequence = 1;
     let hydratedCurrentSystem = "";
+    let currentRoutine = {};
     const pendingCommands = new Map();
     const activityEntries = new Map();
 
@@ -1147,8 +1179,11 @@
 
     function updateOperatorState() {
       const active = clientRole === "active_operator";
+      const routineActive = Boolean(currentRoutine.routine_active);
       document.getElementById("start-haul").disabled = !active || !routeByIndex(selectedRouteIndex);
       document.getElementById("set-destination").disabled = !active || !routeByIndex(selectedRouteIndex);
+      document.getElementById("stop-after-run").disabled = !active || !routineActive;
+      document.getElementById("stop-now").disabled = !active || !routineActive;
       document.querySelector("#search-form .btn.primary").disabled = !active;
       document.getElementById("access-token").value = accessToken;
       if (!accessToken) {
@@ -1564,6 +1599,7 @@
       const haulSession = payload.haul_session || {};
       const routine = payload.routine || {};
       const activity = payload.activity_log || {};
+      currentRoutine = routine;
       document.getElementById("summary-current").textContent =
         market.station || ship.station || ship.system || "-";
       document.getElementById("summary-home").textContent = ship.system || "-";
@@ -1580,6 +1616,7 @@
       }
       document.getElementById("summary-profit").textContent = formatCredits(haulSession.accumulated_profit || 0);
       updateRoutinePanel(routine, haulSession, ship);
+      updateOperatorState();
       activityEntries.clear();
       (activity.entries || []).forEach(addActivityEntry);
       renderActivityLog();
@@ -1712,6 +1749,36 @@
         .catch((error) => {
           appendActivity(error.message, "Haul", "warning");
         });
+    });
+
+    function requestRoutineStop(mode) {
+      if (!accessToken) {
+        appendActivity("Enter and save an access token to control the active routine.", "Haul", "warning");
+        return;
+      }
+      if (clientRole !== "active_operator") {
+        appendActivity("Only the active operator can stop routines.", "Haul", "warning");
+        return;
+      }
+      if (!currentRoutine.routine_active) {
+        appendActivity("No active routine to stop.", "Haul", "warning");
+        return;
+      }
+      sendCommand("command.cancel_active_routine", { mode })
+        .then(() => {
+          appendActivity(mode === "after_run" ? "Stop after run requested." : "Immediate stop requested.", "Haul", "warning");
+        })
+        .catch((error) => {
+          appendActivity(error.message, "Haul", "warning");
+        });
+    }
+
+    document.getElementById("stop-after-run").addEventListener("click", () => {
+      requestRoutineStop("after_run");
+    });
+
+    document.getElementById("stop-now").addEventListener("click", () => {
+      requestRoutineStop("now");
     });
 
     document.getElementById("galaxy-settle").addEventListener("input", updateCommandPreview);
