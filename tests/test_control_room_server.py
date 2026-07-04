@@ -6,6 +6,7 @@ import unittest
 import warnings
 from pathlib import Path
 import tempfile
+from unittest.mock import patch
 
 warnings.filterwarnings(
     "ignore",
@@ -41,6 +42,9 @@ from edap.control_room.protocol import ActivityLogEntry
 from edap.control_room.server.app import (
     BROWSER_PROBE_URL_PATH,
     CONTROL_ROOM_MESSAGE_SCHEMA,
+    HAUL_SEARCH_API_PATH,
+    HAUL_START_API_PATH,
+    HAUL_WEB_URL_PATH,
     MESSAGE_SCHEMA_URL_PATH,
     SUPPORTED_COMMAND_MESSAGE_TYPES,
     SUPPORTED_EVENT_MESSAGE_TYPES,
@@ -55,6 +59,7 @@ from edap.control_room.server.commands import ObserverSessionCommandHandler
 from edap.control_room.server.host import HeadlessControlRoomHost
 from edap.control_room.server.sink import DataHydrateFanoutSink, ServerActivityLogSink
 from edap.control_room.server.state import ControlRoomServerState
+from edap.inara.trade_routes import TradeRoute, TradeRouteSearchResult
 from edap.runtime import ResolvedPath, RuntimeContext
 from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler
 from edap.tts import AnnouncementId
@@ -502,6 +507,177 @@ class ControlRoomServerTests(unittest.TestCase):
             self.assertIn("authentication_supported_transports", response.text)
             self.assertIn("authentication_query_parameter_name", response.text)
             self.assertIn("Browser probe requires query-parameter websocket auth support.", response.text)
+
+    def test_haul_web_endpoint_serves_static_page(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        app = build_observer_server_app(
+            data_provider=_base_data_read_model,
+            command_handler=None,
+            broker=broker,
+            auth=SharedAccessTokenAuth("secret-token"),
+        )
+
+        with TestClient(app) as client:
+            response = client.get(HAUL_WEB_URL_PATH)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Two-way haul control", response.text)
+        self.assertIn("Start two-way haul", response.text)
+
+    def test_haul_search_api_requires_authentication(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        app = build_observer_server_app(
+            data_provider=_base_data_read_model,
+            command_handler=None,
+            broker=broker,
+            auth=SharedAccessTokenAuth("secret-token"),
+        )
+
+        with TestClient(app) as client:
+            response = client.post(HAUL_SEARCH_API_PATH, json={"origin": "Sol"})
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_haul_search_api_returns_serialized_routes(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        app = build_observer_server_app(
+            data_provider=_base_data_read_model,
+            command_handler=None,
+            broker=broker,
+            auth=SharedAccessTokenAuth("secret-token"),
+        )
+        result = TradeRouteSearchResult(
+            system_name="Sol",
+            query_url="https://inara.cz/elite/market-traderoutes/?ps1=Sol",
+            searched_at="2026-07-04T08:00:00Z",
+            routes=(
+                TradeRoute(
+                    index=1,
+                    from_station="Galileo",
+                    from_system="Sol",
+                    to_station="Irkutsk",
+                    to_system="Alioth",
+                    source_buy_commodity="Agronomic Treatment",
+                    target_buy_commodity="Gold",
+                    from_station_distance="510 ls",
+                    to_station_distance="1,200 ls",
+                    route_distance="221.34 ly",
+                    profit_per_trip="43.1m",
+                    profit_per_hour="88.3m",
+                ),
+                TradeRoute(
+                    index=2,
+                    from_station="Galileo",
+                    from_system="Sol",
+                    to_station="Jameson Memorial",
+                    to_system="Shinrarta Dezhra",
+                    source_buy_commodity="Silver",
+                ),
+            ),
+        )
+
+        with patch("edap.control_room.server.app.search_trade_routes", return_value=result) as search:
+            with TestClient(app) as client:
+                response = client.post(
+                    HAUL_SEARCH_API_PATH,
+                    headers={"Authorization": "Bearer secret-token"},
+                    json={
+                        "origin": "Sol",
+                        "destination": "Alioth",
+                        "cargo_capacity": "784",
+                        "max_route_distance_ly": "500 ly",
+                        "max_station_distance_ls": "Any",
+                        "metric": "Profit / trip",
+                    },
+                )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["route_count"], 1)
+        self.assertEqual(payload["unfiltered_route_count"], 2)
+        self.assertTrue(payload["station_carrier_only"])
+        self.assertEqual(payload["routes"][0]["source_buy_commodity"], "Agronomic Treatment")
+        search.assert_called_once()
+        self.assertEqual(search.call_args.args, ("Sol",))
+        self.assertEqual(
+            search.call_args.kwargs["query_params"],
+            {
+                "use_surface_stations": "no",
+                "cargo_capacity": "784",
+                "max_route_distance_ly": "500",
+                "max_station_distance_ls": "any",
+                "order_by": "best_profit",
+            },
+        )
+
+    def test_haul_start_api_dispatches_structured_params(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        command_handler = _CommandHandlerRecorder()
+        app = build_observer_server_app(
+            data_provider=_base_data_read_model,
+            command_handler=command_handler,
+            broker=broker,
+            auth=SharedAccessTokenAuth("secret-token"),
+        )
+
+        with TestClient(app) as client:
+            response = client.post(
+                HAUL_START_API_PATH,
+                headers={"Authorization": "Bearer secret-token"},
+                json={
+                    "params": {
+                        "station_1_buying": "Agronomic Treatment",
+                        "station_1": "Galileo",
+                        "station_1_system": "Sol",
+                        "station_2_buying": "Gold",
+                        "station_2": "Irkutsk",
+                        "station_2_system": "Alioth",
+                        "galaxy_map_settle": "2.0",
+                        "dock_timeout": "1200",
+                    },
+                    "raw_command": "web haul start",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["accepted"], True)
+        self.assertEqual(len(command_handler.dispatched_hauls), 1)
+        params, skip_delay, raw_command = command_handler.dispatched_hauls[0]
+        self.assertEqual(skip_delay, False)
+        self.assertEqual(raw_command, "web haul start")
+        self.assertEqual(params["station_1_on_land"], "false")
+        self.assertEqual(params["station_2_on_land"], "false")
+        self.assertEqual(params["station_2_buying"], "Gold")
+
+    def test_haul_start_api_rejects_surface_destinations(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        command_handler = _CommandHandlerRecorder()
+        app = build_observer_server_app(
+            data_provider=_base_data_read_model,
+            command_handler=command_handler,
+            broker=broker,
+            auth=SharedAccessTokenAuth("secret-token"),
+        )
+
+        with TestClient(app) as client:
+            response = client.post(
+                HAUL_START_API_PATH,
+                headers={"Authorization": "Bearer secret-token"},
+                json={
+                    "params": {
+                        "station_1_buying": "Silver",
+                        "station_1": "Galileo",
+                        "station_1_system": "Sol",
+                        "station_1_on_land": "true",
+                        "station_2": "Irkutsk",
+                        "station_2_system": "Alioth",
+                    }
+                },
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error_code"], "surface_destination_not_supported")
+        self.assertEqual(command_handler.dispatched_hauls, [])
 
     def test_websocket_active_operator_failover_promotes_remaining_client(self) -> None:
         broker = InMemoryObserverSessionBroker()

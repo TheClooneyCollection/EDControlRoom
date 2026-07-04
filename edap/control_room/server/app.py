@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import asdict
+from json import JSONDecodeError
 import json
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from starlette.applications import Starlette
 from starlette.middleware.cors import CORSMiddleware
@@ -15,6 +17,11 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 from edap.control_room.server.auth import ObserverServerAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
 from edap.control_room.server.commands import ObserverSessionCommandHandler
+from edap.inara.trade_routes import (
+    TradeRoute,
+    TradeRouteSearchResult,
+    search_trade_routes,
+)
 from edap.control_room.protocol import (
     SUPPORTED_COMMAND_MESSAGE_TYPES,
     SUPPORTED_EVENT_MESSAGE_TYPES,
@@ -27,14 +34,19 @@ from edap.control_room.server.messages import protocol_message
 
 MESSAGE_SCHEMA_URL_PATH = "/schema/control_room_message.json"
 BROWSER_PROBE_URL_PATH = "/browser-probe"
+HAUL_WEB_URL_PATH = "/haul"
+HAUL_SEARCH_API_PATH = "/api/haul/search"
+HAUL_START_API_PATH = "/api/haul/start"
 _MESSAGE_SCHEMA_PATH = (
     Path(__file__).resolve().parents[3] / "docs" / "schemas" / "control_room_message.schema.json"
 )
 _BROWSER_PROBE_PATH = (
     Path(__file__).resolve().parents[3] / "tools" / "scratch" / "control_room_remote_browser.html"
 )
+_HAUL_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "haul-v1.html"
 CONTROL_ROOM_MESSAGE_SCHEMA = json.loads(_MESSAGE_SCHEMA_PATH.read_text(encoding="utf-8"))
 CONTROL_ROOM_BROWSER_PROBE_HTML = _BROWSER_PROBE_PATH.read_text(encoding="utf-8")
+CONTROL_ROOM_HAUL_V1_HTML = _HAUL_WEB_PATH.read_text(encoding="utf-8")
 
 
 def build_observer_server_app(
@@ -100,6 +112,115 @@ def build_observer_server_app(
     async def browser_probe(request):
         return HTMLResponse(CONTROL_ROOM_BROWSER_PROBE_HTML)
 
+    async def haul_web(request):
+        return HTMLResponse(CONTROL_ROOM_HAUL_V1_HTML)
+
+    async def haul_search(request):
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        payload = await _json_payload(request)
+        if payload is None:
+            return _api_error(
+                "invalid_json",
+                "Request body must be a JSON object.",
+                status_code=400,
+                retryable=True,
+            )
+        data = data_provider()
+        system_name = _payload_string(payload, "system_name") or _payload_string(payload, "origin")
+        if not system_name:
+            system_name = (getattr(data.ship, "system", "") or "").strip()
+        if not system_name:
+            return _api_error(
+                "invalid_search",
+                "Haul search needs an origin system.",
+                status_code=400,
+                retryable=True,
+            )
+        query_params = _haul_search_query_params(payload, data=data)
+        destination_filter = (
+            _payload_string(payload, "destination")
+            or _payload_string(payload, "destination_filter")
+            or ""
+        )
+        try:
+            result = await asyncio.to_thread(
+                search_trade_routes,
+                system_name,
+                query_params=query_params,
+            )
+        except Exception as exc:
+            return _api_error(
+                "haul_search_failed",
+                str(exc) or "Failed to search haul routes.",
+                status_code=502,
+                retryable=True,
+            )
+        routes = list(result.routes)
+        unfiltered_count = len(routes)
+        if destination_filter:
+            routes = [
+                route
+                for route in routes
+                if _route_matches_destination(route, destination_filter)
+            ]
+        return JSONResponse(_haul_search_response(result, routes=routes, unfiltered_count=unfiltered_count))
+
+    async def haul_start(request):
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        if command_handler is None:
+            return _api_error(
+                "active_operator_transport_unavailable",
+                "Remote active-operator command execution is not available.",
+                status_code=503,
+                retryable=False,
+            )
+        payload = await _json_payload(request)
+        if payload is None:
+            return _api_error(
+                "invalid_json",
+                "Request body must be a JSON object.",
+                status_code=400,
+                retryable=True,
+            )
+        params_value = payload.get("params", payload)
+        if not isinstance(params_value, dict):
+            return _api_error(
+                "invalid_haul_params",
+                "Haul start requests must include a params object.",
+                status_code=400,
+                retryable=True,
+            )
+        params = {str(key): str(value).strip() for key, value in params_value.items()}
+        validation_error = _validate_web_haul_params(params)
+        if validation_error is not None:
+            return validation_error
+        raw_command = _payload_string(payload, "raw_command") or "web haul start"
+        skip_delay = payload.get("skip_delay") if isinstance(payload.get("skip_delay"), bool) else False
+        try:
+            command_handler.dispatch_haul_loop(
+                params=params,
+                skip_delay=skip_delay,
+                raw_command=raw_command,
+            )
+        except Exception as exc:
+            return _api_error(
+                "command_execution_failed",
+                str(exc) or "Failed to start haul routine.",
+                status_code=500,
+                retryable=True,
+            )
+        return JSONResponse(
+            {
+                "accepted": True,
+                "message_text": "Haul routine accepted.",
+                "params": params,
+            }
+        )
+
     async def session(websocket: WebSocket) -> None:
         if not auth.is_websocket_authorized(websocket):
             await websocket.close(code=4401, reason="authentication required")
@@ -151,16 +272,175 @@ def build_observer_server_app(
             Route("/hydrate", hydrate),
             Route(MESSAGE_SCHEMA_URL_PATH, message_schema),
             Route(BROWSER_PROBE_URL_PATH, browser_probe),
+            Route(HAUL_WEB_URL_PATH, haul_web),
+            Route(HAUL_SEARCH_API_PATH, haul_search, methods=["POST"]),
+            Route(HAUL_START_API_PATH, haul_start, methods=["POST"]),
             WebSocketRoute("/session", session),
         ]
     )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
-        allow_methods=["GET", "OPTIONS"],
+        allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type"],
     )
     return app
+
+
+async def _json_payload(request: Request) -> dict[str, Any] | None:
+    try:
+        payload = await request.json()
+    except JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def _api_error(
+    error_code: str,
+    error_message: str,
+    *,
+    status_code: int,
+    retryable: bool,
+) -> JSONResponse:
+    return JSONResponse(
+        {
+            "error_code": error_code,
+            "error_message": error_message,
+            "retryable": retryable,
+        },
+        status_code=status_code,
+    )
+
+
+def _payload_string(payload: dict[str, Any], key: str) -> str:
+    value = payload.get(key)
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _haul_search_query_params(
+    payload: dict[str, Any],
+    *,
+    data: object,
+) -> dict[str, str]:
+    ship = getattr(data, "ship", None)
+    cargo_capacity = _payload_string(payload, "cargo_capacity")
+    if not cargo_capacity and ship is not None:
+        cargo_capacity_value = getattr(ship, "cargo_capacity", 0)
+        if cargo_capacity_value:
+            cargo_capacity = str(cargo_capacity_value)
+
+    order_by = _payload_string(payload, "order_by")
+    if not order_by:
+        metric = _payload_string(payload, "metric").lower()
+        order_by = "best_profit" if "trip" in metric else "best_profit_per_hour_estimate"
+
+    params: dict[str, str] = {
+        "use_surface_stations": "no",
+    }
+    if cargo_capacity:
+        params["cargo_capacity"] = cargo_capacity
+    route_distance = _numberish_string(_payload_string(payload, "max_route_distance_ly"))
+    if route_distance:
+        params["max_route_distance_ly"] = route_distance
+    station_distance = _payload_string(payload, "max_station_distance_ls")
+    if station_distance:
+        params["max_station_distance_ls"] = _numberish_string(station_distance) or "any"
+    if order_by:
+        params["order_by"] = order_by
+    return params
+
+
+def _numberish_string(value: str) -> str:
+    stripped = value.strip()
+    if not stripped:
+        return ""
+    lowered = stripped.lower()
+    if lowered == "any":
+        return "any"
+    first = stripped.split()[0].replace(",", "")
+    return first if first else stripped
+
+
+def _route_matches_destination(route: TradeRoute, destination_filter: str) -> bool:
+    needle = destination_filter.strip().lower()
+    if not needle:
+        return True
+    haystack = " ".join(
+        value
+        for value in (
+            route.to_station,
+            route.to_system,
+        )
+        if value
+    ).lower()
+    return needle in haystack
+
+
+def _haul_search_response(
+    result: TradeRouteSearchResult,
+    *,
+    routes: list[TradeRoute],
+    unfiltered_count: int,
+) -> dict[str, Any]:
+    return {
+        "system_name": result.system_name,
+        "query_url": result.query_url,
+        "searched_at": result.searched_at,
+        "route_count": len(routes),
+        "unfiltered_route_count": unfiltered_count,
+        "station_carrier_only": True,
+        "routes": [_trade_route_to_payload(route) for route in routes],
+    }
+
+
+def _trade_route_to_payload(route: TradeRoute) -> dict[str, Any]:
+    return asdict(route)
+
+
+def _validate_web_haul_params(params: dict[str, str]) -> JSONResponse | None:
+    for key in ("station_1_on_land", "station_2_on_land"):
+        value = params.get(key, "").strip().lower()
+        if value in {"1", "true", "y", "yes", "land", "surface"}:
+            return _api_error(
+                "surface_destination_not_supported",
+                "Web haul v1 supports station and carrier endpoints only.",
+                status_code=400,
+                retryable=False,
+            )
+        params[key] = "false"
+    required = ("station_1", "station_1_system", "station_2", "station_2_system")
+    missing = [key for key in required if not params.get(key, "").strip()]
+    if missing:
+        return _api_error(
+            "invalid_haul_params",
+            f"Missing required haul params: {', '.join(missing)}.",
+            status_code=400,
+            retryable=True,
+        )
+    if not params.get("station_1_buying", "").strip() and not params.get("station_2_buying", "").strip():
+        return _api_error(
+            "invalid_haul_params",
+            "At least one station buy commodity is required.",
+            status_code=400,
+            retryable=True,
+        )
+    for key in ("galaxy_map_settle", "dock_timeout"):
+        if not params.get(key, "").strip():
+            continue
+        try:
+            float(params[key])
+        except ValueError:
+            return _api_error(
+                "invalid_haul_params",
+                f"{key} must be numeric.",
+                status_code=400,
+                retryable=True,
+            )
+    return None
 
 
 async def _send_session_messages(websocket: WebSocket, observer) -> None:

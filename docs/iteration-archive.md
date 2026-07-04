@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `193`
-- Latest generated iteration number: `326`
+- Generated iteration count: `194`
+- Latest generated iteration number: `327`
 
 ## Iteration 134
 
@@ -5362,3 +5362,33 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Keep backend implementation notes out of the primary prototype UI unless surfaced through debug-only affordances.
+
+## Iteration 327
+
+- When: `2026-07-04 08:04`
+- Area: `web`
+- Title: `wire-haul-page-backend`
+- Source: [2026-07-04-08-04_____web______wire-haul-page-backend.md](iteration-logs/2026-07-04-08-04_____web______wire-haul-page-backend.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `wire-haul-page-backend`
+- Started: `2026-07-04 08:04`
+
+## Summary
+
+- Wired the static Haul v1 page to the Control Room server with authenticated search and start endpoints.
+
+## Changes
+
+- Added `GET /haul` to serve `web/haul-v1.html` from `control_room.py serve`.
+- Added `POST /api/haul/search` to run shared Inara route search, force station/carrier-only query params, optionally filter by destination, and return serialized route data.
+- Added `POST /api/haul/start` to validate web haul params, reject surface destinations, default both `on_land` flags false, and call existing structured `dispatch_haul_loop`.
+- Updated the Haul page to hydrate summary state, search live routes, render backend route data, and start the selected two-way haul.
+- Removed unsupported supply/demand columns from the web route table for v1 because the current backend route model does not expose them as first-class fields.
+- Added server regression tests for serving `/haul`, route search serialization, start dispatch, auth, and surface-destination rejection.
+
+## Follow-ups
+
+- Live-check `/haul?access_token=...` against a running server with the real Inara browser profile before treating the web search flow as operator-validated.

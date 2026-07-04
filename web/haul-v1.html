@@ -781,19 +781,19 @@
         <section class="summary-strip" aria-label="Current haul summary">
           <div class="summary-cell">
             <div class="summary-label">Home system</div>
-            <div class="summary-value">Sol</div>
+            <div class="summary-value" id="summary-home">Sol</div>
           </div>
           <div class="summary-cell">
             <div class="summary-label">Current system</div>
-            <div class="summary-value">Galileo</div>
+            <div class="summary-value" id="summary-current">Galileo</div>
           </div>
           <div class="summary-cell">
             <div class="summary-label">Destination</div>
-            <div class="summary-value">Alioth</div>
+            <div class="summary-value" id="summary-destination">Alioth</div>
           </div>
           <div class="summary-cell">
             <div class="summary-label">Cargo</div>
-            <div class="summary-value mono">420 / 784 t</div>
+            <div class="summary-value mono" id="summary-cargo">420 / 784 t</div>
           </div>
           <div class="summary-cell">
             <div class="summary-label">Routine</div>
@@ -801,7 +801,7 @@
           </div>
           <div class="summary-cell">
             <div class="summary-label">Completed runs</div>
-            <div class="summary-value mono">3</div>
+            <div class="summary-value mono" id="summary-runs">3</div>
           </div>
           <div class="summary-cell">
             <div class="summary-label">Accumulated profit</div>
@@ -918,8 +918,6 @@
                     <th>Sell endpoint</th>
                     <th class="num">Route</th>
                     <th class="num">Station dist.</th>
-                    <th class="num">Supply</th>
-                    <th class="num">Demand</th>
                   </tr>
                 </thead>
                 <tbody id="route-rows"></tbody>
@@ -960,8 +958,7 @@
               </details>
 
               <div class="btn-row">
-                <button class="btn" type="button">Set destination</button>
-                <button class="btn success block" type="button">Start two-way haul</button>
+                <button class="btn success block" type="button" id="start-haul">Start two-way haul</button>
               </div>
               <div class="callout">
                 Existing backend command: <span class="inline-kbd">command.dispatch_haul_loop</span> with structured params. No prompt handoff in web.
@@ -998,157 +995,283 @@
   </div>
 
   <script>
-    const routes = [
+    const sampleRoutes = [
       {
         index: 1,
         profitHour: "88.3m",
         profitTrip: "43.1m",
         commodity: "Agronomic Treatment",
+        targetCommodity: "",
         buyStation: "Galileo",
         buySystem: "Sol",
         sellStation: "Irkutsk",
         sellSystem: "Alioth",
         routeDistance: "221.34 ly",
-        stationDistance: "Any",
-        supply: "270k",
-        demand: "42k"
+        stationDistance: "Any"
       },
       {
         index: 2,
         profitHour: "72.1m",
         profitTrip: "35.6m",
         commodity: "Tritium",
+        targetCommodity: "",
         buyStation: "Sirius Market",
         buySystem: "Sol",
         sellStation: "Irkutsk",
         sellSystem: "Alioth",
         routeDistance: "223.18 ly",
-        stationDistance: "Any",
-        supply: "1.2m",
-        demand: "360k"
+        stationDistance: "Any"
       },
       {
         index: 3,
         profitHour: "61.4m",
         profitTrip: "30.2m",
         commodity: "Bertrandite",
+        targetCommodity: "",
         buyStation: "Galileo",
         buySystem: "Sol",
         sellStation: "Abraham Lincoln",
         sellSystem: "Alioth",
         routeDistance: "226.90 ly",
-        stationDistance: "Any",
-        supply: "120k",
-        demand: "92k"
+        stationDistance: "Any"
       },
       {
         index: 4,
         profitHour: "57.8m",
         profitTrip: "27.6m",
         commodity: "Medical Supplies",
+        targetCommodity: "",
         buyStation: "Sirius Market",
         buySystem: "Sol",
         sellStation: "Irkutsk",
         sellSystem: "Alioth",
         routeDistance: "223.18 ly",
-        stationDistance: "Any",
-        supply: "96k",
-        demand: "110k"
+        stationDistance: "Any"
       },
       {
         index: 5,
         profitHour: "48.3m",
         profitTrip: "24.0m",
         commodity: "Gold",
+        targetCommodity: "",
         buyStation: "Sirius Market",
         buySystem: "Sol",
         sellStation: "Irkutsk",
         sellSystem: "Alioth",
         routeDistance: "223.18 ly",
-        stationDistance: "Any",
-        supply: "573k",
-        demand: "210k"
+        stationDistance: "Any"
       },
       {
         index: 6,
         profitHour: "44.6m",
         profitTrip: "21.8m",
         commodity: "Silver",
+        targetCommodity: "",
         buyStation: "Galileo",
         buySystem: "Sol",
         sellStation: "Abraham Lincoln",
         sellSystem: "Alioth",
         routeDistance: "226.90 ly",
-        stationDistance: "Any",
-        supply: "404k",
-        demand: "160k"
+        stationDistance: "Any"
       }
     ];
 
+    let routes = sampleRoutes;
     let selectedRouteIndex = 1;
+    const accessToken = new URLSearchParams(window.location.search).get("access_token") || "";
 
     function routeByIndex(index) {
-      return routes.find((route) => route.index === index) || routes[0];
+      return routes.find((route) => route.index === index) || routes[0] || null;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#39;"
+      }[char]));
+    }
+
+    function apiHeaders() {
+      const headers = { "Content-Type": "application/json" };
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+      }
+      return headers;
+    }
+
+    async function postJson(path, body) {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: apiHeaders(),
+        body: JSON.stringify(body)
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error_message || `Request failed: ${response.status}`);
+      }
+      return payload;
+    }
+
+    async function getJson(path) {
+      const response = await fetch(path, { headers: apiHeaders() });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error_message || `Request failed: ${response.status}`);
+      }
+      return payload;
+    }
+
+    function routeFromApi(route, fallbackIndex) {
+      const stationDistances = [route.from_station_distance, route.to_station_distance].filter(Boolean);
+      return {
+        index: Number(route.index || fallbackIndex),
+        profitHour: route.profit_per_hour || "-",
+        profitTrip: route.profit_per_trip || "-",
+        commodity: route.source_buy_commodity || "",
+        targetCommodity: route.target_buy_commodity || "",
+        buyStation: route.from_station || "",
+        buySystem: route.from_system || "",
+        sellStation: route.to_station || "",
+        sellSystem: route.to_system || "",
+        routeDistance: route.route_distance || route.distance_from_system || "-",
+        stationDistance: stationDistances.length ? stationDistances.join(" / ") : "-"
+      };
+    }
+
+    function profitHourLabel(route) {
+      if (!route.profitHour || route.profitHour === "-") {
+        return "-";
+      }
+      return route.profitHour.includes("/") ? route.profitHour : `${route.profitHour}/h`;
+    }
+
+    function setResultCount(text) {
+      document.getElementById("result-count").textContent = text;
+    }
+
+    function appendActivity(text, label, badgeClass = "neutral") {
+      const list = document.getElementById("activity-list");
+      const now = new Date();
+      const time = now.toLocaleTimeString([], { hour12: false });
+      const row = document.createElement("div");
+      row.className = "activity-row";
+      row.innerHTML = `
+        <div class="activity-time mono">${escapeHtml(time)}</div>
+        <div class="activity-text">${escapeHtml(text)}</div>
+        <span class="badge ${badgeClass}">${escapeHtml(label)}</span>
+      `;
+      list.prepend(row);
     }
 
     function renderRows() {
       const tbody = document.getElementById("route-rows");
+      if (!routes.length) {
+        tbody.innerHTML = `<tr><td colspan="7" class="route-sub">No station/carrier routes found.</td></tr>`;
+        return;
+      }
       tbody.innerHTML = routes.map((route) => `
         <tr class="${route.index === selectedRouteIndex ? "selected" : ""}" data-index="${route.index}">
-          <td class="mono">${route.index}</td>
-          <td class="num profit">${route.profitHour}/h</td>
+          <td class="mono">${escapeHtml(route.index)}</td>
+          <td class="num profit">${escapeHtml(profitHourLabel(route))}</td>
           <td>
-            <div class="route-main">${route.commodity}</div>
+            <div class="route-main">${escapeHtml(route.commodity || "No buy commodity")}</div>
             <div class="route-sub">station/carrier endpoints</div>
           </td>
           <td>
-            <div class="route-main">${route.buyStation}</div>
-            <div class="route-sub mono">${route.buySystem}</div>
+            <div class="route-main">${escapeHtml(route.buyStation)}</div>
+            <div class="route-sub mono">${escapeHtml(route.buySystem)}</div>
           </td>
           <td>
-            <div class="route-main">${route.sellStation}</div>
-            <div class="route-sub mono">${route.sellSystem}</div>
+            <div class="route-main">${escapeHtml(route.sellStation)}</div>
+            <div class="route-sub mono">${escapeHtml(route.sellSystem)}</div>
           </td>
-          <td class="num">${route.routeDistance}</td>
-          <td class="num">${route.stationDistance}</td>
-          <td class="num">${route.supply}</td>
-          <td class="num">${route.demand}</td>
+          <td class="num">${escapeHtml(route.routeDistance)}</td>
+          <td class="num">${escapeHtml(route.stationDistance)}</td>
         </tr>
       `).join("");
     }
 
     function renderSelected() {
       const route = routeByIndex(selectedRouteIndex);
+      const startButton = document.getElementById("start-haul");
+      if (!route) {
+        document.getElementById("selected-title").textContent = "No route selected";
+        document.getElementById("selected-stats").innerHTML = "";
+        document.getElementById("command-preview").textContent = "";
+        startButton.disabled = true;
+        return;
+      }
+      startButton.disabled = false;
       document.getElementById("selected-title").textContent =
         `${route.buySystem} (${route.buyStation}) -> ${route.sellSystem} (${route.sellStation})`;
       document.getElementById("selected-stats").innerHTML = `
-        <div class="stat-row"><span class="k">Commodity</span><span class="v">${route.commodity}</span></div>
-        <div class="stat-row"><span class="k">Profit / hour</span><span class="v profit mono">${route.profitHour} CR</span></div>
-        <div class="stat-row"><span class="k">Profit / trip</span><span class="v mono">${route.profitTrip} CR</span></div>
-        <div class="stat-row"><span class="k">Route distance</span><span class="v mono">${route.routeDistance}</span></div>
+        <div class="stat-row"><span class="k">Commodity</span><span class="v">${escapeHtml(route.commodity || "No buy commodity")}</span></div>
+        <div class="stat-row"><span class="k">Return cargo</span><span class="v">${escapeHtml(route.targetCommodity || "None")}</span></div>
+        <div class="stat-row"><span class="k">Profit / hour</span><span class="v profit mono">${escapeHtml(profitHourLabel(route))}</span></div>
+        <div class="stat-row"><span class="k">Profit / trip</span><span class="v mono">${escapeHtml(route.profitTrip)}</span></div>
+        <div class="stat-row"><span class="k">Route distance</span><span class="v mono">${escapeHtml(route.routeDistance)}</span></div>
         <div class="stat-row"><span class="k">Surface support</span><span class="v">disabled</span></div>
       `;
       updateCommandPreview();
     }
 
-    function updateCommandPreview() {
+    function selectedHaulParams() {
       const route = routeByIndex(selectedRouteIndex);
+      if (!route) {
+        return {};
+      }
       const settle = document.getElementById("galaxy-settle").value || "2.0";
       const timeout = document.getElementById("dock-timeout").value || "1200";
-      const params = [
-        `station_1_buying=${route.commodity}`,
-        `station_1=${route.buyStation}`,
-        `station_1_system=${route.buySystem}`,
-        "station_1_on_land=false",
-        "station_2_buying=",
-        `station_2=${route.sellStation}`,
-        `station_2_system=${route.sellSystem}`,
-        "station_2_on_land=false",
-        `galaxy_map_settle=${settle}`,
-        `dock_timeout=${timeout}`
-      ];
+      return {
+        station_1_buying: route.commodity || "",
+        station_1: route.buyStation || "",
+        station_1_system: route.buySystem || "",
+        station_1_on_land: "false",
+        station_2_buying: route.targetCommodity || "",
+        station_2: route.sellStation || "",
+        station_2_system: route.sellSystem || "",
+        station_2_on_land: "false",
+        galaxy_map_settle: settle,
+        dock_timeout: timeout
+      };
+    }
+
+    function updateCommandPreview() {
+      const params = selectedHaulParams();
       document.getElementById("command-preview").textContent =
-        "command.dispatch_haul_loop\n" + params.map((item) => `  ${item}`).join("\n");
+        "command.dispatch_haul_loop\n" +
+        Object.entries(params).map(([key, value]) => `  ${key}=${value}`).join("\n");
+    }
+
+    async function hydrateSummary() {
+      if (!accessToken) {
+        return;
+      }
+      try {
+        const message = await getJson("/hydrate");
+        const payload = message.payload || {};
+        const ship = payload.ship || {};
+        const market = payload.market || {};
+        const haulSession = payload.haul_session || {};
+        document.getElementById("summary-current").textContent =
+          market.station || ship.station || ship.system || "-";
+        document.getElementById("summary-home").textContent = ship.system || "-";
+        document.getElementById("summary-destination").textContent = ship.destination_system || "-";
+        document.getElementById("summary-cargo").textContent =
+          `${ship.cargo_count || 0} / ${ship.cargo_capacity || 0} t`;
+        document.getElementById("summary-runs").textContent = haulSession.completed_runs || 0;
+        if (ship.system) {
+          document.getElementById("origin").value = ship.system;
+        }
+        if (ship.cargo_capacity) {
+          document.getElementById("capacity").value = ship.cargo_capacity;
+        }
+      } catch (error) {
+        appendActivity(error.message, "Hydrate", "warning");
+      }
     }
 
     document.getElementById("route-rows").addEventListener("click", (event) => {
@@ -1163,11 +1286,33 @@
 
     document.getElementById("search-form").addEventListener("submit", (event) => {
       event.preventDefault();
-      const count = document.getElementById("result-count");
-      count.textContent = "Search staged - server command planned";
-      window.setTimeout(() => {
-        count.textContent = "Found 6 station/carrier routes";
-      }, 1200);
+      if (!accessToken) {
+        setResultCount("Backend token required");
+        appendActivity("Open /haul with access_token to search live routes.", "Search", "warning");
+        return;
+      }
+      setResultCount("Searching station/carrier routes...");
+      const body = {
+        origin: document.getElementById("origin").value,
+        destination: document.getElementById("destination").value,
+        cargo_capacity: document.getElementById("capacity").value,
+        max_route_distance_ly: document.getElementById("route-distance").value,
+        max_station_distance_ls: document.getElementById("station-distance").value,
+        metric: document.getElementById("metric").value
+      };
+      postJson("/api/haul/search", body)
+        .then((payload) => {
+          routes = (payload.routes || []).map(routeFromApi);
+          selectedRouteIndex = routes[0] ? routes[0].index : 0;
+          renderRows();
+          renderSelected();
+          setResultCount(`Found ${payload.route_count || 0} station/carrier routes`);
+          appendActivity(`Route search returned ${payload.route_count || 0} result(s).`, "Search", "success");
+        })
+        .catch((error) => {
+          setResultCount("Search failed");
+          appendActivity(error.message, "Search", "warning");
+        });
     });
 
     document.getElementById("reset-search").addEventListener("click", () => {
@@ -1179,11 +1324,35 @@
       document.getElementById("metric").value = "Profit / hour";
     });
 
+    document.getElementById("start-haul").addEventListener("click", () => {
+      const route = routeByIndex(selectedRouteIndex);
+      if (!route) {
+        appendActivity("Select a route before starting haul.", "Haul", "warning");
+        return;
+      }
+      if (!accessToken) {
+        appendActivity("Open /haul with access_token to start haul.", "Haul", "warning");
+        return;
+      }
+      const params = selectedHaulParams();
+      postJson("/api/haul/start", {
+        params,
+        raw_command: `web haul start ${route.buyStation} -> ${route.sellStation}`
+      })
+        .then(() => {
+          appendActivity("Two-way haul accepted by backend.", "Haul", "success");
+        })
+        .catch((error) => {
+          appendActivity(error.message, "Haul", "warning");
+        });
+    });
+
     document.getElementById("galaxy-settle").addEventListener("input", updateCommandPreview);
     document.getElementById("dock-timeout").addEventListener("input", updateCommandPreview);
 
     renderRows();
     renderSelected();
+    hydrateSummary();
   </script>
 </body>
 </html>
