@@ -680,6 +680,44 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(response["correlation_message_id"], "message-search-observer")
         self.assertEqual(response["payload"]["result"]["route_count"], 0)
 
+    def test_select_trade_route_stores_route_for_future_hydrate(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        observer = broker.register_observer("web-haul")
+        route_payload = {
+            "index": 4,
+            "from_station": "Galileo",
+            "from_system": "Sol",
+            "to_station": "Irkutsk",
+            "to_system": "Alioth",
+            "source_buy_commodity": "Agronomic Treatment",
+            "target_buy_commodity": "Gold",
+            "profit_per_hour": "88.3m",
+        }
+
+        response = _handle_session_message(
+            {
+                "message_type": "command.select_trade_route",
+                "message_id": "message-select-route",
+                "payload": {"route": route_payload},
+            },
+            session_id=observer.session_id,
+            client_role="active_operator",
+            command_handler=None,
+            broker=broker,
+            data_provider=_base_data_read_model,
+        )
+
+        self.assertEqual(response["message_type"], "response.success")
+        self.assertEqual(response["correlation_message_id"], "message-select-route")
+        self.assertEqual(broker.server_state.selected_trade_route().to_system, "Alioth")
+        hydrate = observer.queue.get_nowait()
+        self.assertEqual(hydrate["message_type"], "control_room.hydrate")
+        self.assertEqual(
+            hydrate["payload"]["selected_trade_route"]["source_buy_commodity"],
+            "Agronomic Treatment",
+        )
+        self.assertIsNone(hydrate["payload"]["running_trade_route"])
+
     def test_websocket_search_and_dispatch_haul_commands(self) -> None:
         def _receive_until_response(websocket, correlation_id: str) -> dict[str, object]:
             for _ in range(8):
@@ -761,6 +799,15 @@ class ControlRoomServerTests(unittest.TestCase):
                                     "station_2_system": "Alioth",
                                     "station_2_on_land": "false",
                                 },
+                                "trade_route": {
+                                    "index": 1,
+                                    "from_station": "Galileo",
+                                    "from_system": "Sol",
+                                    "to_station": "Irkutsk",
+                                    "to_system": "Alioth",
+                                    "source_buy_commodity": "Agronomic Treatment",
+                                    "route_distance": "221.34 ly",
+                                },
                                 "raw_command": "web haul start Galileo -> Irkutsk",
                             },
                         }
@@ -784,6 +831,7 @@ class ControlRoomServerTests(unittest.TestCase):
                 "station_2_on_land": "false",
             },
         )
+        self.assertEqual(broker.server_state.running_trade_route().from_station, "Galileo")
 
     def test_websocket_clients_are_all_active_operators(self) -> None:
         broker = InMemoryObserverSessionBroker()

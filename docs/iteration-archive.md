@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `214`
-- Latest generated iteration number: `347`
+- Generated iteration count: `215`
+- Latest generated iteration number: `348`
 
 ## Iteration 134
 
@@ -5946,3 +5946,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-check the stats controls against a served `/haul` session to confirm operator-facing activity messages are clear enough after backend command logs arrive.
+
+## Iteration 348
+
+- When: `2026-07-04 18:20`
+- Area: `web`
+- Title: `server-route-selection-hydrate`
+- Source: [2026-07-04-18-20_____web______server-route-selection-hydrate.md](iteration-logs/2026-07-04-18-20_____web______server-route-selection-hydrate.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `server-route-selection-hydrate`
+- Started: `2026-07-04 18:20`
+
+## Summary
+
+- Server now retains the current web-selected and last accepted running Inara trade route in broker-owned server state so `/hydrate` and websocket hydrate can restore it after web reload/reconnect.
+
+## Changes
+
+- Added `selected_trade_route` / `running_trade_route` to the Control Room data read model and data-message round trip.
+- Added websocket `command.select_trade_route`; web selection changes send the selected route, and `command.dispatch_haul_loop` can carry the started route.
+- Updated `/haul` to merge hydrated selected/running routes into its route table and prefer the running route when both are present.
+
+## Follow-ups
+
+- Live-check multi-client behavior during web route search/start so route selection updates feel natural when more than one browser is connected.

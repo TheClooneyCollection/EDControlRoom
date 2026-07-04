@@ -15,6 +15,7 @@ from edap.control_room.protocol.data_messages import (
 )
 from edap.control_room.protocol.events import ActivityLogEntry
 from edap.control_room_state import ControlRoomState
+from edap.inara.trade_routes import TradeRoute
 
 
 class ControlRoomDataMessagesTests(unittest.TestCase):
@@ -50,6 +51,19 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
                 haul_phase="transit",
                 haul_phase_station_index=2,
             ),
+            _trade_routes=SimpleNamespace(
+                routes=[
+                    TradeRoute(
+                        index=3,
+                        from_station="Galileo",
+                        from_system="Sol",
+                        to_station="Irkutsk",
+                        to_system="Alioth",
+                        source_buy_commodity="Agronomic Treatment",
+                    )
+                ]
+            ),
+            _trade_route_picker_state=SimpleNamespace(selected_route_index=3),
             _current_version="1.2.3",
             _ctx=SimpleNamespace(
                 journal=SimpleNamespace(cli_source_status=lambda: "configured"),
@@ -77,6 +91,8 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
         self.assertEqual(message["payload"]["haul_session"]["current_run_elapsed_s"], 50.0)
         self.assertEqual(message["payload"]["routine"]["haul_phase"], "transit")
         self.assertEqual(message["payload"]["routine"]["haul_phase_station_index"], 2)
+        self.assertEqual(message["payload"]["selected_trade_route"]["from_station"], "Galileo")
+        self.assertIsNone(message["payload"]["running_trade_route"])
         self.assertEqual(
             message["payload"]["activity_log"]["entries"][0]["message_text"],
             "Starting haul loop.",
@@ -97,3 +113,5 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
         self.assertEqual(parsed.routine.haul_phase, "transit")
         self.assertEqual(parsed.routine.haul_phase_station_index, 2)
         self.assertEqual(parsed.activity_log.entries[0].message_text, "Starting haul loop.")
+        self.assertIsNotNone(parsed.selected_trade_route)
+        self.assertEqual(parsed.selected_trade_route.to_system, "Alioth")

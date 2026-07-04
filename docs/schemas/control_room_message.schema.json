@@ -23,6 +23,7 @@
         "command.dispatch_destination",
         "command.dispatch_haul_loop",
         "command.search_haul_routes",
+        "command.select_trade_route",
         "command.cancel_active_routine",
         "response.success",
         "response.error"
@@ -102,6 +103,18 @@
       "then": {
         "properties": {
           "payload": { "$ref": "#/$defs/command_search_haul_routes_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "command.select_trade_route" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/command_select_trade_route_payload" }
         }
       }
     },
@@ -269,7 +282,8 @@
           }
         },
         "skip_delay": { "type": "boolean" },
-        "raw_command": { "type": ["string", "null"] }
+        "raw_command": { "type": ["string", "null"] },
+        "trade_route": { "$ref": "#/$defs/trade_route" }
       }
     },
     "command_search_haul_routes_payload": {
@@ -287,6 +301,14 @@
         "order_by": { "type": "string" }
       }
     },
+    "command_select_trade_route_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route"],
+      "properties": {
+        "route": { "$ref": "#/$defs/trade_route" }
+      }
+    },
     "command_cancel_active_routine_payload": {
       "type": "object",
       "additionalProperties": false,
@@ -294,6 +316,33 @@
         "mode": {
           "type": "string",
           "enum": ["toggle", "after_run", "now"]
+        }
+      }
+    },
+    "trade_route": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["index", "from_station", "from_system", "to_station", "to_system"],
+      "properties": {
+        "index": { "type": "integer" },
+        "from_station": { "type": "string", "minLength": 1 },
+        "from_system": { "type": "string", "minLength": 1 },
+        "to_station": { "type": "string", "minLength": 1 },
+        "to_system": { "type": "string", "minLength": 1 },
+        "source_buy_commodity": { "type": ["string", "null"] },
+        "target_buy_commodity": { "type": ["string", "null"] },
+        "from_station_distance": { "type": ["string", "null"] },
+        "to_station_distance": { "type": ["string", "null"] },
+        "distance_from_system": { "type": ["string", "null"] },
+        "route_distance": { "type": ["string", "null"] },
+        "profit_per_unit": { "type": ["string", "null"] },
+        "profit_per_trip": { "type": ["string", "null"] },
+        "profit_per_hour": { "type": ["string", "null"] },
+        "updated": { "type": ["string", "null"] },
+        "raw_text": { "type": "string" },
+        "url_links": {
+          "type": "array",
+          "items": { "type": "string" }
         }
       }
     },

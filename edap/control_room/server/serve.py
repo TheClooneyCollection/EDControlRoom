@@ -6,7 +6,7 @@ import uvicorn
 
 from edap.control_room import error_text
 from edap.control_room.app import _ALL_ROUTINE_ACTIONS
-from edap.control_room.server.app import build_observer_server_app
+from edap.control_room.server.app import build_observer_server_app, _server_hydrate_data
 from edap.control_room.server.auth import SharedAccessTokenAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
 from edap.control_room.server.host import HeadlessControlRoomHost
@@ -49,11 +49,18 @@ def serve_observer_mode(
 
     broker = InMemoryObserverSessionBroker()
     runtime_host = HeadlessControlRoomHost(ctx)
+
+    def data_provider():
+        return _server_hydrate_data(
+            runtime_host.dependencies.data_source.current(),
+            broker=broker,
+        )
+
     runtime_host._protocol_event_sink = FanoutControlRoomEventSink(
         [
             broker,
             DataHydrateFanoutSink(
-                data_provider=runtime_host.dependencies.data_source.current,
+                data_provider=data_provider,
                 broker=broker,
             ),
             ServerActivityLogSink(),
@@ -61,7 +68,7 @@ def serve_observer_mode(
     )
     runtime_host.start()
     app = build_observer_server_app(
-        data_provider=runtime_host.dependencies.data_source.current,
+        data_provider=data_provider,
         command_handler=runtime_host,
         broker=broker,
         auth=SharedAccessTokenAuth(access_token),

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import json
 from pathlib import Path
 from typing import Any, Callable
@@ -15,7 +15,7 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from edap.control_room.server.auth import ObserverServerAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
-from edap.control_room.server.commands import ObserverSessionCommandHandler
+from edap.control_room.server.commands import ObserverSessionCommandHandler, trade_route_from_payload
 from edap.inara.trade_routes import (
     TradeRoute,
     TradeRouteSearchResult,
@@ -109,7 +109,7 @@ def build_observer_server_app(
         auth_failure = require_http_auth(request)
         if auth_failure is not None:
             return auth_failure
-        return JSONResponse(hydrate_message(data_provider()))
+        return JSONResponse(hydrate_message(_server_hydrate_data(data_provider(), broker=broker)))
 
     async def message_schema(request):
         return JSONResponse(CONTROL_ROOM_MESSAGE_SCHEMA)
@@ -144,7 +144,7 @@ def build_observer_server_app(
                     },
                 )
             )
-            await websocket.send_json(hydrate_message(data_provider()))
+            await websocket.send_json(hydrate_message(_server_hydrate_data(data_provider(), broker=broker)))
             sender = asyncio.create_task(_send_session_messages(websocket, observer))
             receiver = asyncio.create_task(
                 _receive_session_messages(
@@ -203,6 +203,30 @@ def _response_error(
             "retryable": retryable,
         },
         correlation_message_id=correlation_message_id,
+    )
+
+
+def _server_hydrate_data(
+    data: object,
+    *,
+    broker: InMemoryObserverSessionBroker,
+) -> object:
+    return replace(
+        data,
+        selected_trade_route=broker.server_state.selected_trade_route(),
+        running_trade_route=broker.server_state.running_trade_route(),
+    )
+
+
+def _publish_route_hydrate(
+    *,
+    broker: InMemoryObserverSessionBroker,
+    data_provider: Callable[[], object] | None,
+) -> None:
+    if data_provider is None:
+        return
+    broker.publish_data_message(
+        hydrate_message(_server_hydrate_data(data_provider(), broker=broker))
     )
 
 
@@ -558,6 +582,7 @@ def _handle_session_message(
             )
         raw_command_value = payload.get("raw_command")
         raw_command = raw_command_value if isinstance(raw_command_value, str) else None
+        trade_route = trade_route_from_payload(payload.get("trade_route"))
         try:
             skip_delay_value = payload.get("skip_delay")
             skip_delay = bool(skip_delay_value) if isinstance(skip_delay_value, bool) else False
@@ -568,11 +593,40 @@ def _handle_session_message(
             )
         except Exception as exc:
             return _command_execution_failed_error(exc, correlation_message_id)
+        if trade_route is not None:
+            broker.server_state.set_selected_trade_route(trade_route)
+            broker.server_state.set_running_trade_route(trade_route)
+            _publish_route_hydrate(broker=broker, data_provider=data_provider)
         return protocol_message(
             "response.success",
             {
                 "accepted": True,
                 "message_text": "Haul routine accepted.",
+            },
+            correlation_message_id=correlation_message_id,
+        )
+
+    if message_type == "command.select_trade_route":
+        trade_route = trade_route_from_payload(payload.get("route"))
+        if trade_route is None:
+            return protocol_message(
+                "response.error",
+                {
+                    "error_code": "invalid_command",
+                    "error_message": "Trade-route selection commands must include a valid route object.",
+                    "recommended_action": "Send a route returned by command.search_haul_routes.",
+                    "retryable": True,
+                },
+                correlation_message_id=correlation_message_id,
+            )
+        broker.server_state.set_selected_trade_route(trade_route)
+        _publish_route_hydrate(broker=broker, data_provider=data_provider)
+        return protocol_message(
+            "response.success",
+            {
+                "accepted": True,
+                "message_text": "Trade route selection stored.",
+                "result": {"route": _trade_route_to_payload(trade_route)},
             },
             correlation_message_id=correlation_message_id,
         )

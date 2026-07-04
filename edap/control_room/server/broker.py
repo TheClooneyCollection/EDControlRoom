@@ -115,6 +115,10 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
     def publish_data_message(self, message: dict[str, Any]) -> None:
         self._broadcast(message)
 
+    @property
+    def server_state(self) -> ControlRoomServerState:
+        return self._server_state
+
     def _broadcast(self, message: dict[str, Any]) -> None:
         for session in list(self._sessions.values()):
             self._queue_message(session, message)

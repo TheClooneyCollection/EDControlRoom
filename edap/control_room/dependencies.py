@@ -76,6 +76,8 @@ class ControlRoomDataReadModel:
     session: SessionReadModel
     server_status: ServerStatusReadModel
     home_system: str = ""
+    selected_trade_route: TradeRoute | None = None
+    running_trade_route: TradeRoute | None = None
 
 
 class ControlRoomDataSource(Protocol):
@@ -186,6 +188,7 @@ class LocalControlRoomDataSource:
                 bindings_loaded=app._ctx.binding_lookup is not None,
             ),
             home_system=app._config.control_room.home_system,
+            selected_trade_route=_selected_trade_route(app),
         )
 
 
@@ -320,4 +323,17 @@ def _copy_haul_stats(haul: HaulStats, *, now: float | None = None) -> HaulStats:
         last_run_profit=haul.last_run_profit,
         last_run_elapsed_s=haul.last_run_elapsed_s,
         total_run_elapsed_s=haul.total_run_elapsed_s,
+    )
+
+
+def _selected_trade_route(app: ControlRoomApp) -> TradeRoute | None:
+    picker_state = getattr(app, "_trade_route_picker_state", None)
+    trade_routes = getattr(app, "_trade_routes", None)
+    selected_index = getattr(picker_state, "selected_route_index", None)
+    if selected_index is None:
+        return None
+    routes = getattr(trade_routes, "routes", ())
+    return next(
+        (route for route in routes if route.index == selected_index),
+        None,
     )

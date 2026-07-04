@@ -1531,8 +1531,9 @@
 
     function routeFromApi(route, fallbackIndex) {
       const stationDistances = [route.from_station_distance, route.to_station_distance].filter(Boolean);
+      const index = Number(route.index || fallbackIndex);
       return {
-        index: Number(route.index || fallbackIndex),
+        index,
         profitHour: route.profit_per_hour || "-",
         profitTrip: route.profit_per_trip || "-",
         commodity: route.source_buy_commodity || "",
@@ -1545,8 +1546,73 @@
         sellStationDistance: route.to_station_distance || "-",
         distanceFromSystem: route.distance_from_system || "-",
         routeDistance: route.route_distance || "-",
-        stationDistance: stationDistances.length ? stationDistances.join(" / ") : "-"
+        stationDistance: stationDistances.length ? stationDistances.join(" / ") : "-",
+        apiRoute: { ...route, index }
       };
+    }
+
+    function tradeRoutePayload(route) {
+      if (!route) {
+        return null;
+      }
+      return {
+        index: Number(route.index || 0),
+        from_station: route.buyStation || "",
+        from_system: route.buySystem || "",
+        to_station: route.sellStation || "",
+        to_system: route.sellSystem || "",
+        source_buy_commodity: route.commodity || null,
+        target_buy_commodity: route.targetCommodity || null,
+        from_station_distance: route.buyStationDistance !== "-" ? route.buyStationDistance : null,
+        to_station_distance: route.sellStationDistance !== "-" ? route.sellStationDistance : null,
+        distance_from_system: route.distanceFromSystem !== "-" ? route.distanceFromSystem : null,
+        route_distance: route.routeDistance !== "-" ? route.routeDistance : null,
+        profit_per_trip: route.profitTrip !== "-" ? route.profitTrip : null,
+        profit_per_hour: route.profitHour !== "-" ? route.profitHour : null,
+        raw_text: route.apiRoute?.raw_text || "",
+        url_links: route.apiRoute?.url_links || []
+      };
+    }
+
+    function routeKey(route) {
+      return [
+        route.buyStation,
+        route.buySystem,
+        route.sellStation,
+        route.sellSystem,
+        route.commodity,
+        route.targetCommodity
+      ].join("\u001f").toLowerCase();
+    }
+
+    function mergeHydratedRoute(apiRoute) {
+      if (!apiRoute || typeof apiRoute !== "object") {
+        return null;
+      }
+      const hydratedRoute = routeFromApi(apiRoute, routes.length + 1);
+      const hydratedKey = routeKey(hydratedRoute);
+      const existingIndex = routes.findIndex((route) => routeKey(route) === hydratedKey);
+      if (existingIndex >= 0) {
+        routes[existingIndex] = hydratedRoute;
+      } else {
+        routes = [hydratedRoute, ...routes];
+      }
+      hasSearchedRoutes = true;
+      selectedRouteIndex = hydratedRoute.index;
+      const routeOffset = routes.findIndex((route) => route.index === selectedRouteIndex);
+      routePage = routeOffset >= 0 ? Math.floor(routeOffset / ROUTES_PER_PAGE) + 1 : 1;
+      return hydratedRoute;
+    }
+
+    function persistSelectedRoute(route) {
+      const payload = tradeRoutePayload(route);
+      if (!payload || !accessToken || clientRole !== "active_operator" || !isSocketReady()) {
+        return;
+      }
+      sendCommand("command.select_trade_route", { route: payload })
+        .catch((error) => {
+          appendActivity(error.message, "Haul", "warning");
+        });
     }
 
     function profitHourLabel(route) {
@@ -2099,6 +2165,10 @@
       if (ship.cargo_capacity) {
         document.getElementById("capacity").value = ship.cargo_capacity;
       }
+      if (mergeHydratedRoute(payload.running_trade_route || payload.selected_trade_route)) {
+        renderRows();
+        renderSelected();
+      }
       document.getElementById("summary-profit").textContent = formatCredits(haulSession.accumulated_profit || 0);
       updateRoutinePanel(routine, haulSession, ship);
       updateOperatorState();
@@ -2115,6 +2185,7 @@
       selectedRouteIndex = Number(row.dataset.index);
       renderRows();
       renderSelected();
+      persistSelectedRoute(routeByIndex(selectedRouteIndex));
     });
 
     document.getElementById("search-form").addEventListener("submit", (event) => {
@@ -2147,6 +2218,7 @@
           selectedRouteIndex = routes[0] ? routes[0].index : 0;
           renderRows();
           renderSelected();
+          persistSelectedRoute(routeByIndex(selectedRouteIndex));
           setResultCount(`Found ${result.route_count || 0} station/carrier routes`);
           appendActivity(`Route search returned ${result.route_count || 0} result(s).`, "Search", "success");
         })
@@ -2226,7 +2298,8 @@
       const params = selectedHaulParams();
       sendCommand("command.dispatch_haul_loop", {
         params,
-        raw_command: `web haul start ${route.buyStation} -> ${route.sellStation}`
+        raw_command: `web haul start ${route.buyStation} -> ${route.sellStation}`,
+        trade_route: tradeRoutePayload(route)
       })
         .then(() => {
           appendActivity("Two-way haul accepted by backend.", "Haul", "success");

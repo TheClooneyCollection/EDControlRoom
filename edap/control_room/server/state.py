@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from edap.control_room.protocol.events import ActivityLogEntry, AnnouncementEvent
+from edap.inara.trade_routes import TradeRoute
 
 
 class ControlRoomServerState:
@@ -14,6 +15,8 @@ class ControlRoomServerState:
         self._announcement_limit = announcement_limit
         self._activity_log: list[ActivityLogEntry] = []
         self._announcements: list[AnnouncementEvent] = []
+        self._selected_trade_route: TradeRoute | None = None
+        self._running_trade_route: TradeRoute | None = None
 
     def replace_activity_log(self, entries: list[ActivityLogEntry]) -> None:
         self._activity_log = list(entries)[-self._activity_log_limit :]
@@ -31,3 +34,15 @@ class ControlRoomServerState:
 
     def announcements(self) -> list[AnnouncementEvent]:
         return list(self._announcements)
+
+    def set_selected_trade_route(self, route: TradeRoute | None) -> None:
+        self._selected_trade_route = route
+
+    def selected_trade_route(self) -> TradeRoute | None:
+        return self._selected_trade_route
+
+    def set_running_trade_route(self, route: TradeRoute | None) -> None:
+        self._running_trade_route = route
+
+    def running_trade_route(self) -> TradeRoute | None:
+        return self._running_trade_route

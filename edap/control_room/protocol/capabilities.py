@@ -16,6 +16,7 @@ SUPPORTED_COMMAND_MESSAGE_TYPES = [
     "command.dispatch_destination",
     "command.dispatch_haul_loop",
     "command.search_haul_routes",
+    "command.select_trade_route",
     "command.cancel_active_routine",
 ]
 SUPPORTED_EVENT_MESSAGE_TYPES = [

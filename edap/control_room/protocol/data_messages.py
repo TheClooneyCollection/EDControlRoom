@@ -16,6 +16,7 @@ from edap.control_room.dependencies import (
 )
 from edap.control_room.models import HaulStats, MarketData, ShipState
 from edap.control_room_state import CommandHistoryEntry
+from edap.inara.trade_routes import TradeRoute
 
 
 DATA_MESSAGE_SCHEMA = "edcontrolroom.control_room_data_message"
@@ -100,6 +101,8 @@ def data_read_model_from_payload(payload: dict[str, Any]) -> ControlRoomDataRead
         session=_session(_mapping(payload.get("session", {}))),
         server_status=_server_status(_mapping(payload.get("server_status", {}))),
         home_system=str(payload.get("home_system", "")),
+        selected_trade_route=_trade_route(payload.get("selected_trade_route")),
+        running_trade_route=_trade_route(payload.get("running_trade_route")),
     )
 
 
@@ -238,6 +241,48 @@ def _server_status(payload: dict[str, Any]) -> ServerStatusReadModel:
         if isinstance(capability_names, (list, tuple))
         else (),
         operator_mode=str(payload.get("operator_mode", "")),
+    )
+
+
+def _trade_route(payload: object) -> TradeRoute | None:
+    if not isinstance(payload, dict):
+        return None
+    try:
+        index = int(payload.get("index", 0))
+    except (TypeError, ValueError):
+        return None
+    from_station = payload.get("from_station")
+    from_system = payload.get("from_system")
+    to_station = payload.get("to_station")
+    to_system = payload.get("to_system")
+    if not all(
+        isinstance(value, str) and value.strip()
+        for value in (from_station, from_system, to_station, to_system)
+    ):
+        return None
+    url_links_value = payload.get("url_links", ())
+    if isinstance(url_links_value, (list, tuple)):
+        url_links = tuple(str(value) for value in url_links_value)
+    else:
+        url_links = ()
+    return TradeRoute(
+        index=index,
+        from_station=from_station,
+        from_system=from_system,
+        to_station=to_station,
+        to_system=to_system,
+        source_buy_commodity=_optional_str(payload.get("source_buy_commodity")),
+        target_buy_commodity=_optional_str(payload.get("target_buy_commodity")),
+        from_station_distance=_optional_str(payload.get("from_station_distance")),
+        to_station_distance=_optional_str(payload.get("to_station_distance")),
+        distance_from_system=_optional_str(payload.get("distance_from_system")),
+        route_distance=_optional_str(payload.get("route_distance")),
+        profit_per_unit=_optional_str(payload.get("profit_per_unit")),
+        profit_per_trip=_optional_str(payload.get("profit_per_trip")),
+        profit_per_hour=_optional_str(payload.get("profit_per_hour")),
+        updated=_optional_str(payload.get("updated")),
+        raw_text=str(payload.get("raw_text", "")),
+        url_links=url_links,
     )
 
 
