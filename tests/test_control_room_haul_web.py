@@ -81,7 +81,7 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
 
         self.assertIn('sendCommand("command.select_trade_route", { route: payload })', html)
-        self.assertIn("mergeHydratedRoute(payload.running_trade_route || payload.selected_trade_route)", html)
+        self.assertIn("mergeHydratedRoute(payload.selected_trade_route || payload.running_trade_route)", html)
         self.assertIn("trade_route: tradeRoutePayload(route)", html)
         self.assertIn("apiRoute: { ...route, index }", html)
 

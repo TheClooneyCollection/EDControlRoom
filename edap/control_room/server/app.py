@@ -211,10 +211,18 @@ def _server_hydrate_data(
     *,
     broker: InMemoryObserverSessionBroker,
 ) -> object:
+    selected_trade_route = (
+        broker.server_state.selected_trade_route()
+        or getattr(data, "selected_trade_route", None)
+    )
+    running_trade_route = (
+        broker.server_state.running_trade_route()
+        or getattr(data, "running_trade_route", None)
+    )
     return replace(
         data,
-        selected_trade_route=broker.server_state.selected_trade_route(),
-        running_trade_route=broker.server_state.running_trade_route(),
+        selected_trade_route=selected_trade_route,
+        running_trade_route=running_trade_route,
     )
 
 
@@ -228,6 +236,22 @@ def _publish_route_hydrate(
     broker.publish_data_message(
         hydrate_message(_server_hydrate_data(data_provider(), broker=broker))
     )
+
+
+def _persist_route_state(
+    command_handler: ObserverSessionCommandHandler | None,
+    *,
+    selected_trade_route: TradeRoute | None = None,
+    running_trade_route: TradeRoute | None = None,
+) -> None:
+    if command_handler is None:
+        return
+    persist = getattr(command_handler, "persist_trade_route_state", None)
+    if callable(persist):
+        persist(
+            selected_trade_route=selected_trade_route,
+            running_trade_route=running_trade_route,
+        )
 
 
 async def _handle_search_haul_routes_message_async(
@@ -596,6 +620,11 @@ def _handle_session_message(
         if trade_route is not None:
             broker.server_state.set_selected_trade_route(trade_route)
             broker.server_state.set_running_trade_route(trade_route)
+            _persist_route_state(
+                command_handler,
+                selected_trade_route=trade_route,
+                running_trade_route=trade_route,
+            )
             _publish_route_hydrate(broker=broker, data_provider=data_provider)
         return protocol_message(
             "response.success",
@@ -620,6 +649,10 @@ def _handle_session_message(
                 correlation_message_id=correlation_message_id,
             )
         broker.server_state.set_selected_trade_route(trade_route)
+        _persist_route_state(
+            command_handler,
+            selected_trade_route=trade_route,
+        )
         _publish_route_hydrate(broker=broker, data_provider=data_provider)
         return protocol_message(
             "response.success",

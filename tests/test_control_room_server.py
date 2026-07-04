@@ -234,6 +234,8 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
         self.dispatched_hauls: list[tuple[dict[str, str] | None, bool, str | None]] = []
         self.loaded_trade_routes: list[tuple[object, str | None]] = []
         self.cancel_modes: list[str] = []
+        self.persisted_selected_trade_route = None
+        self.persisted_running_trade_route = None
 
     def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None:
         self.submitted_inputs.append((raw_input, skip_delay))
@@ -264,6 +266,17 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
 
     def cancel_active_routine(self, *, stop_mode="toggle") -> None:
         self.cancel_modes.append(stop_mode)
+
+    def persist_trade_route_state(
+        self,
+        *,
+        selected_trade_route=None,
+        running_trade_route=None,
+    ) -> None:
+        if selected_trade_route is not None:
+            self.persisted_selected_trade_route = selected_trade_route
+        if running_trade_route is not None:
+            self.persisted_running_trade_route = running_trade_route
 
 
 class ControlRoomServerTests(unittest.TestCase):
@@ -683,6 +696,7 @@ class ControlRoomServerTests(unittest.TestCase):
     def test_select_trade_route_stores_route_for_future_hydrate(self) -> None:
         broker = InMemoryObserverSessionBroker()
         observer = broker.register_observer("web-haul")
+        command_handler = _CommandHandlerRecorder()
         route_payload = {
             "index": 4,
             "from_station": "Galileo",
@@ -702,7 +716,7 @@ class ControlRoomServerTests(unittest.TestCase):
             },
             session_id=observer.session_id,
             client_role="active_operator",
-            command_handler=None,
+            command_handler=command_handler,
             broker=broker,
             data_provider=_base_data_read_model,
         )
@@ -710,6 +724,8 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(response["message_type"], "response.success")
         self.assertEqual(response["correlation_message_id"], "message-select-route")
         self.assertEqual(broker.server_state.selected_trade_route().to_system, "Alioth")
+        self.assertEqual(command_handler.persisted_selected_trade_route.to_system, "Alioth")
+        self.assertIsNone(command_handler.persisted_running_trade_route)
         hydrate = observer.queue.get_nowait()
         self.assertEqual(hydrate["message_type"], "control_room.hydrate")
         self.assertEqual(
@@ -832,6 +848,8 @@ class ControlRoomServerTests(unittest.TestCase):
             },
         )
         self.assertEqual(broker.server_state.running_trade_route().from_station, "Galileo")
+        self.assertEqual(command_handler.persisted_selected_trade_route.from_station, "Galileo")
+        self.assertEqual(command_handler.persisted_running_trade_route.from_station, "Galileo")
 
     def test_websocket_clients_are_all_active_operators(self) -> None:
         broker = InMemoryObserverSessionBroker()

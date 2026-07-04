@@ -67,6 +67,8 @@ def serve_observer_mode(
         ]
     )
     runtime_host.start()
+    broker.server_state.set_selected_trade_route(runtime_host._saved_state.selected_trade_route)
+    broker.server_state.set_running_trade_route(runtime_host._saved_state.running_trade_route)
     app = build_observer_server_app(
         data_provider=data_provider,
         command_handler=runtime_host,

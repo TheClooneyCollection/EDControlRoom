@@ -12,6 +12,7 @@ from edap.control_room.app import ControlRoomApp
 from edap.control_room.history import now_iso
 from edap.control_room.routine_stop import RoutineStopMode
 from edap.control_room_state import CommandHistoryEntry
+from edap.inara.trade_routes import TradeRoute
 from edap.runtime import RuntimeContext
 from edap.state import JournalWatcher
 from edap.tts import NullSpeechBackend, TTSAnnouncer
@@ -221,6 +222,18 @@ class HeadlessControlRoomHost(ControlRoomApp):
             raw_command=raw_command,
         )
         self._publish_data_refresh()
+
+    def persist_trade_route_state(
+        self,
+        *,
+        selected_trade_route: TradeRoute | None = None,
+        running_trade_route: TradeRoute | None = None,
+    ) -> None:
+        if selected_trade_route is not None:
+            self._saved_state.selected_trade_route = selected_trade_route
+        if running_trade_route is not None:
+            self._saved_state.running_trade_route = running_trade_route
+        self._save_saved_state()
 
     def _publish_data_refresh(self) -> None:
         sink = self._protocol_event_sink

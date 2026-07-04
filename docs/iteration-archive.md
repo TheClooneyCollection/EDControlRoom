@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `215`
-- Latest generated iteration number: `348`
+- Generated iteration count: `216`
+- Latest generated iteration number: `349`
 
 ## Iteration 134
 
@@ -5973,3 +5973,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-check multi-client behavior during web route search/start so route selection updates feel natural when more than one browser is connected.
+
+## Iteration 349
+
+- When: `2026-07-04 18:29`
+- Area: `web`
+- Title: `persist-route-selection-state`
+- Source: [2026-07-04-18-29_____web______persist-route-selection-state.md](iteration-logs/2026-07-04-18-29_____web______persist-route-selection-state.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `persist-route-selection-state`
+- Started: `2026-07-04 18:29`
+
+## Summary
+
+- Selected and running web trade routes now persist through the existing Control Room state file so `/haul` can hydrate the route after a server restart.
+
+## Changes
+
+- Added `selected_trade_route` and `running_trade_route` to `ControlRoomState` load/save serialization.
+- Headless websocket route selection/start commands now write route state through `persist_trade_route_state()`.
+- `serve` seeds broker route state from the loaded state file before exposing hydrate/session routes.
+
+## Follow-ups
+
+- Live-check restart recovery after selecting and after starting a route to verify the restored web table matches operator expectations.

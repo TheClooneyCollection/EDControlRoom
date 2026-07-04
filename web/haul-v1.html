@@ -2165,7 +2165,7 @@
       if (ship.cargo_capacity) {
         document.getElementById("capacity").value = ship.cargo_capacity;
       }
-      if (mergeHydratedRoute(payload.running_trade_route || payload.selected_trade_route)) {
+      if (mergeHydratedRoute(payload.selected_trade_route || payload.running_trade_route)) {
         renderRows();
         renderSelected();
       }

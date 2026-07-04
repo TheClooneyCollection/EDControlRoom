@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from edap.inara.trade_routes import TradeRoute
 
 
 @dataclass
@@ -27,6 +30,8 @@ class ControlRoomState:
     session_total_run_elapsed_seconds: float = 0.0
     session_last_run_profit: int | None = None
     session_last_run_elapsed_seconds: float | None = None
+    selected_trade_route: TradeRoute | None = None
+    running_trade_route: TradeRoute | None = None
 
 
 _LEGACY_HAUL_KEYS = frozenset({"commodity", "buy_station", "sell_station", "buy_system", "sell_system"})
@@ -112,6 +117,8 @@ def load_control_room_state(path: Path) -> ControlRoomState:
     session_last_run_elapsed_seconds = raw.get("session_last_run_elapsed_seconds")
     if not isinstance(session_last_run_elapsed_seconds, (int, float)):
         session_last_run_elapsed_seconds = None
+    selected_trade_route = _trade_route_from_payload(raw.get("selected_trade_route"))
+    running_trade_route = _trade_route_from_payload(raw.get("running_trade_route"))
 
     return ControlRoomState(
         default_haul={str(key): str(value) for key, value in default_haul.items()},
@@ -128,6 +135,8 @@ def load_control_room_state(path: Path) -> ControlRoomState:
             if session_last_run_elapsed_seconds is not None
             else None
         ),
+        selected_trade_route=selected_trade_route,
+        running_trade_route=running_trade_route,
     )
 
 
@@ -143,6 +152,8 @@ def save_control_room_state(path: Path, state: ControlRoomState) -> None:
         "session_total_run_elapsed_seconds": state.session_total_run_elapsed_seconds,
         "session_last_run_profit": state.session_last_run_profit,
         "session_last_run_elapsed_seconds": state.session_last_run_elapsed_seconds,
+        "selected_trade_route": _trade_route_to_payload(state.selected_trade_route),
+        "running_trade_route": _trade_route_to_payload(state.running_trade_route),
         "history": [
             {
                 "raw": entry.raw,
@@ -160,3 +171,60 @@ def save_control_room_state(path: Path, state: ControlRoomState) -> None:
         temp_path = Path(handle.name)
 
     temp_path.replace(path)
+
+
+def _trade_route_from_payload(payload: object) -> TradeRoute | None:
+    from edap.inara.trade_routes import TradeRoute
+
+    if not isinstance(payload, dict):
+        return None
+    try:
+        index = int(payload.get("index", 0))
+    except (TypeError, ValueError):
+        return None
+    from_station = payload.get("from_station")
+    from_system = payload.get("from_system")
+    to_station = payload.get("to_station")
+    to_system = payload.get("to_system")
+    if not all(
+        isinstance(value, str) and value.strip()
+        for value in (from_station, from_system, to_station, to_system)
+    ):
+        return None
+    url_links_value = payload.get("url_links", ())
+    url_links = (
+        tuple(str(value) for value in url_links_value)
+        if isinstance(url_links_value, (list, tuple))
+        else ()
+    )
+    return TradeRoute(
+        index=index,
+        from_station=from_station,
+        from_system=from_system,
+        to_station=to_station,
+        to_system=to_system,
+        source_buy_commodity=_optional_str(payload.get("source_buy_commodity")),
+        target_buy_commodity=_optional_str(payload.get("target_buy_commodity")),
+        from_station_distance=_optional_str(payload.get("from_station_distance")),
+        to_station_distance=_optional_str(payload.get("to_station_distance")),
+        distance_from_system=_optional_str(payload.get("distance_from_system")),
+        route_distance=_optional_str(payload.get("route_distance")),
+        profit_per_unit=_optional_str(payload.get("profit_per_unit")),
+        profit_per_trip=_optional_str(payload.get("profit_per_trip")),
+        profit_per_hour=_optional_str(payload.get("profit_per_hour")),
+        updated=_optional_str(payload.get("updated")),
+        raw_text=str(payload.get("raw_text", "")),
+        url_links=url_links,
+    )
+
+
+def _trade_route_to_payload(route: TradeRoute | None) -> dict[str, Any] | None:
+    return asdict(route) if route is not None else None
+
+
+def _optional_str(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        value = str(value)
+    return value or None

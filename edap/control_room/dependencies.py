@@ -188,7 +188,8 @@ class LocalControlRoomDataSource:
                 bindings_loaded=app._ctx.binding_lookup is not None,
             ),
             home_system=app._config.control_room.home_system,
-            selected_trade_route=_selected_trade_route(app),
+            selected_trade_route=_selected_trade_route(app) or app._saved_state.selected_trade_route,
+            running_trade_route=app._saved_state.running_trade_route,
         )
 
 

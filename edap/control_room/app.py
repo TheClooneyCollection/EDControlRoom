@@ -913,7 +913,9 @@ class ControlRoomApp(App[None]):
             items=list(data.market.items),
             locked=self._market.locked,
         )
-        selected_trade_route = data.running_trade_route or data.selected_trade_route
+        self._saved_state.selected_trade_route = data.selected_trade_route
+        self._saved_state.running_trade_route = data.running_trade_route
+        selected_trade_route = data.selected_trade_route or data.running_trade_route
         if selected_trade_route is not None:
             self._trade_routes = TradeRoutesData(routes=[selected_trade_route])
             self._trade_route_picker_state.selected_route_index = selected_trade_route.index
