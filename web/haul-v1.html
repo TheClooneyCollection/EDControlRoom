@@ -249,6 +249,30 @@
       opacity: 0.45;
     }
 
+    .mode-toggle {
+      height: 30px;
+      border: 1px solid var(--border-strong);
+      border-radius: 999px;
+      background: var(--bg-2);
+      color: var(--text-2);
+      padding: 0 10px;
+      font-size: 11.5px;
+      font-weight: 650;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .mode-toggle.on {
+      border-color: rgba(91, 141, 214, 0.7);
+      background: var(--blue-dim);
+      color: var(--blue);
+    }
+
+    .mode-toggle:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+
     .token-control {
       display: grid;
       grid-template-columns: 150px auto;
@@ -882,6 +906,7 @@
             <input class="token-input" id="access-token" type="password" placeholder="Access token" autocomplete="off" aria-label="Access token">
             <button class="token-button" id="save-token" type="button">Save</button>
           </div>
+          <button class="mode-toggle" id="instant-toggle" type="button" aria-pressed="false">Instant off</button>
           <div class="stop-controls" aria-label="Routine stop controls">
             <button class="stop-button secondary" id="stop-after-run" type="button">Stop after run</button>
             <button class="stop-button" id="stop-now" type="button">Stop now</button>
@@ -1180,8 +1205,14 @@
     function updateOperatorState() {
       const active = clientRole === "active_operator";
       const routineActive = Boolean(currentRoutine.routine_active);
+      const instantMode = Boolean(currentRoutine.instant_mode);
+      const instantToggle = document.getElementById("instant-toggle");
       document.getElementById("start-haul").disabled = !active || !routeByIndex(selectedRouteIndex);
       document.getElementById("set-destination").disabled = !active || !routeByIndex(selectedRouteIndex);
+      instantToggle.disabled = !active;
+      instantToggle.textContent = instantMode ? "Instant on" : "Instant off";
+      instantToggle.classList.toggle("on", instantMode);
+      instantToggle.setAttribute("aria-pressed", instantMode ? "true" : "false");
       document.getElementById("stop-after-run").disabled = !active || !routineActive;
       document.getElementById("stop-now").disabled = !active || !routineActive;
       document.querySelector("#search-form .btn.primary").disabled = !active;
@@ -1773,6 +1804,28 @@
         });
     }
 
+    function requestInstantToggle() {
+      if (!accessToken) {
+        appendActivity("Enter and save an access token to change instant mode.", "Session", "warning");
+        return;
+      }
+      if (clientRole !== "active_operator") {
+        appendActivity("Only the active operator can change instant mode.", "Session", "warning");
+        return;
+      }
+      const nextMode = currentRoutine.instant_mode ? "off" : "on";
+      sendCommand("command.submit_input", {
+        raw_input: `instant ${nextMode}`,
+        skip_delay: true
+      })
+        .then(() => {
+          appendActivity(`Instant mode ${nextMode} requested.`, "Session", "success");
+        })
+        .catch((error) => {
+          appendActivity(error.message, "Session", "warning");
+        });
+    }
+
     document.getElementById("stop-after-run").addEventListener("click", () => {
       requestRoutineStop("after_run");
     });
@@ -1780,6 +1833,8 @@
     document.getElementById("stop-now").addEventListener("click", () => {
       requestRoutineStop("now");
     });
+
+    document.getElementById("instant-toggle").addEventListener("click", requestInstantToggle);
 
     document.getElementById("galaxy-settle").addEventListener("input", updateCommandPreview);
     document.getElementById("dock-timeout").addEventListener("input", updateCommandPreview);

@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `206`
-- Latest generated iteration number: `339`
+- Generated iteration count: `207`
+- Latest generated iteration number: `340`
 
 ## Iteration 134
 
@@ -5724,3 +5724,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-check `Stop after run` and `Stop now` from `/haul` against an active `control_room.py serve` session to confirm operator feedback and TTS feel right in-game.
+
+## Iteration 340
+
+- When: `2026-07-04 12:22`
+- Area: `web`
+- Title: `instant-mode-toggle`
+- Source: [2026-07-04-12-22_____web______instant-mode-toggle.md](iteration-logs/2026-07-04-12-22_____web______instant-mode-toggle.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `instant-mode-toggle`
+- Started: `2026-07-04 12:22`
+
+## Summary
+
+- Added a Haul Web instant-mode toggle that reflects hydrated routine state and sends explicit `instant on/off` commands.
+
+## Changes
+
+- Added an `Instant on/off` button to `/haul`, disabled unless the browser is the active operator.
+- Wired the toggle to `routine.instant_mode` from hydrate and to `command.submit_input` with `skip_delay=true`.
+- Added static web regression coverage for the instant-mode toggle payload.
+
+## Follow-ups
+
+- Live-check the `/haul` instant-mode toggle against a running server to confirm the hydrated state flips promptly after command execution.

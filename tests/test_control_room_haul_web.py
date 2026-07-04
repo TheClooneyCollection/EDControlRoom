@@ -21,3 +21,11 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn('id="stop-after-run"', html)
         self.assertIn('id="stop-now"', html)
         self.assertIn('sendCommand("command.cancel_active_routine", { mode })', html)
+
+    def test_haul_web_exposes_instant_mode_toggle(self) -> None:
+        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+
+        self.assertIn('id="instant-toggle"', html)
+        self.assertIn("currentRoutine.instant_mode", html)
+        self.assertIn('sendCommand("command.submit_input"', html)
+        self.assertIn("raw_input: `instant ${nextMode}`", html)
