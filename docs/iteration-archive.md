@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `224`
-- Latest generated iteration number: `357`
+- Generated iteration count: `225`
+- Latest generated iteration number: `358`
 
 ## Iteration 134
 
@@ -6224,3 +6224,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-check `dest <system>` under CrossOver when the first route plot leaves `NavRoute.json` empty to confirm the 3/5/8 second retries are enough before adding operator configuration.
+
+## Iteration 358
+
+- When: `2026-07-04 22:12`
+- Area: `ci-release`
+- Title: `v1-19-0-release-prep`
+- Source: [2026-07-04-22-12__ci-release__v1-19-0-release-prep.md](iteration-logs/2026-07-04-22-12__ci-release__v1-19-0-release-prep.md)
+
+# Iteration Log
+
+- Area: `ci-release`
+- Title: `v1-19-0-release-prep`
+- Started: `2026-07-04 22:12`
+
+## Summary
+
+- Prepared `v1.19.0` after the post-`v1.18.0` haul web controls/state work and haul route/interdiction recovery fixes.
+
+## Changes
+
+- Bumped `pyproject.toml` and `uv.lock` from `1.18.0` to `1.19.0`.
+- Updated `docs/status/ci-release.md` with the `v1.19.0` release summary and current unittest timing gate.
+- Ran `uv run python3 -m unittest discover -s tests`: `675` tests passed in `0.377s`, below the `0.405s` timing budget.
+
+## Follow-ups
+
+- Publish the `v1.19.0` tag and GitHub release once the release-prep commit is pushed.
