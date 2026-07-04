@@ -508,6 +508,12 @@
       grid-column: 1 / -1;
     }
 
+    .activity-list {
+      max-height: min(42vh, 420px);
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+    }
+
     .panel {
       border: 1px solid var(--border);
       border-radius: 10px;
@@ -1189,7 +1195,7 @@
               <div class="panel-title" id="activity-title">Activity</div>
               <div class="panel-action" id="activity-status">Live</div>
             </div>
-            <div class="panel-body" id="activity-list"></div>
+            <div class="panel-body activity-list" id="activity-list" role="log" aria-live="polite" tabindex="0"></div>
           </section>
         </section>
       </main>
@@ -1630,8 +1636,8 @@
 
     function renderActivityLog() {
       const list = document.getElementById("activity-list");
-      const entries = Array.from(activityEntries.values()).slice(-8).reverse();
-      document.getElementById("activity-status").textContent = entries.length ? "Live" : "No entries";
+      const entries = Array.from(activityEntries.values()).reverse();
+      document.getElementById("activity-status").textContent = entries.length ? `${entries.length} entries` : "No entries";
       if (!entries.length) {
         list.innerHTML = `<div class="activity-row"><div class="activity-time mono">--:--:--</div><div class="activity-text">Waiting for backend activity.</div><span class="badge neutral">Log</span></div>`;
         return;

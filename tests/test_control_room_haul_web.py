@@ -51,3 +51,13 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn('document.getElementById("summary-current").textContent = ship.system || "-";', html)
         self.assertIn('document.getElementById("summary-home").textContent = payload.home_system || "-";', html)
         self.assertNotIn("market.station || ship.station || ship.system", html)
+
+    def test_haul_web_activity_log_scrolls_full_hydrated_history(self) -> None:
+        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+
+        self.assertIn(".activity-list", html)
+        self.assertIn("overflow-y: auto", html)
+        self.assertIn('id="activity-list" role="log" aria-live="polite" tabindex="0"', html)
+        self.assertIn("Array.from(activityEntries.values()).reverse()", html)
+        self.assertIn('`${entries.length} entries`', html)
+        self.assertNotIn("slice(-8)", html)
