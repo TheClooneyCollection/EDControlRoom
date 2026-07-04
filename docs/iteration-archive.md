@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `184`
-- Latest generated iteration number: `317`
+- Generated iteration count: `193`
+- Latest generated iteration number: `326`
 
 ## Iteration 134
 
@@ -5124,3 +5124,241 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-check with real `Market.json` updates that Elite emits stable `MarketID` across repeated visits to the same station market.
+
+## Iteration 318
+
+- When: `2026-07-04 07:46`
+- Area: `web`
+- Title: `haul-page-static-prototype`
+- Source: [2026-07-04-07-46_____web______haul-page-static-prototype.md](iteration-logs/2026-07-04-07-46_____web______haul-page-static-prototype.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `haul-page-static-prototype`
+- Started: `2026-07-04 07:46`
+
+## Summary
+
+- Added a static HTML-only prototype for the v1 web Haul page, using the external component library's restrained dark/amber design language while keeping the layout purpose-built for EDControlRoom's two-way haul workflow.
+
+## Changes
+
+- Created `web/haul-v1.html` with no backend integration or build step.
+- Included route search, route results, selected-route setup, command preview, routine summary, and activity sample sections.
+- Added explicit station/carrier-only guardrails in both search and start panels; the preview always emits `station_1_on_land=false` and `station_2_on_land=false`.
+- Reflected the agreed v1 scope: two-way haul only, no prompt flow, no Inara URL import, and no market page.
+
+## Follow-ups
+
+- Add backend support for server-owned haul search data in hydrate plus a structured search command before wiring this page to live data.
+- Keep route row selection browser-local; use structured `command.dispatch_haul_loop` only when the operator starts a selected route.
+
+## Iteration 319
+
+- When: `2026-07-04 07:52`
+- Area: `web`
+- Title: `clarify-haul-dispatch-copy`
+- Source: [2026-07-04-07-52_____web______clarify-haul-dispatch-copy.md](iteration-logs/2026-07-04-07-52_____web______clarify-haul-dispatch-copy.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `clarify-haul-dispatch-copy`
+- Started: `2026-07-04 07:52`
+
+## Summary
+
+- Corrected the static Haul prototype copy so it does not describe the existing structured haul dispatch command as future backend work.
+
+## Changes
+
+- Updated `web/haul-v1.html` to label `command.dispatch_haul_loop` as an existing backend command.
+- Left `command.search_haul_routes` framed as future work because the server-side structured search command is not implemented yet.
+
+## Follow-ups
+
+- Wire the existing `command.dispatch_haul_loop` path before adding new backend action surface for haul search.
+
+## Iteration 320
+
+- When: `2026-07-04 07:53`
+- Area: `web`
+- Title: `tighten-haul-endpoint-copy`
+- Source: [2026-07-04-07-53_____web______tighten-haul-endpoint-copy.md](iteration-logs/2026-07-04-07-53_____web______tighten-haul-endpoint-copy.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `tighten-haul-endpoint-copy`
+- Started: `2026-07-04 07:53`
+
+## Summary
+
+- Tightened the static Haul prototype endpoint-support copy after review.
+
+## Changes
+
+- Removed the redundant read-only endpoint type field from the selected-route start panel.
+- Renamed the vague `Launch guardrail` notice to `Endpoint support` and made the station/carrier-only dispatch behavior explicit there.
+
+## Follow-ups
+
+- Keep endpoint support messaging in one visible place when the page is wired to live route data.
+
+## Iteration 321
+
+- When: `2026-07-04 07:55`
+- Area: `web`
+- Title: `reposition-haul-panels`
+- Source: [2026-07-04-07-55_____web______reposition-haul-panels.md](iteration-logs/2026-07-04-07-55_____web______reposition-haul-panels.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `reposition-haul-panels`
+- Started: `2026-07-04 07:55`
+
+## Summary
+
+- Repositioned the static Haul v1 panels so the active routine reads as a top operational band and the activity feed fills the open lower work area.
+
+## Changes
+
+- Moved `Active haul routine` directly below the current haul summary strip and above the search/results/start workspace.
+- Moved `Activity` into the main grid as a second-row panel spanning the search and route result columns.
+- Kept `Selected route + start` pinned in the right setup column across the main workspace.
+
+## Follow-ups
+
+- Recheck the proportions visually once the static page is served over HTTP or embedded in the backend.
+
+## Iteration 322
+
+- When: `2026-07-04 07:56`
+- Area: `web`
+- Title: `remove-haul-header-pills`
+- Source: [2026-07-04-07-56_____web______remove-haul-header-pills.md](iteration-logs/2026-07-04-07-56_____web______remove-haul-header-pills.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `remove-haul-header-pills`
+- Started: `2026-07-04 07:56`
+
+## Summary
+
+- Removed redundant header pills from the static Haul v1 prototype.
+
+## Changes
+
+- Dropped the page-head `V1 structured dispatch` and `No Inara URL import` chips.
+- Dropped the topbar `Stations and carriers only` status chip while preserving the search/start panel limitation copy.
+
+## Follow-ups
+
+- Continue trimming duplicate scope labels as the static prototype moves toward backend-served UI.
+
+## Iteration 323
+
+- When: `2026-07-04 07:57`
+- Area: `web`
+- Title: `collapse-command-preview`
+- Source: [2026-07-04-07-57_____web______collapse-command-preview.md](iteration-logs/2026-07-04-07-57_____web______collapse-command-preview.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `collapse-command-preview`
+- Started: `2026-07-04 07:57`
+
+## Summary
+
+- Converted the selected route command preview into a collapsed debug disclosure.
+
+## Changes
+
+- Wrapped the existing command preview output in a native `details` section labeled `Debug command preview`.
+- Added compact disclosure styling so debug params no longer occupy the default start panel layout.
+- Kept the existing `command-preview` id intact for the current static JavaScript updater.
+
+## Follow-ups
+
+- Revisit debug affordances when backend integration lands and decide whether command previews should be hidden behind a developer mode.
+
+## Iteration 324
+
+- When: `2026-07-04 07:57`
+- Area: `web`
+- Title: `remove-surface-destination-field`
+- Source: [2026-07-04-07-57_____web______remove-surface-destination-field.md](iteration-logs/2026-07-04-07-57_____web______remove-surface-destination-field.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `remove-surface-destination-field`
+- Started: `2026-07-04 07:57`
+
+## Summary
+
+- Removed the redundant disabled surface-destinations field from the static Haul v1 search form.
+
+## Changes
+
+- Dropped the readonly `Surface destinations` input while keeping the station/carrier limitation in the search banner.
+
+## Follow-ups
+
+- Keep future unsupported-scope messaging informational rather than styled like inactive form controls.
+
+## Iteration 325
+
+- When: `2026-07-04 07:59`
+- Area: `web`
+- Title: `remove-unimplemented-sidebar-items`
+- Source: [2026-07-04-07-59_____web______remove-unimplemented-sidebar-items.md](iteration-logs/2026-07-04-07-59_____web______remove-unimplemented-sidebar-items.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `remove-unimplemented-sidebar-items`
+- Started: `2026-07-04 07:59`
+
+## Summary
+
+- Removed unimplemented sidebar navigation and backend-contract placeholders from the static Haul v1 prototype.
+
+## Changes
+
+- Dropped the inactive `Market later` and `Diagnostics later` sidebar buttons.
+- Dropped the `Backend Contract` sidebar block for planned/unimplemented backend states.
+- Kept the active `Two-way haul` nav item and lower runtime status rows.
+
+## Follow-ups
+
+- Reintroduce sidebar destinations only when those pages or live backend states exist.
+
+## Iteration 326
+
+- When: `2026-07-04 08:00`
+- Area: `web`
+- Title: `remove-search-backend-callout`
+- Source: [2026-07-04-08-00_____web______remove-search-backend-callout.md](iteration-logs/2026-07-04-08-00_____web______remove-search-backend-callout.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `remove-search-backend-callout`
+- Started: `2026-07-04 08:00`
+
+## Summary
+
+- Removed the search-panel backend command callout from the static Haul v1 prototype.
+
+## Changes
+
+- Dropped the `Future backend command: command.search_haul_routes` copy below the search controls.
+
+## Follow-ups
+
+- Keep backend implementation notes out of the primary prototype UI unless surfaced through debug-only affordances.

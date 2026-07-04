@@ -1,0 +1,1189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ED Control Room - Haul Web V1 Prototype</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg-0: #0a0c10;
+      --bg-1: #11151b;
+      --bg-2: #181d25;
+      --bg-3: #202631;
+      --border: #252b36;
+      --border-strong: #343c4b;
+      --text-1: #e4e7ec;
+      --text-2: #9aa2af;
+      --text-3: #626b79;
+      --amber: #e8912b;
+      --amber-dim: #332716;
+      --green: #4fae7c;
+      --green-dim: #15251e;
+      --red: #d65b5b;
+      --red-dim: #2b1718;
+      --blue: #5b8dd6;
+      --blue-dim: #132033;
+      --radius: 6px;
+      --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-width: 1160px;
+      background: var(--bg-0);
+      color: var(--text-1);
+      font-family: var(--sans);
+      font-size: 13px;
+      line-height: 1.35;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .mono {
+      font-family: var(--mono);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 208px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      border-right: 1px solid var(--border);
+      background: var(--bg-1);
+      padding: 20px 14px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .brand {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 0 6px 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      border-radius: var(--radius);
+      background: var(--amber-dim);
+      border: 1px solid var(--amber);
+      display: grid;
+      place-items: center;
+      color: var(--amber);
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    .brand-name {
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .brand-sub {
+      margin-top: 2px;
+      color: var(--text-3);
+      font-size: 10.5px;
+    }
+
+    .nav-label {
+      padding: 14px 10px 6px;
+      color: var(--text-3);
+      text-transform: uppercase;
+      font-size: 10px;
+      font-weight: 650;
+    }
+
+    .nav-item {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 10px;
+      border: 0;
+      border-radius: var(--radius);
+      background: transparent;
+      color: var(--text-2);
+      text-align: left;
+      cursor: default;
+    }
+
+    .nav-item svg {
+      width: 16px;
+      height: 16px;
+      color: currentColor;
+    }
+
+    .nav-item.active {
+      color: var(--text-1);
+      background: var(--bg-2);
+    }
+
+    .nav-item.active svg {
+      color: var(--amber);
+    }
+
+    .sidebar-foot {
+      margin-top: auto;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 6px;
+      color: var(--text-2);
+      font-size: 11px;
+    }
+
+    .dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      margin-right: 6px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-0);
+    }
+
+    .topbar-title {
+      font-weight: 650;
+      font-size: 14px;
+    }
+
+    .topbar-sub {
+      color: var(--text-3);
+      font-size: 11px;
+      margin-top: 2px;
+    }
+
+    .chips {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--bg-1);
+      color: var(--text-2);
+      font-size: 11.5px;
+      white-space: nowrap;
+    }
+
+    .chip strong {
+      color: var(--text-1);
+      font-weight: 550;
+    }
+
+    .chip.warning {
+      border-color: rgba(232, 145, 43, 0.55);
+      color: var(--amber);
+      background: var(--amber-dim);
+    }
+
+    .chip.danger {
+      border-color: rgba(214, 91, 91, 0.65);
+      color: var(--red);
+      background: var(--red-dim);
+    }
+
+    main {
+      padding: 22px 24px 34px;
+      max-width: 1480px;
+    }
+
+    .page-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 26px;
+      font-weight: 600;
+    }
+
+    .page-description {
+      margin-top: 6px;
+      max-width: 760px;
+      color: var(--text-2);
+      font-size: 12.5px;
+    }
+
+    .summary-strip {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 1px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--border);
+      margin-bottom: 16px;
+    }
+
+    .summary-cell {
+      min-width: 0;
+      background: var(--bg-1);
+      padding: 12px 14px;
+    }
+
+    .summary-label {
+      color: var(--text-3);
+      font-size: 10px;
+      font-weight: 650;
+      text-transform: uppercase;
+    }
+
+    .summary-value {
+      margin-top: 5px;
+      font-size: 13px;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .summary-value.success {
+      color: var(--green);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 300px minmax(500px, 1fr) 350px;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .routine-panel {
+      margin-bottom: 16px;
+    }
+
+    .setup-panel {
+      grid-column: 3;
+      grid-row: 1 / span 2;
+    }
+
+    .activity-panel {
+      grid-column: 1 / span 2;
+      grid-row: 2;
+    }
+
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg-1);
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-title {
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .panel-action {
+      color: var(--text-3);
+      font-size: 11px;
+    }
+
+    .panel-body {
+      padding: 14px 16px;
+    }
+
+    .banner {
+      border: 1px solid rgba(232, 145, 43, 0.55);
+      border-radius: var(--radius);
+      padding: 10px 11px;
+      background: var(--amber-dim);
+      color: var(--text-1);
+      margin-bottom: 12px;
+    }
+
+    .banner-title {
+      color: var(--amber);
+      font-weight: 650;
+      font-size: 11.5px;
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }
+
+    .banner-text {
+      color: var(--text-2);
+      font-size: 11.5px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .field-label {
+      display: block;
+      color: var(--text-3);
+      font-size: 10.5px;
+      font-weight: 650;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+
+    .field,
+    .select {
+      width: 100%;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      background: var(--bg-2);
+      color: var(--text-1);
+      padding: 8px 10px;
+      min-height: 34px;
+    }
+
+    .field[readonly],
+    .select[disabled] {
+      color: var(--text-3);
+      border-color: var(--border);
+    }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 2px;
+    }
+
+    .btn {
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      background: var(--bg-2);
+      color: var(--text-1);
+      min-height: 34px;
+      padding: 7px 12px;
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn.primary {
+      background: var(--amber-dim);
+      border-color: var(--amber);
+      color: var(--amber);
+    }
+
+    .btn.success {
+      background: var(--green-dim);
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .btn.danger {
+      background: transparent;
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    .btn.ghost {
+      background: transparent;
+      border-color: transparent;
+      color: var(--text-2);
+    }
+
+    .btn.block {
+      width: 100%;
+    }
+
+    .btn:focus-visible,
+    .field:focus,
+    .select:focus {
+      outline: 1px solid var(--amber);
+      outline-offset: 1px;
+    }
+
+    .route-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11.5px;
+    }
+
+    .route-table th {
+      color: var(--text-3);
+      font-size: 10px;
+      font-weight: 650;
+      text-align: left;
+      text-transform: uppercase;
+      padding: 0 10px 9px;
+      white-space: nowrap;
+    }
+
+    .route-table td {
+      border-top: 1px solid var(--border);
+      padding: 10px;
+      vertical-align: middle;
+    }
+
+    .route-table tr {
+      cursor: pointer;
+    }
+
+    .route-table tr.selected {
+      background: var(--bg-2);
+      box-shadow: inset 2px 0 0 var(--amber);
+    }
+
+    .route-table .num {
+      text-align: right;
+      font-family: var(--mono);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .route-main {
+      font-weight: 600;
+    }
+
+    .route-sub {
+      margin-top: 2px;
+      color: var(--text-3);
+      font-size: 10.5px;
+    }
+
+    .profit {
+      color: var(--green);
+      font-weight: 700;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .badge.success {
+      background: var(--green-dim);
+      color: var(--green);
+    }
+
+    .badge.warning {
+      background: var(--amber-dim);
+      color: var(--amber);
+    }
+
+    .badge.neutral {
+      background: var(--bg-3);
+      color: var(--text-2);
+    }
+
+    .selected-route-title {
+      padding: 9px 10px;
+      border: 1px solid var(--amber);
+      border-radius: var(--radius);
+      background: rgba(232, 145, 43, 0.08);
+      font-weight: 650;
+      margin-bottom: 12px;
+    }
+
+    .stat-list {
+      display: grid;
+      gap: 1px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--border);
+      margin-bottom: 12px;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      background: var(--bg-1);
+      padding: 8px 10px;
+    }
+
+    .stat-row .k {
+      color: var(--text-2);
+      font-size: 11.5px;
+    }
+
+    .stat-row .v {
+      font-weight: 600;
+      text-align: right;
+    }
+
+    .debug-disclosure {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-0);
+      margin: 12px 0;
+    }
+
+    .debug-disclosure summary {
+      cursor: pointer;
+      list-style: none;
+      padding: 10px;
+      color: var(--text-2);
+      font-size: 10px;
+      font-weight: 650;
+      text-transform: uppercase;
+    }
+
+    .debug-disclosure summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .debug-disclosure summary::after {
+      content: "+";
+      float: right;
+      color: var(--amber);
+      font-family: var(--mono);
+    }
+
+    .debug-disclosure[open] summary {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .debug-disclosure[open] summary::after {
+      content: "-";
+    }
+
+    .command-preview {
+      padding: 10px;
+      color: var(--amber);
+      font-size: 11px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      margin: 0;
+    }
+
+    .routine-bar {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 4px;
+      margin-bottom: 14px;
+    }
+
+    .step {
+      min-height: 50px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-2);
+      padding: 8px;
+    }
+
+    .step.done {
+      background: var(--green-dim);
+      border-color: rgba(79, 174, 124, 0.6);
+    }
+
+    .step.current {
+      background: var(--amber-dim);
+      border-color: var(--amber);
+    }
+
+    .step-label {
+      font-size: 10px;
+      color: var(--text-3);
+      text-transform: uppercase;
+      font-weight: 650;
+    }
+
+    .step-value {
+      margin-top: 4px;
+      font-size: 11.5px;
+      font-weight: 600;
+    }
+
+    .step.done .step-value {
+      color: var(--green);
+    }
+
+    .step.current .step-value {
+      color: var(--amber);
+    }
+
+    .activity-row {
+      display: grid;
+      grid-template-columns: 72px minmax(0, 1fr) auto;
+      gap: 12px;
+      padding: 9px 0;
+      border-top: 1px solid var(--border);
+      align-items: center;
+    }
+
+    .activity-row:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .activity-time {
+      color: var(--text-3);
+      font-size: 10.5px;
+    }
+
+    .activity-text {
+      font-size: 11.5px;
+    }
+
+    .mini-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .metric {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 11px;
+      background: var(--bg-0);
+    }
+
+    .metric-label {
+      color: var(--text-3);
+      text-transform: uppercase;
+      font-size: 10px;
+      font-weight: 650;
+    }
+
+    .metric-value {
+      margin-top: 6px;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .metric-value.success {
+      color: var(--green);
+    }
+
+    .callout {
+      margin-top: 12px;
+      padding: 10px 11px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-0);
+      color: var(--text-2);
+      font-size: 11.5px;
+    }
+
+    .inline-kbd {
+      color: var(--text-1);
+      font-family: var(--mono);
+      font-size: 11px;
+      background: var(--bg-3);
+      border: 1px solid var(--border-strong);
+      border-radius: 4px;
+      padding: 1px 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Navigation">
+      <div class="brand">
+        <div class="brand-mark">ED</div>
+        <div>
+          <div class="brand-name">Control Room</div>
+          <div class="brand-sub">web haul prototype</div>
+        </div>
+      </div>
+
+      <div class="nav-label">V1 Scope</div>
+      <button class="nav-item active" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 12h5l2 5 4-14 2 9h5"/></svg>
+        Two-way haul
+      </button>
+
+      <div class="sidebar-foot">
+        <div class="status-row"><span><span class="dot"></span>ED client</span><span>Running</span></div>
+        <div class="status-row"><span><span class="dot"></span>Journal</span><span>Live</span></div>
+        <div class="status-row"><span><span class="dot"></span>CrossOver</span><span>Targeted</span></div>
+      </div>
+    </aside>
+
+    <div>
+      <header class="topbar">
+        <div>
+          <div class="topbar-title">Haul</div>
+          <div class="topbar-sub">Static V1 prototype. No backend integration, prompt flow, market page, or settlement route support.</div>
+        </div>
+        <div class="chips" aria-label="Session status">
+          <div class="chip">Host <strong>MacBook Pro</strong></div>
+          <div class="chip">Target <strong>edserver.exe</strong></div>
+          <div class="chip">Role <strong>Active operator</strong></div>
+          <div class="chip danger">Emergency stop</div>
+        </div>
+      </header>
+
+      <main>
+        <div class="page-head">
+          <div>
+            <h1>Two-way haul control</h1>
+            <div class="page-description">
+              Search routes, inspect the selected station-to-station route, and start a two-way haul with structured dispatch. Route selection stays local to this browser; server-side search results are shared data.
+            </div>
+          </div>
+        </div>
+
+        <section class="summary-strip" aria-label="Current haul summary">
+          <div class="summary-cell">
+            <div class="summary-label">Home system</div>
+            <div class="summary-value">Sol</div>
+          </div>
+          <div class="summary-cell">
+            <div class="summary-label">Current system</div>
+            <div class="summary-value">Galileo</div>
+          </div>
+          <div class="summary-cell">
+            <div class="summary-label">Destination</div>
+            <div class="summary-value">Alioth</div>
+          </div>
+          <div class="summary-cell">
+            <div class="summary-label">Cargo</div>
+            <div class="summary-value mono">420 / 784 t</div>
+          </div>
+          <div class="summary-cell">
+            <div class="summary-label">Routine</div>
+            <div class="summary-value">Two-way haul</div>
+          </div>
+          <div class="summary-cell">
+            <div class="summary-label">Completed runs</div>
+            <div class="summary-value mono">3</div>
+          </div>
+          <div class="summary-cell">
+            <div class="summary-label">Accumulated profit</div>
+            <div class="summary-value success mono">129.4m CR</div>
+          </div>
+        </section>
+
+        <section class="panel routine-panel" aria-labelledby="routine-title">
+          <div class="panel-head">
+            <div class="panel-title" id="routine-title">Active haul routine</div>
+            <div class="panel-action">Stop after current run available later</div>
+          </div>
+          <div class="panel-body">
+            <div class="routine-bar" aria-label="Routine phase timeline">
+              <div class="step done"><div class="step-label">1. Buy</div><div class="step-value">Complete</div></div>
+              <div class="step done"><div class="step-label">2. Launch</div><div class="step-value">Complete</div></div>
+              <div class="step current"><div class="step-label">3. Jump</div><div class="step-value">En route</div></div>
+              <div class="step"><div class="step-label">4. Dock</div><div class="step-value">Pending</div></div>
+              <div class="step"><div class="step-label">5. Sell</div><div class="step-value">Pending</div></div>
+              <div class="step"><div class="step-label">6. Return</div><div class="step-value">Pending</div></div>
+            </div>
+
+            <div class="mini-metrics">
+              <div class="metric">
+                <div class="metric-label">Elapsed</div>
+                <div class="metric-value mono">00:27:14</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label">Current run</div>
+                <div class="metric-value success mono">43.1m</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label">Cargo moved</div>
+                <div class="metric-value mono">2,352 t</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="layout">
+          <section class="panel" aria-labelledby="search-title">
+            <div class="panel-head">
+              <div class="panel-title" id="search-title">Haul search</div>
+              <div class="panel-action">Active operator required</div>
+            </div>
+            <div class="panel-body">
+              <div class="banner">
+                <div class="banner-title">Station and carrier routes only</div>
+                <div class="banner-text">V1 search excludes land settlements. Surface destinations are intentionally disabled until route metadata is reliable.</div>
+              </div>
+
+              <form class="form-grid" id="search-form">
+                <label>
+                  <span class="field-label">Origin system</span>
+                  <input class="field" id="origin" value="Sol" autocomplete="off">
+                </label>
+                <label>
+                  <span class="field-label">Destination system or station</span>
+                  <input class="field" id="destination" value="Alioth" autocomplete="off">
+                </label>
+                <div class="field-row">
+                  <label>
+                    <span class="field-label">Max route distance</span>
+                    <select class="select" id="route-distance">
+                      <option>250 ly</option>
+                      <option selected>500 ly</option>
+                      <option>750 ly</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span class="field-label">Station distance</span>
+                    <select class="select" id="station-distance">
+                      <option selected>Any</option>
+                      <option>1,000 ls</option>
+                      <option>5,000 ls</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="field-row">
+                  <label>
+                    <span class="field-label">Cargo capacity</span>
+                    <input class="field mono" id="capacity" value="784" inputmode="numeric">
+                  </label>
+                  <label>
+                    <span class="field-label">Profit metric</span>
+                    <select class="select" id="metric">
+                      <option selected>Profit / hour</option>
+                      <option>Profit / trip</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="btn-row">
+                  <button class="btn primary block" type="submit">Search routes</button>
+                  <button class="btn ghost" type="button" id="reset-search">Reset</button>
+                </div>
+              </form>
+
+            </div>
+          </section>
+
+          <section class="panel" aria-labelledby="results-title">
+            <div class="panel-head">
+              <div class="panel-title" id="results-title">Route results</div>
+              <div class="panel-action" id="result-count">Found 6 station/carrier routes</div>
+            </div>
+            <div class="panel-body">
+              <table class="route-table" aria-label="Haul route results">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Profit / hr</th>
+                    <th>Commodity</th>
+                    <th>Buy endpoint</th>
+                    <th>Sell endpoint</th>
+                    <th class="num">Route</th>
+                    <th class="num">Station dist.</th>
+                    <th class="num">Supply</th>
+                    <th class="num">Demand</th>
+                  </tr>
+                </thead>
+                <tbody id="route-rows"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel setup-panel" aria-labelledby="setup-title">
+            <div class="panel-head">
+              <div class="panel-title" id="setup-title">Selected route + start</div>
+              <div class="panel-action">Two-way only</div>
+            </div>
+            <div class="panel-body">
+              <div class="banner">
+                <div class="banner-title">Endpoint support</div>
+                <div class="banner-text">V1 starts hauls only between stations and carriers. The dispatch preview sets both <span class="mono">on_land</span> flags to false.</div>
+              </div>
+
+              <div class="selected-route-title" id="selected-title">-</div>
+              <div class="stat-list" id="selected-stats"></div>
+
+              <div class="form-grid">
+                <div class="field-row">
+                  <label>
+                    <span class="field-label">Galaxy settle</span>
+                    <input class="field mono" id="galaxy-settle" value="2.0">
+                  </label>
+                  <label>
+                    <span class="field-label">Dock timeout</span>
+                    <input class="field mono" id="dock-timeout" value="1200">
+                  </label>
+                </div>
+              </div>
+
+              <details class="debug-disclosure">
+                <summary>Debug command preview</summary>
+                <pre class="command-preview mono" id="command-preview"></pre>
+              </details>
+
+              <div class="btn-row">
+                <button class="btn" type="button">Set destination</button>
+                <button class="btn success block" type="button">Start two-way haul</button>
+              </div>
+              <div class="callout">
+                Existing backend command: <span class="inline-kbd">command.dispatch_haul_loop</span> with structured params. No prompt handoff in web.
+              </div>
+            </div>
+          </section>
+
+          <section class="panel activity-panel" aria-labelledby="activity-title">
+            <div class="panel-head">
+              <div class="panel-title" id="activity-title">Activity</div>
+              <div class="panel-action">Static sample</div>
+            </div>
+            <div class="panel-body" id="activity-list">
+              <div class="activity-row">
+                <div class="activity-time mono">12:45:02</div>
+                <div class="activity-text">Bought 784t Agronomic Treatment at Galileo.</div>
+                <span class="badge success">Market</span>
+              </div>
+              <div class="activity-row">
+                <div class="activity-time mono">12:44:36</div>
+                <div class="activity-text">Route set for Alioth. Waiting for FSD jump.</div>
+                <span class="badge neutral">Nav</span>
+              </div>
+              <div class="activity-row">
+                <div class="activity-time mono">12:43:58</div>
+                <div class="activity-text">Two-way haul started with station/carrier endpoints.</div>
+                <span class="badge warning">Haul</span>
+              </div>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    const routes = [
+      {
+        index: 1,
+        profitHour: "88.3m",
+        profitTrip: "43.1m",
+        commodity: "Agronomic Treatment",
+        buyStation: "Galileo",
+        buySystem: "Sol",
+        sellStation: "Irkutsk",
+        sellSystem: "Alioth",
+        routeDistance: "221.34 ly",
+        stationDistance: "Any",
+        supply: "270k",
+        demand: "42k"
+      },
+      {
+        index: 2,
+        profitHour: "72.1m",
+        profitTrip: "35.6m",
+        commodity: "Tritium",
+        buyStation: "Sirius Market",
+        buySystem: "Sol",
+        sellStation: "Irkutsk",
+        sellSystem: "Alioth",
+        routeDistance: "223.18 ly",
+        stationDistance: "Any",
+        supply: "1.2m",
+        demand: "360k"
+      },
+      {
+        index: 3,
+        profitHour: "61.4m",
+        profitTrip: "30.2m",
+        commodity: "Bertrandite",
+        buyStation: "Galileo",
+        buySystem: "Sol",
+        sellStation: "Abraham Lincoln",
+        sellSystem: "Alioth",
+        routeDistance: "226.90 ly",
+        stationDistance: "Any",
+        supply: "120k",
+        demand: "92k"
+      },
+      {
+        index: 4,
+        profitHour: "57.8m",
+        profitTrip: "27.6m",
+        commodity: "Medical Supplies",
+        buyStation: "Sirius Market",
+        buySystem: "Sol",
+        sellStation: "Irkutsk",
+        sellSystem: "Alioth",
+        routeDistance: "223.18 ly",
+        stationDistance: "Any",
+        supply: "96k",
+        demand: "110k"
+      },
+      {
+        index: 5,
+        profitHour: "48.3m",
+        profitTrip: "24.0m",
+        commodity: "Gold",
+        buyStation: "Sirius Market",
+        buySystem: "Sol",
+        sellStation: "Irkutsk",
+        sellSystem: "Alioth",
+        routeDistance: "223.18 ly",
+        stationDistance: "Any",
+        supply: "573k",
+        demand: "210k"
+      },
+      {
+        index: 6,
+        profitHour: "44.6m",
+        profitTrip: "21.8m",
+        commodity: "Silver",
+        buyStation: "Galileo",
+        buySystem: "Sol",
+        sellStation: "Abraham Lincoln",
+        sellSystem: "Alioth",
+        routeDistance: "226.90 ly",
+        stationDistance: "Any",
+        supply: "404k",
+        demand: "160k"
+      }
+    ];
+
+    let selectedRouteIndex = 1;
+
+    function routeByIndex(index) {
+      return routes.find((route) => route.index === index) || routes[0];
+    }
+
+    function renderRows() {
+      const tbody = document.getElementById("route-rows");
+      tbody.innerHTML = routes.map((route) => `
+        <tr class="${route.index === selectedRouteIndex ? "selected" : ""}" data-index="${route.index}">
+          <td class="mono">${route.index}</td>
+          <td class="num profit">${route.profitHour}/h</td>
+          <td>
+            <div class="route-main">${route.commodity}</div>
+            <div class="route-sub">station/carrier endpoints</div>
+          </td>
+          <td>
+            <div class="route-main">${route.buyStation}</div>
+            <div class="route-sub mono">${route.buySystem}</div>
+          </td>
+          <td>
+            <div class="route-main">${route.sellStation}</div>
+            <div class="route-sub mono">${route.sellSystem}</div>
+          </td>
+          <td class="num">${route.routeDistance}</td>
+          <td class="num">${route.stationDistance}</td>
+          <td class="num">${route.supply}</td>
+          <td class="num">${route.demand}</td>
+        </tr>
+      `).join("");
+    }
+
+    function renderSelected() {
+      const route = routeByIndex(selectedRouteIndex);
+      document.getElementById("selected-title").textContent =
+        `${route.buySystem} (${route.buyStation}) -> ${route.sellSystem} (${route.sellStation})`;
+      document.getElementById("selected-stats").innerHTML = `
+        <div class="stat-row"><span class="k">Commodity</span><span class="v">${route.commodity}</span></div>
+        <div class="stat-row"><span class="k">Profit / hour</span><span class="v profit mono">${route.profitHour} CR</span></div>
+        <div class="stat-row"><span class="k">Profit / trip</span><span class="v mono">${route.profitTrip} CR</span></div>
+        <div class="stat-row"><span class="k">Route distance</span><span class="v mono">${route.routeDistance}</span></div>
+        <div class="stat-row"><span class="k">Surface support</span><span class="v">disabled</span></div>
+      `;
+      updateCommandPreview();
+    }
+
+    function updateCommandPreview() {
+      const route = routeByIndex(selectedRouteIndex);
+      const settle = document.getElementById("galaxy-settle").value || "2.0";
+      const timeout = document.getElementById("dock-timeout").value || "1200";
+      const params = [
+        `station_1_buying=${route.commodity}`,
+        `station_1=${route.buyStation}`,
+        `station_1_system=${route.buySystem}`,
+        "station_1_on_land=false",
+        "station_2_buying=",
+        `station_2=${route.sellStation}`,
+        `station_2_system=${route.sellSystem}`,
+        "station_2_on_land=false",
+        `galaxy_map_settle=${settle}`,
+        `dock_timeout=${timeout}`
+      ];
+      document.getElementById("command-preview").textContent =
+        "command.dispatch_haul_loop\n" + params.map((item) => `  ${item}`).join("\n");
+    }
+
+    document.getElementById("route-rows").addEventListener("click", (event) => {
+      const row = event.target.closest("tr[data-index]");
+      if (!row) {
+        return;
+      }
+      selectedRouteIndex = Number(row.dataset.index);
+      renderRows();
+      renderSelected();
+    });
+
+    document.getElementById("search-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const count = document.getElementById("result-count");
+      count.textContent = "Search staged - server command planned";
+      window.setTimeout(() => {
+        count.textContent = "Found 6 station/carrier routes";
+      }, 1200);
+    });
+
+    document.getElementById("reset-search").addEventListener("click", () => {
+      document.getElementById("origin").value = "Sol";
+      document.getElementById("destination").value = "Alioth";
+      document.getElementById("route-distance").value = "500 ly";
+      document.getElementById("station-distance").value = "Any";
+      document.getElementById("capacity").value = "784";
+      document.getElementById("metric").value = "Profit / hour";
+    });
+
+    document.getElementById("galaxy-settle").addEventListener("input", updateCommandPreview);
+    document.getElementById("dock-timeout").addEventListener("input", updateCommandPreview);
+
+    renderRows();
+    renderSelected();
+  </script>
+</body>
+</html>
