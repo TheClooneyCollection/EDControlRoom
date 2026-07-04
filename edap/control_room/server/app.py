@@ -211,8 +211,6 @@ async def _handle_search_haul_routes_message_async(
     correlation_message_id = message_id_value if isinstance(message_id_value, str) else None
     payload_value = message.get("payload", {})
     payload = payload_value if isinstance(payload_value, dict) else {}
-    if client_role != "active_operator":
-        return _observer_read_only_error(correlation_message_id)
     if data_provider is None:
         return _transport_unavailable_error(correlation_message_id)
     data = data_provider()
@@ -440,17 +438,6 @@ def _handle_session_message(
         )
 
     if message_type == "command.submit_input":
-        if client_role != "active_operator":
-            return protocol_message(
-                "response.error",
-                {
-                    "error_code": "observer_read_only",
-                    "error_message": "Observer clients cannot issue operator commands.",
-                    "recommended_action": "Use an active operator session to run commands.",
-                    "retryable": False,
-                },
-                correlation_message_id=correlation_message_id,
-            )
         raw_input = payload.get("raw_input")
         if not isinstance(raw_input, str):
             return protocol_message(
@@ -500,8 +487,6 @@ def _handle_session_message(
         )
 
     if message_type == "command.dispatch_destination":
-        if client_role != "active_operator":
-            return _observer_read_only_error(correlation_message_id)
         if command_handler is None:
             return _transport_unavailable_error(correlation_message_id)
         destination = payload.get("destination")
@@ -552,8 +537,6 @@ def _handle_session_message(
         )
 
     if message_type == "command.dispatch_haul_loop":
-        if client_role != "active_operator":
-            return _observer_read_only_error(correlation_message_id)
         if command_handler is None:
             return _transport_unavailable_error(correlation_message_id)
         params_value = payload.get("params", {})
@@ -590,8 +573,6 @@ def _handle_session_message(
         )
 
     if message_type == "command.search_haul_routes":
-        if client_role != "active_operator":
-            return _observer_read_only_error(correlation_message_id)
         if data_provider is None:
             return _transport_unavailable_error(correlation_message_id)
         data = data_provider()
@@ -646,17 +627,6 @@ def _handle_session_message(
         )
 
     if message_type == "command.cancel_active_routine":
-        if client_role != "active_operator":
-            return protocol_message(
-                "response.error",
-                {
-                    "error_code": "observer_read_only",
-                    "error_message": "Observer clients cannot cancel operator routines.",
-                    "recommended_action": "Use an active operator session to control routines.",
-                    "retryable": False,
-                },
-                correlation_message_id=correlation_message_id,
-            )
         if command_handler is None:
             return protocol_message(
                 "response.error",
@@ -700,19 +670,6 @@ def _handle_session_message(
             "error_code": "unsupported_message_type",
             "error_message": f"Unsupported message type: {message_type}",
             "recommended_action": "Use a supported command or upgrade the client.",
-            "retryable": False,
-        },
-        correlation_message_id=correlation_message_id,
-    )
-
-
-def _observer_read_only_error(correlation_message_id: str | None) -> dict[str, object]:
-    return protocol_message(
-        "response.error",
-        {
-            "error_code": "observer_read_only",
-            "error_message": "Observer clients cannot issue operator commands.",
-            "recommended_action": "Use an active operator session to run commands.",
             "retryable": False,
         },
         correlation_message_id=correlation_message_id,

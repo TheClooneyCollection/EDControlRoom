@@ -42,7 +42,7 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
         session = ObserverSession(
             session_id=f"observer-{uuid4().hex[:12]}",
             client_name=client_name,
-            client_role="observer",
+            client_role="active_operator",
             queue=asyncio.Queue(maxsize=self._queue_size),
         )
         self._sessions[session.session_id] = session
@@ -145,6 +145,6 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
         session.queue.put_nowait(message)
 
     def _resolved_session_role(self, session_id: str) -> str:
-        if self._active_operator_session_id == session_id:
+        if session_id in self._sessions:
             return "active_operator"
         return "observer"

@@ -61,3 +61,11 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn("Array.from(activityEntries.values()).reverse()", html)
         self.assertIn('`${entries.length} entries`', html)
         self.assertNotIn("slice(-8)", html)
+
+    def test_haul_web_treats_connected_clients_as_operators(self) -> None:
+        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+
+        self.assertIn('clientRole = "active_operator";', html)
+        self.assertIn("Operator connection required", html)
+        self.assertNotIn("Only the active operator", html)
+        self.assertNotIn("Active operator required", html)

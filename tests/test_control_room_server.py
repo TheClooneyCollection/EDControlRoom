@@ -636,25 +636,33 @@ class ControlRoomServerTests(unittest.TestCase):
             },
         )
 
-    def test_observer_search_haul_routes_is_rejected(self) -> None:
+    def test_connected_observer_search_haul_routes_is_allowed(self) -> None:
         broker = InMemoryObserverSessionBroker()
         observer = broker.register_observer("bridge-ipad")
 
-        response = _handle_session_message(
-            {
-                "message_type": "command.search_haul_routes",
-                "message_id": "message-search-observer",
-                "payload": {"origin": "Sol"},
-            },
-            session_id=observer.session_id,
-            client_role="observer",
-            command_handler=None,
-            broker=broker,
-            data_provider=_base_data_read_model,
-        )
+        with patch("edap.control_room.server.app.search_trade_routes") as search:
+            search.return_value = TradeRouteSearchResult(
+                system_name="Sol",
+                query_url="https://inara.cz/elite/market-traderoutes/?ps1=Sol",
+                searched_at="2026-07-04T08:00:00Z",
+                routes=(),
+            )
+            response = _handle_session_message(
+                {
+                    "message_type": "command.search_haul_routes",
+                    "message_id": "message-search-observer",
+                    "payload": {"origin": "Sol"},
+                },
+                session_id=observer.session_id,
+                client_role="observer",
+                command_handler=None,
+                broker=broker,
+                data_provider=_base_data_read_model,
+            )
 
-        self.assertEqual(response["message_type"], "response.error")
-        self.assertEqual(response["payload"]["error_code"], "observer_read_only")
+        self.assertEqual(response["message_type"], "response.success")
+        self.assertEqual(response["correlation_message_id"], "message-search-observer")
+        self.assertEqual(response["payload"]["result"]["route_count"], 0)
 
     def test_websocket_search_and_dispatch_haul_commands(self) -> None:
         def _receive_until_response(websocket, correlation_id: str) -> dict[str, object]:
@@ -761,7 +769,7 @@ class ControlRoomServerTests(unittest.TestCase):
             },
         )
 
-    def test_websocket_active_operator_failover_promotes_remaining_client(self) -> None:
+    def test_websocket_clients_are_all_active_operators(self) -> None:
         broker = InMemoryObserverSessionBroker()
         app = build_observer_server_app(
             data_provider=_base_data_read_model,
@@ -774,23 +782,30 @@ class ControlRoomServerTests(unittest.TestCase):
             with client.websocket_connect(
                 "/session?client_name=bridge-ipad&access_token=secret-token"
             ) as first:
-                first.receive_json()
+                first_ready = first.receive_json()
                 with client.websocket_connect(
                     "/session?client_name=bridge-mac&access_token=secret-token"
                 ) as second:
+                    second_ready = second.receive_json()
                     second.receive_json()
-                    second.receive_json()
+
+                    self.assertEqual(first_ready["payload"]["client_role"], "active_operator")
+                    self.assertEqual(second_ready["payload"]["client_role"], "active_operator")
+                    self.assertEqual(
+                        [client.client_role for client in broker.connected_clients()],
+                        ["active_operator", "active_operator"],
+                    )
 
                     first.close()
 
-                    promoted_event = second.receive_json()
-                    self.assertEqual(promoted_event["message_type"], "event.active_operator_changed")
+                    operator_event = second.receive_json()
+                    self.assertEqual(operator_event["message_type"], "event.active_operator_changed")
                     self.assertEqual(
-                        promoted_event["payload"]["active_operator_client_name"],
+                        operator_event["payload"]["active_operator_client_name"],
                         "bridge-mac",
                     )
                     self.assertEqual(
-                        broker.current_session_role(promoted_event["payload"]["active_operator_session_id"]),
+                        broker.current_session_role(operator_event["payload"]["active_operator_session_id"]),
                         "active_operator",
                     )
 
@@ -969,8 +984,9 @@ class ControlRoomServerTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
 
-    def test_observer_submit_input_command_is_rejected(self) -> None:
+    def test_observer_role_submit_input_command_calls_handler(self) -> None:
         broker = InMemoryObserverSessionBroker()
+        command_handler = _CommandHandlerRecorder()
 
         response = _handle_session_message(
             {
@@ -980,13 +996,13 @@ class ControlRoomServerTests(unittest.TestCase):
             },
             session_id="observer-unknown",
             client_role="observer",
-            command_handler=None,
+            command_handler=command_handler,
             broker=broker,
         )
 
-        self.assertEqual(response["message_type"], "response.error")
+        self.assertEqual(command_handler.submitted_inputs, [("dock", None)])
+        self.assertEqual(response["message_type"], "response.success")
         self.assertEqual(response["correlation_message_id"], "message-99")
-        self.assertEqual(response["payload"]["error_code"], "observer_read_only")
 
     def test_active_operator_submit_input_command_calls_handler(self) -> None:
         broker = InMemoryObserverSessionBroker()
@@ -1161,8 +1177,9 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(response["message_type"], "response.success")
         self.assertEqual(response["payload"]["message_text"], "Routine cancellation requested.")
 
-    def test_observer_cancel_active_routine_is_rejected(self) -> None:
+    def test_observer_role_cancel_active_routine_calls_handler(self) -> None:
         broker = InMemoryObserverSessionBroker()
+        command_handler = _CommandHandlerRecorder()
 
         response = _handle_session_message(
             {
@@ -1172,12 +1189,13 @@ class ControlRoomServerTests(unittest.TestCase):
             },
             session_id="observer-cancel-observer",
             client_role="observer",
-            command_handler=None,
+            command_handler=command_handler,
             broker=broker,
         )
 
-        self.assertEqual(response["message_type"], "response.error")
-        self.assertEqual(response["payload"]["error_code"], "observer_read_only")
+        self.assertEqual(command_handler.cancel_modes, ["toggle"])
+        self.assertEqual(response["message_type"], "response.success")
+
     def test_broker_active_operator_claim_only_broadcasts_operator_event(self) -> None:
         broker = InMemoryObserverSessionBroker()
         observer = broker.register_observer("bridge-ipad")

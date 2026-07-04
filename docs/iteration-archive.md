@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `210`
-- Latest generated iteration number: `343`
+- Generated iteration count: `211`
+- Latest generated iteration number: `344`
 
 ## Iteration 134
 
@@ -5834,3 +5834,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-check the panel with a long running `serve` session to confirm the chosen max height is comfortable on the intended browser display.
+
+## Iteration 344
+
+- When: `2026-07-04 17:03`
+- Area: `web`
+- Title: `allow-all-connected-operators`
+- Source: [2026-07-04-17-03_____web______allow-all-connected-operators.md](iteration-logs/2026-07-04-17-03_____web______allow-all-connected-operators.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `allow-all-connected-operators`
+- Started: `2026-07-04 17:03`
+
+## Summary
+
+- Opened the remote/web operator policy so every authenticated connected client is treated as an operator instead of competing for a single active-operator slot.
+
+## Changes
+
+- Changed the observer session broker to register connected clients as `active_operator` and resolve all live sessions to that role.
+- Removed server-side read-only role gates from websocket command handlers; command validation, auth, and transport-availability checks still apply.
+- Updated `/haul` to avoid self-demotion on `event.active_operator_changed` and replaced old active-operator-required copy with connection-oriented wording.
+- Updated server and web tests for the new all-connected-operators policy.
+
+## Follow-ups
+
+- Live-check two simultaneous `/haul` browser clients against one `serve` process to confirm both can search/start/stop without role churn.

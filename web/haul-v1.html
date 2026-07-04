@@ -1071,7 +1071,7 @@
             <section class="panel" aria-labelledby="search-title">
               <div class="panel-head">
                 <div class="panel-title" id="search-title">Haul search</div>
-                <div class="panel-action">Active operator required</div>
+                <div class="panel-action">Operator connection required</div>
               </div>
               <div class="panel-body">
                 <div class="banner">
@@ -1382,7 +1382,7 @@
       } else if (!isSocketReady()) {
         setResultCount("Connecting to backend...");
       } else if (!active) {
-        setResultCount("Active operator required");
+        setResultCount("Operator connection required");
       } else if (routes.length) {
         setResultCount(`Found ${routes.length} station/carrier routes`);
       }
@@ -1486,9 +1486,7 @@
           return;
         }
         if (message.message_type === "event.active_operator_changed") {
-          clientRole = message.payload.active_operator_client_name === "web-haul"
-            ? "active_operator"
-            : "observer";
+          clientRole = "active_operator";
           updateOperatorState();
           return;
         }
@@ -1850,8 +1848,8 @@
         return;
       }
       if (clientRole !== "active_operator") {
-        setResultCount("Active operator required");
-        appendActivity("Only the active operator can search routes.", "Search", "warning");
+        setResultCount("Operator connection required");
+        appendActivity("Connect to the backend before searching routes.", "Search", "warning");
         return;
       }
       setResultCount("Searching station/carrier routes...");
@@ -1912,7 +1910,7 @@
         return;
       }
       if (clientRole !== "active_operator") {
-        appendActivity("Only the active operator can set destination.", "Nav", "warning");
+        appendActivity("Connect to the backend before setting destination.", "Nav", "warning");
         return;
       }
       const destination = route.buySystem || "";
@@ -1945,7 +1943,7 @@
         return;
       }
       if (clientRole !== "active_operator") {
-        appendActivity("Only the active operator can start haul.", "Haul", "warning");
+        appendActivity("Connect to the backend before starting haul.", "Haul", "warning");
         return;
       }
       const params = selectedHaulParams();
@@ -1967,7 +1965,7 @@
         return;
       }
       if (clientRole !== "active_operator") {
-        appendActivity("Only the active operator can stop routines.", "Haul", "warning");
+        appendActivity("Connect to the backend before stopping routines.", "Haul", "warning");
         return;
       }
       if (!currentRoutine.routine_active) {
@@ -1989,7 +1987,7 @@
         return;
       }
       if (clientRole !== "active_operator") {
-        appendActivity("Only the active operator can change instant mode.", "Session", "warning");
+        appendActivity("Connect to the backend before changing instant mode.", "Session", "warning");
         return;
       }
       const nextMode = currentRoutine.instant_mode ? "off" : "on";
