@@ -481,6 +481,11 @@
       width: 100%;
     }
 
+    .btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+
     .btn:focus-visible,
     .field:focus,
     .select:focus {
@@ -534,6 +539,25 @@
       margin-top: 2px;
       color: var(--text-3);
       font-size: 10.5px;
+    }
+
+    .pager {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+      margin-top: 6px;
+    }
+
+    .pager-status {
+      color: var(--text-2);
+      font-size: 11px;
+      font-family: var(--mono);
+      font-variant-numeric: tabular-nums;
+      min-width: 92px;
+      text-align: center;
     }
 
     .profit {
@@ -1008,15 +1032,20 @@
                   <tr>
                     <th>#</th>
                     <th>Profit / hr</th>
-                    <th>Commodity</th>
-                    <th>Buy endpoint</th>
-                    <th>Sell endpoint</th>
+                    <th>Cargo</th>
+                    <th>Station 1</th>
+                    <th>Station 2</th>
                     <th class="num">Route</th>
                     <th class="num">Station dist.</th>
                   </tr>
                 </thead>
                 <tbody id="route-rows"></tbody>
               </table>
+              <div class="pager" aria-label="Route result pages">
+                <button class="btn ghost" type="button" id="prev-routes">Prev</button>
+                <div class="pager-status" id="route-page-status">0-0 of 0</div>
+                <button class="btn ghost" type="button" id="next-routes">Next</button>
+              </div>
             </div>
           </section>
 
@@ -1036,6 +1065,8 @@
     let routes = [];
     let selectedRouteIndex = 0;
     let hasSearchedRoutes = false;
+    let routePage = 1;
+    const ROUTES_PER_PAGE = 12;
     const TOKEN_STORAGE_KEY = "edcr.haul.accessToken";
     const queryAccessToken = new URLSearchParams(window.location.search).get("access_token") || "";
     let accessToken = queryAccessToken || window.localStorage.getItem(TOKEN_STORAGE_KEY) || "";
@@ -1349,6 +1380,12 @@
         `${Number(haulSession.cargo_moved_t || 0).toLocaleString()} t`;
     }
 
+    function updateRoutePager(start, end, total, totalPages) {
+      document.getElementById("route-page-status").textContent = `${start}-${end} of ${total}`;
+      document.getElementById("prev-routes").disabled = routePage <= 1;
+      document.getElementById("next-routes").disabled = routePage >= totalPages || total === 0;
+    }
+
     function renderRows() {
       const tbody = document.getElementById("route-rows");
       if (!routes.length) {
@@ -1356,15 +1393,21 @@
           ? "No station/carrier routes found."
           : "Search routes to load station/carrier results.";
         tbody.innerHTML = `<tr><td colspan="7" class="route-sub">${message}</td></tr>`;
+        routePage = 1;
+        updateRoutePager(0, 0, 0, 1);
         return;
       }
-      tbody.innerHTML = routes.map((route) => `
+      const totalPages = Math.max(1, Math.ceil(routes.length / ROUTES_PER_PAGE));
+      routePage = Math.min(Math.max(1, routePage), totalPages);
+      const startIndex = (routePage - 1) * ROUTES_PER_PAGE;
+      const visibleRoutes = routes.slice(startIndex, startIndex + ROUTES_PER_PAGE);
+      tbody.innerHTML = visibleRoutes.map((route) => `
         <tr class="${route.index === selectedRouteIndex ? "selected" : ""}" data-index="${route.index}">
           <td class="mono">${escapeHtml(route.index)}</td>
           <td class="num profit">${escapeHtml(profitHourLabel(route))}</td>
           <td>
-            <div class="route-main">${escapeHtml(route.commodity || "No buy commodity")}</div>
-            <div class="route-sub">station/carrier endpoints</div>
+            <div class="route-main">S1 buy: ${escapeHtml(route.commodity || "No buy commodity")}</div>
+            <div class="route-sub">S2 buy: ${escapeHtml(route.targetCommodity || "No buy commodity")}</div>
           </td>
           <td>
             <div class="route-main">${escapeHtml(route.buyStation)}</div>
@@ -1378,6 +1421,7 @@
           <td class="num">${escapeHtml(route.stationDistance)}</td>
         </tr>
       `).join("");
+      updateRoutePager(startIndex + 1, startIndex + visibleRoutes.length, routes.length, totalPages);
     }
 
     function renderSelected() {
@@ -1394,11 +1438,14 @@
       document.getElementById("selected-title").textContent =
         `${route.buySystem} (${route.buyStation}) -> ${route.sellSystem} (${route.sellStation})`;
       document.getElementById("selected-stats").innerHTML = `
-        <div class="stat-row"><span class="k">Commodity</span><span class="v">${escapeHtml(route.commodity || "No buy commodity")}</span></div>
-        <div class="stat-row"><span class="k">Return cargo</span><span class="v">${escapeHtml(route.targetCommodity || "None")}</span></div>
+        <div class="stat-row"><span class="k">Station 1</span><span class="v">${escapeHtml(route.buyStation)} / ${escapeHtml(route.buySystem)}</span></div>
+        <div class="stat-row"><span class="k">Station 1 buy</span><span class="v">${escapeHtml(route.commodity || "No buy commodity")}</span></div>
+        <div class="stat-row"><span class="k">Station 2</span><span class="v">${escapeHtml(route.sellStation)} / ${escapeHtml(route.sellSystem)}</span></div>
+        <div class="stat-row"><span class="k">Station 2 buy</span><span class="v">${escapeHtml(route.targetCommodity || "No buy commodity")}</span></div>
         <div class="stat-row"><span class="k">Profit / hour</span><span class="v profit mono">${escapeHtml(profitHourLabel(route))}</span></div>
         <div class="stat-row"><span class="k">Profit / trip</span><span class="v mono">${escapeHtml(route.profitTrip)}</span></div>
         <div class="stat-row"><span class="k">Route distance</span><span class="v mono">${escapeHtml(route.routeDistance)}</span></div>
+        <div class="stat-row"><span class="k">Station distance</span><span class="v mono">${escapeHtml(route.stationDistance)}</span></div>
         <div class="stat-row"><span class="k">Surface support</span><span class="v">disabled</span></div>
       `;
       updateCommandPreview();
@@ -1495,6 +1542,7 @@
           const result = payload.result || {};
           routes = (result.routes || []).map(routeFromApi);
           hasSearchedRoutes = true;
+          routePage = 1;
           selectedRouteIndex = routes[0] ? routes[0].index : 0;
           renderRows();
           renderSelected();
@@ -1514,6 +1562,17 @@
       document.getElementById("station-distance").value = "Any";
       document.getElementById("capacity").value = "784";
       document.getElementById("metric").value = "Profit / hour";
+    });
+
+    document.getElementById("prev-routes").addEventListener("click", () => {
+      routePage = Math.max(1, routePage - 1);
+      renderRows();
+    });
+
+    document.getElementById("next-routes").addEventListener("click", () => {
+      const totalPages = Math.max(1, Math.ceil(routes.length / ROUTES_PER_PAGE));
+      routePage = Math.min(totalPages, routePage + 1);
+      renderRows();
     });
 
     document.getElementById("start-haul").addEventListener("click", () => {

@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `199`
-- Latest generated iteration number: `332`
+- Generated iteration count: `200`
+- Latest generated iteration number: `333`
 
 ## Iteration 134
 
@@ -5533,3 +5533,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Recheck route table width after the next live search result shape changes.
+
+## Iteration 333
+
+- When: `2026-07-04 10:38`
+- Area: `web`
+- Title: `paginate-haul-route-results`
+- Source: [2026-07-04-10-38_____web______paginate-haul-route-results.md](iteration-logs/2026-07-04-10-38_____web______paginate-haul-route-results.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `paginate-haul-route-results`
+- Started: `2026-07-04 10:38`
+
+## Summary
+
+- Improved the haul v1 route results view so two-way cargo details are visible without opening the debug preview.
+
+## Changes
+
+- Renamed the result table endpoints to Station 1 and Station 2 and shows both Station 1 buy and Station 2 buy cargo in each row.
+- Expanded selected route details with Station 1, Station 1 buy, Station 2, Station 2 buy, route distance, and station distance.
+- Added client-side pagination for route results with 12 rows per page and disabled pager controls at the bounds.
+
+## Follow-ups
+
+- Backend pagination is not needed yet; the v1 page still receives the full search result payload and paginates locally.
