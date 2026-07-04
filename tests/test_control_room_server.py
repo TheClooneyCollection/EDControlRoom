@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import replace
 import logging
 import unittest
@@ -666,7 +667,17 @@ class ControlRoomServerTests(unittest.TestCase):
             ),
         )
 
-        with patch("edap.control_room.server.app.search_trade_routes", return_value=result):
+        search_ran_outside_event_loop = False
+
+        def fake_search_trade_routes(*args, **kwargs):
+            nonlocal search_ran_outside_event_loop
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                search_ran_outside_event_loop = True
+            return result
+
+        with patch("edap.control_room.server.app.search_trade_routes", side_effect=fake_search_trade_routes):
             with TestClient(app) as client:
                 with client.websocket_connect(
                     "/session?client_name=web-haul&access_token=secret-token"
@@ -687,6 +698,7 @@ class ControlRoomServerTests(unittest.TestCase):
                         search_response["payload"]["result"]["routes"][0]["from_station"],
                         "Galileo",
                     )
+                    self.assertTrue(search_ran_outside_event_loop)
 
                     websocket.send_json(
                         {

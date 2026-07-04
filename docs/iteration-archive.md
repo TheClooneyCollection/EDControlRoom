@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `197`
-- Latest generated iteration number: `330`
+- Generated iteration count: `198`
+- Latest generated iteration number: `331`
 
 ## Iteration 134
 
@@ -5479,3 +5479,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-check the phase strip during a real two-way run to confirm operator-visible timing around skipped sell/buy legs.
+
+## Iteration 331
+
+- When: `2026-07-04 10:21`
+- Area: `web`
+- Title: `thread-websocket-haul-search`
+- Source: [2026-07-04-10-21_____web______thread-websocket-haul-search.md](iteration-logs/2026-07-04-10-21_____web______thread-websocket-haul-search.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `thread-websocket-haul-search`
+- Started: `2026-07-04 10:21`
+
+## Summary
+
+- Fixed web websocket haul search failing when sync Playwright ran inside the server asyncio loop.
+
+## Changes
+
+- Added an async websocket message wrapper for `command.search_haul_routes`.
+- Runs blocking `search_trade_routes()` through `asyncio.to_thread()` for websocket searches while leaving the synchronous handler available for direct unit tests.
+- Added websocket regression coverage that verifies the search function runs outside a running asyncio event loop.
+
+## Follow-ups
+
+- Retry `/haul` route search against a live server with a stored browser token.

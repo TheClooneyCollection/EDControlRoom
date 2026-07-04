@@ -195,6 +195,73 @@ def _response_error(
     )
 
 
+async def _handle_search_haul_routes_message_async(
+    message: dict[str, object],
+    *,
+    client_role: str,
+    data_provider: Callable[[], object] | None,
+) -> dict[str, object]:
+    message_id_value = message.get("message_id")
+    correlation_message_id = message_id_value if isinstance(message_id_value, str) else None
+    payload_value = message.get("payload", {})
+    payload = payload_value if isinstance(payload_value, dict) else {}
+    if client_role != "active_operator":
+        return _observer_read_only_error(correlation_message_id)
+    if data_provider is None:
+        return _transport_unavailable_error(correlation_message_id)
+    data = data_provider()
+    system_name = _payload_string(payload, "system_name") or _payload_string(payload, "origin")
+    if not system_name:
+        system_name = (getattr(data.ship, "system", "") or "").strip()
+    if not system_name:
+        return _response_error(
+            "invalid_search",
+            "Haul search needs an origin system.",
+            retryable=True,
+            correlation_message_id=correlation_message_id,
+        )
+    query_params = _haul_search_query_params(payload, data=data)
+    destination_filter = (
+        _payload_string(payload, "destination")
+        or _payload_string(payload, "destination_filter")
+        or ""
+    )
+    try:
+        result = await asyncio.to_thread(
+            search_trade_routes,
+            system_name,
+            query_params=query_params,
+        )
+    except Exception as exc:
+        return _response_error(
+            "haul_search_failed",
+            str(exc) or "Failed to search haul routes.",
+            retryable=True,
+            correlation_message_id=correlation_message_id,
+        )
+    routes = list(result.routes)
+    unfiltered_count = len(routes)
+    if destination_filter:
+        routes = [
+            route
+            for route in routes
+            if _route_matches_destination(route, destination_filter)
+        ]
+    return protocol_message(
+        "response.success",
+        {
+            "accepted": True,
+            "message_text": "Haul search complete.",
+            "result": _haul_search_response(
+                result,
+                routes=routes,
+                unfiltered_count=unfiltered_count,
+            ),
+        },
+        correlation_message_id=correlation_message_id,
+    )
+
+
 def _payload_string(payload: dict[str, Any], key: str) -> str:
     value = payload.get(key)
     if value is None:
@@ -301,7 +368,7 @@ async def _receive_session_messages(
 ) -> None:
     while True:
         message = await websocket.receive_json()
-        response = _handle_session_message(
+        response = await _handle_session_message_async(
             message,
             session_id=observer.session_id,
             client_role=broker.current_session_role(observer.session_id),
@@ -312,6 +379,31 @@ async def _receive_session_messages(
         if response is None:
             continue
         await websocket.send_json(response)
+
+
+async def _handle_session_message_async(
+    message: dict[str, object],
+    *,
+    session_id: str,
+    client_role: str,
+    command_handler: ObserverSessionCommandHandler | None,
+    broker: InMemoryObserverSessionBroker,
+    data_provider: Callable[[], object] | None = None,
+) -> dict[str, object] | None:
+    if message.get("message_type") == "command.search_haul_routes":
+        return await _handle_search_haul_routes_message_async(
+            message,
+            client_role=client_role,
+            data_provider=data_provider,
+        )
+    return _handle_session_message(
+        message,
+        session_id=session_id,
+        client_role=client_role,
+        command_handler=command_handler,
+        broker=broker,
+        data_provider=data_provider,
+    )
 
 
 def _handle_session_message(
