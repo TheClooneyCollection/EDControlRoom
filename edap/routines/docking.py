@@ -13,6 +13,7 @@ from edap.routines._base import (
     SupportsUndockControls,
     _is_docked_event,
     _is_docking_response_event,
+    _is_interdicted_event,
     _is_music_no_track_event,
     _is_supercruise_exit_event,
     _is_undocked_event,
@@ -213,6 +214,7 @@ def dock(
     deny_retry_delay_s: float = 5.0,
     pad_full_retry_delay_s: float = 30.0,
     pad_full_max_retries: int = 20,
+    abort_on_interdiction: bool = False,
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
     progress_fn: ProgressCallback,
@@ -247,7 +249,11 @@ def dock(
         progress_fn("Waiting for SupercruiseExit...")
         supercruise_exit_event, queued_events = _wait_for_event_with_pending(
             watcher,
-            predicate=_is_supercruise_exit_event,
+            predicate=(
+                lambda event: _is_supercruise_exit_event(event) or _is_interdicted_event(event)
+                if abort_on_interdiction
+                else _is_supercruise_exit_event(event)
+            ),
             deadline=time_fn() + dock_timeout_s,
             time_fn=time_fn,
             pending_events=queued_events,
@@ -261,6 +267,19 @@ def dock(
                     reason="supercruise exit was not observed before timeout",
                 ),
                 details={"phase": "wait_for_supercruise_exit", "dock_timeout_s": dock_timeout_s},
+            )
+        if _is_interdicted_event(supercruise_exit_event):
+            interdictor = str(supercruise_exit_event.get("Interdictor", "") or "unknown")
+            progress_fn(f"Interdicted by {interdictor}; aborting docking automation.")
+            return RoutineResult(
+                action="Interdicted",
+                dispatch=ActionDispatchResult(
+                    action="Interdicted",
+                    status="error",
+                    reason=f"interdicted by {interdictor}; docking automation aborted",
+                ),
+                trigger_event=supercruise_exit_event,
+                details={"phase": "wait_for_supercruise_exit", "interdiction_event": supercruise_exit_event},
             )
         system = supercruise_exit_event.get("StarSystem", "")
         progress_fn(f"SupercruiseExit: {system}" if system else "SupercruiseExit")

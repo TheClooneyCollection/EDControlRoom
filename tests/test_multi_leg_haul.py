@@ -281,6 +281,64 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
             announcements,
         )
 
+    def test_transit_aborts_docking_after_interdiction_drop(self) -> None:
+        controls = FakeShipControls()
+        messages: list[str] = []
+        announcements: list[tuple[AnnouncementId, dict[str, object]]] = []
+        watcher = FakeWatcher([
+            [{"event": "FSDJump", "StarSystem": "HIP 68076"}],
+            [
+                {
+                    "event": "Interdicted",
+                    "Submitted": True,
+                    "Interdictor": "Jeremy Linter",
+                    "IsPlayer": False,
+                },
+                {"event": "SupercruiseExit", "BodyType": "Planet", "StarSystem": "HIP 68076"},
+            ],
+        ])
+        definition = _definition()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            (journal_dir / "Journal.240101000000.01.log").write_text(
+                '{"event":"FSDJump","StarSystem":"HIP 68076"}\n',
+                encoding="utf-8",
+            )
+            (journal_dir / "Market.json").write_text(
+                '{"StationName":"Pawelczyk Dock","StarSystem":"HIP 58412","Items":[]}\n',
+                encoding="utf-8",
+            )
+            (journal_dir / "Cargo.json").write_text(
+                '{"Inventory":[{"Name":"water purifiers","Name_Localised":"Water Purifiers","Count":460,"Stolen":0}]}\n',
+                encoding="utf-8",
+            )
+            result = multi_leg_haul(
+                controls,
+                watcher,
+                definition=definition,
+                journal_dir=journal_dir,
+                step_delay_s=0.0,
+                settle_s=0.0,
+                supercruise_exit_settle_s=0.0,
+                boost_settle_s=0.0,
+                dock_timeout_s=30.0,
+                request_timeout_s=10.0,
+                undock_timeout_s=10.0,
+                trade_timeout_s=10.0,
+                time_fn=_ticking_clock(),
+                sleeper=lambda _: None,
+                progress_fn=messages.append,
+                announce_fn=lambda message_id, **values: announcements.append((message_id, values)),
+            )
+
+        self.assertEqual(result.action, "Interdicted")
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertIn("interdicted by Jeremy Linter", result.dispatch.reason)
+        self.assertNotIn("UI_Select", [call["action"] for call in controls.calls])
+        self.assertTrue(any("Interdiction detected during multi-leg haul transit" in message for message in messages))
+        self.assertIn((AnnouncementId.HAUL_ABORTED, {}), announcements)
+
     def test_departure_warns_and_continues_when_galaxy_map_route_is_unconfirmed(self) -> None:
         controls = FakeShipControls()
         sleep_calls: list[float] = []

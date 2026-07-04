@@ -1391,6 +1391,72 @@ class TwoWayHaulLoopTests(unittest.TestCase):
         self.assertIn(1.5, sleep_calls)
         self.assertNotIn(3.0, sleep_calls)
 
+    def test_transit_aborts_docking_after_interdiction_drop(self) -> None:
+        controls = FakeShipControls()
+        messages: list[str] = []
+        announcements: list[tuple[AnnouncementId, dict[str, object]]] = []
+        watcher = FakeWatcher([
+            [{"event": "FSDJump", "StarSystem": _SYSTEM_2}],
+            [
+                {
+                    "event": "ReceiveText",
+                    "From_Localised": "Jeremy Linter",
+                    "Message_Localised": "I'm coming for you.",
+                },
+                {
+                    "event": "Interdicted",
+                    "Submitted": True,
+                    "Interdictor": "Jeremy Linter",
+                    "IsPlayer": False,
+                },
+                {"event": "SupercruiseExit", "BodyType": "Planet", "StarSystem": _SYSTEM_2},
+            ],
+        ])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_market(
+                journal_dir,
+                _STATION_1,
+                [
+                    {"Category": "Metals", "Name": "aluminium", "Name_Localised": _CARGO_1, "DemandBracket": 1, "Stock": 1000},
+                    {"Category": "Minerals", "Name": "bertrandite", "Name_Localised": _CARGO_2, "DemandBracket": 1, "Stock": 1000},
+                ],
+            )
+            _write_cargo(journal_dir, [])
+            result = haul_loop_two_way(
+                controls,
+                watcher,
+                journal_dir=journal_dir,
+                station_1=_STATION_1,
+                station_1_buying=_CARGO_1,
+                station_1_system=_SYSTEM_1,
+                station_2=_STATION_2,
+                station_2_buying=_CARGO_2,
+                station_2_system=_SYSTEM_2,
+                iterations=1,
+                start_phase=Phase.TRANSIT_TO_STATION_2,
+                step_delay_s=0.0,
+                settle_s=0.0,
+                supercruise_exit_settle_s=0.0,
+                boost_settle_s=0.0,
+                dock_timeout_s=30.0,
+                request_timeout_s=10.0,
+                undock_timeout_s=10.0,
+                trade_timeout_s=10.0,
+                time_fn=_ticking_clock(),
+                sleeper=lambda _: None,
+                progress_fn=messages.append,
+                announce_fn=lambda message_id, **values: announcements.append((message_id, values)),
+            )
+
+        self.assertEqual(result.action, "Interdicted")
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertIn("interdicted by Jeremy Linter", result.dispatch.reason)
+        self.assertNotIn("UI_Select", [call["action"] for call in controls.calls])
+        self.assertTrue(any("Interdiction detected during haul transit" in message for message in messages))
+        self.assertIn((AnnouncementId.HAUL_ABORTED, {}), announcements)
+
     def test_arrival_wait_ignores_intermediate_jump_systems(self) -> None:
         watcher = FakeWatcher([
             [{"event": "FSDJump", "StarSystem": _SYSTEM_1}],

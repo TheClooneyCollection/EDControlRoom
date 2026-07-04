@@ -719,6 +719,7 @@ def _run_transit(
         supercruise_exit_settle_s=runtime.timing.supercruise_exit_settle_s,
         boost_settle_s=runtime.timing.boost_settle_s,
         deny_retry_delay_s=runtime.timing.deny_retry_delay_s,
+        abort_on_interdiction=True,
         time_fn=runtime.time_fn,
         sleeper=runtime.sleeper,
         progress_fn=runtime.progress_fn,
@@ -726,6 +727,12 @@ def _run_transit(
         announce_fn=runtime.announce_fn,
         announce_station_name=destination_leg.station,
     )
+    if result.action == "Interdicted" and result.dispatch.status != "ok":
+        runtime.progress_fn(
+            "Interdiction detected during haul transit; haul aborted. "
+            "Escape or re-enter supercruise, then resume haul."
+        )
+        runtime.announce_fn(AnnouncementId.HAUL_ABORTED)
     return result, next_phase
 
 

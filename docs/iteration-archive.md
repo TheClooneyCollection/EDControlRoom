@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `222`
-- Latest generated iteration number: `355`
+- Generated iteration count: `223`
+- Latest generated iteration number: `356`
 
 ## Iteration 134
 
@@ -6171,3 +6171,29 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Investigate CrossOver/Wine-specific input translation or Windows-side options before spending more effort on macOS `CGEventPostToPid` variants.
+
+## Iteration 356
+
+- When: `2026-07-04 21:49`
+- Area: `haul`
+- Title: `interdiction-docking-abort`
+- Source: [2026-07-04-21-49_____haul_____interdiction-docking-abort.md](iteration-logs/2026-07-04-21-49_____haul_____interdiction-docking-abort.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `interdiction-docking-abort`
+- Started: `2026-07-04 21:49`
+
+## Summary
+
+- Reviewed `artifacts/control-room.log` and confirmed live interdiction sequences where `Interdicted` is followed by `SupercruiseExit` on a star/planet plus `Combat_Dogfight`, distinct from later station `SupercruiseDestinationDrop` events.
+
+## Changes
+
+- Added an opt-in `dock(abort_on_interdiction=True)` guard and enabled it for two-way and multi-leg haul transit so haul aborts/TTS `haul_aborted` before any docking request when interdicted during station approach.
+- Added regression coverage for two-way and multi-leg haul using the logged event shape: destination-system `FSDJump`, `Interdicted`, then non-station `SupercruiseExit`.
+
+## Follow-ups
+
+- Watch future live haul logs for interdiction variants that emit only emergency-drop style events without `Interdicted`; current guard keys on the explicit journal event seen in artifacts.

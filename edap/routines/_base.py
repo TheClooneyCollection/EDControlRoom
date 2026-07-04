@@ -198,6 +198,10 @@ def _is_supercruise_exit_event(event: dict[str, object]) -> bool:
     return event.get("event") == "SupercruiseExit"
 
 
+def _is_interdicted_event(event: dict[str, object]) -> bool:
+    return event.get("event") == "Interdicted"
+
+
 def _is_docking_started_event(event: dict[str, object]) -> bool:
     return event.get("event") in {"DockingRequested", "DockingGranted"}
 
