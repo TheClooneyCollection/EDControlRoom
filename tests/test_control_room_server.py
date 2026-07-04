@@ -521,7 +521,8 @@ class ControlRoomServerTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Two-way haul control", response.text)
-        self.assertIn("Start two-way haul", response.text)
+        self.assertIn("Set destination", response.text)
+        self.assertIn("Start route", response.text)
 
     def test_haul_rest_action_endpoints_are_not_registered(self) -> None:
         broker = InMemoryObserverSessionBroker()

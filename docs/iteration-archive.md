@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `203`
-- Latest generated iteration number: `336`
+- Generated iteration count: `204`
+- Latest generated iteration number: `337`
 
 ## Iteration 134
 
@@ -5641,3 +5641,29 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-check the action against a running server to confirm route selection, galaxy map timing, and activity feedback feel right before start-route handoff.
+
+## Iteration 337
+
+- When: `2026-07-04 11:10`
+- Area: `web`
+- Title: `update-haul-static-page-test`
+- Source: [2026-07-04-11-10_____web______update-haul-static-page-test.md](iteration-logs/2026-07-04-11-10_____web______update-haul-static-page-test.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `update-haul-static-page-test`
+- Started: `2026-07-04 11:10`
+
+## Summary
+
+- Updated static haul page coverage after the start panel wording changed from the old two-way haul button text.
+
+## Changes
+
+- Changed the `/haul` static endpoint test to assert `Set destination` and `Start route`.
+- Confirmed `uv build` succeeds and the full unittest suite passes within the repository timing limit.
+
+## Follow-ups
+
+- None.
