@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+import re
 from subprocess import run
 from time import sleep as _default_sleep
 
@@ -19,6 +20,7 @@ try:
         kCGEventFlagMaskCommand,
         kCGEventFlagMaskControl,
         kCGEventFlagMaskShift,
+        kCGEventSourceStateCombinedSessionState,
         kCGEventSourceStateHIDSystemState,
         kCGHIDEventTap,
     )
@@ -33,6 +35,7 @@ except ImportError:  # pragma: no cover - exercised implicitly on non-macOS CI r
     kCGEventFlagMaskCommand = 1 << 20
     kCGEventFlagMaskControl = 1 << 18
     kCGEventFlagMaskShift = 1 << 17
+    kCGEventSourceStateCombinedSessionState = None
     kCGEventSourceStateHIDSystemState = None
     kCGHIDEventTap = None
 
@@ -136,6 +139,8 @@ PidPosterFn = Callable[[int, int, bool, int, "str | None"], None]
 SleeperFn = Callable[[float], None]
 PidFinderFn = Callable[[str], int | None]
 
+_WINDOWS_EXE_BASENAME_PATTERN = re.compile(r"([^\\/\"\s]+\.exe)\b", re.IGNORECASE)
+
 
 def _make_default_poster() -> PosterFn:
     if CGEventSourceCreate is None or CGEventCreateKeyboardEvent is None or CGEventPost is None:
@@ -156,7 +161,12 @@ def _make_default_poster() -> PosterFn:
 def _make_default_pid_poster() -> PidPosterFn:
     if CGEventSourceCreate is None or CGEventCreateKeyboardEvent is None or CGEventPostToPid is None:
         raise RuntimeError("Quartz pid-targeted posting is unavailable on this macOS runtime.")
-    source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState)
+    source_state = (
+        kCGEventSourceStateCombinedSessionState
+        if kCGEventSourceStateCombinedSessionState is not None
+        else kCGEventSourceStateHIDSystemState
+    )
+    source = CGEventSourceCreate(source_state)
 
     def poster(pid: int, keycode: int, down: bool, flags: int, unicode_char: str | None) -> None:
         event = CGEventCreateKeyboardEvent(source, keycode, down)
@@ -196,7 +206,7 @@ def _find_pid_in_ps_output(
         if len(parts) != 2:
             continue
         pid_raw, command = parts
-        if wanted not in command.lower():
+        if not _command_line_matches_process_name(command, wanted):
             continue
         try:
             return int(pid_raw)
@@ -204,6 +214,15 @@ def _find_pid_in_ps_output(
             continue
 
     return None
+
+
+def _command_line_matches_process_name(command: str, wanted: str) -> bool:
+    windows_exe_names = _WINDOWS_EXE_BASENAME_PATTERN.findall(command)
+    if windows_exe_names:
+        return windows_exe_names[0].lower() == wanted
+
+    first_arg = command.strip().split(None, 1)[0] if command.strip() else ""
+    return Path(first_arg).name.lower() == wanted
 
 
 def _find_pid_by_process_name(process_name: str) -> int | None:

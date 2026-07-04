@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from edap.platform.input.macos import (
     KEY_CODES,
     MODIFIER_FLAGS,
     MacOSInputController,
     _find_pid_in_ps_output,
+    _make_default_pid_poster,
 )
 from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler, no_jitter_timing_sampler
 
@@ -40,6 +42,30 @@ def _build() -> tuple[MacOSInputController, FakeBackend]:
 
 
 class MacOSInputControllerTests(unittest.TestCase):
+    def test_default_pid_poster_uses_combined_session_event_source(self) -> None:
+        source_states: list[str] = []
+        posted: list[tuple[int, object]] = []
+
+        def fake_source_create(source_state: str) -> object:
+            source_states.append(source_state)
+            return object()
+
+        def fake_keyboard_event(_source: object, keycode: int, down: bool) -> dict[str, object]:
+            return {"keycode": keycode, "down": down}
+
+        with (
+            patch("edap.platform.input.macos.CGEventSourceCreate", fake_source_create),
+            patch("edap.platform.input.macos.CGEventCreateKeyboardEvent", fake_keyboard_event),
+            patch("edap.platform.input.macos.CGEventPostToPid", lambda pid, event: posted.append((pid, event))),
+            patch("edap.platform.input.macos.kCGEventSourceStateCombinedSessionState", "combined"),
+            patch("edap.platform.input.macos.kCGEventSourceStateHIDSystemState", "hid"),
+        ):
+            poster = _make_default_pid_poster()
+            poster(4242, KEY_CODES["a"], True, 0, None)
+
+        self.assertEqual(source_states, ["combined"])
+        self.assertEqual(posted, [(4242, {"keycode": KEY_CODES["a"], "down": True})])
+
     def test_hold_and_typing_delay_use_timing_sampler(self) -> None:
         backend = FakeBackend()
         timing_sampler = TimingSampler(
@@ -85,6 +111,21 @@ class MacOSInputControllerTests(unittest.TestCase):
         )
 
         self.assertEqual(pid, 222)
+
+    def test_find_pid_in_ps_output_ignores_watched_executable_argument(self) -> None:
+        pid = _find_pid_in_ps_output(
+            "EliteDangerous64.exe",
+            comm_output=" 23232 C:\\\\Program Files\n 23244 C:\\\\Program Files\n",
+            command_output=(
+                " 23232 C:\\\\Program Files (x86)\\\\Steam\\\\steamapps\\\\common\\\\Elite Dangerous\\\\WatchDog64.exe "
+                "/Executable C:\\\\Program Files (x86)\\\\Steam\\\\steamapps\\\\common\\\\Elite Dangerous"
+                "\\\\Products\\\\elite-dangerous-odyssey-64\\\\EliteDangerous64.exe\n"
+                " 23244 C:\\\\Program Files (x86)\\\\Steam\\\\steamapps\\\\common\\\\Elite Dangerous"
+                "\\\\Products\\\\elite-dangerous-odyssey-64\\\\EliteDangerous64.exe wseed 13422\n"
+            ),
+        )
+
+        self.assertEqual(pid, 23244)
 
     def test_find_pid_in_ps_output_returns_none_when_no_match_exists(self) -> None:
         pid = _find_pid_in_ps_output(

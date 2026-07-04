@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `220`
-- Latest generated iteration number: `353`
+- Generated iteration count: `222`
+- Latest generated iteration number: `355`
 
 ## Iteration 134
 
@@ -6113,3 +6113,61 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-check a real `control_room.py connect` terminal during an active remote routine to confirm double `Ctrl-D` exits/detaches as expected with the command bar focused.
+
+## Iteration 354
+
+- When: `2026-07-04 20:45`
+- Area: `runtime`
+- Title: `crossover-pid-watchdog-detect`
+- Source: [2026-07-04-20-45___runtime____crossover-pid-watchdog-detect.md](iteration-logs/2026-07-04-20-45___runtime____crossover-pid-watchdog-detect.md)
+
+# Iteration Log
+
+- Area: `runtime`
+- Title: `crossover-pid-watchdog-detect`
+- Started: `2026-07-04 20:45`
+
+## Summary
+
+- Fixed macOS `set_pid` auto-detect selecting CrossOver `WatchDog64.exe` when its command line named `EliteDangerous64.exe` as the watchdog executable argument before the real game process row.
+
+## Changes
+
+- Tightened the macOS full-command-line fallback so it matches the first Windows `.exe` basename in a `ps` row instead of any later argument substring.
+- Added a regression test covering the live WatchDog/Elite process-table shape where PID `23232` is the watchdog and PID `23244` is the real game process.
+- Confirmed the live finder changed from `23232` to `23244` after the matcher fix.
+- Updated runtime status to record that CrossOver still needs foreground HID posting because pid-targeted Quartz posting is not yet a validated background-control path.
+
+## Follow-ups
+
+- Investigate a different macOS/CrossOver background-input route; `set_pid foreground` remains the practical recovery path when targeted dispatch stops foreground input delivery.
+
+## Iteration 355
+
+- When: `2026-07-04 20:53`
+- Area: `runtime`
+- Title: `combined-session-pid-events`
+- Source: [2026-07-04-20-53___runtime____combined-session-pid-events.md](iteration-logs/2026-07-04-20-53___runtime____combined-session-pid-events.md)
+
+# Iteration Log
+
+- Area: `runtime`
+- Title: `combined-session-pid-events`
+- Started: `2026-07-04 20:53`
+
+## Summary
+
+- Switched macOS pid-targeted Quartz keyboard events to use the combined-session event source and captured the live result: native background typing works, CrossOver/Elite still does not.
+
+## Changes
+
+- Changed `_make_default_pid_poster()` to create pid-targeted events with `kCGEventSourceStateCombinedSessionState`, matching the background-mode pattern found in `macos-desktop-control`.
+- Kept foreground macOS input on the existing HID event-tap path.
+- Added a focused unit test that stubs Quartz and verifies the pid poster chooses the combined-session source.
+- Live-tested background typing against Sublime successfully, which confirms the pid-targeted event construction can work for native macOS apps.
+- Live-tested CrossOver/Elite with combined-session pid events and flash-focus; both failed as background-control paths, so the bottleneck appears specific to CrossOver/Elite input translation.
+- Updated runtime status to record the native-app success and CrossOver/Elite limitation.
+
+## Follow-ups
+
+- Investigate CrossOver/Wine-specific input translation or Windows-side options before spending more effort on macOS `CGEventPostToPid` variants.
