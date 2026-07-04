@@ -1001,15 +1001,15 @@
         <section class="summary-strip" aria-label="Current haul summary">
           <div class="summary-cell">
             <div class="summary-label">Home system</div>
-            <div class="summary-value" id="summary-home">Sol</div>
+            <div class="summary-value" id="summary-home">-</div>
           </div>
           <div class="summary-cell">
             <div class="summary-label">Current system</div>
-            <div class="summary-value" id="summary-current">Galileo</div>
+            <div class="summary-value" id="summary-current">-</div>
           </div>
           <div class="summary-cell">
             <div class="summary-label">Destination</div>
-            <div class="summary-value" id="summary-destination">Alioth</div>
+            <div class="summary-value" id="summary-destination">-</div>
           </div>
           <div class="summary-cell">
             <div class="summary-label">Cargo</div>
@@ -1801,14 +1801,12 @@
 
     function applyHydratePayload(payload) {
       const ship = payload.ship || {};
-      const market = payload.market || {};
       const haulSession = payload.haul_session || {};
       const routine = payload.routine || {};
       const activity = payload.activity_log || {};
       currentRoutine = routine;
-      document.getElementById("summary-current").textContent =
-        market.station || ship.station || ship.system || "-";
-      document.getElementById("summary-home").textContent = ship.system || "-";
+      document.getElementById("summary-current").textContent = ship.system || "-";
+      document.getElementById("summary-home").textContent = payload.home_system || "-";
       document.getElementById("summary-destination").textContent = ship.destination_system || "-";
       document.getElementById("summary-cargo").textContent =
         `${ship.cargo_count || 0} / ${ship.cargo_capacity || 0} t`;

@@ -42,3 +42,12 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn("Math.min(reconnectDelayMs * 2, RECONNECT_MAX_DELAY_MS)", html)
         self.assertIn("event.code === 4401", html)
         self.assertNotIn("|| !receivedConnectionReady", html)
+
+    def test_haul_web_renders_home_and_current_system_from_distinct_hydrate_fields(self) -> None:
+        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+
+        self.assertIn('id="summary-home">-</div>', html)
+        self.assertIn('id="summary-current">-</div>', html)
+        self.assertIn('document.getElementById("summary-current").textContent = ship.system || "-";', html)
+        self.assertIn('document.getElementById("summary-home").textContent = payload.home_system || "-";', html)
+        self.assertNotIn("market.station || ship.station || ship.system", html)

@@ -80,7 +80,7 @@ class ControlRoomDependenciesTests(unittest.TestCase):
                 default_haul={"station_1": "Galileo"},
             ),
             _config=SimpleNamespace(
-                control_room=SimpleNamespace(history_limit=20),
+                control_room=SimpleNamespace(history_limit=20, home_system="Achenar"),
                 runtime=SimpleNamespace(platform="macos"),
             ),
             _protocol_activity_log=[build_activity_log_entry("Observer ready")],
@@ -104,6 +104,7 @@ class ControlRoomDependenciesTests(unittest.TestCase):
         self.assertEqual(data.activity_log.entries[0].message_text, "Observer ready")
         self.assertTrue(data.routine.routine_active)
         self.assertEqual(data.server_status.runtime_platform, "macos")
+        self.assertEqual(data.home_system, "Achenar")
 
         app._ship.cargo_inventory.append({"Name": "silver"})
         app._market.items.append({"name": "Silver"})
@@ -127,7 +128,7 @@ class ControlRoomDependenciesTests(unittest.TestCase):
             ),
             _saved_state=ControlRoomState(),
             _config=SimpleNamespace(
-                control_room=SimpleNamespace(history_limit=20),
+                control_room=SimpleNamespace(history_limit=20, home_system="Achenar"),
                 runtime=SimpleNamespace(platform="macos"),
             ),
             _protocol_activity_log=[],

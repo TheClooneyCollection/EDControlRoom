@@ -33,7 +33,7 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
             ),
             _saved_state=ControlRoomState(),
             _config=SimpleNamespace(
-                control_room=SimpleNamespace(history_limit=20),
+                control_room=SimpleNamespace(history_limit=20, home_system="Achenar"),
                 runtime=SimpleNamespace(platform="macos"),
             ),
             _protocol_activity_log=[
@@ -66,6 +66,7 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
         self.assertEqual(message["message_type"], CONTROL_ROOM_HYDRATE)
         self.assertTrue(is_control_room_data_message(message))
         self.assertEqual(message["payload"]["ship"]["system"], "Sol")
+        self.assertEqual(message["payload"]["home_system"], "Achenar")
         self.assertEqual(message["payload"]["market"]["station"], "Galileo")
         self.assertEqual(message["payload"]["market"]["market_id"], 3229359104)
         self.assertEqual(message["payload"]["haul_session"]["completed_runs"], 3)
@@ -86,6 +87,7 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
         parsed = data_read_model_from_message(message)
 
         self.assertEqual(parsed.ship.system, "Sol")
+        self.assertEqual(parsed.home_system, "Achenar")
         self.assertEqual(parsed.market.station, "Galileo")
         self.assertEqual(parsed.market.market_id, 3229359104)
         self.assertEqual(parsed.haul_session.completed_runs, 3)

@@ -75,6 +75,7 @@ class ControlRoomDataReadModel:
     routine: RoutineReadModel
     session: SessionReadModel
     server_status: ServerStatusReadModel
+    home_system: str = ""
 
 
 class ControlRoomDataSource(Protocol):
@@ -184,6 +185,7 @@ class LocalControlRoomDataSource:
                 bindings_source_status=app._ctx.bindings.cli_source_status(),
                 bindings_loaded=app._ctx.binding_lookup is not None,
             ),
+            home_system=app._config.control_room.home_system,
         )
 
 

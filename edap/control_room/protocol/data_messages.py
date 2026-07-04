@@ -99,6 +99,7 @@ def data_read_model_from_payload(payload: dict[str, Any]) -> ControlRoomDataRead
         routine=_routine(_mapping(payload.get("routine", {}))),
         session=_session(_mapping(payload.get("session", {}))),
         server_status=_server_status(_mapping(payload.get("server_status", {}))),
+        home_system=str(payload.get("home_system", "")),
     )
 
 
