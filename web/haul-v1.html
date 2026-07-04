@@ -221,6 +221,41 @@
       background: var(--red-dim);
     }
 
+    .token-control {
+      display: grid;
+      grid-template-columns: 150px auto;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .token-input {
+      height: 30px;
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--bg-1);
+      color: var(--text-1);
+      padding: 0 10px;
+      font: 12px var(--mono);
+      outline: none;
+    }
+
+    .token-input:focus {
+      border-color: rgba(232, 145, 43, 0.8);
+      box-shadow: 0 0 0 2px rgba(232, 145, 43, 0.15);
+    }
+
+    .token-button {
+      height: 30px;
+      border: 1px solid rgba(232, 145, 43, 0.7);
+      border-radius: 999px;
+      background: var(--amber-dim);
+      color: var(--amber);
+      padding: 0 10px;
+      font: 650 11.5px Inter, sans-serif;
+      cursor: pointer;
+    }
+
     main {
       padding: 22px 24px 34px;
       max-width: 1480px;
@@ -764,6 +799,10 @@
           <div class="chip">Host <strong>MacBook Pro</strong></div>
           <div class="chip">Target <strong>edserver.exe</strong></div>
           <div class="chip">Role <strong>Active operator</strong></div>
+          <div class="token-control">
+            <input class="token-input" id="access-token" type="password" placeholder="Access token" autocomplete="off" aria-label="Access token">
+            <button class="token-button" id="save-token" type="button">Save</button>
+          </div>
           <div class="chip danger">Emergency stop</div>
         </div>
       </header>
@@ -1061,7 +1100,9 @@
 
     let routes = sampleRoutes;
     let selectedRouteIndex = 1;
-    const accessToken = new URLSearchParams(window.location.search).get("access_token") || "";
+    const TOKEN_STORAGE_KEY = "edcr.haul.accessToken";
+    const queryAccessToken = new URLSearchParams(window.location.search).get("access_token") || "";
+    let accessToken = queryAccessToken || window.localStorage.getItem(TOKEN_STORAGE_KEY) || "";
     let socket = null;
     let clientRole = "observer";
     let commandSequence = 1;
@@ -1119,6 +1160,7 @@
       const active = clientRole === "active_operator";
       document.getElementById("start-haul").disabled = !active || !routeByIndex(selectedRouteIndex);
       document.querySelector("#search-form .btn.primary").disabled = !active;
+      document.getElementById("access-token").value = accessToken;
       if (!accessToken) {
         setResultCount("Backend token required");
       } else if (!isSocketReady()) {
@@ -1159,12 +1201,22 @@
       return `${protocol}//${window.location.host}/session?${params.toString()}`;
     }
 
+    function disconnectWebsocket() {
+      if (!socket) {
+        return;
+      }
+      const existingSocket = socket;
+      socket = null;
+      existingSocket.close();
+    }
+
     function connectWebsocket() {
       if (!accessToken) {
-        appendActivity("Open /haul with access_token to connect backend.", "Session", "warning");
+        appendActivity("Enter and save an access token to connect backend.", "Session", "warning");
         updateOperatorState();
         return;
       }
+      disconnectWebsocket();
       socket = new WebSocket(websocketUrl());
       socket.addEventListener("open", () => {
         appendActivity("Websocket connected.", "Session", "success");
@@ -1214,6 +1266,20 @@
           pending.resolve(message.payload);
         }
       });
+    }
+
+    function saveAccessToken() {
+      accessToken = document.getElementById("access-token").value.trim();
+      if (accessToken) {
+        window.localStorage.setItem(TOKEN_STORAGE_KEY, accessToken);
+        appendActivity("Access token saved locally.", "Session", "success");
+      } else {
+        window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+        appendActivity("Access token cleared.", "Session", "warning");
+      }
+      clientRole = "observer";
+      updateOperatorState();
+      connectWebsocket();
     }
 
     function appendActivity(text, label, badgeClass = "neutral") {
@@ -1468,7 +1534,7 @@
       event.preventDefault();
       if (!accessToken) {
         setResultCount("Backend token required");
-        appendActivity("Open /haul with access_token to search live routes.", "Search", "warning");
+        appendActivity("Enter and save an access token to search live routes.", "Search", "warning");
         return;
       }
       if (clientRole !== "active_operator") {
@@ -1517,7 +1583,7 @@
         return;
       }
       if (!accessToken) {
-        appendActivity("Open /haul with access_token to start haul.", "Haul", "warning");
+        appendActivity("Enter and save an access token to start haul.", "Haul", "warning");
         return;
       }
       if (clientRole !== "active_operator") {
@@ -1539,6 +1605,13 @@
 
     document.getElementById("galaxy-settle").addEventListener("input", updateCommandPreview);
     document.getElementById("dock-timeout").addEventListener("input", updateCommandPreview);
+    document.getElementById("save-token").addEventListener("click", saveAccessToken);
+    document.getElementById("access-token").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        saveAccessToken();
+      }
+    });
 
     renderRows();
     renderSelected();
