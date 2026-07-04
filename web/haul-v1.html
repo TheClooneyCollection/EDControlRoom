@@ -35,13 +35,13 @@
 
     body {
       margin: 0;
-      min-width: 1160px;
       background: var(--bg-0);
       color: var(--text-1);
       font-family: var(--sans);
       font-size: 13px;
       line-height: 1.35;
       -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
     }
 
     button,
@@ -376,6 +376,7 @@
     main {
       padding: 22px 24px 34px;
       max-width: 1480px;
+      width: 100%;
     }
 
     .page-head {
@@ -713,6 +714,7 @@
       margin-top: 2px;
       color: var(--text-3);
       font-size: 10.5px;
+      overflow-wrap: anywhere;
     }
 
     .pager {
@@ -925,6 +927,259 @@
 
       .activity-panel {
         grid-column: auto;
+      }
+    }
+
+    @media (max-width: 760px) {
+      body {
+        font-size: 12.5px;
+      }
+
+      .shell {
+        display: block;
+      }
+
+      .sidebar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        flex-direction: row;
+        align-items: center;
+        gap: 10px;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+        padding: 9px 12px;
+      }
+
+      .brand {
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        border-bottom: 0;
+      }
+
+      .brand-mark {
+        width: 28px;
+        height: 28px;
+      }
+
+      .brand-name,
+      .brand-sub {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .nav-label,
+      .sidebar-foot {
+        display: none;
+      }
+
+      .nav-item {
+        width: auto;
+        margin-left: auto;
+        padding: 8px 9px;
+        white-space: nowrap;
+      }
+
+      .topbar {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 12px;
+      }
+
+      .topbar-sub {
+        max-width: 100%;
+      }
+
+      .chips {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: 100%;
+        justify-content: stretch;
+      }
+
+      .chip {
+        min-width: 0;
+        justify-content: space-between;
+        border-radius: var(--radius);
+      }
+
+      .token-control,
+      .stop-controls {
+        grid-column: 1 / -1;
+      }
+
+      .token-control {
+        grid-template-columns: minmax(0, 1fr) auto;
+      }
+
+      .stop-controls {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .stop-button,
+      .mode-toggle,
+      .reconnect-button,
+      .token-button {
+        width: 100%;
+      }
+
+      main {
+        max-width: none;
+        padding: 14px 12px 24px;
+      }
+
+      .page-head,
+      .connection-banner,
+      .panel-head {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      h1 {
+        font-size: 21px;
+      }
+
+      .summary-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        border-radius: 8px;
+      }
+
+      .summary-cell {
+        padding: 10px 11px;
+      }
+
+      .summary-cell:last-child {
+        grid-column: 1 / -1;
+      }
+
+      .routine-bar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .routine-bar .step:last-child {
+        grid-column: 1 / -1;
+      }
+
+      .mini-metrics,
+      .field-row {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .btn-row {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .route-table,
+      .route-table tbody,
+      .route-table tr,
+      .route-table td {
+        display: block;
+        width: 100%;
+      }
+
+      .route-table thead {
+        display: none;
+      }
+
+      .route-table tr {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--bg-0);
+        padding: 10px;
+        margin-bottom: 10px;
+      }
+
+      .route-table tr.selected {
+        background: var(--bg-2);
+        box-shadow: inset 3px 0 0 var(--amber);
+      }
+
+      .route-table td {
+        display: grid;
+        grid-template-columns: 88px minmax(0, 1fr);
+        gap: 8px;
+        border-top: 0;
+        padding: 4px 0;
+        text-align: left;
+      }
+
+      .route-table td::before {
+        color: var(--text-3);
+        content: "";
+        font-size: 10px;
+        font-weight: 650;
+        text-transform: uppercase;
+      }
+
+      .route-table td:nth-child(1)::before { content: "#"; }
+      .route-table td:nth-child(2)::before { content: "Profit / hr"; }
+      .route-table td:nth-child(3)::before { content: "Cargo"; }
+      .route-table td:nth-child(4)::before { content: "Station 1"; }
+      .route-table td:nth-child(5)::before { content: "Station 2"; }
+      .route-table td:nth-child(6)::before { content: "Distance"; }
+      .route-table td:nth-child(7)::before { content: "Route"; }
+
+      .route-table td.empty-route-message {
+        display: block;
+      }
+
+      .route-table td.empty-route-message::before {
+        display: none;
+      }
+
+      .route-table .num {
+        text-align: left;
+        white-space: normal;
+      }
+
+      .route-main {
+        overflow-wrap: anywhere;
+      }
+
+      .pager {
+        justify-content: space-between;
+      }
+
+      .activity-list {
+        max-height: 360px;
+      }
+
+      .activity-row {
+        grid-template-columns: 58px minmax(0, 1fr);
+        gap: 8px;
+      }
+
+      .activity-row .badge {
+        grid-column: 2;
+        justify-self: start;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .chips,
+      .summary-strip,
+      .btn-row,
+      .stop-controls {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .summary-cell:last-child,
+      .token-control,
+      .stop-controls {
+        grid-column: auto;
+      }
+
+      .brand-sub,
+      .nav-item svg {
+        display: none;
+      }
+
+      .route-table td {
+        grid-template-columns: 78px minmax(0, 1fr);
       }
     }
 
@@ -1721,7 +1976,7 @@
         const message = hasSearchedRoutes
           ? "No station/carrier routes found."
           : "Search routes to load station/carrier results.";
-        tbody.innerHTML = `<tr><td colspan="7" class="route-sub">${message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="route-sub empty-route-message">${message}</td></tr>`;
         routePage = 1;
         updateRoutePager(0, 0, 0, 1);
         return;

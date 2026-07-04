@@ -40,6 +40,7 @@ from edap.control_room.dependencies import (
 )
 from edap.control_room.models import HaulStats, MarketData, ShipState
 from edap.control_room.protocol import ActivityLogEntry
+from edap.control_room.server import app as server_app
 from edap.control_room.server.app import (
     BROWSER_PROBE_URL_PATH,
     CONTROL_ROOM_MESSAGE_SCHEMA,
@@ -50,6 +51,7 @@ from edap.control_room.server.app import (
     SUPPORTED_MESSAGE_TYPES,
     SUPPORTED_RESPONSE_MESSAGE_TYPES,
     _handle_session_message,
+    _render_haul_web_html,
     build_observer_server_app,
 )
 from edap.control_room.server.auth import SharedAccessTokenAuth
@@ -529,6 +531,7 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertIn("Access token rejected", response.text)
         self.assertNotIn("window.prompt", response.text)
         self.assertIn('const SERVER_DEFAULT_ACCESS_TOKEN = "";', response.text)
+        self.assertEqual(response.headers["cache-control"], "no-store")
 
     def test_haul_web_endpoint_can_inject_implicit_serve_token(self) -> None:
         broker = InMemoryObserverSessionBroker()
@@ -545,6 +548,19 @@ class ControlRoomServerTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('const SERVER_DEFAULT_ACCESS_TOKEN = "edcr";', response.text)
+
+    def test_haul_web_renderer_rereads_html_file_without_server_restart(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            html_path = Path(tmpdir) / "haul-v1.html"
+            html_path.write_text('first const SERVER_DEFAULT_ACCESS_TOKEN = "";', encoding="utf-8")
+
+            with patch.object(server_app, "_HAUL_WEB_PATH", html_path):
+                first_html = _render_haul_web_html(web_default_access_token="edcr")
+                html_path.write_text('second const SERVER_DEFAULT_ACCESS_TOKEN = "";', encoding="utf-8")
+                second_html = _render_haul_web_html(web_default_access_token="edcr")
+
+        self.assertIn('first const SERVER_DEFAULT_ACCESS_TOKEN = "edcr";', first_html)
+        self.assertIn('second const SERVER_DEFAULT_ACCESS_TOKEN = "edcr";', second_html)
 
     def test_haul_rest_action_endpoints_are_not_registered(self) -> None:
         broker = InMemoryObserverSessionBroker()

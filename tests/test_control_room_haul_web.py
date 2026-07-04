@@ -69,3 +69,13 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn("Operator connection required", html)
         self.assertNotIn("Only the active operator", html)
         self.assertNotIn("Active operator required", html)
+
+    def test_haul_web_includes_mobile_layout_breakpoints(self) -> None:
+        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+
+        self.assertNotIn("min-width: 1160px", html)
+        self.assertIn("@media (max-width: 760px)", html)
+        self.assertIn(".shell {\n        display: block;", html)
+        self.assertIn(".route-table td:nth-child(2)::before { content: \"Profit / hr\"; }", html)
+        self.assertIn("empty-route-message", html)
+        self.assertIn("@media (max-width: 480px)", html)

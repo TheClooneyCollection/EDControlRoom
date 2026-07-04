@@ -44,7 +44,13 @@ _BROWSER_PROBE_PATH = (
 _HAUL_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "haul-v1.html"
 CONTROL_ROOM_MESSAGE_SCHEMA = json.loads(_MESSAGE_SCHEMA_PATH.read_text(encoding="utf-8"))
 CONTROL_ROOM_BROWSER_PROBE_HTML = _BROWSER_PROBE_PATH.read_text(encoding="utf-8")
-CONTROL_ROOM_HAUL_V1_HTML = _HAUL_WEB_PATH.read_text(encoding="utf-8")
+
+
+def _render_haul_web_html(*, web_default_access_token: str = "") -> str:
+    return _HAUL_WEB_PATH.read_text(encoding="utf-8").replace(
+        'const SERVER_DEFAULT_ACCESS_TOKEN = "";',
+        f"const SERVER_DEFAULT_ACCESS_TOKEN = {json.dumps(web_default_access_token)};",
+    )
 
 
 def build_observer_server_app(
@@ -112,11 +118,10 @@ def build_observer_server_app(
         return HTMLResponse(CONTROL_ROOM_BROWSER_PROBE_HTML)
 
     async def haul_web(request):
-        html = CONTROL_ROOM_HAUL_V1_HTML.replace(
-            'const SERVER_DEFAULT_ACCESS_TOKEN = "";',
-            f"const SERVER_DEFAULT_ACCESS_TOKEN = {json.dumps(web_default_access_token)};",
+        return HTMLResponse(
+            _render_haul_web_html(web_default_access_token=web_default_access_token),
+            headers={"Cache-Control": "no-store"},
         )
-        return HTMLResponse(html)
 
     async def session(websocket: WebSocket) -> None:
         if not auth.is_websocket_authorized(websocket):
