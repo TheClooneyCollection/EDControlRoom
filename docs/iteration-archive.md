@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `198`
-- Latest generated iteration number: `331`
+- Generated iteration count: `199`
+- Latest generated iteration number: `332`
 
 ## Iteration 134
 
@@ -5506,3 +5506,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Retry `/haul` route search against a live server with a stored browser token.
+
+## Iteration 332
+
+- When: `2026-07-04 10:34`
+- Area: `web`
+- Title: `empty-haul-results-layout`
+- Source: [2026-07-04-10-34_____web______empty-haul-results-layout.md](iteration-logs/2026-07-04-10-34_____web______empty-haul-results-layout.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `empty-haul-results-layout`
+- Started: `2026-07-04 10:34`
+
+## Summary
+
+- Removed static haul route seed data and widened the results area by stacking selected route controls under search.
+
+## Changes
+
+- `/haul` route results now start empty with a neutral prompt until websocket search returns data.
+- Moved the selected route/start panel into a left-side stack below haul search, leaving the right column for a wider route results table.
+- Added a responsive single-column fallback for narrower viewports.
+
+## Follow-ups
+
+- Recheck route table width after the next live search result shape changes.

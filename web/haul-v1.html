@@ -321,9 +321,15 @@
 
     .layout {
       display: grid;
-      grid-template-columns: 300px minmax(500px, 1fr) 350px;
+      grid-template-columns: 380px minmax(0, 1fr);
       gap: 16px;
       align-items: start;
+    }
+
+    .left-stack {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
     }
 
     .routine-panel {
@@ -331,13 +337,11 @@
     }
 
     .setup-panel {
-      grid-column: 3;
-      grid-row: 1 / span 2;
+      min-width: 0;
     }
 
     .activity-panel {
-      grid-column: 1 / span 2;
-      grid-row: 2;
+      grid-column: 1 / -1;
     }
 
     .panel {
@@ -754,6 +758,16 @@
       font-size: 11.5px;
     }
 
+    @media (max-width: 1100px) {
+      .layout {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .activity-panel {
+        grid-column: auto;
+      }
+    }
+
     .inline-kbd {
       color: var(--text-1);
       font-family: var(--mono);
@@ -880,70 +894,113 @@
         </section>
 
         <section class="layout">
-          <section class="panel" aria-labelledby="search-title">
-            <div class="panel-head">
-              <div class="panel-title" id="search-title">Haul search</div>
-              <div class="panel-action">Active operator required</div>
-            </div>
-            <div class="panel-body">
-              <div class="banner">
-                <div class="banner-title">Station and carrier routes only</div>
-                <div class="banner-text">V1 search excludes land settlements. Surface destinations are intentionally disabled until route metadata is reliable.</div>
+          <div class="left-stack">
+            <section class="panel" aria-labelledby="search-title">
+              <div class="panel-head">
+                <div class="panel-title" id="search-title">Haul search</div>
+                <div class="panel-action">Active operator required</div>
               </div>
+              <div class="panel-body">
+                <div class="banner">
+                  <div class="banner-title">Station and carrier routes only</div>
+                  <div class="banner-text">V1 search excludes land settlements. Surface destinations are intentionally disabled until route metadata is reliable.</div>
+                </div>
 
-              <form class="form-grid" id="search-form">
-                <label>
-                  <span class="field-label">Origin system</span>
-                  <input class="field" id="origin" value="" placeholder="Current system" autocomplete="off">
-                </label>
-                <label>
-                  <span class="field-label">Destination system or station</span>
-                  <input class="field" id="destination" value="" autocomplete="off">
-                </label>
-                <div class="field-row">
+                <form class="form-grid" id="search-form">
                   <label>
-                    <span class="field-label">Max route distance</span>
-                    <select class="select" id="route-distance">
-                      <option>250 ly</option>
-                      <option selected>500 ly</option>
-                      <option>750 ly</option>
-                    </select>
+                    <span class="field-label">Origin system</span>
+                    <input class="field" id="origin" value="" placeholder="Current system" autocomplete="off">
                   </label>
                   <label>
-                    <span class="field-label">Station distance</span>
-                    <select class="select" id="station-distance">
-                      <option selected>Any</option>
-                      <option>1,000 ls</option>
-                      <option>5,000 ls</option>
-                    </select>
+                    <span class="field-label">Destination system or station</span>
+                    <input class="field" id="destination" value="" autocomplete="off">
                   </label>
+                  <div class="field-row">
+                    <label>
+                      <span class="field-label">Max route distance</span>
+                      <select class="select" id="route-distance">
+                        <option>250 ly</option>
+                        <option selected>500 ly</option>
+                        <option>750 ly</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span class="field-label">Station distance</span>
+                      <select class="select" id="station-distance">
+                        <option selected>Any</option>
+                        <option>1,000 ls</option>
+                        <option>5,000 ls</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="field-row">
+                    <label>
+                      <span class="field-label">Cargo capacity</span>
+                      <input class="field mono" id="capacity" value="784" inputmode="numeric">
+                    </label>
+                    <label>
+                      <span class="field-label">Profit metric</span>
+                      <select class="select" id="metric">
+                        <option selected>Profit / hour</option>
+                        <option>Profit / trip</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="btn-row">
+                    <button class="btn primary block" type="submit">Search routes</button>
+                    <button class="btn ghost" type="button" id="reset-search">Reset</button>
+                  </div>
+                </form>
+
+              </div>
+            </section>
+
+            <section class="panel setup-panel" aria-labelledby="setup-title">
+              <div class="panel-head">
+                <div class="panel-title" id="setup-title">Selected route + start</div>
+                <div class="panel-action">Two-way only</div>
+              </div>
+              <div class="panel-body">
+                <div class="banner">
+                  <div class="banner-title">Endpoint support</div>
+                  <div class="banner-text">V1 starts hauls only between stations and carriers. The dispatch preview sets both <span class="mono">on_land</span> flags to false.</div>
                 </div>
-                <div class="field-row">
-                  <label>
-                    <span class="field-label">Cargo capacity</span>
-                    <input class="field mono" id="capacity" value="784" inputmode="numeric">
-                  </label>
-                  <label>
-                    <span class="field-label">Profit metric</span>
-                    <select class="select" id="metric">
-                      <option selected>Profit / hour</option>
-                      <option>Profit / trip</option>
-                    </select>
-                  </label>
+
+                <div class="selected-route-title" id="selected-title">-</div>
+                <div class="stat-list" id="selected-stats"></div>
+
+                <div class="form-grid">
+                  <div class="field-row">
+                    <label>
+                      <span class="field-label">Galaxy settle</span>
+                      <input class="field mono" id="galaxy-settle" value="2.0">
+                    </label>
+                    <label>
+                      <span class="field-label">Dock timeout</span>
+                      <input class="field mono" id="dock-timeout" value="1200">
+                    </label>
+                  </div>
                 </div>
+
+                <details class="debug-disclosure">
+                  <summary>Debug command preview</summary>
+                  <pre class="command-preview mono" id="command-preview"></pre>
+                </details>
+
                 <div class="btn-row">
-                  <button class="btn primary block" type="submit">Search routes</button>
-                  <button class="btn ghost" type="button" id="reset-search">Reset</button>
+                  <button class="btn success block" type="button" id="start-haul">Start two-way haul</button>
                 </div>
-              </form>
-
-            </div>
-          </section>
+                <div class="callout">
+                  Existing backend command: <span class="inline-kbd">command.dispatch_haul_loop</span> with structured params. No prompt handoff in web.
+                </div>
+              </div>
+            </section>
+          </div>
 
           <section class="panel" aria-labelledby="results-title">
             <div class="panel-head">
               <div class="panel-title" id="results-title">Route results</div>
-              <div class="panel-action" id="result-count">Found 6 station/carrier routes</div>
+              <div class="panel-action" id="result-count">Search routes to load results</div>
             </div>
             <div class="panel-body">
               <table class="route-table" aria-label="Haul route results">
@@ -963,47 +1020,6 @@
             </div>
           </section>
 
-          <section class="panel setup-panel" aria-labelledby="setup-title">
-            <div class="panel-head">
-              <div class="panel-title" id="setup-title">Selected route + start</div>
-              <div class="panel-action">Two-way only</div>
-            </div>
-            <div class="panel-body">
-              <div class="banner">
-                <div class="banner-title">Endpoint support</div>
-                <div class="banner-text">V1 starts hauls only between stations and carriers. The dispatch preview sets both <span class="mono">on_land</span> flags to false.</div>
-              </div>
-
-              <div class="selected-route-title" id="selected-title">-</div>
-              <div class="stat-list" id="selected-stats"></div>
-
-              <div class="form-grid">
-                <div class="field-row">
-                  <label>
-                    <span class="field-label">Galaxy settle</span>
-                    <input class="field mono" id="galaxy-settle" value="2.0">
-                  </label>
-                  <label>
-                    <span class="field-label">Dock timeout</span>
-                    <input class="field mono" id="dock-timeout" value="1200">
-                  </label>
-                </div>
-              </div>
-
-              <details class="debug-disclosure">
-                <summary>Debug command preview</summary>
-                <pre class="command-preview mono" id="command-preview"></pre>
-              </details>
-
-              <div class="btn-row">
-                <button class="btn success block" type="button" id="start-haul">Start two-way haul</button>
-              </div>
-              <div class="callout">
-                Existing backend command: <span class="inline-kbd">command.dispatch_haul_loop</span> with structured params. No prompt handoff in web.
-              </div>
-            </div>
-          </section>
-
           <section class="panel activity-panel" aria-labelledby="activity-title">
             <div class="panel-head">
               <div class="panel-title" id="activity-title">Activity</div>
@@ -1017,89 +1033,9 @@
   </div>
 
   <script>
-    const sampleRoutes = [
-      {
-        index: 1,
-        profitHour: "88.3m",
-        profitTrip: "43.1m",
-        commodity: "Agronomic Treatment",
-        targetCommodity: "",
-        buyStation: "Galileo",
-        buySystem: "Sol",
-        sellStation: "Irkutsk",
-        sellSystem: "Alioth",
-        routeDistance: "221.34 ly",
-        stationDistance: "Any"
-      },
-      {
-        index: 2,
-        profitHour: "72.1m",
-        profitTrip: "35.6m",
-        commodity: "Tritium",
-        targetCommodity: "",
-        buyStation: "Sirius Market",
-        buySystem: "Sol",
-        sellStation: "Irkutsk",
-        sellSystem: "Alioth",
-        routeDistance: "223.18 ly",
-        stationDistance: "Any"
-      },
-      {
-        index: 3,
-        profitHour: "61.4m",
-        profitTrip: "30.2m",
-        commodity: "Bertrandite",
-        targetCommodity: "",
-        buyStation: "Galileo",
-        buySystem: "Sol",
-        sellStation: "Abraham Lincoln",
-        sellSystem: "Alioth",
-        routeDistance: "226.90 ly",
-        stationDistance: "Any"
-      },
-      {
-        index: 4,
-        profitHour: "57.8m",
-        profitTrip: "27.6m",
-        commodity: "Medical Supplies",
-        targetCommodity: "",
-        buyStation: "Sirius Market",
-        buySystem: "Sol",
-        sellStation: "Irkutsk",
-        sellSystem: "Alioth",
-        routeDistance: "223.18 ly",
-        stationDistance: "Any"
-      },
-      {
-        index: 5,
-        profitHour: "48.3m",
-        profitTrip: "24.0m",
-        commodity: "Gold",
-        targetCommodity: "",
-        buyStation: "Sirius Market",
-        buySystem: "Sol",
-        sellStation: "Irkutsk",
-        sellSystem: "Alioth",
-        routeDistance: "223.18 ly",
-        stationDistance: "Any"
-      },
-      {
-        index: 6,
-        profitHour: "44.6m",
-        profitTrip: "21.8m",
-        commodity: "Silver",
-        targetCommodity: "",
-        buyStation: "Galileo",
-        buySystem: "Sol",
-        sellStation: "Abraham Lincoln",
-        sellSystem: "Alioth",
-        routeDistance: "226.90 ly",
-        stationDistance: "Any"
-      }
-    ];
-
-    let routes = sampleRoutes;
-    let selectedRouteIndex = 1;
+    let routes = [];
+    let selectedRouteIndex = 0;
+    let hasSearchedRoutes = false;
     const TOKEN_STORAGE_KEY = "edcr.haul.accessToken";
     const queryAccessToken = new URLSearchParams(window.location.search).get("access_token") || "";
     let accessToken = queryAccessToken || window.localStorage.getItem(TOKEN_STORAGE_KEY) || "";
@@ -1416,7 +1352,10 @@
     function renderRows() {
       const tbody = document.getElementById("route-rows");
       if (!routes.length) {
-        tbody.innerHTML = `<tr><td colspan="7" class="route-sub">No station/carrier routes found.</td></tr>`;
+        const message = hasSearchedRoutes
+          ? "No station/carrier routes found."
+          : "Search routes to load station/carrier results.";
+        tbody.innerHTML = `<tr><td colspan="7" class="route-sub">${message}</td></tr>`;
         return;
       }
       tbody.innerHTML = routes.map((route) => `
@@ -1555,6 +1494,7 @@
         .then((payload) => {
           const result = payload.result || {};
           routes = (result.routes || []).map(routeFromApi);
+          hasSearchedRoutes = true;
           selectedRouteIndex = routes[0] ? routes[0].index : 0;
           renderRows();
           renderSelected();
