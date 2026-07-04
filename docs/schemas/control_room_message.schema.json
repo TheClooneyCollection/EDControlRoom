@@ -22,6 +22,7 @@
         "command.submit_input",
         "command.dispatch_destination",
         "command.dispatch_haul_loop",
+        "command.search_haul_routes",
         "command.cancel_active_routine",
         "response.success",
         "response.error"
@@ -89,6 +90,18 @@
       "then": {
         "properties": {
           "payload": { "$ref": "#/$defs/command_dispatch_haul_loop_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "command.search_haul_routes" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/command_search_haul_routes_payload" }
         }
       }
     },
@@ -257,6 +270,21 @@
         },
         "skip_delay": { "type": "boolean" },
         "raw_command": { "type": ["string", "null"] }
+      }
+    },
+    "command_search_haul_routes_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "origin": { "type": "string" },
+        "system_name": { "type": "string" },
+        "destination": { "type": "string" },
+        "destination_filter": { "type": "string" },
+        "cargo_capacity": { "type": "string" },
+        "max_route_distance_ly": { "type": "string" },
+        "max_station_distance_ls": { "type": "string" },
+        "metric": { "type": "string" },
+        "order_by": { "type": "string" }
       }
     },
     "command_cancel_active_routine_payload": {

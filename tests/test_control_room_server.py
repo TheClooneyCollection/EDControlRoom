@@ -42,8 +42,6 @@ from edap.control_room.protocol import ActivityLogEntry
 from edap.control_room.server.app import (
     BROWSER_PROBE_URL_PATH,
     CONTROL_ROOM_MESSAGE_SCHEMA,
-    HAUL_SEARCH_API_PATH,
-    HAUL_START_API_PATH,
     HAUL_WEB_URL_PATH,
     MESSAGE_SCHEMA_URL_PATH,
     SUPPORTED_COMMAND_MESSAGE_TYPES,
@@ -524,7 +522,7 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertIn("Two-way haul control", response.text)
         self.assertIn("Start two-way haul", response.text)
 
-    def test_haul_search_api_requires_authentication(self) -> None:
+    def test_haul_rest_action_endpoints_are_not_registered(self) -> None:
         broker = InMemoryObserverSessionBroker()
         app = build_observer_server_app(
             data_provider=_base_data_read_model,
@@ -534,18 +532,15 @@ class ControlRoomServerTests(unittest.TestCase):
         )
 
         with TestClient(app) as client:
-            response = client.post(HAUL_SEARCH_API_PATH, json={"origin": "Sol"})
+            search_response = client.post("/api/haul/search", json={"origin": "Sol"})
+            start_response = client.post("/api/haul/start", json={"params": {}})
 
-        self.assertEqual(response.status_code, 401)
+        self.assertEqual(search_response.status_code, 404)
+        self.assertEqual(start_response.status_code, 404)
 
-    def test_haul_search_api_returns_serialized_routes(self) -> None:
+    def test_active_operator_search_haul_routes_returns_serialized_routes(self) -> None:
         broker = InMemoryObserverSessionBroker()
-        app = build_observer_server_app(
-            data_provider=_base_data_read_model,
-            command_handler=None,
-            broker=broker,
-            auth=SharedAccessTokenAuth("secret-token"),
-        )
+        observer = broker.register_observer("bridge-ipad")
         result = TradeRouteSearchResult(
             system_name="Sol",
             query_url="https://inara.cz/elite/market-traderoutes/?ps1=Sol",
@@ -577,11 +572,11 @@ class ControlRoomServerTests(unittest.TestCase):
         )
 
         with patch("edap.control_room.server.app.search_trade_routes", return_value=result) as search:
-            with TestClient(app) as client:
-                response = client.post(
-                    HAUL_SEARCH_API_PATH,
-                    headers={"Authorization": "Bearer secret-token"},
-                    json={
+            response = _handle_session_message(
+                {
+                    "message_type": "command.search_haul_routes",
+                    "message_id": "message-search",
+                    "payload": {
                         "origin": "Sol",
                         "destination": "Alioth",
                         "cargo_capacity": "784",
@@ -589,14 +584,21 @@ class ControlRoomServerTests(unittest.TestCase):
                         "max_station_distance_ls": "Any",
                         "metric": "Profit / trip",
                     },
-                )
+                },
+                session_id=observer.session_id,
+                client_role="active_operator",
+                command_handler=None,
+                broker=broker,
+                data_provider=_base_data_read_model,
+            )
 
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["route_count"], 1)
-        self.assertEqual(payload["unfiltered_route_count"], 2)
-        self.assertTrue(payload["station_carrier_only"])
-        self.assertEqual(payload["routes"][0]["source_buy_commodity"], "Agronomic Treatment")
+        self.assertEqual(response["message_type"], "response.success")
+        self.assertEqual(response["correlation_message_id"], "message-search")
+        result_payload = response["payload"]["result"]
+        self.assertEqual(result_payload["route_count"], 1)
+        self.assertEqual(result_payload["unfiltered_route_count"], 2)
+        self.assertTrue(result_payload["station_carrier_only"])
+        self.assertEqual(result_payload["routes"][0]["source_buy_commodity"], "Agronomic Treatment")
         search.assert_called_once()
         self.assertEqual(search.call_args.args, ("Sol",))
         self.assertEqual(
@@ -610,7 +612,34 @@ class ControlRoomServerTests(unittest.TestCase):
             },
         )
 
-    def test_haul_start_api_dispatches_structured_params(self) -> None:
+    def test_observer_search_haul_routes_is_rejected(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        observer = broker.register_observer("bridge-ipad")
+
+        response = _handle_session_message(
+            {
+                "message_type": "command.search_haul_routes",
+                "message_id": "message-search-observer",
+                "payload": {"origin": "Sol"},
+            },
+            session_id=observer.session_id,
+            client_role="observer",
+            command_handler=None,
+            broker=broker,
+            data_provider=_base_data_read_model,
+        )
+
+        self.assertEqual(response["message_type"], "response.error")
+        self.assertEqual(response["payload"]["error_code"], "observer_read_only")
+
+    def test_websocket_search_and_dispatch_haul_commands(self) -> None:
+        def _receive_until_response(websocket, correlation_id: str) -> dict[str, object]:
+            for _ in range(8):
+                message = websocket.receive_json()
+                if message.get("correlation_message_id") == correlation_id:
+                    return message
+            self.fail(f"Did not receive response for {correlation_id}")
+
         broker = InMemoryObserverSessionBroker()
         command_handler = _CommandHandlerRecorder()
         app = build_observer_server_app(
@@ -619,65 +648,83 @@ class ControlRoomServerTests(unittest.TestCase):
             broker=broker,
             auth=SharedAccessTokenAuth("secret-token"),
         )
+        result = TradeRouteSearchResult(
+            system_name="Sol",
+            query_url="https://inara.cz/elite/market-traderoutes/?ps1=Sol",
+            searched_at="2026-07-04T08:00:00Z",
+            routes=(
+                TradeRoute(
+                    index=1,
+                    from_station="Galileo",
+                    from_system="Sol",
+                    to_station="Irkutsk",
+                    to_system="Alioth",
+                    source_buy_commodity="Agronomic Treatment",
+                    route_distance="221.34 ly",
+                    profit_per_hour="88.3m",
+                ),
+            ),
+        )
 
-        with TestClient(app) as client:
-            response = client.post(
-                HAUL_START_API_PATH,
-                headers={"Authorization": "Bearer secret-token"},
-                json={
-                    "params": {
-                        "station_1_buying": "Agronomic Treatment",
-                        "station_1": "Galileo",
-                        "station_1_system": "Sol",
-                        "station_2_buying": "Gold",
-                        "station_2": "Irkutsk",
-                        "station_2_system": "Alioth",
-                        "galaxy_map_settle": "2.0",
-                        "dock_timeout": "1200",
-                    },
-                    "raw_command": "web haul start",
-                },
-            )
+        with patch("edap.control_room.server.app.search_trade_routes", return_value=result):
+            with TestClient(app) as client:
+                with client.websocket_connect(
+                    "/session?client_name=web-haul&access_token=secret-token"
+                ) as websocket:
+                    websocket.receive_json()
+                    websocket.receive_json()
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["accepted"], True)
+                    websocket.send_json(
+                        {
+                            "message_type": "command.search_haul_routes",
+                            "message_id": "message-web-search",
+                            "payload": {"origin": "Sol", "destination": "Alioth"},
+                        }
+                    )
+                    search_response = _receive_until_response(websocket, "message-web-search")
+                    self.assertEqual(search_response["message_type"], "response.success")
+                    self.assertEqual(
+                        search_response["payload"]["result"]["routes"][0]["from_station"],
+                        "Galileo",
+                    )
+
+                    websocket.send_json(
+                        {
+                            "message_type": "command.dispatch_haul_loop",
+                            "message_id": "message-web-haul",
+                            "payload": {
+                                "params": {
+                                    "station_1_buying": "Agronomic Treatment",
+                                    "station_1": "Galileo",
+                                    "station_1_system": "Sol",
+                                    "station_1_on_land": "false",
+                                    "station_2": "Irkutsk",
+                                    "station_2_system": "Alioth",
+                                    "station_2_on_land": "false",
+                                },
+                                "raw_command": "web haul start Galileo -> Irkutsk",
+                            },
+                        }
+                    )
+                    dispatch_response = _receive_until_response(websocket, "message-web-haul")
+                    self.assertEqual(dispatch_response["message_type"], "response.success")
+
         self.assertEqual(len(command_handler.dispatched_hauls), 1)
         params, skip_delay, raw_command = command_handler.dispatched_hauls[0]
-        self.assertEqual(skip_delay, False)
-        self.assertEqual(raw_command, "web haul start")
-        self.assertEqual(params["station_1_on_land"], "false")
-        self.assertEqual(params["station_2_on_land"], "false")
-        self.assertEqual(params["station_2_buying"], "Gold")
-
-    def test_haul_start_api_rejects_surface_destinations(self) -> None:
-        broker = InMemoryObserverSessionBroker()
-        command_handler = _CommandHandlerRecorder()
-        app = build_observer_server_app(
-            data_provider=_base_data_read_model,
-            command_handler=command_handler,
-            broker=broker,
-            auth=SharedAccessTokenAuth("secret-token"),
+        self.assertFalse(skip_delay)
+        self.assertEqual(raw_command, "web haul start Galileo -> Irkutsk")
+        self.assertEqual(
+            params,
+            {
+                "station_1_buying": "Agronomic Treatment",
+                "station_1": "Galileo",
+                "station_1_system": "Sol",
+                "station_1_on_land": "false",
+                "station_2": "Irkutsk",
+                "station_2_system": "Alioth",
+                "station_2_on_land": "false",
+            },
         )
-
-        with TestClient(app) as client:
-            response = client.post(
-                HAUL_START_API_PATH,
-                headers={"Authorization": "Bearer secret-token"},
-                json={
-                    "params": {
-                        "station_1_buying": "Silver",
-                        "station_1": "Galileo",
-                        "station_1_system": "Sol",
-                        "station_1_on_land": "true",
-                        "station_2": "Irkutsk",
-                        "station_2_system": "Alioth",
-                    }
-                },
-            )
-
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["error_code"], "surface_destination_not_supported")
-        self.assertEqual(command_handler.dispatched_hauls, [])
 
     def test_websocket_active_operator_failover_promotes_remaining_client(self) -> None:
         broker = InMemoryObserverSessionBroker()

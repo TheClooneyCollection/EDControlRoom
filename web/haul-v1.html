@@ -1079,6 +1079,10 @@
     let routes = sampleRoutes;
     let selectedRouteIndex = 1;
     const accessToken = new URLSearchParams(window.location.search).get("access_token") || "";
+    let socket = null;
+    let clientRole = "observer";
+    let commandSequence = 1;
+    const pendingCommands = new Map();
 
     function routeByIndex(index) {
       return routes.find((route) => route.index === index) || routes[0] || null;
@@ -1092,36 +1096,6 @@
         "\"": "&quot;",
         "'": "&#39;"
       }[char]));
-    }
-
-    function apiHeaders() {
-      const headers = { "Content-Type": "application/json" };
-      if (accessToken) {
-        headers.Authorization = `Bearer ${accessToken}`;
-      }
-      return headers;
-    }
-
-    async function postJson(path, body) {
-      const response = await fetch(path, {
-        method: "POST",
-        headers: apiHeaders(),
-        body: JSON.stringify(body)
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload.error_message || `Request failed: ${response.status}`);
-      }
-      return payload;
-    }
-
-    async function getJson(path) {
-      const response = await fetch(path, { headers: apiHeaders() });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload.error_message || `Request failed: ${response.status}`);
-      }
-      return payload;
     }
 
     function routeFromApi(route, fallbackIndex) {
@@ -1150,6 +1124,106 @@
 
     function setResultCount(text) {
       document.getElementById("result-count").textContent = text;
+    }
+
+    function isSocketReady() {
+      return socket && socket.readyState === WebSocket.OPEN;
+    }
+
+    function updateOperatorState() {
+      const active = clientRole === "active_operator";
+      document.getElementById("start-haul").disabled = !active || !routeByIndex(selectedRouteIndex);
+      document.querySelector("#search-form .btn.primary").disabled = !active;
+      if (!accessToken) {
+        setResultCount("Backend token required");
+      } else if (!isSocketReady()) {
+        setResultCount("Connecting to backend...");
+      } else if (!active) {
+        setResultCount("Active operator required");
+      } else if (routes.length) {
+        setResultCount(`Found ${routes.length} station/carrier routes`);
+      }
+    }
+
+    function sendCommand(messageType, payload) {
+      if (!isSocketReady()) {
+        return Promise.reject(new Error("Websocket is not connected."));
+      }
+      const messageId = `web-haul-${commandSequence++}`;
+      const message = {
+        message_type: messageType,
+        message_id: messageId,
+        payload
+      };
+      return new Promise((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+          pendingCommands.delete(messageId);
+          reject(new Error("Timed out waiting for backend response."));
+        }, 60000);
+        pendingCommands.set(messageId, { resolve, reject, timeout });
+        socket.send(JSON.stringify(message));
+      });
+    }
+
+    function websocketUrl() {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const params = new URLSearchParams({
+        client_name: "web-haul",
+        access_token: accessToken
+      });
+      return `${protocol}//${window.location.host}/session?${params.toString()}`;
+    }
+
+    function connectWebsocket() {
+      if (!accessToken) {
+        appendActivity("Open /haul with access_token to connect backend.", "Session", "warning");
+        updateOperatorState();
+        return;
+      }
+      socket = new WebSocket(websocketUrl());
+      socket.addEventListener("open", () => {
+        appendActivity("Websocket connected.", "Session", "success");
+        updateOperatorState();
+      });
+      socket.addEventListener("close", () => {
+        clientRole = "observer";
+        appendActivity("Websocket disconnected.", "Session", "warning");
+        updateOperatorState();
+      });
+      socket.addEventListener("error", () => {
+        appendActivity("Websocket error.", "Session", "warning");
+      });
+      socket.addEventListener("message", (event) => {
+        const message = JSON.parse(event.data);
+        if (message.message_type === "event.connection_ready") {
+          clientRole = message.payload.client_role || "observer";
+          appendActivity(`Connected as ${clientRole.replace("_", " ")}.`, "Session", "success");
+          updateOperatorState();
+          return;
+        }
+        if (message.message_type === "event.active_operator_changed") {
+          clientRole = message.payload.active_operator_client_name === "web-haul"
+            ? "active_operator"
+            : "observer";
+          updateOperatorState();
+          return;
+        }
+        if (message.message_type === "control_room.hydrate") {
+          applyHydratePayload(message.payload || {});
+          return;
+        }
+        const pending = pendingCommands.get(message.correlation_message_id);
+        if (!pending) {
+          return;
+        }
+        window.clearTimeout(pending.timeout);
+        pendingCommands.delete(message.correlation_message_id);
+        if (message.message_type === "response.error") {
+          pending.reject(new Error(message.payload.error_message || "Backend command failed."));
+        } else {
+          pending.resolve(message.payload);
+        }
+      });
     }
 
     function appendActivity(text, label, badgeClass = "neutral") {
@@ -1204,7 +1278,7 @@
         startButton.disabled = true;
         return;
       }
-      startButton.disabled = false;
+      startButton.disabled = clientRole !== "active_operator";
       document.getElementById("selected-title").textContent =
         `${route.buySystem} (${route.buyStation}) -> ${route.sellSystem} (${route.sellStation})`;
       document.getElementById("selected-stats").innerHTML = `
@@ -1246,31 +1320,22 @@
         Object.entries(params).map(([key, value]) => `  ${key}=${value}`).join("\n");
     }
 
-    async function hydrateSummary() {
-      if (!accessToken) {
-        return;
+    function applyHydratePayload(payload) {
+      const ship = payload.ship || {};
+      const market = payload.market || {};
+      const haulSession = payload.haul_session || {};
+      document.getElementById("summary-current").textContent =
+        market.station || ship.station || ship.system || "-";
+      document.getElementById("summary-home").textContent = ship.system || "-";
+      document.getElementById("summary-destination").textContent = ship.destination_system || "-";
+      document.getElementById("summary-cargo").textContent =
+        `${ship.cargo_count || 0} / ${ship.cargo_capacity || 0} t`;
+      document.getElementById("summary-runs").textContent = haulSession.completed_runs || 0;
+      if (ship.system) {
+        document.getElementById("origin").value = ship.system;
       }
-      try {
-        const message = await getJson("/hydrate");
-        const payload = message.payload || {};
-        const ship = payload.ship || {};
-        const market = payload.market || {};
-        const haulSession = payload.haul_session || {};
-        document.getElementById("summary-current").textContent =
-          market.station || ship.station || ship.system || "-";
-        document.getElementById("summary-home").textContent = ship.system || "-";
-        document.getElementById("summary-destination").textContent = ship.destination_system || "-";
-        document.getElementById("summary-cargo").textContent =
-          `${ship.cargo_count || 0} / ${ship.cargo_capacity || 0} t`;
-        document.getElementById("summary-runs").textContent = haulSession.completed_runs || 0;
-        if (ship.system) {
-          document.getElementById("origin").value = ship.system;
-        }
-        if (ship.cargo_capacity) {
-          document.getElementById("capacity").value = ship.cargo_capacity;
-        }
-      } catch (error) {
-        appendActivity(error.message, "Hydrate", "warning");
+      if (ship.cargo_capacity) {
+        document.getElementById("capacity").value = ship.cargo_capacity;
       }
     }
 
@@ -1291,6 +1356,11 @@
         appendActivity("Open /haul with access_token to search live routes.", "Search", "warning");
         return;
       }
+      if (clientRole !== "active_operator") {
+        setResultCount("Active operator required");
+        appendActivity("Only the active operator can search routes.", "Search", "warning");
+        return;
+      }
       setResultCount("Searching station/carrier routes...");
       const body = {
         origin: document.getElementById("origin").value,
@@ -1300,14 +1370,15 @@
         max_station_distance_ls: document.getElementById("station-distance").value,
         metric: document.getElementById("metric").value
       };
-      postJson("/api/haul/search", body)
+      sendCommand("command.search_haul_routes", body)
         .then((payload) => {
-          routes = (payload.routes || []).map(routeFromApi);
+          const result = payload.result || {};
+          routes = (result.routes || []).map(routeFromApi);
           selectedRouteIndex = routes[0] ? routes[0].index : 0;
           renderRows();
           renderSelected();
-          setResultCount(`Found ${payload.route_count || 0} station/carrier routes`);
-          appendActivity(`Route search returned ${payload.route_count || 0} result(s).`, "Search", "success");
+          setResultCount(`Found ${result.route_count || 0} station/carrier routes`);
+          appendActivity(`Route search returned ${result.route_count || 0} result(s).`, "Search", "success");
         })
         .catch((error) => {
           setResultCount("Search failed");
@@ -1334,8 +1405,12 @@
         appendActivity("Open /haul with access_token to start haul.", "Haul", "warning");
         return;
       }
+      if (clientRole !== "active_operator") {
+        appendActivity("Only the active operator can start haul.", "Haul", "warning");
+        return;
+      }
       const params = selectedHaulParams();
-      postJson("/api/haul/start", {
+      sendCommand("command.dispatch_haul_loop", {
         params,
         raw_command: `web haul start ${route.buyStation} -> ${route.sellStation}`
       })
@@ -1352,7 +1427,7 @@
 
     renderRows();
     renderSelected();
-    hydrateSummary();
+    connectWebsocket();
   </script>
 </body>
 </html>

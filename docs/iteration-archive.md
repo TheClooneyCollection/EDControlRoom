@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `194`
-- Latest generated iteration number: `327`
+- Generated iteration count: `195`
+- Latest generated iteration number: `328`
 
 ## Iteration 134
 
@@ -5392,3 +5392,32 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-check `/haul?access_token=...` against a running server with the real Inara browser profile before treating the web search flow as operator-validated.
+
+## Iteration 328
+
+- When: `2026-07-04 09:09`
+- Area: `web`
+- Title: `move-haul-actions-to-websocket`
+- Source: [2026-07-04-09-09_____web______move-haul-actions-to-websocket.md](iteration-logs/2026-07-04-09-09_____web______move-haul-actions-to-websocket.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `move-haul-actions-to-websocket`
+- Started: `2026-07-04 09:09`
+
+## Summary
+
+- Removed Haul web action REST endpoints and moved browser search/start behavior onto the existing websocket session.
+
+## Changes
+
+- Removed `/api/haul/search` and `/api/haul/start` from the Starlette app; only `GET /haul` remains for serving the page.
+- Added websocket `command.search_haul_routes` to the advertised protocol capabilities and JSON schema.
+- Routed `command.search_haul_routes` through the websocket session handler, returning serialized route results in `response.success.result`.
+- Updated `web/haul-v1.html` to consume initial/live hydrate data from websocket messages and send both search and `command.dispatch_haul_loop` through `/session`.
+- Updated server tests to assert the old REST action endpoints return 404 and cover websocket search plus dispatch from a browser-style session.
+
+## Follow-ups
+
+- Live-check `/haul?access_token=...` against a running server and real Inara profile to validate websocket search latency and operator-role behavior.
