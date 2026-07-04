@@ -855,11 +855,11 @@
               <form class="form-grid" id="search-form">
                 <label>
                   <span class="field-label">Origin system</span>
-                  <input class="field" id="origin" value="Sol" autocomplete="off">
+                  <input class="field" id="origin" value="" placeholder="Current system" autocomplete="off">
                 </label>
                 <label>
                   <span class="field-label">Destination system or station</span>
-                  <input class="field" id="destination" value="Alioth" autocomplete="off">
+                  <input class="field" id="destination" value="" autocomplete="off">
                 </label>
                 <div class="field-row">
                   <label>
@@ -1065,6 +1065,7 @@
     let socket = null;
     let clientRole = "observer";
     let commandSequence = 1;
+    let hydratedCurrentSystem = "";
     const pendingCommands = new Map();
     const activityEntries = new Map();
 
@@ -1440,7 +1441,8 @@
         `${ship.cargo_count || 0} / ${ship.cargo_capacity || 0} t`;
       document.getElementById("summary-runs").textContent = haulSession.completed_runs || 0;
       if (ship.system) {
-        document.getElementById("origin").value = ship.system;
+        hydratedCurrentSystem = ship.system;
+        document.getElementById("origin").value = hydratedCurrentSystem;
       }
       if (ship.cargo_capacity) {
         document.getElementById("capacity").value = ship.cargo_capacity;
@@ -1500,8 +1502,8 @@
     });
 
     document.getElementById("reset-search").addEventListener("click", () => {
-      document.getElementById("origin").value = "Sol";
-      document.getElementById("destination").value = "Alioth";
+      document.getElementById("origin").value = hydratedCurrentSystem;
+      document.getElementById("destination").value = "";
       document.getElementById("route-distance").value = "500 ly";
       document.getElementById("station-distance").value = "Any";
       document.getElementById("capacity").value = "784";
