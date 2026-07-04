@@ -273,6 +273,24 @@
       opacity: 0.45;
     }
 
+    .reconnect-button {
+      height: 30px;
+      border: 1px solid rgba(91, 141, 214, 0.7);
+      border-radius: 999px;
+      background: var(--blue-dim);
+      color: var(--blue);
+      padding: 0 10px;
+      font-size: 11.5px;
+      font-weight: 650;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .reconnect-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+
     .token-control {
       display: grid;
       grid-template-columns: 150px auto;
@@ -379,6 +397,53 @@
       max-width: 760px;
       color: var(--text-2);
       font-size: 12.5px;
+    }
+
+    .connection-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      border: 1px solid rgba(232, 145, 43, 0.55);
+      border-radius: var(--radius);
+      background: var(--amber-dim);
+      padding: 11px 12px;
+      margin-bottom: 16px;
+    }
+
+    .connection-banner.hidden {
+      display: none;
+    }
+
+    .connection-banner.danger {
+      border-color: rgba(214, 91, 91, 0.65);
+      background: var(--red-dim);
+    }
+
+    .connection-banner.connecting {
+      border-color: rgba(91, 141, 214, 0.7);
+      background: var(--blue-dim);
+    }
+
+    .connection-title {
+      font-size: 11.5px;
+      font-weight: 650;
+      text-transform: uppercase;
+      color: var(--amber);
+    }
+
+    .connection-banner.danger .connection-title {
+      color: var(--red);
+    }
+
+    .connection-banner.connecting .connection-title {
+      color: var(--blue);
+    }
+
+    .connection-text {
+      margin-top: 3px;
+      color: var(--text-2);
+      font-size: 11.5px;
     }
 
     .summary-strip {
@@ -906,6 +971,7 @@
             <input class="token-input" id="access-token" type="password" placeholder="Access token" autocomplete="off" aria-label="Access token">
             <button class="token-button" id="save-token" type="button">Save</button>
           </div>
+          <button class="reconnect-button" id="reconnect-websocket" type="button">Reconnect</button>
           <button class="mode-toggle" id="instant-toggle" type="button" aria-pressed="false">Instant off</button>
           <div class="stop-controls" aria-label="Routine stop controls">
             <button class="stop-button secondary" id="stop-after-run" type="button">Stop after run</button>
@@ -923,6 +989,14 @@
             </div>
           </div>
         </div>
+
+        <section class="connection-banner hidden" id="connection-banner" aria-live="polite">
+          <div>
+            <div class="connection-title" id="connection-title">Connection issue</div>
+            <div class="connection-text" id="connection-message">Websocket disconnected.</div>
+          </div>
+          <button class="reconnect-button" id="connection-reconnect" type="button">Reconnect now</button>
+        </section>
 
         <section class="summary-strip" aria-label="Current haul summary">
           <div class="summary-cell">
@@ -1140,6 +1214,8 @@
     let hasSearchedRoutes = false;
     let routePage = 1;
     const ROUTES_PER_PAGE = 12;
+    const RECONNECT_INITIAL_DELAY_MS = 1000;
+    const RECONNECT_MAX_DELAY_MS = 30000;
     const TOKEN_STORAGE_KEY = "edcr.haul.accessToken";
     const SERVER_DEFAULT_ACCESS_TOKEN = "";
     const queryAccessToken = new URLSearchParams(window.location.search).get("access_token") || "";
@@ -1150,6 +1226,11 @@
     let commandSequence = 1;
     let hydratedCurrentSystem = "";
     let currentRoutine = {};
+    let reconnectDelayMs = RECONNECT_INITIAL_DELAY_MS;
+    let reconnectTimer = null;
+    let reconnectCountdownTimer = null;
+    let reconnectDeadlineMs = 0;
+    let reconnectAttempts = 0;
     const pendingCommands = new Map();
     const activityEntries = new Map();
 
@@ -1202,6 +1283,77 @@
       return socket && socket.readyState === WebSocket.OPEN;
     }
 
+    function setConnectionBanner(state, title, message) {
+      const banner = document.getElementById("connection-banner");
+      banner.classList.toggle("hidden", state === "connected");
+      banner.classList.toggle("danger", state === "danger");
+      banner.classList.toggle("connecting", state === "connecting");
+      document.getElementById("connection-title").textContent = title;
+      document.getElementById("connection-message").textContent = message;
+    }
+
+    function clearReconnectTimer({ resetBackoff = false } = {}) {
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      if (reconnectCountdownTimer !== null) {
+        window.clearInterval(reconnectCountdownTimer);
+        reconnectCountdownTimer = null;
+      }
+      reconnectDeadlineMs = 0;
+      if (resetBackoff) {
+        reconnectDelayMs = RECONNECT_INITIAL_DELAY_MS;
+        reconnectAttempts = 0;
+      }
+    }
+
+    function resetConnectionRecovery() {
+      clearReconnectTimer({ resetBackoff: true });
+      setConnectionBanner("connected", "Connected", "Websocket connected.");
+    }
+
+    function updateReconnectBanner(reason) {
+      const remainingSeconds = Math.max(1, Math.ceil((reconnectDeadlineMs - Date.now()) / 1000));
+      setConnectionBanner(
+        "danger",
+        "Connection issue",
+        `${reason} Retrying in ${remainingSeconds}s (attempt ${reconnectAttempts}).`
+      );
+    }
+
+    function scheduleReconnect(reason) {
+      if (!accessToken) {
+        setConnectionBanner("danger", "Access token required", "Enter the shared access token to reconnect.");
+        return;
+      }
+      if (reconnectTimer !== null) {
+        updateReconnectBanner(reason);
+        return;
+      }
+      const delayMs = reconnectDelayMs;
+      reconnectDelayMs = Math.min(reconnectDelayMs * 2, RECONNECT_MAX_DELAY_MS);
+      reconnectAttempts += 1;
+      reconnectDeadlineMs = Date.now() + delayMs;
+      updateReconnectBanner(reason);
+      reconnectCountdownTimer = window.setInterval(() => updateReconnectBanner(reason), 1000);
+      reconnectTimer = window.setTimeout(() => {
+        clearReconnectTimer();
+        connectWebsocket({ automatic: true });
+      }, delayMs);
+    }
+
+    function reconnectNow() {
+      if (!accessToken) {
+        showAccessTokenPrompt("Enter the shared access token for this server.");
+        setConnectionBanner("danger", "Access token required", "Enter the shared access token to reconnect.");
+        return;
+      }
+      appendActivity("Manual websocket reconnect requested.", "Session", "warning");
+      clearReconnectTimer({ resetBackoff: true });
+      connectWebsocket({ manual: true });
+    }
+
     function updateOperatorState() {
       const active = clientRole === "active_operator";
       const routineActive = Boolean(currentRoutine.routine_active);
@@ -1215,6 +1367,8 @@
       instantToggle.setAttribute("aria-pressed", instantMode ? "true" : "false");
       document.getElementById("stop-after-run").disabled = !active || !routineActive;
       document.getElementById("stop-now").disabled = !active || !routineActive;
+      document.getElementById("reconnect-websocket").disabled = !accessToken;
+      document.getElementById("connection-reconnect").disabled = !accessToken;
       document.querySelector("#search-form .btn.primary").disabled = !active;
       document.getElementById("access-token").value = accessToken;
       if (!accessToken) {
@@ -1230,6 +1384,8 @@
 
     function sendCommand(messageType, payload) {
       if (!isSocketReady()) {
+        setConnectionBanner("danger", "Disconnected", "Websocket is not connected. Wait for retry or reconnect now.");
+        scheduleReconnect("Websocket is not connected.");
         return Promise.reject(new Error("Websocket is not connected."));
       }
       const messageId = `web-haul-${commandSequence++}`;
@@ -1267,35 +1423,52 @@
       existingSocket.close();
     }
 
-    function connectWebsocket() {
+    function connectWebsocket({ automatic = false, manual = false } = {}) {
       if (!accessToken) {
+        clearReconnectTimer({ resetBackoff: true });
+        setConnectionBanner("danger", "Access token required", "Enter the shared access token to connect.");
         showAccessTokenPrompt("Enter the shared access token for this server.");
         appendActivity("Set an access token to connect backend.", "Session", "warning");
         updateOperatorState();
         return;
       }
       disconnectWebsocket();
+      setConnectionBanner(
+        "connecting",
+        automatic ? "Reconnecting" : "Connecting",
+        manual ? "Manual websocket reconnect in progress." : "Opening websocket session."
+      );
+      updateOperatorState();
       socket = new WebSocket(websocketUrl());
       let receivedConnectionReady = false;
       socket.addEventListener("open", () => {
         appendActivity("Websocket connected.", "Session", "success");
+        resetConnectionRecovery();
         updateOperatorState();
       });
       socket.addEventListener("close", (event) => {
         if (event.currentTarget.edcrIntentionalClose) {
           return;
         }
+        if (socket === event.currentTarget) {
+          socket = null;
+        }
         clientRole = "observer";
-        if (accessToken && (event.code === 4401 || !receivedConnectionReady)) {
+        if (accessToken && event.code === 4401) {
+          clearReconnectTimer({ resetBackoff: true });
           handleAccessTokenRejected();
           updateOperatorState();
           return;
         }
-        appendActivity("Websocket disconnected.", "Session", "warning");
+        const reason = receivedConnectionReady ? "Websocket disconnected." : "Unable to open websocket session.";
+        appendActivity(reason, "Session", "warning");
+        scheduleReconnect(reason);
         updateOperatorState();
       });
       socket.addEventListener("error", () => {
         appendActivity("Websocket error.", "Session", "warning");
+        setConnectionBanner("danger", "Websocket error", "The websocket reported an error. Retrying after disconnect.");
+        scheduleReconnect("Websocket error.");
       });
       socket.addEventListener("message", (event) => {
         const message = JSON.parse(event.data);
@@ -1375,11 +1548,13 @@
     }
 
     function handleAccessTokenRejected() {
+      clearReconnectTimer({ resetBackoff: true });
       accessToken = "";
       window.localStorage.removeItem(TOKEN_STORAGE_KEY);
       document.getElementById("access-token").value = "";
       document.getElementById("prompt-access-token").value = "";
       appendActivity("Access token rejected by backend. Enter the shared token for this server.", "Session", "warning");
+      setConnectionBanner("danger", "Access token rejected", "Enter the shared token for this server.");
       showAccessTokenPrompt("Access token rejected. Enter the shared token for this server.", "warning");
     }
 
@@ -1839,6 +2014,8 @@
     document.getElementById("galaxy-settle").addEventListener("input", updateCommandPreview);
     document.getElementById("dock-timeout").addEventListener("input", updateCommandPreview);
     document.getElementById("save-token").addEventListener("click", saveAccessToken);
+    document.getElementById("reconnect-websocket").addEventListener("click", reconnectNow);
+    document.getElementById("connection-reconnect").addEventListener("click", reconnectNow);
     document.getElementById("connect-token-prompt").addEventListener("click", submitAccessTokenPrompt);
     document.getElementById("cancel-token-prompt").addEventListener("click", closeAccessTokenPrompt);
     document.getElementById("prompt-access-token").addEventListener("keydown", (event) => {

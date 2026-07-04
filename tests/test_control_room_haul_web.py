@@ -29,3 +29,16 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn("currentRoutine.instant_mode", html)
         self.assertIn('sendCommand("command.submit_input"', html)
         self.assertIn("raw_input: `instant ${nextMode}`", html)
+
+    def test_haul_web_exposes_connection_error_recovery_ui(self) -> None:
+        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+
+        self.assertIn('id="connection-banner"', html)
+        self.assertIn('id="reconnect-websocket"', html)
+        self.assertIn('id="connection-reconnect"', html)
+        self.assertIn("const RECONNECT_INITIAL_DELAY_MS = 1000", html)
+        self.assertIn("const RECONNECT_MAX_DELAY_MS = 30000", html)
+        self.assertIn("function scheduleReconnect(reason)", html)
+        self.assertIn("Math.min(reconnectDelayMs * 2, RECONNECT_MAX_DELAY_MS)", html)
+        self.assertIn("event.code === 4401", html)
+        self.assertNotIn("|| !receivedConnectionReady", html)
