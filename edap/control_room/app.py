@@ -54,6 +54,7 @@ from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
 from textual.app import ScreenStackError
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.events import MouseScrollDown, MouseScrollUp
 from textual.widgets import Footer, Header, Input, OptionList, RichLog, Static, Tab, Tabs
@@ -328,9 +329,9 @@ class ActivityLog(RichLog):
 
 class ControlRoomApp(App[None]):
     BINDINGS = [
-        ("ctrl+c", "request_interrupt", "Interrupt"),
-        ("ctrl+d", "request_exit", "Exit"),
-        ("ctrl+r", "open_history", "History"),
+        Binding("ctrl+c", "request_interrupt", "Interrupt", priority=True),
+        Binding("ctrl+d", "request_exit", "Exit", priority=True),
+        Binding("ctrl+r", "open_history", "History"),
     ]
 
     CSS = """
@@ -902,8 +903,9 @@ class ControlRoomApp(App[None]):
         self._runtime_state.haul_paused = data.routine.haul_paused
         self._runtime_state.verbose_controls = data.routine.verbose_controls
         self._runtime_state.instant_mode = data.routine.instant_mode
-        self._runtime_state.shutdown_requested = data.routine.shutdown_requested
-        self._runtime_state.shutdown_finalized = data.routine.shutdown_finalized
+        if not self._backend.exit_detaches_remote_session():
+            self._runtime_state.shutdown_requested = data.routine.shutdown_requested
+            self._runtime_state.shutdown_finalized = data.routine.shutdown_finalized
         self._runtime_state.haul_phase = data.routine.haul_phase
         self._runtime_state.haul_phase_station_index = data.routine.haul_phase_station_index
         self._saved_state.default_haul = dict(data.command_history.default_haul)
@@ -1672,15 +1674,16 @@ class ControlRoomApp(App[None]):
 
     def action_request_exit(self) -> None:
         if self._exit_prompt_active:
+            self._handle_exit_prompt_input("")
+            return
+        if self._should_prompt_remote_exit():
+            self._start_remote_exit_prompt()
             return
         if not self._exit_requested_once:
             self._exit_requested_once = True
             self._log("[yellow]Ctrl-D received — press Ctrl-D again to exit control room.[/]")
             return
         self._exit_requested_once = False
-        if self._should_prompt_remote_exit():
-            self._start_remote_exit_prompt()
-            return
         self._request_shutdown("Ctrl-D")
 
     def request_sigint(self) -> None:
@@ -1878,6 +1881,7 @@ class ControlRoomApp(App[None]):
         )
 
     def _start_remote_exit_prompt(self) -> None:
+        self._exit_requested_once = False
         self._exit_prompt_active = True
         self._log(
             "[yellow]Remote routine still running — Enter exits this client and leaves it running; "
@@ -1997,11 +2001,11 @@ class ControlRoomApp(App[None]):
             event.prevent_default()
             self.action_open_history()
             return
-        if event.key == "ctrl+d":
+        if event.key == "ctrl+d" or event.character == "\x04":
             event.prevent_default()
             self.action_request_exit()
             return
-        if event.key == "ctrl+c":
+        if event.key == "ctrl+c" or event.character == "\x03":
             event.prevent_default()
             self.action_request_interrupt()
             return

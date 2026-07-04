@@ -754,13 +754,30 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertTrue(self.app._shutdown_requested)
         self.assertEqual(self.app.exit_calls, 1)
 
+    def test_interrupt_and_exit_bindings_take_priority_over_command_input(self) -> None:
+        bindings = {binding.key: binding for binding in self.app.BINDINGS}
+
+        self.assertTrue(bindings["ctrl+c"].priority)
+        self.assertTrue(bindings["ctrl+d"].priority)
+
+    def test_ctrl_d_raw_character_requests_exit(self) -> None:
+        first_event = _KeyEventStub("eof", character="\x04")
+        second_event = _KeyEventStub("eof", character="\x04")
+
+        self.app.on_key(first_event)
+        self.app.on_key(second_event)
+
+        self.assertTrue(first_event.prevented)
+        self.assertTrue(second_event.prevented)
+        self.assertTrue(self.app._shutdown_requested)
+        self.assertEqual(self.app.exit_calls, 1)
+
     def test_remote_exit_prompt_defaults_to_detach_without_cancelling(self) -> None:
         backend = _RemoteBackendStub()
         app = _HarnessApp(_make_context(Path(self.tmpdir.name)))
         app._backend = backend
         app._routine_active = True
 
-        app.action_request_exit()
         app.action_request_exit()
 
         self.assertTrue(app._exit_prompt_active)
@@ -769,7 +786,7 @@ class ControlRoomCommandTests(unittest.TestCase):
             "Enter = leave routine running | cancel = stop routine and exit | no = stay",
         )
 
-        app._handle_exit_prompt_input("")
+        app.action_request_exit()
 
         self.assertEqual(backend.interrupt_calls, 0)
         self.assertTrue(app._shutdown_requested)
@@ -781,7 +798,6 @@ class ControlRoomCommandTests(unittest.TestCase):
         app._backend = backend
         app._routine_active = True
 
-        app.action_request_exit()
         app.action_request_exit()
         app._handle_exit_prompt_input("cancel")
 
@@ -795,7 +811,6 @@ class ControlRoomCommandTests(unittest.TestCase):
         app._backend = backend
         app._routine_active = True
 
-        app.action_request_exit()
         app.action_request_exit()
         app._handle_exit_prompt_input("no")
 

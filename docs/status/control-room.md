@@ -10,7 +10,7 @@
 - Market panel lock semantics are aligned across embedded and `connect`: `market lock` pins the displayed panel to the current market identity, same-market updates still render, and different-market data is held back until unlock.
 - `set_pid` and `set_hwnd` are available operator commands; bare forms auto-target `EliteDangerous64.exe`, explicit pid/hwnd values are accepted, and `foreground` clears the override.
 - Cargo and haul session state are journal-driven: cargo manifest reads retry around transient empty `Cargo.json`, market buy/sell resync cargo, persisted haul totals survive relaunch unless configured otherwise, paused hauls freeze session/current-run timers at station boundaries, and hydrate read models export elapsed haul durations instead of process-local timer origins for remote clients.
-- Remote observer clients can start without a local Elite journal path and reconnect with exponential backoff; websocket recovery relies on server hydrate messages.
+- Remote observer clients can start without a local Elite journal path and reconnect with exponential backoff; websocket recovery relies on server hydrate messages, while client shutdown state stays local, priority `Ctrl-C`/`Ctrl-D` bindings avoid command-input collisions, and remote-active `Ctrl-D` opens the detach prompt then exits the client on the next press without cancelling the server routine.
 - Control Room supports `home` / `home set`, `dest home`, repo-local `haul load [path]`, replay/edit prefill for multi-step haul prompts, and failure messages with `Failed:` plus `Try:` guidance.
 ## Caveats
 - Known live-only connect bug: after `haul search <system>`, the observer can show the correct placeholder but an empty command bar instead of the serialized search params.

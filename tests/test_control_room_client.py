@@ -374,6 +374,40 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertIn("13:54:34  Unknown command: dest sol", rendered_messages[0])
         self.assertIn("dest - dest <system>", rendered_messages[-1])
 
+    def test_observer_app_keeps_shutdown_state_client_local_on_data_refresh(self) -> None:
+        data = _data_read_model()
+        server_shutdown_data = replace(
+            data,
+            routine=replace(
+                data.routine,
+                shutdown_requested=True,
+                shutdown_finalized=True,
+            ),
+        )
+        app = self._app()
+        _bind_observer_widgets(app, _FakeInputWidget())
+
+        app._apply_data_state(server_shutdown_data, replace_activity=True)
+
+        self.assertFalse(app._shutdown_requested)
+        self.assertFalse(app._shutdown_finalized)
+
+        app._shutdown_requested = True
+        app._shutdown_finalized = True
+        server_running_data = replace(
+            data,
+            routine=replace(
+                data.routine,
+                shutdown_requested=False,
+                shutdown_finalized=False,
+            ),
+        )
+
+        app._apply_data_state(server_running_data, replace_activity=True)
+
+        self.assertTrue(app._shutdown_requested)
+        self.assertTrue(app._shutdown_finalized)
+
     def test_observer_app_preserves_observed_activity_order_on_refresh(self) -> None:
         remote_activity = [
             ActivityLogEntry(
