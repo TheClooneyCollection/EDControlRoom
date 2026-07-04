@@ -288,7 +288,7 @@ def market_panel_markup(view_model: MarketPanelViewModel) -> str:
             "Dock at a station and open\nthe market screen in-game."
         )
 
-    lock_tag = "  [dim]\\[LOCKED][/]" if market.locked else ""
+    lock_tag = "  [dim]\\[PINNED][/]" if market.locked else ""
     header = (
         f"[bold]{escape(market.station)}[/] / {escape(market.system)}{lock_tag}\n"
         f"[dim]{escape(market.timestamp)}[/]"

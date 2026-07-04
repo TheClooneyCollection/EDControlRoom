@@ -20,7 +20,7 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
     def test_hydrate_message_wraps_data_source_read_model(self) -> None:
         app = SimpleNamespace(
             _ship=ShipState(system="Sol"),
-            _market=MarketData(station="Galileo"),
+            _market=MarketData(station="Galileo", market_id=3229359104),
             _haul_stats=HaulStats(
                 completed_runs=3,
                 session_started_at=50.0,
@@ -52,6 +52,7 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
         self.assertTrue(is_control_room_data_message(message))
         self.assertEqual(message["payload"]["ship"]["system"], "Sol")
         self.assertEqual(message["payload"]["market"]["station"], "Galileo")
+        self.assertEqual(message["payload"]["market"]["market_id"], 3229359104)
         self.assertEqual(message["payload"]["haul_session"]["completed_runs"], 3)
         self.assertIsNone(message["payload"]["haul_session"]["session_started_at"])
         self.assertEqual(message["payload"]["haul_session"]["session_elapsed_s"], 75.0)
@@ -64,6 +65,7 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
 
         self.assertEqual(parsed.ship.system, "Sol")
         self.assertEqual(parsed.market.station, "Galileo")
+        self.assertEqual(parsed.market.market_id, 3229359104)
         self.assertEqual(parsed.haul_session.completed_runs, 3)
         self.assertIsNone(parsed.haul_session.session_started_at)
         self.assertEqual(parsed.haul_session.session_elapsed_s, 75.0)

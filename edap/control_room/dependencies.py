@@ -258,6 +258,7 @@ def _copy_market_data(market: MarketData) -> MarketData:
         station=market.station,
         system=market.system,
         timestamp=market.timestamp,
+        market_id=market.market_id,
         items=list(market.items),
         locked=market.locked,
     )

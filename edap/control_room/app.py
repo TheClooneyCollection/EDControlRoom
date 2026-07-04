@@ -25,8 +25,8 @@ Routine commands (type in the input bar):
 Market commands:
     market filter <name>   filter market panel by commodity name (e.g. market filter aluminium)
     market [clear]         clear the filter (default when no args)
-    market lock            freeze panel to current station
-    market unlock          unfreeze panel
+    market lock            pin panel to current market
+    market unlock          follow latest market
 
 Other:
     commands           list supported commands
@@ -901,6 +901,7 @@ class ControlRoomApp(App[None]):
             station=data.market.station,
             system=data.market.system,
             timestamp=data.market.timestamp,
+            market_id=data.market.market_id,
             items=list(data.market.items),
             locked=self._market.locked,
         )
@@ -1321,22 +1322,38 @@ class ControlRoomApp(App[None]):
             station=self._presented_market.station,
             system=self._presented_market.system,
             timestamp=self._presented_market.timestamp,
+            market_id=self._presented_market.market_id,
             items=list(self._presented_market.items),
             locked=self._presented_market.locked,
         )
 
     def _sync_presented_market_from_current_data(self, *, force: bool = False) -> None:
         market = self._dependencies.data_source.current().market
-        if not self._market.locked or force:
+        if (
+            not self._market.locked
+            or force
+            or self._market_identity(market) == self._market_identity(self._presented_market)
+        ):
             self._presented_market = MarketData(
                 station=market.station,
                 system=market.system,
                 timestamp=market.timestamp,
+                market_id=market.market_id,
                 items=list(market.items),
                 locked=self._market.locked,
             )
             return
         self._presented_market.locked = True
+
+    @staticmethod
+    def _market_identity(market: MarketData) -> tuple[object, ...] | None:
+        if market.market_id is not None:
+            return ("market_id", market.market_id)
+        station = market.station.strip().lower()
+        system = market.system.strip().lower()
+        if station and station != "?" and system and system != "?":
+            return ("station_system", station, system)
+        return None
 
     def _status_panel_view_model(self) -> _view_models.StatusPanelViewModel:
         return _view_models.status_panel_view_model(

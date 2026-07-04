@@ -76,7 +76,7 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
         name="market",
         usage="market | market clear | market filter <name> | market lock | market unlock",
         summary="Control the market panel filter and lock state.",
-        detail="Use 'market filter <name>' to filter visible items, 'market' or 'market clear' to remove the filter, 'market lock' to freeze the currently displayed market panel while fresh market data continues loading in the background, and 'market unlock' to resume showing the latest loaded market data.",
+        detail="Use 'market filter <name>' to filter visible items, 'market' or 'market clear' to remove the filter, 'market lock' to pin the panel to the currently displayed market while updates for that same market continue flowing in, and 'market unlock' to resume following the latest loaded market.",
     ),
     CommandHelp(
         name="verbose",

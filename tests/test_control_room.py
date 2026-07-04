@@ -954,6 +954,20 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertIn("SELL TO MARKET", sell_markup)
         self.assertNotIn("BUY FROM MARKET", sell_markup)
 
+    def test_market_markup_labels_locked_market_as_pinned(self) -> None:
+        market = MarketData(
+            station="Pawelczyk Dock",
+            system="HIP 58412",
+            timestamp="2026-06-08T20:09:46Z",
+            items=[{"Name": "gold", "Stock": 15, "BuyPrice": 10_000}],
+            locked=True,
+        )
+
+        markup = control_room_rendering.market_markup(market, None, side="buy")
+
+        self.assertIn("\\[PINNED]", markup)
+        self.assertNotIn("\\[LOCKED]", markup)
+
     def test_fmt_cr_uses_billions_and_remaining_millions(self) -> None:
         self.assertEqual(
             control_room_rendering.fmt_cr(1_234_567_890),
@@ -3177,13 +3191,14 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertEqual(entry.command, "market")
         self.assertEqual(entry.params, {"value": "filter Aluminium"})
 
-    def test_market_lock_freezes_display_but_market_json_still_ingests(self) -> None:
+    def test_market_lock_pins_display_to_current_market_and_keeps_matching_updates(self) -> None:
         market_path = Path(self.tmpdir.name) / "Market.json"
         market_path.write_text(
             json.dumps(
                 {
                     "StationName": "Jameson Memorial",
                     "StarSystem": "Sol",
+                    "MarketID": 128666762,
                     "timestamp": "2026-06-30T12:00:00Z",
                     "Items": [{"Name": "gold", "Stock": 42}],
                 }
@@ -3201,9 +3216,32 @@ class ControlRoomDispatchTests(unittest.TestCase):
         market_path.write_text(
             json.dumps(
                 {
+                    "StationName": "Jameson Memorial",
+                    "StarSystem": "Sol",
+                    "MarketID": 128666762,
+                    "timestamp": "2026-06-30T12:01:00Z",
+                    "Items": [{"Name": "gold", "Stock": 84}],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.app._market_mtime = None
+        self.app._load_market_json()
+        self.app._sync_presented_market_from_current_data()
+
+        self.assertTrue(self.app._market.locked)
+        self.assertEqual(self.app._market.station, "Jameson Memorial")
+        self.assertEqual(self.app._market.items[0]["Stock"], 84)
+        self.assertEqual(self.app._presented_market.station, "Jameson Memorial")
+        self.assertEqual(self.app._presented_market.items[0]["Stock"], 84)
+
+        market_path.write_text(
+            json.dumps(
+                {
                     "StationName": "Galileo",
                     "StarSystem": "Sol",
-                    "timestamp": "2026-06-30T12:01:00Z",
+                    "MarketID": 3229359104,
+                    "timestamp": "2026-06-30T12:02:00Z",
                     "Items": [{"Name": "silver", "Stock": 99}],
                 }
             ),
@@ -3211,12 +3249,14 @@ class ControlRoomDispatchTests(unittest.TestCase):
         )
         self.app._market_mtime = None
         self.app._load_market_json()
+        self.app._sync_presented_market_from_current_data()
 
         self.assertTrue(self.app._market.locked)
         self.assertEqual(self.app._market.station, "Galileo")
         self.assertEqual(self.app._market.items[0]["Name"], "silver")
         self.assertEqual(self.app._presented_market.station, "Jameson Memorial")
         self.assertEqual(self.app._presented_market.items[0]["Name"], "gold")
+        self.assertEqual(self.app._presented_market.items[0]["Stock"], 84)
 
         self.app._dispatch_command("market unlock")
         self.app._sync_presented_market_from_current_data()

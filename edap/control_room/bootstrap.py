@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from edap.cargo_manifest import read_cargo_inventory
 from edap.control_room import rendering as _rendering
@@ -97,6 +97,7 @@ def load_market_json(app: BootstrapHost) -> None:
         station=station,
         system=system,
         timestamp=data.get("timestamp", ""),
+        market_id=_int_or_none(data.get("MarketID")),
         items=data.get("Items", []),
         locked=app._market.locked,
     )
@@ -108,3 +109,12 @@ def load_market_json(app: BootstrapHost) -> None:
         if not app._ship.system and market_system and market_system != "?":
             app._ship.system = market_system
     app._refresh_market()
+
+
+def _int_or_none(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None

@@ -66,7 +66,7 @@ class ControlRoomDependenciesTests(unittest.TestCase):
     def test_local_data_source_returns_copied_read_model(self) -> None:
         app = SimpleNamespace(
             _ship=ShipState(system="Sol", cargo_inventory=[{"Name": "gold"}]),
-            _market=MarketData(station="Galileo", items=[{"name": "Gold"}]),
+            _market=MarketData(station="Galileo", market_id=3229359104, items=[{"name": "Gold"}]),
             _haul_stats=HaulStats(station_1="Galileo", completed_runs=2),
             _saved_state=ControlRoomState(
                 history=[
@@ -97,6 +97,7 @@ class ControlRoomDependenciesTests(unittest.TestCase):
 
         self.assertEqual(data.ship.system, "Sol")
         self.assertEqual(data.market.station, "Galileo")
+        self.assertEqual(data.market.market_id, 3229359104)
         self.assertEqual(data.haul_session.completed_runs, 2)
         self.assertEqual(data.command_history.default_haul["station_1"], "Galileo")
         self.assertEqual(data.command_history.history_entries[0].raw, "dest sol")

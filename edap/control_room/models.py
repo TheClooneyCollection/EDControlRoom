@@ -31,6 +31,7 @@ class MarketData:
     station: str = ""
     system: str = ""
     timestamp: str = ""
+    market_id: int | None = None
     items: list[dict[str, Any]] = field(default_factory=list)
     locked: bool = False
 

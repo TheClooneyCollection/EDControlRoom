@@ -546,7 +546,7 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertTrue(any(entry.entry.raw == "haul Silver" for entry in app._resume_entries))
         self.assertTrue(backend._outgoing_messages.empty())
 
-    def test_observer_app_market_lock_unlock_are_local_display_controls(self) -> None:
+    def test_observer_app_market_lock_pins_locally_and_keeps_matching_updates(self) -> None:
         backend = self._backend()
         data_source = RemoteObserverDataSource(
             replace(
@@ -555,6 +555,7 @@ class ControlRoomClientTests(unittest.TestCase):
                     station="Jameson Memorial",
                     system="Sol",
                     timestamp="2026-06-30T12:00:00Z",
+                    market_id=128666762,
                     items=[{"Name": "gold", "Stock": 42}],
                 ),
             )
@@ -580,9 +581,26 @@ class ControlRoomClientTests(unittest.TestCase):
             replace(
                 data_source.current(),
                 market=MarketData(
-                    station="Galileo",
+                    station="Jameson Memorial",
                     system="Sol",
                     timestamp="2026-06-30T12:01:00Z",
+                    market_id=128666762,
+                    items=[{"Name": "gold", "Stock": 84}],
+                ),
+            )
+        )
+        app._apply_data_state(data_source.current(), replace_activity=False)
+        self.assertEqual(app._view_market_data().station, "Jameson Memorial")
+        self.assertEqual(app._view_market_data().items[0]["Stock"], 84)
+
+        data_source.hydrate(
+            replace(
+                data_source.current(),
+                market=MarketData(
+                    station="Galileo",
+                    system="Sol",
+                    timestamp="2026-06-30T12:02:00Z",
+                    market_id=3229359104,
                     items=[{"Name": "silver", "Stock": 99}],
                 ),
             )
@@ -590,6 +608,7 @@ class ControlRoomClientTests(unittest.TestCase):
         app._apply_data_state(data_source.current(), replace_activity=False)
         self.assertEqual(app._view_market_data().station, "Jameson Memorial")
         self.assertEqual(app._view_market_data().items[0]["Name"], "gold")
+        self.assertEqual(app._view_market_data().items[0]["Stock"], 84)
 
         app.on_input_submitted(_Submitted("market unlock"))
         self.assertFalse(app._market.locked)

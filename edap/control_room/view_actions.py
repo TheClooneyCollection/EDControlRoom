@@ -78,12 +78,12 @@ class MarketPanelViewActions:
 
     def lock_display(self) -> None:
         self._dependencies.set_display_locked(True)
-        self._dependencies.append_notice("Market panel locked.")
+        self._dependencies.append_notice("Market panel pinned.")
         self._dependencies.market_changed()
 
     def unlock_display(self) -> None:
         self._dependencies.set_display_locked(False)
-        self._dependencies.append_notice("Market panel unlocked.")
+        self._dependencies.append_notice("Market panel following latest market.")
         self._dependencies.market_changed()
 
     def set_filter(self, value: str) -> None:

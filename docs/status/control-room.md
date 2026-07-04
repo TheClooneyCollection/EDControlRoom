@@ -7,7 +7,7 @@
 - Activity log redraws preserve first-observed display order across local prompt logs and remote server logs, so connect-mode hydrate refreshes do not reorder entries by cross-machine wall-clock timestamps.
 - Replay browser actions are app-local, not backend-owned: backend replay open/close/filter/move/replay/default-haul methods were removed after the connect single-app collapse.
 - `connect` currently intercepts prompt-owning commands like `haul`, `haul route`, `haul search`, `dest`, `home`, `help`, `history`, and `market` locally, then sends finalized `command.dispatch_haul_loop` / `command.dispatch_destination` payloads to the headless server.
-- Market panel lock semantics are aligned across embedded and `connect`: market data keeps ingesting continuously, while lock/unlock freezes or unfreezes only the displayed panel.
+- Market panel lock semantics are aligned across embedded and `connect`: `market lock` pins the displayed panel to the current market identity, same-market updates still render, and different-market data is held back until unlock.
 - `set_pid` and `set_hwnd` are available operator commands; bare forms auto-target `EliteDangerous64.exe`, explicit pid/hwnd values are accepted, and `foreground` clears the override.
 - Cargo and haul session state are journal-driven: cargo manifest reads retry around transient empty `Cargo.json`, market buy/sell resync cargo, persisted haul totals survive relaunch unless configured otherwise, and hydrate read models export elapsed haul durations instead of process-local timer origins for remote clients.
 - Remote observer clients can start without a local Elite journal path and reconnect with exponential backoff; websocket recovery relies on server hydrate messages.

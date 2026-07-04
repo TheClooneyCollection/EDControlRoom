@@ -84,9 +84,9 @@ class ControlRoomViewActionsTests(unittest.TestCase):
         self.assertEqual(
             dependencies.notices,
             [
-                "Market panel locked.",
+                "Market panel pinned.",
                 "Market filter: Gold",
-                "Market panel unlocked.",
+                "Market panel following latest market.",
                 "Market filter cleared.",
             ],
         )

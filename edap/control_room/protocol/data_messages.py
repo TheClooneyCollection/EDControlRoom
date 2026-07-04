@@ -129,6 +129,7 @@ def _market(payload: dict[str, Any]) -> MarketData:
         station=str(payload.get("station", "")),
         system=str(payload.get("system", "")),
         timestamp=str(payload.get("timestamp", "")),
+        market_id=_optional_int(payload.get("market_id")),
         items=list(payload.get("items", [])) if isinstance(payload.get("items"), list) else [],
         locked=bool(payload.get("locked", False)),
     )
