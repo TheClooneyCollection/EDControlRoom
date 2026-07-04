@@ -638,6 +638,30 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertIn((AnnouncementId.HAUL_CANCELLED, {}), self.app._tts.calls)
         self.assertIn("cancelling haul immediately", "\n".join(self.app.logged))
 
+    def test_pause_command_requests_next_station_pause(self) -> None:
+        worker = _FakeWorker()
+        self.app._routine_active = True
+        self.app._routine_worker = worker
+        self.app._active_routine_name = "haul"
+
+        self.app._dispatch_command("pause")
+
+        self.assertFalse(worker.cancelled)
+        self.assertTrue(self.app._haul_pause_requested)
+        self.assertFalse(self.app._haul_paused)
+        self.assertIn("haul will pause at the next station", "\n".join(self.app.logged))
+
+    def test_resume_command_cancels_pending_pause_before_station(self) -> None:
+        self.app._routine_active = True
+        self.app._active_routine_name = "haul"
+        self.app._haul_pause_requested = True
+
+        self.app._dispatch_command("resume")
+
+        self.assertFalse(self.app._haul_pause_requested)
+        self.assertFalse(self.app._haul_paused)
+        self.assertIn("pending haul pause cancelled", "\n".join(self.app.logged))
+
     def test_request_interrupt_on_haul_cancels_immediately_when_stop_already_pending(self) -> None:
         worker = _FakeWorker()
         self.app._routine_active = True
@@ -1466,6 +1490,11 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.assertFalse(captured["stop_requested_fn"]())
         self.app._haul_stop_requested = True
         self.assertTrue(captured["stop_requested_fn"]())
+        pause_requested_fn = captured["kwargs"]["pause_requested_fn"]
+        self.assertFalse(pause_requested_fn())
+        self.app._haul_pause_requested = True
+        self.assertTrue(pause_requested_fn())
+        self.assertIn("pause_fn", captured["kwargs"])
         self.assertIn("Starting haul loop:", "\n".join(self.app.logged))
         self.assertEqual(self.app._active_routine_name, "haul")
         self.assertEqual(self.app._haul_stats.station_1_buying, "Aluminium")
@@ -2959,6 +2988,29 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertIn("Stopped the persisted haul session.", "\n".join(self.app.logged))
         entry = self._last_history()
         self.assertEqual(entry.command, "stop")
+
+    def test_pause_and_resume_haul_stats_freezes_elapsed_timers(self) -> None:
+        self.app._haul_stats.station_1_buying = "Aluminium"
+        self.app._haul_stats.active = True
+        self.app._haul_stats.session_active = True
+        self.app._haul_stats.session_started_at = 50.0
+        self.app._haul_stats.current_run_started_at = 100.0
+        self.app._time_fn = lambda: 300.0
+
+        self.app._pause_haul_stats()
+
+        self.assertTrue(self.app._haul_stats.paused)
+        self.assertIsNone(self.app._haul_stats.session_started_at)
+        self.assertEqual(self.app._haul_stats.session_elapsed_s, 250.0)
+        self.assertIsNone(self.app._haul_stats.current_run_started_at)
+        self.assertEqual(self.app._haul_stats.current_run_elapsed_s, 200.0)
+
+        self.app._time_fn = lambda: 500.0
+        self.app._resume_haul_stats()
+
+        self.assertFalse(self.app._haul_stats.paused)
+        self.assertEqual(self.app._haul_stats.session_started_at, 250.0)
+        self.assertEqual(self.app._haul_stats.current_run_started_at, 300.0)
 
     def test_stop_refuses_while_haul_session_is_active(self) -> None:
         self.app._haul_stats.active = True

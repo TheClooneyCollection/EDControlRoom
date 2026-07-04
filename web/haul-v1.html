@@ -1251,6 +1251,8 @@
           <button class="reconnect-button" id="reconnect-websocket" type="button">Reconnect</button>
           <button class="mode-toggle" id="instant-toggle" type="button" aria-pressed="false">Instant off</button>
           <div class="stop-controls" aria-label="Routine stop controls">
+            <button class="stop-button secondary" id="pause-haul" type="button">Pause</button>
+            <button class="stop-button secondary" id="resume-haul" type="button">Resume</button>
             <button class="stop-button secondary" id="stop-after-run" type="button">Stop after run</button>
             <button class="stop-button" id="stop-now" type="button">Stop now</button>
           </div>
@@ -1714,6 +1716,8 @@
       instantToggle.setAttribute("aria-pressed", instantMode ? "true" : "false");
       document.getElementById("stop-after-run").disabled = !active || !routineActive;
       document.getElementById("stop-now").disabled = !active || !routineActive;
+      document.getElementById("pause-haul").disabled = !active || !routineActive || currentRoutine.active_routine_name !== "haul" || Boolean(currentRoutine.haul_pause_requested);
+      document.getElementById("resume-haul").disabled = !active || !routineActive || currentRoutine.active_routine_name !== "haul" || (!currentRoutine.haul_pause_requested && !currentRoutine.haul_paused);
       document.getElementById("clear-haul-stats").disabled = !active;
       document.getElementById("stop-haul-stats").disabled = !active || routineActive;
       document.getElementById("reconnect-websocket").disabled = !accessToken;
@@ -2025,9 +2029,17 @@
       const stationLabel = stationIndex ? `Station ${stationIndex}` : "";
       const phaseOrder = ["sell", "buy", "undock", "depart", "transit"];
       const phaseIndex = phase ? phaseOrder.indexOf(phase) : -1;
+      let routineStatus = "Running";
+      if (routine.haul_paused) {
+        routineStatus = "Paused";
+      } else if (routine.haul_pause_requested) {
+        routineStatus = "Pause requested";
+      } else if (routine.haul_stop_requested) {
+        routineStatus = "Stop requested";
+      }
       document.getElementById("routine-status").textContent =
         routine.routine_active && routine.active_routine_name === "haul"
-          ? `${routine.haul_stop_requested ? "Stop requested" : "Running"}${stationLabel ? ` · ${stationLabel}` : ""}`
+          ? `${routineStatus}${stationLabel ? ` · ${stationLabel}` : ""}`
           : "Idle";
       document.querySelectorAll("#routine-steps .step").forEach((step, index) => {
         const stepPhase = step.dataset.phase;
@@ -2332,6 +2344,31 @@
         });
     }
 
+    function requestHaulPauseCommand(rawInput, successMessage) {
+      if (!accessToken) {
+        appendActivity("Enter and save an access token to control the active haul.", "Haul", "warning");
+        return;
+      }
+      if (clientRole !== "active_operator") {
+        appendActivity("Connect to the backend before controlling haul pause.", "Haul", "warning");
+        return;
+      }
+      if (!currentRoutine.routine_active || currentRoutine.active_routine_name !== "haul") {
+        appendActivity("No active haul to control.", "Haul", "warning");
+        return;
+      }
+      sendCommand("command.submit_input", {
+        raw_input: rawInput,
+        skip_delay: true
+      })
+        .then(() => {
+          appendActivity(successMessage, "Haul", "warning");
+        })
+        .catch((error) => {
+          appendActivity(error.message, "Haul", "warning");
+        });
+    }
+
     function requestInstantToggle() {
       if (!accessToken) {
         appendActivity("Enter and save an access token to change instant mode.", "Session", "warning");
@@ -2385,6 +2422,14 @@
 
     document.getElementById("stop-now").addEventListener("click", () => {
       requestRoutineStop("now");
+    });
+
+    document.getElementById("pause-haul").addEventListener("click", () => {
+      requestHaulPauseCommand("pause", "Haul pause requested.");
+    });
+
+    document.getElementById("resume-haul").addEventListener("click", () => {
+      requestHaulPauseCommand("resume", "Haul resume requested.");
     });
 
     document.getElementById("instant-toggle").addEventListener("click", requestInstantToggle);

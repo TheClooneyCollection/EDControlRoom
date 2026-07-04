@@ -32,6 +32,8 @@ Other:
     commands           list supported commands
     help [command]     explain a command in plain English
     replay             open the replay history browser
+    pause              pause an active two-way haul at the next station
+    resume             resume a paused two-way haul
     new_session        clear persisted haul session time/profit and start a fresh session now
     stop               freeze persisted haul session time/profit until hauling resumes or you start a new session
     q / quit           cancel active work if needed, then exit
@@ -157,7 +159,7 @@ _STARTUP_BINDING_WARNING_IGNORED_ACTIONS = frozenset({
     "YawRightButton",
 })
 
-_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul load | haul search [system] | haul search url <url> | haul route <n> | multi_leg_haul <route> | dest <system> | home | set_pid | set_hwnd | market ... | instant | new_session | stop | reload | q"
+_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul load | haul search [system] | haul search url <url> | haul route <n> | pause | resume | multi_leg_haul <route> | dest <system> | home | set_pid | set_hwnd | market ... | instant | new_session | stop | reload | q"
 _ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS = 10.0
 _JOURNAL_ARTIFACT_LOG_PATH = Path("artifacts/control-room.log")
 _DEBUG_ARTIFACT_LOG_PATH = Path("artifacts/control-room-debug.log")
@@ -702,6 +704,22 @@ class ControlRoomApp(App[None]):
     def _haul_stop_requested(self, value: bool) -> None:
         self._runtime_state.haul_stop_requested = value
 
+    @property
+    def _haul_pause_requested(self) -> bool:
+        return self._runtime_state.haul_pause_requested
+
+    @_haul_pause_requested.setter
+    def _haul_pause_requested(self, value: bool) -> None:
+        self._runtime_state.haul_pause_requested = value
+
+    @property
+    def _haul_paused(self) -> bool:
+        return self._runtime_state.haul_paused
+
+    @_haul_paused.setter
+    def _haul_paused(self, value: bool) -> None:
+        self._runtime_state.haul_paused = value
+
     def _set_haul_phase(self, phase: str | None, station_index: int | None) -> None:
         self._runtime_state.haul_phase = phase
         self._runtime_state.haul_phase_station_index = station_index
@@ -880,6 +898,8 @@ class ControlRoomApp(App[None]):
         self._runtime_state.routine_active = data.routine.routine_active
         self._runtime_state.active_routine_name = data.routine.active_routine_name
         self._runtime_state.haul_stop_requested = data.routine.haul_stop_requested
+        self._runtime_state.haul_pause_requested = data.routine.haul_pause_requested
+        self._runtime_state.haul_paused = data.routine.haul_paused
         self._runtime_state.verbose_controls = data.routine.verbose_controls
         self._runtime_state.instant_mode = data.routine.instant_mode
         self._runtime_state.shutdown_requested = data.routine.shutdown_requested
@@ -1430,6 +1450,12 @@ class ControlRoomApp(App[None]):
     def _stop_haul_stats(self) -> None:
         _haul_tracking.stop_haul_stats(self)
 
+    def _pause_haul_stats(self) -> None:
+        _haul_tracking.pause_haul_stats(self)
+
+    def _resume_haul_stats(self) -> None:
+        _haul_tracking.resume_haul_stats(self)
+
     def _finalize_completed_haul_run(self) -> None:
         _haul_tracking.finalize_completed_haul_run(self)
 
@@ -1683,6 +1709,59 @@ class ControlRoomApp(App[None]):
             return
         self._cancel_active_routine(source, stop_mode=stop_mode)
 
+    def _request_haul_pause(self, source: str) -> None:
+        if self._active_routine_name != "haul" or not self._routine_active:
+            self._log(f"[yellow]{escape(source)} received — no active haul to pause.[/]")
+            return
+        if self._haul_paused:
+            self._log(f"[yellow]{escape(source)} received — haul is already paused at station.[/]")
+            return
+        if self._haul_pause_requested:
+            self._log(f"[yellow]{escape(source)} received — haul pause is already pending.[/]")
+            return
+        self._haul_pause_requested = True
+        self._log(f"[yellow]{escape(source)} received — haul will pause at the next station.[/]")
+        self._publish_protocol_data_refresh()
+
+    def _resume_haul(self, source: str) -> None:
+        if self._active_routine_name != "haul" or not self._routine_active:
+            self._log(f"[yellow]{escape(source)} received — no active haul to resume.[/]")
+            return
+        if not self._haul_pause_requested and not self._haul_paused:
+            self._log(f"[yellow]{escape(source)} received — haul is not paused.[/]")
+            return
+        was_paused = self._haul_paused
+        self._haul_pause_requested = False
+        if not was_paused:
+            self._log(f"[yellow]{escape(source)} received — pending haul pause cancelled.[/]")
+        else:
+            self._log(f"[yellow]{escape(source)} received — resuming haul.[/]")
+        self._publish_protocol_data_refresh()
+
+    def _enter_haul_pause(self, station_index: int) -> None:
+        if not self._haul_pause_requested:
+            return
+        if not self._haul_paused:
+            self._haul_paused = True
+            self._pause_haul_stats()
+            self._log(f"[yellow]Haul paused at station {station_index}; type `resume` to continue.[/]")
+        self._publish_protocol_data_refresh()
+
+    def _exit_haul_pause(self, station_index: int) -> None:
+        if self._haul_paused:
+            self._haul_paused = False
+            self._resume_haul_stats()
+            self._log(f"[green]Haul resumed from station {station_index}.[/]")
+        self._haul_pause_requested = False
+        self._publish_protocol_data_refresh()
+
+    def _wait_for_haul_resume(self, station_index: int) -> None:
+        self.call_from_thread(self._enter_haul_pause, station_index)
+        sleeper = self._make_sleeper()
+        while self._haul_pause_requested:
+            sleeper(0.5)
+        self.call_from_thread(self._exit_haul_pause, station_index)
+
     def _cancel_active_routine(self, source: str, *, stop_mode: RoutineStopMode = "toggle") -> None:
         if stop_mode == "after_run":
             self._request_deferred_haul_stop(source)
@@ -1787,6 +1866,9 @@ class ControlRoomApp(App[None]):
 
     def _clear_pending_haul_stop(self) -> None:
         self._haul_stop_requested = False
+        self._haul_pause_requested = False
+        self._haul_paused = False
+        self._haul_stats.paused = False
 
     def _should_prompt_remote_exit(self) -> bool:
         return (

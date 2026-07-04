@@ -66,6 +66,37 @@ def stop_haul_stats(app: HaulTrackingHost) -> None:
             total_profit_short=format_credits_short(app._haul_stats.accumulated_profit),
         )
     app._haul_stats.active = False
+    app._haul_stats.paused = False
+    app._refresh_haul_stats()
+    app._save_saved_state()
+
+
+def pause_haul_stats(app: HaulTrackingHost) -> None:
+    stats = app._haul_stats
+    if not stats.active or stats.paused:
+        return
+    now = app._time_fn()
+    if stats.session_started_at is not None:
+        stats.session_elapsed_s = max(0.0, now - stats.session_started_at)
+        stats.session_started_at = None
+    if stats.current_run_started_at is not None and not stats.docked_back_at_station_1:
+        stats.current_run_elapsed_s = max(0.0, now - stats.current_run_started_at)
+        stats.current_run_started_at = None
+    stats.paused = True
+    app._refresh_haul_stats()
+    app._save_saved_state()
+
+
+def resume_haul_stats(app: HaulTrackingHost) -> None:
+    stats = app._haul_stats
+    if not stats.active or not stats.paused:
+        return
+    now = app._time_fn()
+    if stats.session_active:
+        stats.session_started_at = max(0.0, now - stats.session_elapsed_s)
+    if stats.current_run_elapsed_s is not None and not stats.docked_back_at_station_1:
+        stats.current_run_started_at = max(0.0, now - stats.current_run_elapsed_s)
+    stats.paused = False
     app._refresh_haul_stats()
     app._save_saved_state()
 

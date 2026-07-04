@@ -59,6 +59,7 @@ class HaulStats:
     last_run_profit: int | None = None
     last_run_elapsed_s: float | None = None
     total_run_elapsed_s: float = 0.0
+    paused: bool = False
 
 
 @dataclass
@@ -135,6 +136,8 @@ class RuntimeUIState:
     routine_active: bool = False
     active_routine_name: str | None = None
     haul_stop_requested: bool = False
+    haul_pause_requested: bool = False
+    haul_paused: bool = False
     haul_phase: str | None = None
     haul_phase_station_index: int | None = None
     verbose_controls: bool = False

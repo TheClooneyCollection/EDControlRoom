@@ -218,7 +218,9 @@ def haul_panel_markup(
         rows.append(f"[dim]{label:<12}[/]  {value}")
 
     status = "active" if stats.active else "stopped"
-    if stats.resumed_mid_run and not stats.clean_run_active:
+    if stats.paused:
+        status = "paused"
+    elif stats.resumed_mid_run and not stats.clean_run_active:
         status = "resumed mid-run"
     elif stats.waiting_for_station_1_departure:
         status = "waiting at station 1"

@@ -91,6 +91,18 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
         detail="With no argument it toggles instant mode. When instant mode is on, executable commands launch immediately without the configured control-room start delay until you turn it off again. The ! prefix still works for one-off immediate launches.",
     ),
     CommandHelp(
+        name="pause",
+        usage="pause",
+        summary="Pause an active two-way haul at the next station boundary.",
+        detail="Requests a pause for the running two-way haul. The routine finishes the current transit or station sell step, pauses before the next station buy/departure at either configured station, and freezes haul session/current-run timers until `resume` is issued.",
+    ),
+    CommandHelp(
+        name="resume",
+        usage="resume",
+        summary="Resume a two-way haul paused at a station.",
+        detail="Releases a paused two-way haul so it continues from the station boundary where it stopped. If a pause was requested but the ship has not reached the next station yet, this cancels the pending pause request.",
+    ),
+    CommandHelp(
         name="new_session",
         usage="new_session",
         summary="Clear persisted haul session time and profit, then start a fresh session now.",

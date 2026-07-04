@@ -541,6 +541,8 @@ def dispatch_haul_loop(
             runtime,
             route=route,
             stop_requested_fn=lambda: app._haul_stop_requested,
+            pause_requested_fn=lambda: app._haul_pause_requested,
+            pause_fn=lambda phase: app._wait_for_haul_resume(_project_two_way_phase(phase)[1] or 0),
             phase_updated_fn=lambda phase: app.call_from_thread(
                 app._set_haul_phase,
                 *_project_two_way_phase(phase),

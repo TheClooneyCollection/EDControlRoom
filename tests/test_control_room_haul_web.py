@@ -37,6 +37,17 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn("raw_input: rawInput", html)
         self.assertIn('rawInput === "stop" && currentRoutine.routine_active', html)
 
+    def test_haul_web_exposes_pause_resume_controls(self) -> None:
+        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+
+        self.assertIn('id="pause-haul"', html)
+        self.assertIn('id="resume-haul"', html)
+        self.assertIn('requestHaulPauseCommand("pause", "Haul pause requested.")', html)
+        self.assertIn('requestHaulPauseCommand("resume", "Haul resume requested.")', html)
+        self.assertIn("currentRoutine.haul_pause_requested", html)
+        self.assertIn("routine.haul_paused", html)
+        self.assertIn('raw_input: rawInput', html)
+
     def test_haul_web_active_routine_shows_current_and_accumulated_credits(self) -> None:
         html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
 

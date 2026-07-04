@@ -162,6 +162,7 @@ def _haul_stats(payload: dict[str, Any]) -> HaulStats:
         last_run_profit=_optional_int(payload.get("last_run_profit")),
         last_run_elapsed_s=_optional_float(payload.get("last_run_elapsed_s")),
         total_run_elapsed_s=_float(payload.get("total_run_elapsed_s"), 0.0),
+        paused=bool(payload.get("paused", False)),
     )
 
 
@@ -210,6 +211,8 @@ def _routine(payload: dict[str, Any]) -> RoutineReadModel:
         routine_active=bool(payload.get("routine_active", False)),
         active_routine_name=_optional_str(payload.get("active_routine_name")),
         haul_stop_requested=bool(payload.get("haul_stop_requested", False)),
+        haul_pause_requested=bool(payload.get("haul_pause_requested", False)),
+        haul_paused=bool(payload.get("haul_paused", False)),
         verbose_controls=bool(payload.get("verbose_controls", False)),
         instant_mode=bool(payload.get("instant_mode", False)),
         shutdown_requested=bool(payload.get("shutdown_requested", False)),

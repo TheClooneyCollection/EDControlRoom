@@ -37,6 +37,8 @@ class RoutineReadModel:
     routine_active: bool
     active_routine_name: str | None
     haul_stop_requested: bool
+    haul_pause_requested: bool
+    haul_paused: bool
     verbose_controls: bool
     instant_mode: bool
     shutdown_requested: bool
@@ -156,6 +158,8 @@ class LocalControlRoomDataSource:
                 routine_active=app._runtime_state.routine_active,
                 active_routine_name=app._runtime_state.active_routine_name,
                 haul_stop_requested=app._runtime_state.haul_stop_requested,
+                haul_pause_requested=app._runtime_state.haul_pause_requested,
+                haul_paused=app._runtime_state.haul_paused,
                 verbose_controls=app._runtime_state.verbose_controls,
                 instant_mode=app._runtime_state.instant_mode,
                 shutdown_requested=app._runtime_state.shutdown_requested,
@@ -324,6 +328,7 @@ def _copy_haul_stats(haul: HaulStats, *, now: float | None = None) -> HaulStats:
         last_run_profit=haul.last_run_profit,
         last_run_elapsed_s=haul.last_run_elapsed_s,
         total_run_elapsed_s=haul.total_run_elapsed_s,
+        paused=haul.paused,
     )
 
 

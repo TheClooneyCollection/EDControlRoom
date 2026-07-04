@@ -93,6 +93,12 @@ def dispatch(app: CommandHost, raw: str, *, skip_delay_override: bool | None = N
     elif verb == "instant":
         app._record_history_entry(CommandHistoryEntry(raw=raw, command="instant", params={"value": rest}, timestamp=now_iso()))
         cmd_instant(app, rest)
+    elif verb == "pause":
+        app._record_history_entry(CommandHistoryEntry(raw=raw, command="pause", timestamp=now_iso()))
+        app._request_haul_pause("Pause command")
+    elif verb == "resume":
+        app._record_history_entry(CommandHistoryEntry(raw=raw, command="resume", timestamp=now_iso()))
+        app._resume_haul("Resume command")
     elif verb in {"new_session", "clear"}:
         app._record_history_entry(
             CommandHistoryEntry(raw=raw, command="new_session", timestamp=now_iso())

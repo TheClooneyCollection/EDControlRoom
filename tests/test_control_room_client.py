@@ -262,6 +262,8 @@ def _data_read_model(
             routine_active=False,
             active_routine_name=None,
             haul_stop_requested=False,
+            haul_pause_requested=False,
+            haul_paused=False,
             verbose_controls=False,
             instant_mode=False,
             shutdown_requested=False,

@@ -123,6 +123,8 @@ def haul_loop_two_way(*args, **kwargs):
     iterations = kwargs.pop("iterations", 0)
     start_phase = kwargs.pop("start_phase", None)
     stop_requested_fn = kwargs.pop("stop_requested_fn", None)
+    pause_requested_fn = kwargs.pop("pause_requested_fn", None)
+    pause_fn = kwargs.pop("pause_fn", None)
     phase_updated_fn = kwargs.pop("phase_updated_fn", None)
     if kwargs:
         raise AssertionError(f"Unhandled haul test kwargs: {sorted(kwargs)}")
@@ -132,6 +134,8 @@ def haul_loop_two_way(*args, **kwargs):
         iterations=iterations,
         start_phase=start_phase,
         stop_requested_fn=stop_requested_fn,
+        pause_requested_fn=pause_requested_fn,
+        pause_fn=pause_fn,
         phase_updated_fn=phase_updated_fn,
     )
 
@@ -866,6 +870,67 @@ class TwoWayHaulLoopTests(unittest.TestCase):
 
         self.assertEqual(result.dispatch.status, "ok")
         self.assertEqual(market_calls, [])
+
+    def test_pause_requested_waits_at_station_2_before_buy(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher([])
+        paused_phases: list[Phase] = []
+        pause_requested = [True]
+
+        def fake_phase_runner(_ctx):
+            return RoutineResult(
+                action="phase",
+                dispatch=ActionDispatchResult(action="phase", status="ok"),
+            ), Phase.TRANSIT_TO_STATION_1
+
+        def fake_transit_runner(_ctx):
+            return RoutineResult(
+                action="transit",
+                dispatch=ActionDispatchResult(action="transit", status="ok"),
+            ), Phase.AT_STATION_1_SELL
+
+        def pause_fn(phase: Phase) -> None:
+            paused_phases.append(phase)
+            pause_requested[0] = False
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_journal(
+                journal_dir,
+                {
+                    "event": "Docked",
+                    "StationName": _STATION_2,
+                    "StarSystem": _SYSTEM_2,
+                    "CargoCapacity": 64,
+                },
+            )
+            _write_cargo(journal_dir, [])
+            with patch.dict(
+                "edap.routines.haul_two_way._PHASE_RUNNERS",
+                {
+                    Phase.AT_STATION_2_BUY: fake_phase_runner,
+                    Phase.TRANSIT_TO_STATION_1: fake_transit_runner,
+                },
+                clear=True,
+            ):
+                result = haul_loop_two_way(
+                    controls,
+                    watcher,
+                    journal_dir=journal_dir,
+                    station_1=_STATION_1,
+                    station_1_buying=_CARGO_1,
+                    station_1_system=_SYSTEM_1,
+                    station_2=_STATION_2,
+                    station_2_buying=_CARGO_2,
+                    station_2_system=_SYSTEM_2,
+                    iterations=1,
+                    start_phase=Phase.AT_STATION_2_BUY,
+                    pause_requested_fn=lambda: pause_requested[0],
+                    pause_fn=pause_fn,
+                )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(paused_phases, [Phase.AT_STATION_2_BUY])
 
     def test_can_start_from_station_2_phase(self) -> None:
         controls = FakeShipControls()

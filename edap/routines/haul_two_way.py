@@ -791,6 +791,8 @@ def haul_loop_two_way(
     iterations: int = 0,
     start_phase: Phase | None = None,
     stop_requested_fn: Callable[[], bool] | None = None,
+    pause_requested_fn: Callable[[], bool] | None = None,
+    pause_fn: Callable[[Phase], None] | None = None,
     phase_updated_fn: Callable[[Phase], None] | None = None,
 ) -> RoutineResult:
     if iterations < 0:
@@ -836,6 +838,15 @@ def haul_loop_two_way(
         while True:
             if phase_updated_fn is not None:
                 phase_updated_fn(phase)
+            if (
+                phase in {Phase.AT_STATION_1_BUY, Phase.AT_STATION_2_BUY}
+                and pause_requested_fn is not None
+                and pause_requested_fn()
+            ):
+                station_index = 1 if phase == Phase.AT_STATION_1_BUY else 2
+                runtime.progress_fn(f"Pause requested at station {station_index}; waiting for resume.")
+                if pause_fn is not None:
+                    pause_fn(phase)
             if _should_stop_before_station_1_buy(phase, stop_requested_fn):
                 runtime.progress_fn("Stop requested at station 1; halting before station 1 buy.")
                 return last_result or _stopped_routine_result("stopped before station 1 buy")
