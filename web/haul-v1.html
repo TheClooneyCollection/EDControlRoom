@@ -1326,7 +1326,7 @@
                 <div class="metric-value mono" id="routine-elapsed">00:00:00</div>
               </div>
               <div class="metric">
-                <div class="metric-label">Current run</div>
+                <div class="metric-label">Current / Accumulated</div>
                 <div class="metric-value success mono" id="routine-current-run">0 CR</div>
               </div>
               <div class="metric">
@@ -2047,7 +2047,8 @@
       });
       document.getElementById("routine-elapsed").textContent =
         formatDuration(haulSession.session_elapsed_s || haulSession.current_run_elapsed_s || 0);
-      document.getElementById("routine-current-run").textContent = formatCredits(haulSession.current_run_profit || 0);
+      document.getElementById("routine-current-run").textContent =
+        `${formatCredits(haulSession.current_run_profit || 0)} / ${formatCredits(haulSession.accumulated_profit || 0)}`;
       document.getElementById("routine-cargo-moved").textContent =
         `${Number(haulSession.cargo_moved_t || 0).toLocaleString()} t`;
     }

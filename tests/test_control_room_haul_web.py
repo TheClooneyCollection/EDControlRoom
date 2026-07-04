@@ -37,6 +37,15 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn("raw_input: rawInput", html)
         self.assertIn('rawInput === "stop" && currentRoutine.routine_active', html)
 
+    def test_haul_web_active_routine_shows_current_and_accumulated_credits(self) -> None:
+        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+
+        self.assertIn("Current / Accumulated", html)
+        self.assertIn(
+            "`${formatCredits(haulSession.current_run_profit || 0)} / ${formatCredits(haulSession.accumulated_profit || 0)}`",
+            html,
+        )
+
     def test_haul_web_exposes_connection_error_recovery_ui(self) -> None:
         html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
 
