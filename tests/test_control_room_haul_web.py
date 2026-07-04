@@ -29,6 +29,13 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn("currentRoutine.instant_mode", html)
         self.assertIn('sendCommand("command.submit_input"', html)
         self.assertIn("raw_input: `instant ${nextMode}`", html)
+        self.assertIn('id="clear-haul-stats"', html)
+        self.assertIn('id="stop-haul-stats"', html)
+        self.assertIn('submitHaulStatsCommand("new_session", "Clear haul stats requested.")', html)
+        self.assertIn('submitHaulStatsCommand("stop", "Stop haul stats requested.")', html)
+        self.assertIn('sendCommand("command.submit_input",', html)
+        self.assertIn("raw_input: rawInput", html)
+        self.assertIn('rawInput === "stop" && currentRoutine.routine_active', html)
 
     def test_haul_web_exposes_connection_error_recovery_ui(self) -> None:
         html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")

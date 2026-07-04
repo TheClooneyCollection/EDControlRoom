@@ -896,6 +896,17 @@
       gap: 10px;
     }
 
+    .stats-controls {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .stats-controls .btn {
+      min-width: 108px;
+    }
+
     .metric {
       border: 1px solid var(--border);
       border-radius: var(--radius);
@@ -1064,8 +1075,13 @@
       }
 
       .mini-metrics,
+      .stats-controls,
       .field-row {
         grid-template-columns: minmax(0, 1fr);
+      }
+
+      .stats-controls {
+        display: grid;
       }
 
       .btn-row {
@@ -1317,6 +1333,10 @@
                 <div class="metric-label">Cargo moved</div>
                 <div class="metric-value mono" id="routine-cargo-moved">0 t</div>
               </div>
+            </div>
+            <div class="stats-controls" aria-label="Haul stats controls">
+              <button class="btn danger" id="clear-haul-stats" type="button">Clear stats</button>
+              <button class="btn" id="stop-haul-stats" type="button">Stop stats</button>
             </div>
           </div>
         </section>
@@ -1628,6 +1648,8 @@
       instantToggle.setAttribute("aria-pressed", instantMode ? "true" : "false");
       document.getElementById("stop-after-run").disabled = !active || !routineActive;
       document.getElementById("stop-now").disabled = !active || !routineActive;
+      document.getElementById("clear-haul-stats").disabled = !active;
+      document.getElementById("stop-haul-stats").disabled = !active || routineActive;
       document.getElementById("reconnect-websocket").disabled = !accessToken;
       document.getElementById("connection-reconnect").disabled = !accessToken;
       document.querySelector("#search-form .btn.primary").disabled = !active;
@@ -2258,6 +2280,31 @@
         });
     }
 
+    function submitHaulStatsCommand(rawInput, successMessage) {
+      if (!accessToken) {
+        appendActivity("Enter and save an access token to update haul stats.", "Haul", "warning");
+        return;
+      }
+      if (clientRole !== "active_operator") {
+        appendActivity("Connect to the backend before updating haul stats.", "Haul", "warning");
+        return;
+      }
+      if (rawInput === "stop" && currentRoutine.routine_active) {
+        appendActivity("Stop the active routine before stopping haul stats.", "Haul", "warning");
+        return;
+      }
+      sendCommand("command.submit_input", {
+        raw_input: rawInput,
+        skip_delay: true
+      })
+        .then(() => {
+          appendActivity(successMessage, "Haul", "success");
+        })
+        .catch((error) => {
+          appendActivity(error.message, "Haul", "warning");
+        });
+    }
+
     document.getElementById("stop-after-run").addEventListener("click", () => {
       requestRoutineStop("after_run");
     });
@@ -2267,6 +2314,12 @@
     });
 
     document.getElementById("instant-toggle").addEventListener("click", requestInstantToggle);
+    document.getElementById("clear-haul-stats").addEventListener("click", () => {
+      submitHaulStatsCommand("new_session", "Clear haul stats requested.");
+    });
+    document.getElementById("stop-haul-stats").addEventListener("click", () => {
+      submitHaulStatsCommand("stop", "Stop haul stats requested.");
+    });
 
     document.getElementById("galaxy-settle").addEventListener("input", updateCommandPreview);
     document.getElementById("dock-timeout").addEventListener("input", updateCommandPreview);

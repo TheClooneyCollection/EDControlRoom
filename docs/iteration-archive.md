@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `213`
-- Latest generated iteration number: `346`
+- Generated iteration count: `214`
+- Latest generated iteration number: `347`
 
 ## Iteration 134
 
@@ -5918,3 +5918,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live check on an actual phone or remote tablet browser once `/haul` is served from the operator host; full automatic browser live-reload would still require a watcher/SSE dev-only path.
+
+## Iteration 347
+
+- When: `2026-07-04 17:47`
+- Area: `web`
+- Title: `haul-stats-controls`
+- Source: [2026-07-04-17-47_____web______haul-stats-controls.md](iteration-logs/2026-07-04-17-47_____web______haul-stats-controls.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `haul-stats-controls`
+- Started: `2026-07-04 17:47`
+
+## Summary
+
+- Added haul stats controls to the web active haul routine panel.
+
+## Changes
+
+- Added `Clear stats` and `Stop stats` buttons below the active routine metrics in `web/haul-v1.html`.
+- Wired the buttons through existing websocket `command.submit_input` handling: `new_session` clears persisted haul stats and `stop` freezes persisted haul stats.
+- Kept `Stop stats` disabled while a routine is active, matching the existing backend command rule that refuses to stop the stats clock during an active haul.
+- Verified phone-width layout at 390px still has no horizontal overflow and the stats controls stack cleanly.
+
+## Follow-ups
+
+- Live-check the stats controls against a served `/haul` session to confirm operator-facing activity messages are clear enough after backend command logs arrive.
