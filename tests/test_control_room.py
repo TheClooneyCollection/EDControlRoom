@@ -2021,8 +2021,12 @@ on_land = true
         self.assertTrue(self.app._haul_stats.waiting_for_station_1_departure)
         self.assertEqual(self.app._haul_stats.current_run_started_at, 100.0)
 
-        self.app._handle_haul_event({"event": "MarketBuy", "TotalCost": 100_000}, station_before="Pawelczyk Dock")
+        self.app._handle_haul_event(
+            {"event": "MarketBuy", "TotalCost": 100_000, "Count": 128},
+            station_before="Pawelczyk Dock",
+        )
         self.assertEqual(self.app._haul_stats.current_run_profit, -100_000)
+        self.assertEqual(self.app._haul_stats.cargo_moved_t, 128)
         self.assertIsNone(self.app._haul_stats.current_run_started_at)
 
         self.app._time_fn = lambda: 110.0
@@ -2036,8 +2040,12 @@ on_land = true
         self.assertEqual(self.app._haul_stats.current_run_profit, 150_000)
 
         self.app._time_fn = lambda: 200.0
-        self.app._handle_haul_event({"event": "MarketBuy", "TotalCost": 250_000}, station_before="Hutton Orbital")
+        self.app._handle_haul_event(
+            {"event": "MarketBuy", "TotalCost": 250_000, "Count": 64},
+            station_before="Hutton Orbital",
+        )
         self.assertEqual(self.app._haul_stats.current_run_profit, -100_000)
+        self.assertEqual(self.app._haul_stats.cargo_moved_t, 192)
 
         self.app._time_fn = lambda: 310.0
         self.app._handle_haul_event({"event": "Docked", "StationName": "Pawelczyk Dock"}, station_before=None)
@@ -2071,6 +2079,7 @@ on_land = true
         self.app._ship.station = "Pawelczyk Dock"
         self.app._haul_stats.session_started_at = 25.0
         self.app._haul_stats.accumulated_profit = 1_500_000
+        self.app._haul_stats.cargo_moved_t = 784
         self.app._haul_stats.completed_runs = 4
         self.app._haul_stats.total_run_elapsed_s = 1200.0
         self.app._haul_stats.last_run_profit = 350_000
@@ -2086,6 +2095,7 @@ on_land = true
 
         self.assertEqual(self.app._haul_stats.session_started_at, 25.0)
         self.assertEqual(self.app._haul_stats.accumulated_profit, 1_500_000)
+        self.assertEqual(self.app._haul_stats.cargo_moved_t, 784)
         self.assertEqual(self.app._haul_stats.completed_runs, 4)
         self.assertEqual(self.app._haul_stats.total_run_elapsed_s, 1200.0)
         self.assertEqual(self.app._haul_stats.last_run_profit, 350_000)
@@ -2850,6 +2860,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.app._haul_stats.current_run_profit = 250_000
         self.app._haul_stats.session_started_at = 50.0
         self.app._haul_stats.accumulated_profit = 900_000
+        self.app._haul_stats.cargo_moved_t = 640
         self.app._haul_stats.completed_runs = 2
         self.app._haul_stats.total_run_elapsed_s = 600.0
         self.app._haul_stats.last_run_profit = 450_000
@@ -2860,6 +2871,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
 
         self.assertEqual(self.app._haul_stats.session_started_at, 300.0)
         self.assertEqual(self.app._haul_stats.accumulated_profit, 0)
+        self.assertEqual(self.app._haul_stats.cargo_moved_t, 0)
         self.assertEqual(self.app._haul_stats.current_run_profit, 0)
         self.assertEqual(self.app._haul_stats.completed_runs, 0)
         self.assertEqual(self.app._haul_stats.total_run_elapsed_s, 0.0)

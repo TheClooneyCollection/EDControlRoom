@@ -154,6 +154,7 @@ def _haul_stats(payload: dict[str, Any]) -> HaulStats:
         current_run_profit=_int(payload.get("current_run_profit"), 0),
         completed_runs=_int(payload.get("completed_runs"), 0),
         accumulated_profit=_int(payload.get("accumulated_profit"), 0),
+        cargo_moved_t=_int(payload.get("cargo_moved_t"), 0),
         last_run_profit=_optional_int(payload.get("last_run_profit")),
         last_run_elapsed_s=_optional_float(payload.get("last_run_elapsed_s")),
         total_run_elapsed_s=_float(payload.get("total_run_elapsed_s"), 0.0),
@@ -186,7 +187,7 @@ def _command_history(payload: dict[str, Any]) -> CommandHistoryReadModel:
 
 def _activity_log(payload: dict[str, Any]) -> ActivityLogReadModel:
     raw_entries = payload.get("entries", [])
-    entries = raw_entries if isinstance(raw_entries, list) else []
+    entries = raw_entries if isinstance(raw_entries, (list, tuple)) else []
     return ActivityLogReadModel(
         entries=tuple(
             ActivityLogItem(
@@ -209,6 +210,7 @@ def _routine(payload: dict[str, Any]) -> RoutineReadModel:
         instant_mode=bool(payload.get("instant_mode", False)),
         shutdown_requested=bool(payload.get("shutdown_requested", False)),
         shutdown_finalized=bool(payload.get("shutdown_finalized", False)),
+        haul_phase=_optional_str(payload.get("haul_phase")),
     )
 
 

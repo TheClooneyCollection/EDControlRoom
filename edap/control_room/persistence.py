@@ -87,6 +87,7 @@ def clear_session_stats(app: PersistenceHost) -> None:
     stats.session_elapsed_s = 0.0
     stats.session_active = True
     stats.accumulated_profit = 0
+    stats.cargo_moved_t = 0
     stats.completed_runs = 0
     stats.total_run_elapsed_s = 0.0
     stats.last_run_profit = None

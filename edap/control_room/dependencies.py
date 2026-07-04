@@ -40,6 +40,7 @@ class RoutineReadModel:
     instant_mode: bool
     shutdown_requested: bool
     shutdown_finalized: bool
+    haul_phase: str | None = None
 
 
 @dataclass(frozen=True)
@@ -154,6 +155,12 @@ class LocalControlRoomDataSource:
                 instant_mode=app._runtime_state.instant_mode,
                 shutdown_requested=app._runtime_state.shutdown_requested,
                 shutdown_finalized=app._runtime_state.shutdown_finalized,
+                haul_phase=_derive_haul_phase(
+                    routine_active=app._runtime_state.routine_active,
+                    active_routine_name=app._runtime_state.active_routine_name,
+                    haul=app._haul_stats,
+                    ship=app._ship,
+                ),
             ),
             session=SessionReadModel(
                 session_id="local-session",
@@ -233,6 +240,29 @@ def build_local_control_room_dependencies(app: ControlRoomApp) -> ControlRoomDep
     )
 
 
+def _derive_haul_phase(
+    *,
+    routine_active: bool,
+    active_routine_name: str | None,
+    haul: HaulStats,
+    ship: ShipState,
+) -> str | None:
+    if not routine_active or active_routine_name != "haul" or not haul.active:
+        return None
+    if haul.waiting_for_station_1_departure:
+        return "buy"
+    current_station = (ship.station or "").lower()
+    if haul.clean_run_active:
+        if haul.station_2 and current_station == haul.station_2.lower():
+            return "sell"
+        if haul.station_1 and current_station == haul.station_1.lower():
+            return "return"
+        return "transit"
+    if haul.resumed_mid_run:
+        return "transit"
+    return "buy"
+
+
 def _copy_ship_state(ship: ShipState) -> ShipState:
     return ShipState(
         commander=ship.commander,
@@ -296,6 +326,7 @@ def _copy_haul_stats(haul: HaulStats, *, now: float | None = None) -> HaulStats:
         current_run_profit=haul.current_run_profit,
         completed_runs=haul.completed_runs,
         accumulated_profit=haul.accumulated_profit,
+        cargo_moved_t=haul.cargo_moved_t,
         last_run_profit=haul.last_run_profit,
         last_run_elapsed_s=haul.last_run_elapsed_s,
         total_run_elapsed_s=haul.total_run_elapsed_s,

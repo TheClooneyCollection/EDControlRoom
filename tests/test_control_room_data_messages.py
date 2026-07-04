@@ -13,6 +13,7 @@ from edap.control_room.protocol.data_messages import (
     hydrate_message,
     is_control_room_data_message,
 )
+from edap.control_room.protocol.events import ActivityLogEntry
 from edap.control_room_state import ControlRoomState
 
 
@@ -22,7 +23,9 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
             _ship=ShipState(system="Sol"),
             _market=MarketData(station="Galileo", market_id=3229359104),
             _haul_stats=HaulStats(
+                station_1="Galileo",
                 completed_runs=3,
+                cargo_moved_t=156,
                 session_started_at=50.0,
                 active=True,
                 current_run_started_at=75.0,
@@ -33,8 +36,18 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
                 control_room=SimpleNamespace(history_limit=20),
                 runtime=SimpleNamespace(platform="macos"),
             ),
-            _protocol_activity_log=[],
-            _runtime_state=RuntimeUIState(),
+            _protocol_activity_log=[
+                ActivityLogEntry(
+                    entry_id="activity-1",
+                    timestamp="2026-07-04T08:00:00Z",
+                    message_text="Starting haul loop.",
+                    severity="info",
+                )
+            ],
+            _runtime_state=RuntimeUIState(
+                routine_active=True,
+                active_routine_name="haul",
+            ),
             _current_version="1.2.3",
             _ctx=SimpleNamespace(
                 journal=SimpleNamespace(cli_source_status=lambda: "configured"),
@@ -54,10 +67,16 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
         self.assertEqual(message["payload"]["market"]["station"], "Galileo")
         self.assertEqual(message["payload"]["market"]["market_id"], 3229359104)
         self.assertEqual(message["payload"]["haul_session"]["completed_runs"], 3)
+        self.assertEqual(message["payload"]["haul_session"]["cargo_moved_t"], 156)
         self.assertIsNone(message["payload"]["haul_session"]["session_started_at"])
         self.assertEqual(message["payload"]["haul_session"]["session_elapsed_s"], 75.0)
         self.assertIsNone(message["payload"]["haul_session"]["current_run_started_at"])
         self.assertEqual(message["payload"]["haul_session"]["current_run_elapsed_s"], 50.0)
+        self.assertEqual(message["payload"]["routine"]["haul_phase"], "transit")
+        self.assertEqual(
+            message["payload"]["activity_log"]["entries"][0]["message_text"],
+            "Starting haul loop.",
+        )
         self.assertNotIn("prompt_state", message["payload"])
         self.assertNotIn("replay_browser", message["payload"])
 
@@ -67,5 +86,8 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
         self.assertEqual(parsed.market.station, "Galileo")
         self.assertEqual(parsed.market.market_id, 3229359104)
         self.assertEqual(parsed.haul_session.completed_runs, 3)
+        self.assertEqual(parsed.haul_session.cargo_moved_t, 156)
         self.assertIsNone(parsed.haul_session.session_started_at)
         self.assertEqual(parsed.haul_session.session_elapsed_s, 75.0)
+        self.assertEqual(parsed.routine.haul_phase, "transit")
+        self.assertEqual(parsed.activity_log.entries[0].message_text, "Starting haul loop.")

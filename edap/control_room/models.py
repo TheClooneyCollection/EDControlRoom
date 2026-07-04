@@ -55,6 +55,7 @@ class HaulStats:
     current_run_profit: int = 0
     completed_runs: int = 0
     accumulated_profit: int = 0
+    cargo_moved_t: int = 0
     last_run_profit: int | None = None
     last_run_elapsed_s: float | None = None
     total_run_elapsed_s: float = 0.0

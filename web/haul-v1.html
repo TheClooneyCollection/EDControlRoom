@@ -758,7 +758,7 @@
       <header class="topbar">
         <div>
           <div class="topbar-title">Haul</div>
-          <div class="topbar-sub">Static V1 prototype. No backend integration, prompt flow, market page, or settlement route support.</div>
+          <div class="topbar-sub">Web V1 for two-way station and carrier hauling. Market page and settlement route support are not included.</div>
         </div>
         <div class="chips" aria-label="Session status">
           <div class="chip">Host <strong>MacBook Pro</strong></div>
@@ -805,37 +805,37 @@
           </div>
           <div class="summary-cell">
             <div class="summary-label">Accumulated profit</div>
-            <div class="summary-value success mono">129.4m CR</div>
+            <div class="summary-value success mono" id="summary-profit">129.4m CR</div>
           </div>
         </section>
 
         <section class="panel routine-panel" aria-labelledby="routine-title">
           <div class="panel-head">
             <div class="panel-title" id="routine-title">Active haul routine</div>
-            <div class="panel-action">Stop after current run available later</div>
+            <div class="panel-action" id="routine-status">Idle</div>
           </div>
           <div class="panel-body">
-            <div class="routine-bar" aria-label="Routine phase timeline">
-              <div class="step done"><div class="step-label">1. Buy</div><div class="step-value">Complete</div></div>
-              <div class="step done"><div class="step-label">2. Launch</div><div class="step-value">Complete</div></div>
-              <div class="step current"><div class="step-label">3. Jump</div><div class="step-value">En route</div></div>
-              <div class="step"><div class="step-label">4. Dock</div><div class="step-value">Pending</div></div>
-              <div class="step"><div class="step-label">5. Sell</div><div class="step-value">Pending</div></div>
-              <div class="step"><div class="step-label">6. Return</div><div class="step-value">Pending</div></div>
+            <div class="routine-bar" id="routine-steps" aria-label="Routine phase timeline">
+              <div class="step" data-phase="buy"><div class="step-label">1. Buy</div><div class="step-value">Pending</div></div>
+              <div class="step" data-phase="launch"><div class="step-label">2. Launch</div><div class="step-value">Pending</div></div>
+              <div class="step" data-phase="transit"><div class="step-label">3. Jump</div><div class="step-value">Pending</div></div>
+              <div class="step" data-phase="dock"><div class="step-label">4. Dock</div><div class="step-value">Pending</div></div>
+              <div class="step" data-phase="sell"><div class="step-label">5. Sell</div><div class="step-value">Pending</div></div>
+              <div class="step" data-phase="return"><div class="step-label">6. Return</div><div class="step-value">Pending</div></div>
             </div>
 
             <div class="mini-metrics">
               <div class="metric">
                 <div class="metric-label">Elapsed</div>
-                <div class="metric-value mono">00:27:14</div>
+                <div class="metric-value mono" id="routine-elapsed">00:00:00</div>
               </div>
               <div class="metric">
                 <div class="metric-label">Current run</div>
-                <div class="metric-value success mono">43.1m</div>
+                <div class="metric-value success mono" id="routine-current-run">0 CR</div>
               </div>
               <div class="metric">
                 <div class="metric-label">Cargo moved</div>
-                <div class="metric-value mono">2,352 t</div>
+                <div class="metric-value mono" id="routine-cargo-moved">0 t</div>
               </div>
             </div>
           </div>
@@ -969,25 +969,9 @@
           <section class="panel activity-panel" aria-labelledby="activity-title">
             <div class="panel-head">
               <div class="panel-title" id="activity-title">Activity</div>
-              <div class="panel-action">Static sample</div>
+              <div class="panel-action" id="activity-status">Live</div>
             </div>
-            <div class="panel-body" id="activity-list">
-              <div class="activity-row">
-                <div class="activity-time mono">12:45:02</div>
-                <div class="activity-text">Bought 784t Agronomic Treatment at Galileo.</div>
-                <span class="badge success">Market</span>
-              </div>
-              <div class="activity-row">
-                <div class="activity-time mono">12:44:36</div>
-                <div class="activity-text">Route set for Alioth. Waiting for FSD jump.</div>
-                <span class="badge neutral">Nav</span>
-              </div>
-              <div class="activity-row">
-                <div class="activity-time mono">12:43:58</div>
-                <div class="activity-text">Two-way haul started with station/carrier endpoints.</div>
-                <span class="badge warning">Haul</span>
-              </div>
-            </div>
+            <div class="panel-body" id="activity-list"></div>
           </section>
         </section>
       </main>
@@ -1083,6 +1067,7 @@
     let clientRole = "observer";
     let commandSequence = 1;
     const pendingCommands = new Map();
+    const activityEntries = new Map();
 
     function routeByIndex(index) {
       return routes.find((route) => route.index === index) || routes[0] || null;
@@ -1212,6 +1197,11 @@
           applyHydratePayload(message.payload || {});
           return;
         }
+        if (message.message_type === "event.activity_log_appended") {
+          addActivityEntry(message.payload.entry || {});
+          renderActivityLog();
+          return;
+        }
         const pending = pendingCommands.get(message.correlation_message_id);
         if (!pending) {
           return;
@@ -1227,17 +1217,132 @@
     }
 
     function appendActivity(text, label, badgeClass = "neutral") {
+      addActivityEntry({
+        entry_id: `local-${Date.now()}-${Math.random()}`,
+        timestamp: new Date().toISOString(),
+        message_text: text,
+        severity: badgeClass === "warning" ? "warning" : "info",
+        label
+      });
+      renderActivityLog();
+    }
+
+    function addActivityEntry(entry) {
+      const id = String(entry.entry_id || `entry-${activityEntries.size + 1}`);
+      activityEntries.set(id, {
+        entry_id: id,
+        timestamp: entry.timestamp || new Date().toISOString(),
+        message_text: entry.message_text || "",
+        severity: entry.severity || "info",
+        label: entry.label || activityLabel(entry.message_text || "")
+      });
+    }
+
+    function activityLabel(message) {
+      const text = String(message).toLowerCase();
+      if (text.includes("haul") || text.includes("route")) {
+        return "Haul";
+      }
+      if (text.includes("market") || text.includes("bought") || text.includes("sold")) {
+        return "Market";
+      }
+      if (text.includes("dock") || text.includes("jump") || text.includes("destination")) {
+        return "Nav";
+      }
+      return "Log";
+    }
+
+    function activityBadgeClass(entry) {
+      if (entry.severity === "warning" || entry.severity === "error") {
+        return "warning";
+      }
+      if (entry.label === "Market") {
+        return "success";
+      }
+      return entry.label === "Haul" ? "warning" : "neutral";
+    }
+
+    function activityTime(timestamp) {
+      const parsed = Date.parse(timestamp);
+      if (Number.isNaN(parsed)) {
+        return "--:--:--";
+      }
+      return new Date(parsed).toLocaleTimeString([], { hour12: false });
+    }
+
+    function renderActivityLog() {
       const list = document.getElementById("activity-list");
-      const now = new Date();
-      const time = now.toLocaleTimeString([], { hour12: false });
-      const row = document.createElement("div");
-      row.className = "activity-row";
-      row.innerHTML = `
-        <div class="activity-time mono">${escapeHtml(time)}</div>
-        <div class="activity-text">${escapeHtml(text)}</div>
-        <span class="badge ${badgeClass}">${escapeHtml(label)}</span>
-      `;
-      list.prepend(row);
+      const entries = Array.from(activityEntries.values()).slice(-8).reverse();
+      document.getElementById("activity-status").textContent = entries.length ? "Live" : "No entries";
+      if (!entries.length) {
+        list.innerHTML = `<div class="activity-row"><div class="activity-time mono">--:--:--</div><div class="activity-text">Waiting for backend activity.</div><span class="badge neutral">Log</span></div>`;
+        return;
+      }
+      list.innerHTML = entries.map((entry) => `
+        <div class="activity-row">
+          <div class="activity-time mono">${escapeHtml(activityTime(entry.timestamp))}</div>
+          <div class="activity-text">${escapeHtml(stripMarkup(entry.message_text))}</div>
+          <span class="badge ${activityBadgeClass(entry)}">${escapeHtml(entry.label)}</span>
+        </div>
+      `).join("");
+    }
+
+    function stripMarkup(value) {
+      return String(value || "").replace(/\[\/?[a-zA-Z0-9_#= .-]+\]/g, "");
+    }
+
+    function formatDuration(seconds) {
+      const safeSeconds = Math.max(0, Number(seconds || 0));
+      const hours = Math.floor(safeSeconds / 3600);
+      const minutes = Math.floor((safeSeconds % 3600) / 60);
+      const secs = Math.floor(safeSeconds % 60);
+      return [hours, minutes, secs].map((value) => String(value).padStart(2, "0")).join(":");
+    }
+
+    function formatCredits(value) {
+      const amount = Number(value || 0);
+      const abs = Math.abs(amount);
+      if (abs >= 1000000000) {
+        return `${(amount / 1000000000).toFixed(1)}b CR`;
+      }
+      if (abs >= 1000000) {
+        return `${(amount / 1000000).toFixed(1)}m CR`;
+      }
+      if (abs >= 1000) {
+        return `${(amount / 1000).toFixed(1)}k CR`;
+      }
+      return `${amount} CR`;
+    }
+
+    function updateRoutinePanel(routine, haulSession, ship) {
+      const phase = routine.haul_phase || null;
+      const phaseOrder = ["buy", "launch", "transit", "dock", "sell", "return"];
+      const phaseIndex = phase ? phaseOrder.indexOf(phase) : -1;
+      document.getElementById("routine-status").textContent =
+        routine.routine_active && routine.active_routine_name === "haul"
+          ? (routine.haul_stop_requested ? "Stop requested" : "Running")
+          : "Idle";
+      document.querySelectorAll("#routine-steps .step").forEach((step, index) => {
+        const stepPhase = step.dataset.phase;
+        const value = step.querySelector(".step-value");
+        step.classList.remove("done", "current");
+        if (!routine.routine_active || routine.active_routine_name !== "haul") {
+          value.textContent = "Pending";
+        } else if (stepPhase === phase) {
+          step.classList.add("current");
+          value.textContent = phase === "transit" ? "En route" : "Active";
+        } else if (phaseIndex > index) {
+          step.classList.add("done");
+          value.textContent = "Complete";
+        } else {
+          value.textContent = "Pending";
+        }
+      });
+      document.getElementById("routine-elapsed").textContent =
+        formatDuration(haulSession.session_elapsed_s || haulSession.current_run_elapsed_s || 0);
+      document.getElementById("routine-current-run").textContent = formatCredits(haulSession.current_run_profit || 0);
+      document.getElementById("routine-cargo-moved").textContent =
+        `${Number(haulSession.cargo_moved_t || 0).toLocaleString()} t`;
     }
 
     function renderRows() {
@@ -1324,6 +1429,8 @@
       const ship = payload.ship || {};
       const market = payload.market || {};
       const haulSession = payload.haul_session || {};
+      const routine = payload.routine || {};
+      const activity = payload.activity_log || {};
       document.getElementById("summary-current").textContent =
         market.station || ship.station || ship.system || "-";
       document.getElementById("summary-home").textContent = ship.system || "-";
@@ -1337,6 +1444,11 @@
       if (ship.cargo_capacity) {
         document.getElementById("capacity").value = ship.cargo_capacity;
       }
+      document.getElementById("summary-profit").textContent = formatCredits(haulSession.accumulated_profit || 0);
+      updateRoutinePanel(routine, haulSession, ship);
+      activityEntries.clear();
+      (activity.entries || []).forEach(addActivityEntry);
+      renderActivityLog();
     }
 
     document.getElementById("route-rows").addEventListener("click", (event) => {
@@ -1427,6 +1539,7 @@
 
     renderRows();
     renderSelected();
+    renderActivityLog();
     connectWebsocket();
   </script>
 </body>

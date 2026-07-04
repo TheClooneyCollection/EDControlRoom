@@ -46,6 +46,7 @@ def start_haul_stats(
         waiting_for_station_1_departure=at_station_1,
         resumed_mid_run=not at_station_1,
         accumulated_profit=previous.accumulated_profit,
+        cargo_moved_t=previous.cargo_moved_t,
         completed_runs=previous.completed_runs,
         last_run_profit=previous.last_run_profit,
         last_run_elapsed_s=previous.last_run_elapsed_s,
@@ -136,6 +137,7 @@ def handle_haul_event(
             stats.waiting_for_station_1_departure = True
     elif event == "MarketBuy" and "TotalCost" in ev:
         total_cost = int(ev["TotalCost"])
+        stats.cargo_moved_t += int(ev.get("Count", 0) or 0)
         if stats.clean_run_active and at_station_2:
             stats.current_run_profit -= total_cost
         elif at_station_1 and stats.waiting_for_station_1_departure:
