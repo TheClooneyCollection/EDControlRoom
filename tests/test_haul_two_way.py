@@ -10,10 +10,12 @@ from edap.config import default_haul_routine_defaults
 from edap.routines.callbacks import noop_announce, noop_progress
 from edap.routines.haul_support import HaulMarketSettings, HaulRuntime, HaulTiming, HaulTravelSettings
 from edap.routines.haul_two_way import (
+    _HaulCtx,
     Phase,
     StationLeg,
     TwoWayHaulRoute,
     _detect_start_phase,
+    _run_market_buy,
     _wait_for_arrival_or_approach_event,
     haul_loop_two_way as _haul_loop_two_way,
 )
@@ -177,6 +179,54 @@ def _station_1_leg() -> StationLeg:
 
 def _station_2_leg() -> StationLeg:
     return StationLeg(index=2, station=_STATION_2, system=_SYSTEM_2, buy_commodity=_CARGO_2, sell_commodity=_CARGO_1)
+
+
+def _test_haul_runtime(
+    journal_dir: Path,
+    controls: FakeShipControls,
+    watcher: FakeWatcher,
+    *,
+    progress_fn=noop_progress,
+    announce_fn=noop_announce,
+) -> HaulRuntime:
+    return HaulRuntime(
+        controls=controls,
+        watcher=watcher,
+        journal_dir=journal_dir,
+        market_path=journal_dir / "Market.json",
+        timing=HaulTiming(
+            step_delay_s=0.0,
+            max_hold_s=10.0,
+            dock_timeout_s=30.0,
+            request_timeout_s=10.0,
+            undock_timeout_s=10.0,
+            undock_no_track_timeout_s=10.0,
+            trade_timeout_s=10.0,
+            settle_s=0.0,
+            galaxy_map_settle_s=0.0,
+            supercruise_exit_settle_s=0.0,
+            boost_settle_s=0.0,
+            deny_retry_delay_s=0.0,
+            mass_lock_boost_delay_s=0.0,
+            post_sell_settle_s=0.0,
+            nav_panel_open_delay_s=0.0,
+        ),
+        market=HaulMarketSettings(
+            buy_hold_segments=_DEFAULTS.market_buy_hold_segments,
+            sell_quantity_restore_taps=_DEFAULTS.market_sell_quantity_restore_taps,
+            sell_quantity_restore_tap_delay_s=_DEFAULTS.market_sell_quantity_restore_tap_delay_seconds,
+            critical_level_multiplier=_DEFAULTS.market_critical_level_multiplier,
+        ),
+        travel=HaulTravelSettings(
+            auto_hyperspace_engage=False,
+            open_nav_panel_after_hyperspace_arrival=False,
+            max_dock_retries=1,
+        ),
+        time_fn=_ticking_clock(),
+        sleeper=lambda _seconds: None,
+        progress_fn=progress_fn,
+        announce_fn=announce_fn,
+    )
 
 
 class TwoWayHaulLoopTests(unittest.TestCase):
@@ -413,7 +463,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 )
                 def fake_buy(controls, watcher, **kwargs):
                     market_calls.append(("buy", kwargs["target"]))
-                    _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 64, "Stolen": 0}])
+                    _write_cargo(journal_dir, [{"Name": kwargs["target"], "Count": 64, "Stolen": 0}])
                     return RoutineResult(
                         action="market_buy",
                         dispatch=ActionDispatchResult(action="market_buy", status="ok"),
@@ -497,7 +547,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 )
                 def fake_buy(controls, watcher, **kwargs):
                     market_calls.append(("buy", kwargs["target"]))
-                    _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 64, "Stolen": 0}])
+                    _write_cargo(journal_dir, [{"Name": kwargs["target"], "Count": 64, "Stolen": 0}])
                     return RoutineResult(
                         action="market_buy",
                         dispatch=ActionDispatchResult(action="market_buy", status="ok"),
@@ -535,6 +585,141 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 ("sell", _CARGO_1),
             ],
         )
+
+    def test_buy_phase_sells_wrong_cargo_and_retries_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_cargo(journal_dir, [])
+            controls = FakeShipControls()
+            watcher = FakeWatcher([])
+            progress: list[str] = []
+            announcements: list[tuple[AnnouncementId, dict[str, object]]] = []
+            ctx = _HaulCtx(
+                runtime=_test_haul_runtime(
+                    journal_dir,
+                    controls,
+                    watcher,
+                    progress_fn=progress.append,
+                    announce_fn=lambda message_id, **values: announcements.append((message_id, values)),
+                ),
+                station_1=_station_1_leg(),
+                station_2=_station_2_leg(),
+            )
+            calls: list[tuple[str, str]] = []
+
+            def fake_buy(controls, watcher, **kwargs):
+                calls.append(("buy", kwargs["target"]))
+                if len([call for call in calls if call[0] == "buy"]) == 1:
+                    _write_cargo(journal_dir, [{"Name": "Gold", "Count": 64, "Stolen": 0}])
+                    return RoutineResult(
+                        action="MarketBuy",
+                        dispatch=ActionDispatchResult(
+                            action="MarketBuy",
+                            status="error",
+                            reason="wrong commodity bought: Gold (expected Aluminium)",
+                        ),
+                        details={
+                            "phase": "wrong_item",
+                            "wrong_commodity": "Gold",
+                            "target": _CARGO_1,
+                        },
+                    )
+                _write_cargo(journal_dir, [{"Name": _CARGO_1, "Count": 64, "Stolen": 0}])
+                return RoutineResult(
+                    action="MarketBuy",
+                    dispatch=ActionDispatchResult(action="MarketBuy", status="ok"),
+                )
+
+            def fake_sell(controls, watcher, **kwargs):
+                calls.append(("sell", kwargs["target"]))
+                _write_cargo(journal_dir, [])
+                return RoutineResult(
+                    action="MarketSell",
+                    dispatch=ActionDispatchResult(action="MarketSell", status="ok"),
+                )
+
+            with patch("edap.routines.haul_two_way.market_buy", side_effect=fake_buy), patch(
+                "edap.routines.haul_two_way.market_sell",
+                side_effect=fake_sell,
+            ):
+                result, next_phase = _run_market_buy(ctx, leg=ctx.station_1, next_phase=Phase.UNDOCK_STATION_1)
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(next_phase, Phase.UNDOCK_STATION_1)
+        self.assertEqual(ctx.wrong_buy_count, 1)
+        self.assertEqual(calls, [("buy", _CARGO_1), ("sell", "Gold"), ("buy", _CARGO_1)])
+        self.assertIn("Wrong cargo sold; retrying intended buy.", progress)
+        self.assertIn((AnnouncementId.SELLING_CARGO, {"commodity_name": "Gold"}), announcements)
+
+    def test_buy_phase_aborts_after_second_wrong_cargo_recovery(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_cargo(journal_dir, [])
+            controls = FakeShipControls()
+            watcher = FakeWatcher([])
+            progress: list[str] = []
+            announcements: list[tuple[AnnouncementId, dict[str, object]]] = []
+            ctx = _HaulCtx(
+                runtime=_test_haul_runtime(
+                    journal_dir,
+                    controls,
+                    watcher,
+                    progress_fn=progress.append,
+                    announce_fn=lambda message_id, **values: announcements.append((message_id, values)),
+                ),
+                station_1=_station_1_leg(),
+                station_2=_station_2_leg(),
+            )
+            wrong_cargos = ["Gold", "Silver"]
+            calls: list[tuple[str, str]] = []
+
+            def fake_buy(controls, watcher, **kwargs):
+                calls.append(("buy", kwargs["target"]))
+                wrong_cargo = wrong_cargos.pop(0)
+                _write_cargo(journal_dir, [{"Name": wrong_cargo, "Count": 64, "Stolen": 0}])
+                return RoutineResult(
+                    action="MarketBuy",
+                    dispatch=ActionDispatchResult(
+                        action="MarketBuy",
+                        status="error",
+                        reason=f"wrong commodity bought: {wrong_cargo} (expected Aluminium)",
+                    ),
+                    details={
+                        "phase": "wrong_item",
+                        "wrong_commodity": wrong_cargo,
+                        "target": _CARGO_1,
+                    },
+                )
+
+            def fake_sell(controls, watcher, **kwargs):
+                calls.append(("sell", kwargs["target"]))
+                _write_cargo(journal_dir, [])
+                return RoutineResult(
+                    action="MarketSell",
+                    dispatch=ActionDispatchResult(action="MarketSell", status="ok"),
+                )
+
+            with patch("edap.routines.haul_two_way.market_buy", side_effect=fake_buy), patch(
+                "edap.routines.haul_two_way.market_sell",
+                side_effect=fake_sell,
+            ):
+                result, next_phase = _run_market_buy(ctx, leg=ctx.station_1, next_phase=Phase.UNDOCK_STATION_1)
+
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertEqual(next_phase, Phase.UNDOCK_STATION_1)
+        self.assertEqual(ctx.wrong_buy_count, 2)
+        self.assertIn("Wrong cargo bought twice", result.dispatch.reason or "")
+        self.assertEqual(
+            calls,
+            [
+                ("buy", _CARGO_1),
+                ("sell", "Gold"),
+                ("buy", _CARGO_1),
+                ("sell", "Silver"),
+            ],
+        )
+        self.assertIn((AnnouncementId.HAUL_WRONG_CARGO_ABORTED, {}), announcements)
+        self.assertTrue(any(line.startswith("Error: Wrong cargo bought twice") for line in progress))
 
     def test_stop_requested_halts_at_station_1_sale_boundary_before_buy(self) -> None:
         controls = FakeShipControls()
@@ -1905,14 +2090,22 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
                 "edap.routines.haul_two_way.market_buy"
             ) as market_buy_mock:
-                market_sell_mock.side_effect = lambda controls, watcher, **kwargs: RoutineResult(
-                    action="market_sell",
-                    dispatch=ActionDispatchResult(action="market_sell", status="ok"),
-                )
-                market_buy_mock.side_effect = lambda controls, watcher, **kwargs: RoutineResult(
-                    action="market_buy",
-                    dispatch=ActionDispatchResult(action="market_buy", status="ok"),
-                )
+                def fake_sell(controls, watcher, **kwargs):
+                    _write_cargo(journal_dir, [])
+                    return RoutineResult(
+                        action="market_sell",
+                        dispatch=ActionDispatchResult(action="market_sell", status="ok"),
+                    )
+
+                def fake_buy(controls, watcher, **kwargs):
+                    _write_cargo(journal_dir, [{"Name": kwargs["target"], "Count": 64, "Stolen": 0}])
+                    return RoutineResult(
+                        action="market_buy",
+                        dispatch=ActionDispatchResult(action="market_buy", status="ok"),
+                    )
+
+                market_sell_mock.side_effect = fake_sell
+                market_buy_mock.side_effect = fake_buy
                 haul_loop_two_way(
                     controls,
                     watcher,

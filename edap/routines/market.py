@@ -134,6 +134,14 @@ def _is_market_event(event: dict[str, object], event_type: str, target: str) -> 
     )
 
 
+def _is_trade_event(event: dict[str, object], event_type: str) -> bool:
+    return event.get("event") == event_type
+
+
+def _event_commodity_name(event: dict[str, object]) -> str:
+    return str(event.get("Type_Localised") or event.get("Type") or "unknown commodity")
+
+
 def _read_last_docked_state(journal_dir: Path) -> dict[str, object] | None:
     journal_files = sorted(journal_dir.glob("Journal.*.log"))
     if not journal_files:
@@ -603,6 +611,9 @@ def _market_trade(
         if result.dispatch.status == "ok" and result.trigger_event is not None:
             return result
 
+        if (result.details or {}).get("phase") == "wrong_item":
+            return result
+
         # Only the wait-for-event phase is retryable; other failures (UI dispatch,
         # missing Market.json, item not in list) indicate setup problems that won't
         # be fixed by trying again.
@@ -922,9 +933,14 @@ def _market_trade_attempt(
 
     # Wait for journal confirmation
     progress_fn(f"Waiting for {event_type} event (timeout {trade_timeout_s:.0f}s)...")
+    predicate = (
+        (lambda e: _is_trade_event(e, event_type))
+        if side == "buy"
+        else (lambda e: _is_market_event(e, event_type, target))
+    )
     trade_event, _ = _wait_for_event_with_pending(
         watcher,
-        predicate=lambda e: _is_market_event(e, event_type, target),
+        predicate=predicate,
         deadline=time_fn() + trade_timeout_s,
         time_fn=time_fn,
         pending_events=pending_events,
@@ -938,6 +954,44 @@ def _market_trade_attempt(
                 reason=f"{event_type} for '{target}' not observed within {trade_timeout_s:.0f}s",
             ),
             details={"phase": "wait_for_event"},
+        )
+
+    if side == "buy" and not _is_market_event(trade_event, event_type, target):
+        wrong_commodity = _event_commodity_name(trade_event)
+        progress_fn(
+            f"{event_type}: wrong commodity bought: {wrong_commodity} "
+            f"(expected {target})"
+        )
+        back_dispatch = _market_back_out_to_station_menu(
+            controls,
+            step_delay_s=step_delay_s,
+            sleeper=sleeper,
+            progress_fn=progress_fn,
+        )
+        if back_dispatch.status != "ok":
+            return RoutineResult(
+                action="UI_Back",
+                dispatch=back_dispatch,
+                trigger_event=trade_event,
+                details={
+                    "phase": "return_to_station_menu",
+                    "wrong_commodity": wrong_commodity,
+                    "target": target,
+                },
+            )
+        return RoutineResult(
+            action=event_type,
+            dispatch=ActionDispatchResult(
+                action=event_type,
+                status="error",
+                reason=f"wrong commodity bought: {wrong_commodity} (expected {target})",
+            ),
+            trigger_event=trade_event,
+            details={
+                "phase": "wrong_item",
+                "wrong_commodity": wrong_commodity,
+                "target": target,
+            },
         )
 
     count = trade_event.get("Count", "?")

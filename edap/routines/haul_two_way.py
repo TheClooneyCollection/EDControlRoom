@@ -73,6 +73,29 @@ def _inventory_commodity_count(inventory: list[dict], commodity: str) -> int:
     return total
 
 
+def _inventory_item_matches(item: dict, commodity: str) -> bool:
+    commodity_lower = commodity.lower()
+    return (
+        str(item.get("Name", "")).lower() == commodity_lower
+        or str(item.get("Name_Localised", "")).lower() == commodity_lower
+    )
+
+
+def _inventory_item_display_name(item: dict) -> str:
+    return str(item.get("Name_Localised") or item.get("Name") or "unknown commodity")
+
+
+def _wrong_buy_commodity_from_inventory(inventory: list[dict], expected_commodity: str) -> str:
+    for item in inventory:
+        count = item.get("Count", 0)
+        if isinstance(count, bool) or not isinstance(count, (int, float)) or count <= 0:
+            continue
+        if _inventory_item_matches(item, expected_commodity):
+            continue
+        return _inventory_item_display_name(item)
+    return ""
+
+
 def _inventory_used_capacity(inventory: list[dict]) -> int:
     used = 0
     for item in inventory:
@@ -136,6 +159,7 @@ class _HaulCtx:
     runtime: HaulRuntime
     station_1: StationLeg
     station_2: StationLeg
+    wrong_buy_count: int = 0
 
 
 def _detect_start_phase(
@@ -342,17 +366,84 @@ def _run_market_buy(
             ),
             next_phase,
         )
-    runtime.progress_fn(f"Buying {leg.buy_commodity} at {leg.label} (MAX)...")
-    runtime.announce_fn(AnnouncementId.BUYING_CARGO, commodity_name=leg.buy_commodity)
-    result = market_buy(
+    while True:
+        runtime.progress_fn(f"Buying {leg.buy_commodity} at {leg.label} (MAX)...")
+        runtime.announce_fn(AnnouncementId.BUYING_CARGO, commodity_name=leg.buy_commodity)
+        result = market_buy(
+            runtime.controls,
+            runtime.watcher,
+            market_path=runtime.market_path,
+            target=leg.buy_commodity,
+            amount="MAX",
+            step_delay_s=runtime.timing.step_delay_s,
+            max_hold_s=runtime.timing.max_hold_s,
+            buy_hold_segments=runtime.market.buy_hold_segments,
+            trade_timeout_s=runtime.timing.trade_timeout_s,
+            time_fn=runtime.time_fn,
+            sleeper=runtime.sleeper,
+            progress_fn=runtime.progress_fn,
+            announce_fn=runtime.announce_fn,
+            critical_level_multiplier=runtime.market.critical_level_multiplier,
+        )
+        wrong_commodity = _wrong_buy_commodity_after_buy(runtime.journal_dir, leg.buy_commodity, result)
+        if not wrong_commodity:
+            if result.dispatch.status != "ok":
+                return result, next_phase
+            return result, next_phase
+
+        ctx.wrong_buy_count += 1
+        runtime.progress_fn(
+            f"Wrong cargo bought at {leg.label}: {wrong_commodity!r}; "
+            f"expected {leg.buy_commodity!r}. Selling wrong cargo "
+            f"(mistake {ctx.wrong_buy_count}/2)."
+        )
+        sell_result = _sell_wrong_buy_cargo(ctx, wrong_commodity)
+        if sell_result.dispatch.status != "ok":
+            return sell_result, next_phase
+        if ctx.wrong_buy_count >= 2:
+            reason = (
+                "Wrong cargo bought twice during haul buy recovery; "
+                f"last wrong cargo {wrong_commodity!r}, expected {leg.buy_commodity!r}."
+            )
+            runtime.progress_fn(f"Error: {reason}")
+            runtime.announce_fn(AnnouncementId.HAUL_WRONG_CARGO_ABORTED)
+            return _error_routine_result(reason), next_phase
+        runtime.progress_fn("Wrong cargo sold; retrying intended buy.")
+
+
+def _wrong_buy_commodity_after_buy(
+    journal_dir: Path,
+    expected_commodity: str,
+    result: RoutineResult,
+) -> str:
+    inventory_wrong_commodity = _wrong_buy_commodity_from_inventory(
+        _read_cargo_json(journal_dir),
+        expected_commodity,
+    )
+    if inventory_wrong_commodity:
+        return inventory_wrong_commodity
+    if (result.details or {}).get("phase") != "wrong_item":
+        return ""
+    wrong_commodity = str((result.details or {}).get("wrong_commodity", "")).strip()
+    if wrong_commodity and wrong_commodity.lower() != expected_commodity.lower():
+        return wrong_commodity
+    return ""
+
+
+def _sell_wrong_buy_cargo(ctx: _HaulCtx, wrong_commodity: str) -> RoutineResult:
+    runtime = ctx.runtime
+    runtime.announce_fn(AnnouncementId.SELLING_CARGO, commodity_name=wrong_commodity)
+    return market_sell(
         runtime.controls,
         runtime.watcher,
         market_path=runtime.market_path,
-        target=leg.buy_commodity,
+        target=wrong_commodity,
         amount="MAX",
         step_delay_s=runtime.timing.step_delay_s,
         max_hold_s=runtime.timing.max_hold_s,
         buy_hold_segments=runtime.market.buy_hold_segments,
+        sell_quantity_restore_taps=runtime.market.sell_quantity_restore_taps,
+        sell_quantity_restore_tap_delay_s=runtime.market.sell_quantity_restore_tap_delay_s,
         trade_timeout_s=runtime.timing.trade_timeout_s,
         time_fn=runtime.time_fn,
         sleeper=runtime.sleeper,
@@ -360,9 +451,6 @@ def _run_market_buy(
         announce_fn=runtime.announce_fn,
         critical_level_multiplier=runtime.market.critical_level_multiplier,
     )
-    if result.dispatch.status != "ok":
-        return result, next_phase
-    return result, next_phase
 
 
 def _should_stop_before_station_1_buy(

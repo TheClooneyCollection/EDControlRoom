@@ -921,6 +921,56 @@ class RoutinesTests(unittest.TestCase):
             ],
         )
 
+    def test_market_buy_reports_wrong_commodity_event_immediately(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher(
+            [[{"event": "MarketBuy", "Type": "silver", "Type_Localised": "Silver", "Count": 1, "TotalCost": 1234}]]
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            (journal_dir / "Journal.240101000000.01.log").write_text(
+                json.dumps({
+                    "timestamp": "2024-01-01T00:00:00Z",
+                    "event": "Location",
+                    "Docked": True,
+                    "StationName": "Pawelczyk Dock",
+                }) + "\n",
+                encoding="utf-8",
+            )
+            market_path = journal_dir / "Market.json"
+            market_path.write_text(
+                json.dumps(
+                    {
+                        "StationName": "Pawelczyk Dock",
+                        "Items": [
+                            {"Category": "Metals", "Name": "gold", "Name_Localised": "Gold", "Stock": 1000},
+                            {"Category": "Metals", "Name": "silver", "Name_Localised": "Silver", "Stock": 1000},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = market_buy(
+                controls,
+                watcher,
+                market_path=market_path,
+                target="Gold",
+                amount=1,
+                step_delay_s=0.0,
+                nav_delay_s=0.0,
+                trade_timeout_s=30.0,
+                time_fn=lambda: 0.0,
+                sleeper=lambda _: None,
+            )
+
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertIn("wrong commodity bought: Silver", result.dispatch.reason or "")
+        self.assertEqual(result.trigger_event["Type_Localised"], "Silver")
+        self.assertEqual(result.details["phase"], "wrong_item")
+        self.assertEqual(result.details["wrong_commodity"], "Silver")
+
     def test_market_sell_requires_current_docked_state(self) -> None:
         controls = FakeShipControls()
         watcher = FakeWatcher([])
