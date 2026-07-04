@@ -441,6 +441,10 @@
       margin-top: 2px;
     }
 
+    .action-row .btn {
+      flex: 1;
+    }
+
     .btn {
       border: 1px solid var(--border-strong);
       border-radius: var(--radius);
@@ -967,8 +971,9 @@
                   <pre class="command-preview mono" id="command-preview"></pre>
                 </details>
 
-                <div class="btn-row">
-                  <button class="btn success block" type="button" id="start-haul">Start route</button>
+                <div class="btn-row action-row">
+                  <button class="btn primary" type="button" id="set-destination">Set destination</button>
+                  <button class="btn success" type="button" id="start-haul">Start route</button>
                 </div>
               </div>
             </section>
@@ -1082,6 +1087,7 @@
     function updateOperatorState() {
       const active = clientRole === "active_operator";
       document.getElementById("start-haul").disabled = !active || !routeByIndex(selectedRouteIndex);
+      document.getElementById("set-destination").disabled = !active || !routeByIndex(selectedRouteIndex);
       document.querySelector("#search-form .btn.primary").disabled = !active;
       document.getElementById("access-token").value = accessToken;
       if (!accessToken) {
@@ -1382,13 +1388,16 @@
     function renderSelected() {
       const route = routeByIndex(selectedRouteIndex);
       const startButton = document.getElementById("start-haul");
+      const destinationButton = document.getElementById("set-destination");
       if (!route) {
         document.getElementById("selected-title").textContent = "Select a route before starting.";
         document.getElementById("command-preview").textContent = "";
         startButton.disabled = true;
+        destinationButton.disabled = true;
         return;
       }
       startButton.disabled = clientRole !== "active_operator";
+      destinationButton.disabled = clientRole !== "active_operator";
       document.getElementById("selected-title").textContent =
         `${route.buySystem} (${route.buyStation}) -> ${route.sellSystem} (${route.sellStation})`;
       updateCommandPreview();
@@ -1413,6 +1422,11 @@
         galaxy_map_settle: settle,
         dock_timeout: timeout
       };
+    }
+
+    function galmapSettleTime() {
+      const value = Number(document.getElementById("galaxy-settle").value || "2.0");
+      return Number.isFinite(value) ? value : 2.0;
     }
 
     function updateCommandPreview() {
@@ -1516,6 +1530,39 @@
       const totalPages = Math.max(1, Math.ceil(routes.length / ROUTES_PER_PAGE));
       routePage = Math.min(totalPages, routePage + 1);
       renderRows();
+    });
+
+    document.getElementById("set-destination").addEventListener("click", () => {
+      const route = routeByIndex(selectedRouteIndex);
+      if (!route) {
+        appendActivity("Select a route before setting destination.", "Nav", "warning");
+        return;
+      }
+      if (!accessToken) {
+        appendActivity("Enter and save an access token to set destination.", "Nav", "warning");
+        return;
+      }
+      if (clientRole !== "active_operator") {
+        appendActivity("Only the active operator can set destination.", "Nav", "warning");
+        return;
+      }
+      const destination = route.buySystem || "";
+      if (!destination) {
+        appendActivity("Selected route is missing a Station 1 system.", "Nav", "warning");
+        return;
+      }
+      sendCommand("command.dispatch_destination", {
+        destination,
+        galaxy_map_settle: galmapSettleTime(),
+        skip_delay: false,
+        raw_command: `web set destination ${destination}`
+      })
+        .then(() => {
+          appendActivity(`Destination set for ${destination}.`, "Nav", "success");
+        })
+        .catch((error) => {
+          appendActivity(error.message, "Nav", "warning");
+        });
     });
 
     document.getElementById("start-haul").addEventListener("click", () => {
