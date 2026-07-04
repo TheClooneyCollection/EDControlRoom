@@ -121,6 +121,7 @@ def haul_loop_two_way(*args, **kwargs):
     iterations = kwargs.pop("iterations", 0)
     start_phase = kwargs.pop("start_phase", None)
     stop_requested_fn = kwargs.pop("stop_requested_fn", None)
+    phase_updated_fn = kwargs.pop("phase_updated_fn", None)
     if kwargs:
         raise AssertionError(f"Unhandled haul test kwargs: {sorted(kwargs)}")
     return _haul_loop_two_way(
@@ -129,6 +130,7 @@ def haul_loop_two_way(*args, **kwargs):
         iterations=iterations,
         start_phase=start_phase,
         stop_requested_fn=stop_requested_fn,
+        phase_updated_fn=phase_updated_fn,
     )
 
 
@@ -386,7 +388,6 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             [{"event": "DockingGranted", "LandingPad": 1, "StationName": _STATION_1}],
             [{"event": "Docked", "StationName": _STATION_1}],
         ])
-
         with tempfile.TemporaryDirectory() as tmp:
             journal_dir = Path(tmp)
             _write_market(
@@ -689,6 +690,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             [{"event": "DockingGranted", "LandingPad": 1, "StationName": _STATION_1}],
             [{"event": "Docked", "StationName": _STATION_1}],
         ])
+        phases: list[Phase] = []
 
         with tempfile.TemporaryDirectory() as tmp:
             journal_dir = Path(tmp)
@@ -722,9 +724,11 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 trade_timeout_s=10.0,
                 time_fn=_ticking_clock(),
                 sleeper=lambda _: None,
+                phase_updated_fn=phases.append,
             )
 
         self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(phases, [Phase.DEPART_STATION_2_SYSTEM, Phase.TRANSIT_TO_STATION_1])
         hyperspace_calls = [call for call in controls.calls if call["action"] == "HyperSuperCombination"]
         self.assertEqual(len(hyperspace_calls), 1)
 

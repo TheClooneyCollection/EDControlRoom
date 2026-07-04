@@ -47,6 +47,8 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
             _runtime_state=RuntimeUIState(
                 routine_active=True,
                 active_routine_name="haul",
+                haul_phase="transit",
+                haul_phase_station_index=2,
             ),
             _current_version="1.2.3",
             _ctx=SimpleNamespace(
@@ -73,6 +75,7 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
         self.assertIsNone(message["payload"]["haul_session"]["current_run_started_at"])
         self.assertEqual(message["payload"]["haul_session"]["current_run_elapsed_s"], 50.0)
         self.assertEqual(message["payload"]["routine"]["haul_phase"], "transit")
+        self.assertEqual(message["payload"]["routine"]["haul_phase_station_index"], 2)
         self.assertEqual(
             message["payload"]["activity_log"]["entries"][0]["message_text"],
             "Starting haul loop.",
@@ -90,4 +93,5 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
         self.assertIsNone(parsed.haul_session.session_started_at)
         self.assertEqual(parsed.haul_session.session_elapsed_s, 75.0)
         self.assertEqual(parsed.routine.haul_phase, "transit")
+        self.assertEqual(parsed.routine.haul_phase_station_index, 2)
         self.assertEqual(parsed.activity_log.entries[0].message_text, "Starting haul loop.")

@@ -20,7 +20,7 @@ from edap.inara.trade_routes import (
 from edap.multi_leg_haul import load_multi_leg_haul_definition
 from edap.routines import haul_loop_two_way, multi_leg_haul
 from edap.routines.haul_support import HaulMarketSettings, HaulRuntime, HaulTiming, HaulTravelSettings
-from edap.routines.haul_two_way import StationLeg, TwoWayHaulRoute
+from edap.routines.haul_two_way import Phase, StationLeg, TwoWayHaulRoute
 
 
 def _haul_param_as_bool(value: str, *, default: bool = False) -> bool:
@@ -28,6 +28,24 @@ def _haul_param_as_bool(value: str, *, default: bool = False) -> bool:
     if not raw:
         return default
     return raw in {"1", "true", "y", "yes", "land", "surface"}
+
+
+_TWO_WAY_PHASE_PROJECTION: dict[Phase, tuple[str, int]] = {
+    Phase.AT_STATION_1_SELL: ("sell", 1),
+    Phase.AT_STATION_1_BUY: ("buy", 1),
+    Phase.UNDOCK_STATION_1: ("undock", 1),
+    Phase.DEPART_STATION_1_SYSTEM: ("depart", 1),
+    Phase.TRANSIT_TO_STATION_2: ("transit", 2),
+    Phase.AT_STATION_2_SELL: ("sell", 2),
+    Phase.AT_STATION_2_BUY: ("buy", 2),
+    Phase.UNDOCK_STATION_2: ("undock", 2),
+    Phase.DEPART_STATION_2_SYSTEM: ("depart", 2),
+    Phase.TRANSIT_TO_STATION_1: ("transit", 1),
+}
+
+
+def _project_two_way_phase(phase: Phase) -> tuple[str, int]:
+    return _TWO_WAY_PHASE_PROJECTION[phase]
 
 
 def _build_haul_runtime(
@@ -507,6 +525,7 @@ def dispatch_haul_loop(
 
     def on_start() -> None:
         app._log(f"Starting haul loop: {', '.join(label_parts)} (infinite)...")
+        app._set_haul_phase(None, None)
         app._start_haul_stats(
             station_1_buying=station_1_buying,
             station_2_buying=station_2_buying,
@@ -522,6 +541,10 @@ def dispatch_haul_loop(
             runtime,
             route=route,
             stop_requested_fn=lambda: app._haul_stop_requested,
+            phase_updated_fn=lambda phase: app.call_from_thread(
+                app._set_haul_phase,
+                *_project_two_way_phase(phase),
+            ),
         ),
         active_routine_name="haul",
         on_start=on_start,

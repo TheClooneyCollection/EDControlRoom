@@ -41,6 +41,7 @@ class RoutineReadModel:
     shutdown_requested: bool
     shutdown_finalized: bool
     haul_phase: str | None = None
+    haul_phase_station_index: int | None = None
 
 
 @dataclass(frozen=True)
@@ -155,11 +156,17 @@ class LocalControlRoomDataSource:
                 instant_mode=app._runtime_state.instant_mode,
                 shutdown_requested=app._runtime_state.shutdown_requested,
                 shutdown_finalized=app._runtime_state.shutdown_finalized,
-                haul_phase=_derive_haul_phase(
-                    routine_active=app._runtime_state.routine_active,
-                    active_routine_name=app._runtime_state.active_routine_name,
-                    haul=app._haul_stats,
-                    ship=app._ship,
+                haul_phase=(
+                    app._runtime_state.haul_phase
+                    if app._runtime_state.routine_active
+                    and app._runtime_state.active_routine_name == "haul"
+                    else None
+                ),
+                haul_phase_station_index=(
+                    app._runtime_state.haul_phase_station_index
+                    if app._runtime_state.routine_active
+                    and app._runtime_state.active_routine_name == "haul"
+                    else None
                 ),
             ),
             session=SessionReadModel(
@@ -238,29 +245,6 @@ def build_local_control_room_dependencies(app: ControlRoomApp) -> ControlRoomDep
         data_source=LocalControlRoomDataSource(app),
         execution=LocalControlRoomExecution(app),
     )
-
-
-def _derive_haul_phase(
-    *,
-    routine_active: bool,
-    active_routine_name: str | None,
-    haul: HaulStats,
-    ship: ShipState,
-) -> str | None:
-    if not routine_active or active_routine_name != "haul" or not haul.active:
-        return None
-    if haul.waiting_for_station_1_departure:
-        return "buy"
-    current_station = (ship.station or "").lower()
-    if haul.clean_run_active:
-        if haul.station_2 and current_station == haul.station_2.lower():
-            return "sell"
-        if haul.station_1 and current_station == haul.station_1.lower():
-            return "return"
-        return "transit"
-    if haul.resumed_mid_run:
-        return "transit"
-    return "buy"
 
 
 def _copy_ship_state(ship: ShipState) -> ShipState:

@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `196`
-- Latest generated iteration number: `329`
+- Generated iteration count: `197`
+- Latest generated iteration number: `330`
 
 ## Iteration 134
 
@@ -5451,3 +5451,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-check the derived haul phase labels against a real two-way run and refine phase mapping if operator-visible transitions need more precision.
+
+## Iteration 330
+
+- When: `2026-07-04 09:40`
+- Area: `web`
+- Title: `compact-haul-phase-state`
+- Source: [2026-07-04-09-40_____web______compact-haul-phase-state.md](iteration-logs/2026-07-04-09-40_____web______compact-haul-phase-state.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `compact-haul-phase-state`
+- Started: `2026-07-04 09:40`
+
+## Summary
+
+- Replaced the web haul phase guess with compact state projected from the existing two-way haul `Phase` enum.
+
+## Changes
+
+- Added an optional `phase_updated_fn` callback to `haul_loop_two_way()` and wired Control Room dispatch to publish `sell|buy|undock|depart|transit` plus station index.
+- Stored compact haul phase state in `RuntimeUIState`, hydrate read models, and hydrate parsing so local and remote clients preserve the same routine state.
+- Updated `/haul` to render five reusable phase steps with a station 1/2 indicator instead of six guessed route steps.
+- Added focused tests for phase callback propagation, hydrate parsing, and the web phase projection mapping.
+
+## Follow-ups
+
+- Live-check the phase strip during a real two-way run to confirm operator-visible timing around skipped sell/buy legs.

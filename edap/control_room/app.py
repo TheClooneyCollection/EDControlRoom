@@ -701,6 +701,11 @@ class ControlRoomApp(App[None]):
     def _haul_stop_requested(self, value: bool) -> None:
         self._runtime_state.haul_stop_requested = value
 
+    def _set_haul_phase(self, phase: str | None, station_index: int | None) -> None:
+        self._runtime_state.haul_phase = phase
+        self._runtime_state.haul_phase_station_index = station_index
+        self._publish_protocol_data_refresh()
+
     @property
     def _verbose_controls(self) -> bool:
         return self._runtime_state.verbose_controls
@@ -878,6 +883,8 @@ class ControlRoomApp(App[None]):
         self._runtime_state.instant_mode = data.routine.instant_mode
         self._runtime_state.shutdown_requested = data.routine.shutdown_requested
         self._runtime_state.shutdown_finalized = data.routine.shutdown_finalized
+        self._runtime_state.haul_phase = data.routine.haul_phase
+        self._runtime_state.haul_phase_station_index = data.routine.haul_phase_station_index
         self._saved_state.default_haul = dict(data.command_history.default_haul)
         self._saved_state.history = list(data.command_history.history_entries)
         self._ship = ShipState(

@@ -135,6 +135,8 @@ class RuntimeUIState:
     routine_active: bool = False
     active_routine_name: str | None = None
     haul_stop_requested: bool = False
+    haul_phase: str | None = None
+    haul_phase_station_index: int | None = None
     verbose_controls: bool = False
     instant_mode: bool = False
     market_panel_tab: str = "buy"

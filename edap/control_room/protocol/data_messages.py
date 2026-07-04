@@ -211,6 +211,7 @@ def _routine(payload: dict[str, Any]) -> RoutineReadModel:
         shutdown_requested=bool(payload.get("shutdown_requested", False)),
         shutdown_finalized=bool(payload.get("shutdown_finalized", False)),
         haul_phase=_optional_str(payload.get("haul_phase")),
+        haul_phase_station_index=_optional_int(payload.get("haul_phase_station_index")),
     )
 
 

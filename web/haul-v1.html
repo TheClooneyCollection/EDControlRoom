@@ -612,7 +612,7 @@
 
     .routine-bar {
       display: grid;
-      grid-template-columns: repeat(6, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 4px;
       margin-bottom: 14px;
     }
@@ -816,12 +816,11 @@
           </div>
           <div class="panel-body">
             <div class="routine-bar" id="routine-steps" aria-label="Routine phase timeline">
-              <div class="step" data-phase="buy"><div class="step-label">1. Buy</div><div class="step-value">Pending</div></div>
-              <div class="step" data-phase="launch"><div class="step-label">2. Launch</div><div class="step-value">Pending</div></div>
-              <div class="step" data-phase="transit"><div class="step-label">3. Jump</div><div class="step-value">Pending</div></div>
-              <div class="step" data-phase="dock"><div class="step-label">4. Dock</div><div class="step-value">Pending</div></div>
-              <div class="step" data-phase="sell"><div class="step-label">5. Sell</div><div class="step-value">Pending</div></div>
-              <div class="step" data-phase="return"><div class="step-label">6. Return</div><div class="step-value">Pending</div></div>
+              <div class="step" data-phase="sell"><div class="step-label">1. Sell</div><div class="step-value">Pending</div></div>
+              <div class="step" data-phase="buy"><div class="step-label">2. Buy</div><div class="step-value">Pending</div></div>
+              <div class="step" data-phase="undock"><div class="step-label">3. Undock</div><div class="step-value">Pending</div></div>
+              <div class="step" data-phase="depart"><div class="step-label">4. Depart</div><div class="step-value">Pending</div></div>
+              <div class="step" data-phase="transit"><div class="step-label">5. Transit</div><div class="step-value">Pending</div></div>
             </div>
 
             <div class="mini-metrics">
@@ -1316,11 +1315,13 @@
 
     function updateRoutinePanel(routine, haulSession, ship) {
       const phase = routine.haul_phase || null;
-      const phaseOrder = ["buy", "launch", "transit", "dock", "sell", "return"];
+      const stationIndex = routine.haul_phase_station_index || null;
+      const stationLabel = stationIndex ? `Station ${stationIndex}` : "";
+      const phaseOrder = ["sell", "buy", "undock", "depart", "transit"];
       const phaseIndex = phase ? phaseOrder.indexOf(phase) : -1;
       document.getElementById("routine-status").textContent =
         routine.routine_active && routine.active_routine_name === "haul"
-          ? (routine.haul_stop_requested ? "Stop requested" : "Running")
+          ? `${routine.haul_stop_requested ? "Stop requested" : "Running"}${stationLabel ? ` · ${stationLabel}` : ""}`
           : "Idle";
       document.querySelectorAll("#routine-steps .step").forEach((step, index) => {
         const stepPhase = step.dataset.phase;
@@ -1330,7 +1331,7 @@
           value.textContent = "Pending";
         } else if (stepPhase === phase) {
           step.classList.add("current");
-          value.textContent = phase === "transit" ? "En route" : "Active";
+          value.textContent = phase === "transit" && stationLabel ? `To ${stationLabel}` : stationLabel || "Active";
         } else if (phaseIndex > index) {
           step.classList.add("done");
           value.textContent = "Complete";
