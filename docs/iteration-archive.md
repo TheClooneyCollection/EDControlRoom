@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `201`
-- Latest generated iteration number: `334`
+- Generated iteration count: `202`
+- Latest generated iteration number: `335`
 
 ## Iteration 134
 
@@ -5587,3 +5587,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Confirm live Inara result rows still have enough horizontal room after the extra distance column.
+
+## Iteration 335
+
+- When: `2026-07-04 10:57`
+- Area: `web`
+- Title: `simplify-route-start-panel`
+- Source: [2026-07-04-10-57_____web______simplify-route-start-panel.md](iteration-logs/2026-07-04-10-57_____web______simplify-route-start-panel.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `simplify-route-start-panel`
+- Started: `2026-07-04 10:57`
+
+## Summary
+
+- Simplified the haul v1 start panel so it acts as route launch controls instead of duplicating route details.
+
+## Changes
+
+- Removed the selected-route stats table, endpoint support banner, and backend command callout from the start panel.
+- Renamed the panel to `Start route`, the action button to `Start route`, and the timing controls to `Galmap settle time` and `Transit wait time`.
+- Kept selected-route details in the results table and selected-route title only.
+
+## Follow-ups
+
+- Re-check the compact start panel with live results once the route table layout settles.

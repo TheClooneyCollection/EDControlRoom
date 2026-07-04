@@ -592,39 +592,11 @@
 
     .selected-route-title {
       padding: 9px 10px;
-      border: 1px solid var(--amber);
-      border-radius: var(--radius);
-      background: rgba(232, 145, 43, 0.08);
-      font-weight: 650;
-      margin-bottom: 12px;
-    }
-
-    .stat-list {
-      display: grid;
-      gap: 1px;
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      overflow: hidden;
-      background: var(--border);
+      background: var(--bg-0);
+      font-weight: 650;
       margin-bottom: 12px;
-    }
-
-    .stat-row {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      background: var(--bg-1);
-      padding: 8px 10px;
-    }
-
-    .stat-row .k {
-      color: var(--text-2);
-      font-size: 11.5px;
-    }
-
-    .stat-row .v {
-      font-weight: 600;
-      text-align: right;
     }
 
     .debug-disclosure {
@@ -770,16 +742,6 @@
 
     .metric-value.success {
       color: var(--green);
-    }
-
-    .callout {
-      margin-top: 12px;
-      padding: 10px 11px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: var(--bg-0);
-      color: var(--text-2);
-      font-size: 11.5px;
     }
 
     @media (max-width: 1100px) {
@@ -981,26 +943,20 @@
 
             <section class="panel setup-panel" aria-labelledby="setup-title">
               <div class="panel-head">
-                <div class="panel-title" id="setup-title">Selected route + start</div>
-                <div class="panel-action">Two-way only</div>
+                <div class="panel-title" id="setup-title">Start route</div>
+                <div class="panel-action">Two-way haul</div>
               </div>
               <div class="panel-body">
-                <div class="banner">
-                  <div class="banner-title">Endpoint support</div>
-                  <div class="banner-text">V1 starts hauls only between stations and carriers. The dispatch preview sets both <span class="mono">on_land</span> flags to false.</div>
-                </div>
-
                 <div class="selected-route-title" id="selected-title">-</div>
-                <div class="stat-list" id="selected-stats"></div>
 
                 <div class="form-grid">
                   <div class="field-row">
                     <label>
-                      <span class="field-label">Galaxy settle</span>
+                      <span class="field-label">Galmap settle time</span>
                       <input class="field mono" id="galaxy-settle" value="2.0">
                     </label>
                     <label>
-                      <span class="field-label">Dock timeout</span>
+                      <span class="field-label">Transit wait time</span>
                       <input class="field mono" id="dock-timeout" value="1200">
                     </label>
                   </div>
@@ -1012,10 +968,7 @@
                 </details>
 
                 <div class="btn-row">
-                  <button class="btn success block" type="button" id="start-haul">Start two-way haul</button>
-                </div>
-                <div class="callout">
-                  Existing backend command: <span class="inline-kbd">command.dispatch_haul_loop</span> with structured params. No prompt handoff in web.
+                  <button class="btn success block" type="button" id="start-haul">Start route</button>
                 </div>
               </div>
             </section>
@@ -1430,8 +1383,7 @@
       const route = routeByIndex(selectedRouteIndex);
       const startButton = document.getElementById("start-haul");
       if (!route) {
-        document.getElementById("selected-title").textContent = "No route selected";
-        document.getElementById("selected-stats").innerHTML = "";
+        document.getElementById("selected-title").textContent = "Select a route before starting.";
         document.getElementById("command-preview").textContent = "";
         startButton.disabled = true;
         return;
@@ -1439,18 +1391,6 @@
       startButton.disabled = clientRole !== "active_operator";
       document.getElementById("selected-title").textContent =
         `${route.buySystem} (${route.buyStation}) -> ${route.sellSystem} (${route.sellStation})`;
-      document.getElementById("selected-stats").innerHTML = `
-        <div class="stat-row"><span class="k">Station 1</span><span class="v">${escapeHtml(route.buyStation)} / ${escapeHtml(route.buySystem)}</span></div>
-        <div class="stat-row"><span class="k">Station 1 buy</span><span class="v">${escapeHtml(route.commodity || "No buy commodity")}</span></div>
-        <div class="stat-row"><span class="k">Station 2</span><span class="v">${escapeHtml(route.sellStation)} / ${escapeHtml(route.sellSystem)}</span></div>
-        <div class="stat-row"><span class="k">Station 2 buy</span><span class="v">${escapeHtml(route.targetCommodity || "No buy commodity")}</span></div>
-        <div class="stat-row"><span class="k">Profit / hour</span><span class="v profit mono">${escapeHtml(profitHourLabel(route))}</span></div>
-        <div class="stat-row"><span class="k">Profit / trip</span><span class="v mono">${escapeHtml(route.profitTrip)}</span></div>
-        <div class="stat-row"><span class="k">Inara distance</span><span class="v mono">${escapeHtml(route.distanceFromSystem)}</span></div>
-        <div class="stat-row"><span class="k">Route distance</span><span class="v mono">${escapeHtml(route.routeDistance)}</span></div>
-        <div class="stat-row"><span class="k">Station distance</span><span class="v mono">${escapeHtml(route.stationDistance)}</span></div>
-        <div class="stat-row"><span class="k">Surface support</span><span class="v">disabled</span></div>
-      `;
       updateCommandPreview();
     }
 
