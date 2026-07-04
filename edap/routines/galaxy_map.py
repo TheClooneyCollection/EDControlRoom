@@ -10,6 +10,63 @@ from edap.routines._base import RoutineResult, SupportsGalaxyMapControls
 from edap.routines.callbacks import ProgressCallback
 
 
+def _route_destination_unset(result: RoutineResult) -> bool:
+    return result.details.get("phase") == "verify_route" and result.details.get("actual") is None
+
+
+def set_gal_map_destination(
+    controls: SupportsGalaxyMapControls,
+    *,
+    destination: str,
+    journal_dir: Path,
+    open_check_fn: Callable[[], bool] | None = None,
+    open_timeout_s: float = 10.0,
+    open_settle_s: float = 5.0,
+    search_settle_s: float = 2.0,
+    map_settle_s: float = 2.0,
+    retry_map_settle_s: tuple[float, ...] = (),
+    step_delay_s: float = 0.5,
+    search_commit_hold_s: float = 0.2,
+    select_hold_s: float = 5.0,
+    time_fn: Callable[[], float] = monotonic,
+    sleeper: Callable[[float], None] = sleep,
+    progress_fn: ProgressCallback,
+) -> RoutineResult:
+    """Odyssey galaxy map flow: open map, search by name, plot route, verify NavRoute."""
+
+    settle_attempts = (map_settle_s, *retry_map_settle_s)
+    result: RoutineResult | None = None
+    for attempt_number, attempt_map_settle_s in enumerate(settle_attempts, start=1):
+        result = _set_gal_map_destination_once(
+            controls,
+            destination=destination,
+            journal_dir=journal_dir,
+            open_check_fn=open_check_fn,
+            open_timeout_s=open_timeout_s,
+            open_settle_s=open_settle_s,
+            search_settle_s=search_settle_s,
+            map_settle_s=attempt_map_settle_s,
+            step_delay_s=step_delay_s,
+            search_commit_hold_s=search_commit_hold_s,
+            select_hold_s=select_hold_s,
+            time_fn=time_fn,
+            sleeper=sleeper,
+            progress_fn=progress_fn,
+        )
+        if result.dispatch.status == "ok":
+            return result
+        if not _route_destination_unset(result):
+            return result
+        if attempt_number < len(settle_attempts):
+            next_settle = settle_attempts[attempt_number]
+            progress_fn(
+                "Route destination was not confirmed in NavRoute.json; "
+                f"retrying with {next_settle:.1f}s galaxy-map settle..."
+            )
+
+    return result
+
+
 def _read_navroute_destination(journal_dir: Path) -> str | None:
     navroute_path = journal_dir / "NavRoute.json"
     try:
@@ -23,7 +80,7 @@ def _read_navroute_destination(journal_dir: Path) -> str | None:
         return None
 
 
-def set_gal_map_destination(
+def _set_gal_map_destination_once(
     controls: SupportsGalaxyMapControls,
     *,
     destination: str,
@@ -40,8 +97,6 @@ def set_gal_map_destination(
     sleeper: Callable[[float], None] = sleep,
     progress_fn: ProgressCallback,
 ) -> RoutineResult:
-    """Odyssey galaxy map flow: open map, search by name, plot route, verify NavRoute."""
-
     def _err(action: str, reason: str, phase: str, **extra: object) -> RoutineResult:
         return RoutineResult(
             action=action,
@@ -139,7 +194,13 @@ def set_gal_map_destination(
         got = actual or "unknown"
         progress_fn(f"Route mismatch: expected {destination!r}, got {got!r}")
         controls.galaxy_map_open()
-        return _err("GalaxyMapOpen", f"route mismatch: expected {destination!r}, got {got!r}", "verify_route", destination=destination, actual=got)
+        return _err(
+            "GalaxyMapOpen",
+            f"route mismatch: expected {destination!r}, got {got!r}",
+            "verify_route",
+            destination=destination,
+            actual=actual,
+        )
 
     progress_fn(f"Route set to {actual!r}")
 

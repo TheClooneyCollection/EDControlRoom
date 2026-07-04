@@ -1,6 +1,8 @@
 """Navigation routine launchers (dest / set galaxy-map destination)."""
 from __future__ import annotations
 
+from math import isfinite
+
 from rich.markup import escape
 
 from edap.control_room import error_text
@@ -8,6 +10,20 @@ from edap.control_room.history import now_iso
 from edap.control_room.interfaces import NavigationHost
 from edap.control_room_state import CommandHistoryEntry
 from edap.routines import set_gal_map_destination
+
+
+def _fibonacci_retry_map_settles(initial_settle_s: float, *, retry_count: int = 3) -> tuple[float, ...]:
+    if not isfinite(initial_settle_s):
+        return ()
+    retries: list[float] = []
+    previous = 1.0
+    current = 2.0
+    while len(retries) < retry_count:
+        if current > initial_settle_s:
+            retries.append(current)
+        previous, current = current, previous + current
+    return tuple(retries)
+
 
 def cmd_dest(
     app: NavigationHost,
@@ -81,6 +97,7 @@ def dispatch_dest(
             journal_dir=journal_dir,
             step_delay_s=step_delay,
             map_settle_s=galaxy_map_settle,
+            retry_map_settle_s=_fibonacci_retry_map_settles(galaxy_map_settle),
             time_fn=time_fn,
             sleeper=sleeper,
             progress_fn=progress,

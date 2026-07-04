@@ -1280,6 +1280,33 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.assertEqual(captured["kwargs"]["supercruise_exit_settle_s"], 3.0)
         self.assertEqual(captured["kwargs"]["step_delay_s"], 0.3)
 
+    def test_dest_dispatch_passes_fibonacci_settle_retries(self) -> None:
+        captured: dict[str, object] = {}
+
+        self.app._controls = object()
+        self.app._make_progress = lambda: (lambda _: None)
+        self.app._make_controls = lambda progress: object()
+        self.app._make_sleeper = lambda: (lambda _: None)
+        self.app._run_in_thread = lambda fn: fn()
+
+        def fake_set_destination(controls, **kwargs):
+            captured["controls"] = controls
+            captured["kwargs"] = kwargs
+            return RoutineResult(
+                action="GalaxyMapOpen",
+                dispatch=ActionDispatchResult(action="GalaxyMapOpen", status="ok"),
+            )
+
+        with patch("edap.control_room.routines_nav.set_gal_map_destination", new=fake_set_destination):
+            self.app._dependencies.execution.dispatch_destination(
+                "Sol",
+                2.0,
+                raw_command="dest Sol",
+            )
+
+        self.assertEqual(captured["kwargs"]["map_settle_s"], 2.0)
+        self.assertEqual(captured["kwargs"]["retry_map_settle_s"], (3.0, 5.0, 8.0))
+
     def test_buy_command_passes_tts_announcer_to_market_routine(self) -> None:
         captured: dict[str, object] = {}
 

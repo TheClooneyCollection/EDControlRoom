@@ -2178,6 +2178,61 @@ class GalMapDestinationTests(unittest.TestCase):
 
         self.assertEqual(result.dispatch.status, "error")
 
+    def test_unset_navroute_can_retry_with_longer_map_settles(self) -> None:
+        controls = _make_gal_map_controls()
+        sleep_calls: list[float] = []
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            journal_dir = Path(tmpdir)
+
+            def sleeper(seconds: float) -> None:
+                sleep_calls.append(seconds)
+                if seconds == 3.0 and sleep_calls.count(3.0) == 2:
+                    _write_navroute(journal_dir, "Sol")
+
+            result = set_gal_map_destination(
+                controls,
+                destination="Sol",
+                journal_dir=journal_dir,
+                open_settle_s=0.0,
+                search_settle_s=0.0,
+                map_settle_s=2.0,
+                retry_map_settle_s=(3.0, 5.0, 8.0),
+                step_delay_s=0.0,
+                sleeper=sleeper,
+            )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual([call for call in sleep_calls if call in {2.0, 3.0}], [2.0, 2.0, 3.0, 3.0])
+        self.assertEqual(
+            [call["action"] for call in controls.calls].count("GalaxyMapOpen"),
+            4,
+        )
+
+    def test_wrong_navroute_destination_does_not_retry(self) -> None:
+        controls = _make_gal_map_controls()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            journal_dir = Path(tmpdir)
+            _write_navroute(journal_dir, "Achenar")
+
+            result = set_gal_map_destination(
+                controls,
+                destination="Sol",
+                journal_dir=journal_dir,
+                open_settle_s=0.0,
+                search_settle_s=0.0,
+                map_settle_s=2.0,
+                retry_map_settle_s=(3.0, 5.0, 8.0),
+                step_delay_s=0.0,
+                sleeper=lambda _: None,
+            )
+
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertEqual(
+            [call["action"] for call in controls.calls].count("GalaxyMapOpen"),
+            2,
+        )
+
     def test_case_insensitive_match(self) -> None:
         controls = _make_gal_map_controls()
         with tempfile.TemporaryDirectory() as tmpdir:
