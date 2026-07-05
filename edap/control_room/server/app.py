@@ -9,7 +9,7 @@ from typing import Any, Callable
 from starlette.applications import Starlette
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse
+from starlette.responses import HTMLResponse, JSONResponse, Response
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
@@ -36,6 +36,8 @@ MESSAGE_SCHEMA_URL_PATH = "/schema/control_room_message.json"
 BROWSER_PROBE_URL_PATH = "/browser-probe"
 HAUL_WEB_ENTRY_URL_PATH = "/"
 HAUL_WEB_URL_PATH = "/haul"
+MULTI_HAUL_WEB_URL_PATH = "/multi-haul"
+HAUL_WEB_ASSET_URL_PATH = "/assets/{asset_name:str}"
 _MESSAGE_SCHEMA_PATH = (
     Path(__file__).resolve().parents[3] / "docs" / "schemas" / "control_room_message.schema.json"
 )
@@ -43,14 +45,15 @@ _BROWSER_PROBE_PATH = (
     Path(__file__).resolve().parents[3] / "tools" / "scratch" / "control_room_remote_browser.html"
 )
 _HAUL_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "haul-v1.html"
+_HAUL_WEB_ASSET_DIR = Path(__file__).resolve().parents[3] / "web"
 CONTROL_ROOM_MESSAGE_SCHEMA = json.loads(_MESSAGE_SCHEMA_PATH.read_text(encoding="utf-8"))
 CONTROL_ROOM_BROWSER_PROBE_HTML = _BROWSER_PROBE_PATH.read_text(encoding="utf-8")
 
 
 def _render_haul_web_html(*, web_default_access_token: str = "") -> str:
     return _HAUL_WEB_PATH.read_text(encoding="utf-8").replace(
-        'const SERVER_DEFAULT_ACCESS_TOKEN = "";',
-        f"const SERVER_DEFAULT_ACCESS_TOKEN = {json.dumps(web_default_access_token)};",
+        'window.EDCR_SERVER_DEFAULT_ACCESS_TOKEN = "";',
+        f"window.EDCR_SERVER_DEFAULT_ACCESS_TOKEN = {json.dumps(web_default_access_token)};",
     )
 
 
@@ -124,6 +127,24 @@ def build_observer_server_app(
             headers={"Cache-Control": "no-store"},
         )
 
+    async def haul_web_asset(request):
+        asset_name = request.path_params["asset_name"]
+        allowed_assets = {
+            "haul-ui.css": "text/css; charset=utf-8",
+            "haul-ui.js": "text/javascript; charset=utf-8",
+        }
+        media_type = allowed_assets.get(asset_name)
+        if media_type is None:
+            return JSONResponse({"detail": "not found"}, status_code=404)
+        asset_path = _HAUL_WEB_ASSET_DIR / asset_name
+        if not asset_path.is_file():
+            return JSONResponse({"detail": "not found"}, status_code=404)
+        return Response(
+            asset_path.read_text(encoding="utf-8"),
+            media_type=media_type,
+            headers={"Cache-Control": "no-store"},
+        )
+
     async def session(websocket: WebSocket) -> None:
         if not auth.is_websocket_authorized(websocket):
             await websocket.close(code=4401, reason="authentication required")
@@ -178,6 +199,8 @@ def build_observer_server_app(
             Route(BROWSER_PROBE_URL_PATH, browser_probe),
             Route(HAUL_WEB_ENTRY_URL_PATH, haul_web),
             Route(HAUL_WEB_URL_PATH, haul_web),
+            Route(MULTI_HAUL_WEB_URL_PATH, haul_web),
+            Route(HAUL_WEB_ASSET_URL_PATH, haul_web_asset),
             WebSocketRoute("/session", session),
         ]
     )

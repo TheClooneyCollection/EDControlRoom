@@ -7,6 +7,14 @@ from edap.control_room.routines_haul import _project_two_way_phase
 from edap.routines.haul_two_way import Phase
 
 
+def _haul_web_source() -> str:
+    web_dir = Path(__file__).resolve().parents[1] / "web"
+    return "\n".join(
+        (web_dir / name).read_text(encoding="utf-8")
+        for name in ("haul-v1.html", "haul-ui.css", "haul-ui.js")
+    )
+
+
 class ControlRoomHaulWebTests(unittest.TestCase):
     def test_two_way_phase_projection_compacts_phase_and_station_for_web(self) -> None:
         self.assertEqual(_project_two_way_phase(Phase.AT_STATION_1_SELL), ("sell", 1))
@@ -16,14 +24,14 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertEqual(_project_two_way_phase(Phase.TRANSIT_TO_STATION_1), ("transit", 1))
 
     def test_haul_web_exposes_explicit_stop_controls(self) -> None:
-        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+        html = _haul_web_source()
 
         self.assertIn('id="stop-after-run"', html)
         self.assertIn('id="stop-now"', html)
         self.assertIn('sendCommand("command.cancel_active_routine", { mode })', html)
 
     def test_haul_web_exposes_instant_mode_toggle(self) -> None:
-        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+        html = _haul_web_source()
 
         self.assertIn('id="instant-toggle"', html)
         self.assertIn("currentRoutine.instant_mode", html)
@@ -38,7 +46,7 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn('rawInput === "stop" && currentRoutine.routine_active', html)
 
     def test_haul_web_exposes_pause_resume_controls(self) -> None:
-        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+        html = _haul_web_source()
 
         self.assertIn('id="pause-haul"', html)
         self.assertIn('id="resume-haul"', html)
@@ -49,7 +57,7 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn('raw_input: rawInput', html)
 
     def test_haul_web_active_routine_shows_current_and_accumulated_credits(self) -> None:
-        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+        html = _haul_web_source()
 
         self.assertIn("Current / Accumulated", html)
         self.assertIn(
@@ -58,7 +66,7 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         )
 
     def test_haul_web_active_routine_treats_sell_as_final_step(self) -> None:
-        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+        html = _haul_web_source()
 
         expected_steps = [
             'data-phase="buy"><div class="step-label">1. Buy',
@@ -72,7 +80,7 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn('const phaseOrder = ["buy", "undock", "depart", "transit", "sell"];', html)
 
     def test_haul_web_exposes_connection_error_recovery_ui(self) -> None:
-        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+        html = _haul_web_source()
 
         self.assertIn('id="connection-banner"', html)
         self.assertIn('id="reconnect-websocket"', html)
@@ -85,7 +93,7 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertNotIn("|| !receivedConnectionReady", html)
 
     def test_haul_web_renders_home_and_current_system_from_distinct_hydrate_fields(self) -> None:
-        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+        html = _haul_web_source()
 
         self.assertIn('id="summary-home">-</div>', html)
         self.assertIn('id="summary-current">-</div>', html)
@@ -94,7 +102,7 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertNotIn("market.station || ship.station || ship.system", html)
 
     def test_haul_web_activity_log_scrolls_full_hydrated_history(self) -> None:
-        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+        html = _haul_web_source()
 
         self.assertIn(".activity-list", html)
         self.assertIn("overflow-y: auto", html)
@@ -104,7 +112,7 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertNotIn("slice(-8)", html)
 
     def test_haul_web_treats_connected_clients_as_operators(self) -> None:
-        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+        html = _haul_web_source()
 
         self.assertIn('clientRole = "active_operator";', html)
         self.assertIn("Operator connection required", html)
@@ -112,7 +120,7 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertNotIn("Active operator required", html)
 
     def test_haul_web_persists_and_hydrates_selected_trade_route(self) -> None:
-        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+        html = _haul_web_source()
 
         self.assertIn('sendCommand("command.select_trade_route", { route: payload })', html)
         self.assertIn("mergeHydratedRoute(payload.selected_trade_route || payload.running_trade_route)", html)
@@ -120,7 +128,7 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn("apiRoute: { ...route, index }", html)
 
     def test_haul_web_includes_mobile_layout_breakpoints(self) -> None:
-        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+        html = _haul_web_source()
 
         self.assertNotIn("min-width: 1160px", html)
         self.assertIn("@media (max-width: 760px)", html)
