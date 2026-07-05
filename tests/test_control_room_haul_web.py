@@ -150,6 +150,21 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn("function routeResultCard(route, index, cumulativeProfit = \"\")", html)
         self.assertIn("Cumulative Profit", html)
 
+    def test_haul_web_defaults_spansh_parameters_from_current_ship(self) -> None:
+        html = _haul_web_source()
+
+        self.assertIn("function applyShipDefaults(ship)", html)
+        self.assertIn('setInputValue("starting-capital", ship.credits)', html)
+        self.assertIn('setInputValue("multi-starting-capital", ship.credits)', html)
+        self.assertIn('setInputValue("capacity", ship.cargo_capacity)', html)
+        self.assertIn('setInputValue("multi-capacity", ship.cargo_capacity)', html)
+        self.assertIn('ship.laden_jump_range_ly || ship.max_jump_range_ly || ship.jump_range_ly', html)
+        self.assertIn("function requiresLargePadForShip(ship)", html)
+        self.assertIn('document.getElementById("requires-large-pad").checked = requiresLargePad', html)
+        self.assertIn('starting_capital: document.getElementById("starting-capital").value', html)
+        self.assertIn('max_hop_distance_ly: document.getElementById("max-hop-distance").value', html)
+        self.assertIn('requires_large_pad: document.getElementById("requires-large-pad").checked', html)
+
     def test_haul_web_exposes_multi_leg_page_with_dedicated_command(self) -> None:
         html = _haul_web_source()
 

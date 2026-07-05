@@ -921,6 +921,7 @@ class ControlRoomApp(App[None]):
             credits=data.ship.credits,
             cargo_count=data.ship.cargo_count,
             cargo_capacity=data.ship.cargo_capacity,
+            max_jump_range_ly=data.ship.max_jump_range_ly,
             cargo_inventory=list(data.ship.cargo_inventory),
             target=data.ship.target,
             destination_system=data.ship.destination_system,

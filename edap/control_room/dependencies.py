@@ -273,6 +273,7 @@ def _copy_ship_state(ship: ShipState) -> ShipState:
         credits=ship.credits,
         cargo_count=ship.cargo_count,
         cargo_capacity=ship.cargo_capacity,
+        max_jump_range_ly=ship.max_jump_range_ly,
         cargo_inventory=list(ship.cargo_inventory),
         target=ship.target,
         destination_system=ship.destination_system,

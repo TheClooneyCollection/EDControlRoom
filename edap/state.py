@@ -21,6 +21,7 @@ class ShipState:
     star_class: str | None
     target: str | None
     cargo_capacity: int | None
+    max_jump_range_ly: float | None
     fuel_capacity: float | None
     fuel_level: float | None
     fuel_percent: int
@@ -126,6 +127,7 @@ def read_ship_state(log_path: Path) -> ShipState:
         "star_class": None,
         "target": None,
         "cargo_capacity": None,
+        "max_jump_range_ly": None,
         "fuel_capacity": None,
         "fuel_level": None,
         "fuel_percent": 10,
@@ -190,6 +192,9 @@ def read_ship_state(log_path: Path) -> ShipState:
                 cargo_capacity = log.get("CargoCapacity")
                 if isinstance(cargo_capacity, (int, float)) and not isinstance(cargo_capacity, bool):
                     ship["cargo_capacity"] = int(cargo_capacity)
+                max_jump_range = log.get("MaxJumpRange")
+                if isinstance(max_jump_range, (int, float)) and not isinstance(max_jump_range, bool):
+                    ship["max_jump_range_ly"] = float(max_jump_range)
 
             if "FuelLevel" in log and ship["ship_type"] != "TestBuggy":
                 ship["fuel_level"] = log["FuelLevel"]

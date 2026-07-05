@@ -26,6 +26,9 @@ def apply_ship_event(ship: ShipState, ev: dict[str, Any]) -> None:
     elif event == "Loadout":
         ship.ship_type = ev.get("Ship", ship.ship_type)
         ship.cargo_capacity = ev.get("CargoCapacity", ship.cargo_capacity)
+        max_jump_range = ev.get("MaxJumpRange")
+        if isinstance(max_jump_range, (int, float)) and not isinstance(max_jump_range, bool):
+            ship.max_jump_range_ly = float(max_jump_range)
 
     if event in {"Location", "FSDJump"} and "StarSystem" in ev:
         ship.system = ev["StarSystem"]

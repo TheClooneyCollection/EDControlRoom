@@ -118,6 +118,7 @@ def _ship(payload: dict[str, Any]) -> ShipState:
         credits=_optional_int(payload.get("credits")),
         cargo_count=_int(payload.get("cargo_count"), 0),
         cargo_capacity=_optional_int(payload.get("cargo_capacity")),
+        max_jump_range_ly=_optional_float(payload.get("max_jump_range_ly")),
         cargo_inventory=list(payload.get("cargo_inventory", []))
         if isinstance(payload.get("cargo_inventory"), list)
         else [],

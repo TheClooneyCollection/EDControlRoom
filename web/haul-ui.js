@@ -38,6 +38,18 @@ let routes = [];
         routine: "Multi-leg haul"
       }
     };
+    const LARGE_PAD_SHIPS = new Set([
+      "anaconda", "belugaliner", "cutter", "empire_cutter", "federation_corvette", "orca",
+      "type7", "type9", "type9_military", "type10defender"
+    ]);
+    const NON_LARGE_PAD_SHIPS = new Set([
+      "adder", "asp", "asp_scout", "cobramkiii", "cobramkiv", "diamondback", "diamondbackxl",
+      "dolphin", "eagle", "empire_courier", "empire_eagle", "federation_assault_ship",
+      "federation_dropship", "federation_dropship_mkii", "federation_gunship",
+      "hauler", "independant_trader", "independent_trader", "krait_light", "krait_mkii",
+      "mandalay", "python", "python_nx", "sidewinder", "type6", "type6_mkii", "type8",
+      "typex", "viper", "viper_mkiv", "vulture"
+    ]);
 
     function routeByIndex(index) {
       return routes.find((route) => route.index === index) || routes[0] || null;
@@ -211,6 +223,61 @@ let routes = [];
       input.addEventListener("input", () => {
         range.value = input.value;
       });
+    }
+
+    function setInputValue(id, value) {
+      const input = document.getElementById(id);
+      if (input && value !== null && value !== undefined && value !== "") {
+        input.value = String(value);
+      }
+    }
+
+    function normalizedShipType(shipType) {
+      return String(shipType || "").trim().toLowerCase().replace(/[\s-]/g, "_");
+    }
+
+    function requiresLargePadForShip(ship) {
+      if (ship.landing_pad_size) {
+        return String(ship.landing_pad_size).toLowerCase() === "large";
+      }
+      const shipType = normalizedShipType(ship.ship_type);
+      if (LARGE_PAD_SHIPS.has(shipType)) {
+        return true;
+      }
+      if (NON_LARGE_PAD_SHIPS.has(shipType)) {
+        return false;
+      }
+      return null;
+    }
+
+    function formattedJumpRange(ship) {
+      const range = Number(ship.laden_jump_range_ly || ship.max_jump_range_ly || ship.jump_range_ly || 0);
+      if (!Number.isFinite(range) || range <= 0) {
+        return "";
+      }
+      return String(Math.round(range * 100) / 100);
+    }
+
+    function applyShipDefaults(ship) {
+      if (ship.credits) {
+        setInputValue("starting-capital", ship.credits);
+        setInputValue("multi-starting-capital", ship.credits);
+      }
+      if (ship.cargo_capacity) {
+        setInputValue("capacity", ship.cargo_capacity);
+        setInputValue("multi-capacity", ship.cargo_capacity);
+      }
+      const jumpRange = formattedJumpRange(ship);
+      if (jumpRange) {
+        setInputValue("max-hop-distance", jumpRange);
+        setInputValue("multi-hop-distance", jumpRange);
+      }
+      const requiresLargePad = requiresLargePadForShip(ship);
+      if (requiresLargePad !== null) {
+        document.getElementById("requires-large-pad").checked = requiresLargePad;
+        document.getElementById("multi-requires-large-pad").checked = requiresLargePad;
+      }
+      updateMultiCommandPreview();
     }
 
     function routeFromApi(route, fallbackIndex) {
@@ -962,10 +1029,7 @@ let routes = [];
         document.getElementById("origin").value = hydratedCurrentSystem;
         document.getElementById("multi-origin").value = hydratedCurrentSystem;
       }
-      if (ship.cargo_capacity) {
-        document.getElementById("capacity").value = ship.cargo_capacity;
-        document.getElementById("multi-capacity").value = ship.cargo_capacity;
-      }
+      applyShipDefaults(ship);
       if (mergeHydratedRoute(payload.selected_trade_route || payload.running_trade_route)) {
         renderRows();
         renderSelected();
@@ -1005,9 +1069,20 @@ let routes = [];
       const body = {
         origin: document.getElementById("origin").value,
         destination: document.getElementById("destination").value,
+        starting_capital: document.getElementById("starting-capital").value,
         cargo_capacity: document.getElementById("capacity").value,
+        max_hop_distance_ly: document.getElementById("max-hop-distance").value,
+        max_hops: document.getElementById("max-hops").value,
         max_route_distance_ly: document.getElementById("route-distance").value,
         max_station_distance_ls: document.getElementById("station-distance").value,
+        max_market_age: document.getElementById("market-age").value,
+        requires_large_pad: document.getElementById("requires-large-pad").checked,
+        allow_planetary: document.getElementById("allow-planetary").checked,
+        allow_player_owned: document.getElementById("allow-player-owned").checked,
+        allow_restricted_access: document.getElementById("allow-restricted").checked,
+        allow_prohibited: document.getElementById("allow-prohibited").checked,
+        avoid_loops: document.getElementById("avoid-loops").checked,
+        allow_permit_systems: document.getElementById("allow-permit-systems").checked,
         metric: document.getElementById("metric").value
       };
       sendCommand("command.search_haul_routes", body)
