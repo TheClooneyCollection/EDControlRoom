@@ -2262,7 +2262,7 @@ def _detect_lan_host() -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="ED AutoPilot Control Room — live TUI")
-    parser.add_argument("mode", nargs="?", choices=["serve", "connect"])
+    parser.add_argument("mode", nargs="?", choices=["serve", "connect", "lan"])
     parser.add_argument("target", nargs="?", help="server host[:port] for connect mode")
     parser.add_argument("--config", default="config.toml")
     parser.add_argument("--market", metavar="FILTER", help="initial market filter (e.g. --market aluminium)")
@@ -2282,18 +2282,19 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if args.lan and args.mode != "serve":
+    if args.lan and args.mode not in {"serve", "lan"}:
         parser.error("--lan is only valid with serve")
 
-    if args.mode == "serve":
+    serve_lan = args.lan or args.mode == "lan"
+    if args.mode in {"serve", "lan"}:
         from edap.control_room.server.serve import serve_observer_mode
 
-        if args.lan and args.host:
-            parser.error("serve --lan cannot be combined with --host")
+        if serve_lan and args.host:
+            parser.error("LAN serve mode cannot be combined with --host")
         access_token = args.token or DEFAULT_OBSERVER_ACCESS_TOKEN
         web_default_access_token = "" if args.token else DEFAULT_OBSERVER_ACCESS_TOKEN
         try:
-            host = _detect_lan_host() if args.lan else args.host or "127.0.0.1"
+            host = _detect_lan_host() if serve_lan else args.host or "127.0.0.1"
         except RuntimeError as exc:
             parser.error(str(exc))
         serve_observer_mode(

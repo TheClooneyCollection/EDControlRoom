@@ -500,6 +500,21 @@ class ControlRoomCliTests(unittest.TestCase):
             web_default_access_token="",
         )
 
+    def test_lan_alias_passes_detected_host(self) -> None:
+        with patch("sys.argv", ["control_room.py", "lan", "--token", "1001"]), patch(
+            "edap.control_room.app._detect_lan_host",
+            return_value="192.168.1.42",
+        ), patch("edap.control_room.server.serve.serve_observer_mode") as serve:
+            main()
+
+        serve.assert_called_once_with(
+            config_path="config.toml",
+            host="192.168.1.42",
+            port=8765,
+            access_token="1001",
+            web_default_access_token="",
+        )
+
     def test_serve_uses_default_token_when_token_is_omitted(self) -> None:
         with patch("sys.argv", ["control_room.py", "serve"]), patch(
             "edap.control_room.server.serve.serve_observer_mode"

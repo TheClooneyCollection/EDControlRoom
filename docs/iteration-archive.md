@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `226`
-- Latest generated iteration number: `359`
+- Generated iteration count: `227`
+- Latest generated iteration number: `360`
 
 ## Iteration 134
 
@@ -6274,6 +6274,32 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - Added a root route constant and mounted it to the existing haul web HTML handler, preserving the no-store response behavior and token injection path.
 - Added server regression coverage for the root web entry point.
 - Updated the Control Room status handoff to mention both web entry paths.
+
+## Follow-ups
+
+- None.
+
+## Iteration 360
+
+- When: `2026-07-05 06:46`
+- Area: `control-room`
+- Title: `lan-command-alias`
+- Source: [2026-07-05-06-46_control-room_lan-command-alias.md](iteration-logs/2026-07-05-06-46_control-room_lan-command-alias.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `lan-command-alias`
+- Started: `2026-07-05 06:46`
+
+## Summary
+
+- Added `control_room.py lan` as a shorter alias for `control_room.py serve --lan`.
+
+## Changes
+
+- Routed `lan` through the existing observer-server startup path with LAN host detection, default token behavior, and the same `--host` conflict guard as `serve --lan`.
+- Added CLI regression coverage for the alias and updated operator docs/status handoff references.
 
 ## Follow-ups
 

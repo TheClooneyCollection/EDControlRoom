@@ -8,6 +8,7 @@ Run it with:
 uv run python3 control_room.py
 uv run python3 control_room.py --market aluminium
 uv run python3 control_room.py serve --token 1001
+uv run python3 control_room.py lan --token 1001
 uv run python3 control_room.py connect 192.168.1.50:8765 --token 1001
 ```
 
