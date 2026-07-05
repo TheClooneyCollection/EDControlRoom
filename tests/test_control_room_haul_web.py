@@ -65,6 +65,15 @@ class ControlRoomHaulWebTests(unittest.TestCase):
             html,
         )
 
+    def test_haul_web_active_routine_shows_secondary_route_context(self) -> None:
+        html = _haul_web_source()
+
+        self.assertIn('id="routine-buying"', html)
+        self.assertIn('id="routine-selling"', html)
+        self.assertIn('id="routine-transit"', html)
+        self.assertIn('id="routine-next-sale"', html)
+        self.assertIn("function updateRoutineContext()", html)
+
     def test_haul_web_active_routine_treats_sell_as_final_step(self) -> None:
         html = _haul_web_source()
 
@@ -127,12 +136,37 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn("trade_route: tradeRoutePayload(route)", html)
         self.assertIn("apiRoute: { ...route, index }", html)
 
+    def test_haul_web_uses_spansh_style_parameters_and_result_cards(self) -> None:
+        html = _haul_web_source()
+
+        self.assertIn("Starting system / station", html)
+        self.assertIn('id="starting-capital"', html)
+        self.assertIn('id="max-hop-distance"', html)
+        self.assertIn('id="max-hops-range"', html)
+        self.assertIn('id="station-distance-range"', html)
+        self.assertIn("Maximum market age", html)
+        self.assertIn("Requires large pad", html)
+        self.assertIn('id="route-results"', html)
+        self.assertIn("function routeResultCard(route, index, cumulativeProfit = \"\")", html)
+        self.assertIn("Cumulative Profit", html)
+
+    def test_haul_web_exposes_multi_leg_page_with_dedicated_command(self) -> None:
+        html = _haul_web_source()
+
+        self.assertIn('id="multi-leg-view"', html)
+        self.assertIn('id="multi-search-form"', html)
+        self.assertIn('id="multi-route-results"', html)
+        self.assertIn('id="start-multi-haul"', html)
+        self.assertIn('sendCommand("command.dispatch_multi_leg_haul"', html)
+        self.assertIn("function multiLegResultCard(route)", html)
+        self.assertIn("multi-cargo ready", html)
+
     def test_haul_web_includes_mobile_layout_breakpoints(self) -> None:
         html = _haul_web_source()
 
         self.assertNotIn("min-width: 1160px", html)
         self.assertIn("@media (max-width: 760px)", html)
         self.assertIn(".shell {\n        display: block;", html)
-        self.assertIn(".route-table td:nth-child(2)::before { content: \"Profit / hr\"; }", html)
+        self.assertIn(".commodity-table td:nth-child(2)::before { content: \"Amount\"; }", html)
         self.assertIn("empty-route-message", html)
         self.assertIn("@media (max-width: 480px)", html)

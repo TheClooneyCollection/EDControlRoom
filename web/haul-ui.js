@@ -1,5 +1,8 @@
 let routes = [];
     let selectedRouteIndex = 0;
+    let currentView = "two-way";
+    let multiLegRoutes = [];
+    let selectedMultiLegIndex = 1;
     let hasSearchedRoutes = false;
     let routePage = 1;
     const ROUTES_PER_PAGE = 12;
@@ -23,8 +26,25 @@ let routes = [];
     const pendingCommands = new Map();
     const activityEntries = new Map();
 
+    const VIEW_COPY = {
+      "two-way": {
+        title: "Two-way haul control",
+        description: "Search routes, inspect the selected station-to-station route, and start a two-way haul with structured dispatch. Route selection stays local to this browser; server-side search results are shared data.",
+        routine: "Two-way haul"
+      },
+      "multi-leg": {
+        title: "Multi-leg haul control",
+        description: "Prepare a finite Spansh-style multi-stop haul route. This page uses a dedicated multi-leg command path and keeps UI state separate from two-way haul.",
+        routine: "Multi-leg haul"
+      }
+    };
+
     function routeByIndex(index) {
       return routes.find((route) => route.index === index) || routes[0] || null;
+    }
+
+    function multiLegRouteByIndex(index) {
+      return multiLegRoutes.find((route) => route.index === index) || multiLegRoutes[0] || null;
     }
 
     function escapeHtml(value) {
@@ -35,6 +55,162 @@ let routes = [];
         "\"": "&quot;",
         "'": "&#39;"
       }[char]));
+    }
+
+    function setText(id, value) {
+      const element = document.getElementById(id);
+      if (element) {
+        element.textContent = value;
+      }
+    }
+
+    function selectedRouteForCurrentView() {
+      return currentView === "multi-leg" ? multiLegRouteByIndex(selectedMultiLegIndex) : routeByIndex(selectedRouteIndex);
+    }
+
+    function compactLocation(system, station) {
+      const systemLabel = system || "-";
+      return station ? `${station} in ${systemLabel}` : systemLabel;
+    }
+
+    function commodityList(...values) {
+      return values.filter((value) => value && value !== "-");
+    }
+
+    function cargoPills(items, className) {
+      if (!items.length) {
+        return `<span class="cargo-pill"><strong>None</strong></span>`;
+      }
+      return items.map((item) => `
+        <span class="cargo-pill ${className}">
+          <strong>${escapeHtml(item.name)}</strong>
+          ${item.amount ? `<span>${escapeHtml(item.amount)}</span>` : ""}
+        </span>
+      `).join("");
+    }
+
+    function routeCommodityRows(route, cumulativeProfit) {
+      const capacity = Number(document.getElementById("capacity")?.value || 0);
+      const amount = capacity > 0 ? capacity.toLocaleString() : "-";
+      const unitProfit = route.apiRoute?.profit_per_unit || "-";
+      const totalProfit = route.profitTrip || "-";
+      const primaryCommodity = route.commodity || "Selected cargo";
+      const rows = [
+        { commodity: primaryCommodity, amount, buy: "-", sell: "-", profit: unitProfit, total: totalProfit }
+      ];
+      return rows.map((row) => `
+        <tr>
+          <td>${escapeHtml(row.commodity)}</td>
+          <td class="num">${escapeHtml(row.amount)}</td>
+          <td class="num">${escapeHtml(row.buy)}</td>
+          <td class="num">${escapeHtml(row.sell)}</td>
+          <td class="num">${escapeHtml(row.profit)}</td>
+          <td class="num">${escapeHtml(row.total)}</td>
+        </tr>
+      `).join("") + `
+        <tr>
+          <td></td><td></td><td></td><td></td><td></td>
+          <td class="num">${escapeHtml(cumulativeProfit || totalProfit)}</td>
+        </tr>
+      `;
+    }
+
+    function routeResultCard(route, index, cumulativeProfit = "") {
+      const isSelected = route.index === selectedRouteIndex;
+      const nextLeg = `Then fly ${route.routeDistance || "-"} to ${compactLocation(route.sellSystem, route.sellStation)}.`;
+      return `
+        <article class="result-card ${isSelected ? "selected" : ""}" data-index="${route.index}">
+          <div class="result-card-head">
+            <div>
+              <div class="result-card-title">
+                ${index === 0 ? "Starting at" : ""} ${escapeHtml(compactLocation(route.buySystem, route.buyStation))}
+              </div>
+              <div class="result-card-sub">
+                ${escapeHtml(route.apiRoute?.updated ? `updated ${route.apiRoute.updated}` : "market age pending")} · ${escapeHtml(route.buyStationDistance || "-")}
+              </div>
+            </div>
+            <button class="btn ghost" type="button" data-select-route="${route.index}">Select</button>
+          </div>
+          <div class="result-card-body">
+            <p class="result-copy">Sell everything in your hold and buy the commodities listed below.</p>
+            <table class="commodity-table">
+              <thead>
+                <tr>
+                  <th>Commodity</th><th>Amount</th><th>Buy Price</th><th>Sell Price</th><th>Profit</th><th>Total Profit</th>
+                </tr>
+              </thead>
+              <tbody>${routeCommodityRows(route, cumulativeProfit)}</tbody>
+            </table>
+            <div class="profit-band">Cumulative Profit ${escapeHtml(cumulativeProfit || route.profitTrip || "-")}</div>
+            <div class="leg-next">${escapeHtml(nextLeg)}</div>
+          </div>
+        </article>
+      `;
+    }
+
+    function multiLegResultCard(route) {
+      const isSelected = route.index === selectedMultiLegIndex;
+      const rows = route.legs.map((leg) => `
+        <tr>
+          <td>${escapeHtml(leg.station)}</td>
+          <td>${cargoPills(leg.buy, "buy")}</td>
+          <td>${cargoPills(leg.sell, "sell")}</td>
+          <td class="num">${escapeHtml(leg.profit)}</td>
+        </tr>
+      `).join("");
+      return `
+        <article class="result-card ${isSelected ? "selected" : ""}" data-multi-index="${route.index}">
+          <div class="result-card-head">
+            <div>
+              <div class="result-card-title">${escapeHtml(route.name)}</div>
+              <div class="result-card-sub">${escapeHtml(route.summary)}</div>
+            </div>
+            <button class="btn ghost" type="button" data-select-multi-route="${route.index}">Select</button>
+          </div>
+          <div class="result-card-body">
+            <table class="commodity-table">
+              <thead>
+                <tr><th>Stop</th><th>Buy</th><th>Sell</th><th>Total Profit</th></tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+            <div class="profit-band">Cumulative Profit ${escapeHtml(route.cumulativeProfit)}</div>
+            <div class="leg-next">${escapeHtml(route.nextTransit)}</div>
+          </div>
+        </article>
+      `;
+    }
+
+    function setView(view) {
+      currentView = view === "multi-leg" ? "multi-leg" : "two-way";
+      document.querySelectorAll(".page-view").forEach((element) => {
+        element.classList.toggle("active", element.dataset.view === currentView);
+      });
+      document.querySelectorAll(".nav-item[data-view]").forEach((element) => {
+        const active = element.dataset.view === currentView;
+        element.classList.toggle("active", active);
+        element.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      const copy = VIEW_COPY[currentView];
+      setText("page-title", copy.title);
+      setText("page-description", copy.description);
+      setText("summary-routine", copy.routine);
+      updateRoutineContext();
+      updateOperatorState();
+    }
+
+    function syncRange(rangeId, inputId) {
+      const range = document.getElementById(rangeId);
+      const input = document.getElementById(inputId);
+      if (!range || !input) {
+        return;
+      }
+      range.addEventListener("input", () => {
+        input.value = range.value;
+      });
+      input.addEventListener("input", () => {
+        range.value = input.value;
+      });
     }
 
     function routeFromApi(route, fallbackIndex) {
@@ -216,6 +392,7 @@ let routes = [];
       const instantToggle = document.getElementById("instant-toggle");
       document.getElementById("start-haul").disabled = !active || !routeByIndex(selectedRouteIndex);
       document.getElementById("set-destination").disabled = !active || !routeByIndex(selectedRouteIndex);
+      document.getElementById("start-multi-haul").disabled = !active || !multiLegRouteByIndex(selectedMultiLegIndex);
       instantToggle.disabled = !active;
       instantToggle.textContent = instantMode ? "Instant on" : "Instant off";
       instantToggle.classList.toggle("on", instantMode);
@@ -529,6 +706,46 @@ let routes = [];
       return `${amount} CR`;
     }
 
+    function updateRoutineContext() {
+      const route = selectedRouteForCurrentView();
+      if (!route) {
+        setText("routine-buying", "-");
+        setText("routine-buying-sub", "Waiting for a selected route");
+        setText("routine-selling", "-");
+        setText("routine-selling-sub", "Waiting for cargo context");
+        setText("routine-transit", "-");
+        setText("routine-transit-sub", "No route active");
+        setText("routine-next-sale", "-");
+        setText("routine-next-sale-sub", "No sell order queued");
+        return;
+      }
+
+      if (currentView === "multi-leg") {
+        const currentLeg = route.legs[0] || {};
+        const nextLeg = route.legs[1] || currentLeg;
+        setText("routine-buying", (currentLeg.buy || []).map((item) => item.name).join(", ") || "-");
+        setText("routine-buying-sub", currentLeg.station || route.name);
+        setText("routine-selling", (currentLeg.sell || []).map((item) => item.name).join(", ") || "-");
+        setText("routine-selling-sub", currentLeg.station || "First stop");
+        setText("routine-transit", nextLeg.station || "-");
+        setText("routine-transit-sub", route.nextTransit || route.summary);
+        setText("routine-next-sale", (nextLeg.sell || []).map((item) => item.name).join(", ") || "-");
+        setText("routine-next-sale-sub", nextLeg.station || "Next stop");
+        return;
+      }
+
+      const sellCargo = commodityList(route.commodity);
+      const returnCargo = commodityList(route.targetCommodity);
+      setText("routine-buying", sellCargo.join(", ") || "-");
+      setText("routine-buying-sub", compactLocation(route.buySystem, route.buyStation));
+      setText("routine-selling", sellCargo.join(", ") || "Hold cargo");
+      setText("routine-selling-sub", compactLocation(route.sellSystem, route.sellStation));
+      setText("routine-transit", compactLocation(route.sellSystem, route.sellStation));
+      setText("routine-transit-sub", route.routeDistance ? `${route.routeDistance} route` : "Route distance pending");
+      setText("routine-next-sale", returnCargo.join(", ") || sellCargo.join(", ") || "-");
+      setText("routine-next-sale-sub", returnCargo.length ? compactLocation(route.buySystem, route.buyStation) : compactLocation(route.sellSystem, route.sellStation));
+    }
+
     function updateRoutinePanel(routine, haulSession, ship) {
       const phase = routine.haul_phase || null;
       const stationIndex = routine.haul_phase_station_index || null;
@@ -569,6 +786,7 @@ let routes = [];
         `${formatCredits(haulSession.current_run_profit || 0)} / ${formatCredits(haulSession.accumulated_profit || 0)}`;
       document.getElementById("routine-cargo-moved").textContent =
         `${Number(haulSession.cargo_moved_t || 0).toLocaleString()} t`;
+      updateRoutineContext();
     }
 
     function updateRoutePager(start, end, total, totalPages) {
@@ -578,40 +796,24 @@ let routes = [];
     }
 
     function renderRows() {
-      const tbody = document.getElementById("route-rows");
+      const container = document.getElementById("route-results");
       if (!routes.length) {
         const message = hasSearchedRoutes
           ? "No station/carrier routes found."
           : "Search routes to load station/carrier results.";
-        tbody.innerHTML = `<tr><td colspan="7" class="route-sub empty-route-message">${message}</td></tr>`;
+        container.innerHTML = `<div class="route-sub empty-route-message">${message}</div>`;
         routePage = 1;
         updateRoutePager(0, 0, 0, 1);
+        updateRoutineContext();
         return;
       }
       const totalPages = Math.max(1, Math.ceil(routes.length / ROUTES_PER_PAGE));
       routePage = Math.min(Math.max(1, routePage), totalPages);
       const startIndex = (routePage - 1) * ROUTES_PER_PAGE;
       const visibleRoutes = routes.slice(startIndex, startIndex + ROUTES_PER_PAGE);
-      tbody.innerHTML = visibleRoutes.map((route) => `
-        <tr class="${route.index === selectedRouteIndex ? "selected" : ""}" data-index="${route.index}">
-          <td class="mono">${escapeHtml(route.index)}</td>
-          <td class="num profit">${escapeHtml(profitHourLabel(route))}</td>
-          <td>
-            <div class="route-main">${escapeHtml(route.commodity || "No buy commodity")} / ${escapeHtml(route.targetCommodity || "No buy commodity")}</div>
-          </td>
-          <td>
-            <div class="route-main">${escapeHtml(route.buyStation)}</div>
-            <div class="route-sub mono">${escapeHtml(route.buySystem)} / ${escapeHtml(route.buyStationDistance)}</div>
-          </td>
-          <td>
-            <div class="route-main">${escapeHtml(route.sellStation)}</div>
-            <div class="route-sub mono">${escapeHtml(route.sellSystem)} / ${escapeHtml(route.sellStationDistance)}</div>
-          </td>
-          <td class="num">${escapeHtml(route.distanceFromSystem)}</td>
-          <td class="num">${escapeHtml(route.routeDistance)}</td>
-        </tr>
-      `).join("");
+      container.innerHTML = visibleRoutes.map((route, index) => routeResultCard(route, startIndex + index)).join("");
       updateRoutePager(startIndex + 1, startIndex + visibleRoutes.length, routes.length, totalPages);
+      updateRoutineContext();
     }
 
     function renderSelected() {
@@ -623,6 +825,7 @@ let routes = [];
         document.getElementById("command-preview").textContent = "";
         startButton.disabled = true;
         destinationButton.disabled = true;
+        updateRoutineContext();
         return;
       }
       startButton.disabled = clientRole !== "active_operator";
@@ -630,6 +833,7 @@ let routes = [];
       document.getElementById("selected-title").textContent =
         `${route.buySystem} (${route.buyStation}) -> ${route.sellSystem} (${route.sellStation})`;
       updateCommandPreview();
+      updateRoutineContext();
     }
 
     function selectedHaulParams() {
@@ -665,6 +869,82 @@ let routes = [];
         Object.entries(params).map(([key, value]) => `  ${key}=${value}`).join("\n");
     }
 
+    function multiLegCommandPayload() {
+      return {
+        origin: document.getElementById("multi-origin").value,
+        starting_capital: document.getElementById("multi-starting-capital").value,
+        cargo_capacity: document.getElementById("multi-capacity").value,
+        max_hop_distance_ly: document.getElementById("multi-hop-distance").value,
+        max_hops: document.getElementById("multi-max-hops").value,
+        max_station_distance_ls: document.getElementById("multi-station-distance").value,
+        max_market_age: document.getElementById("multi-market-age").value,
+        requires_large_pad: document.getElementById("multi-requires-large-pad").checked,
+        allow_planetary: document.getElementById("multi-allow-planetary").checked,
+        allow_player_owned: document.getElementById("multi-allow-player-owned").checked,
+        allow_restricted_access: document.getElementById("multi-allow-restricted").checked,
+        allow_prohibited: document.getElementById("multi-allow-prohibited").checked,
+        avoid_loops: document.getElementById("multi-avoid-loops").checked,
+        allow_permit_systems: document.getElementById("multi-allow-permit-systems").checked,
+        selected_route: multiLegRouteByIndex(selectedMultiLegIndex)
+      };
+    }
+
+    function updateMultiCommandPreview() {
+      const payload = multiLegCommandPayload();
+      document.getElementById("multi-command-preview").textContent =
+        "command.dispatch_multi_leg_haul\n" +
+        JSON.stringify(payload, null, 2);
+      updateRoutineContext();
+    }
+
+    function renderMultiLegResults() {
+      const container = document.getElementById("multi-route-results");
+      if (!multiLegRoutes.length) {
+        container.innerHTML = `<div class="route-sub empty-route-message">Calculate to preview a multi-leg haul result.</div>`;
+        document.getElementById("multi-result-count").textContent = "Calculate to preview multi-leg results";
+        document.getElementById("multi-selected-title").textContent = "Select a generated multi-leg route.";
+        updateMultiCommandPreview();
+        return;
+      }
+      container.innerHTML = multiLegRoutes.map(multiLegResultCard).join("");
+      const selectedRoute = multiLegRouteByIndex(selectedMultiLegIndex);
+      document.getElementById("multi-result-count").textContent = `${multiLegRoutes.length} UI preview route`;
+      document.getElementById("multi-selected-title").textContent = selectedRoute ? selectedRoute.name : "Select a generated multi-leg route.";
+      updateMultiCommandPreview();
+    }
+
+    function buildMultiLegPreviewRoute() {
+      const origin = document.getElementById("multi-origin").value || hydratedCurrentSystem || "Current system";
+      const capacity = document.getElementById("multi-capacity").value || "784";
+      return {
+        index: 1,
+        name: `${origin} / 3-stop haul preview`,
+        summary: `${document.getElementById("multi-max-hops").value || "5"} hops max · ${capacity} t capacity · multi-cargo ready`,
+        cumulativeProfit: "UI estimate pending",
+        nextTransit: "Then fly to the next profitable station after backend route calculation.",
+        legs: [
+          {
+            station: origin,
+            buy: [{ name: "Silver", amount: `${capacity} t` }, { name: "Bertrandite", amount: "optional" }],
+            sell: [],
+            profit: "pending"
+          },
+          {
+            station: "Intermediate station",
+            buy: [{ name: "Gold", amount: "split hold" }],
+            sell: [{ name: "Silver", amount: `${capacity} t` }],
+            profit: "pending"
+          },
+          {
+            station: "Final station",
+            buy: [],
+            sell: [{ name: "Bertrandite", amount: "remaining" }, { name: "Gold", amount: "split hold" }],
+            profit: "pending"
+          }
+        ]
+      };
+    }
+
     function applyHydratePayload(payload) {
       const ship = payload.ship || {};
       const haulSession = payload.haul_session || {};
@@ -680,9 +960,11 @@ let routes = [];
       if (ship.system) {
         hydratedCurrentSystem = ship.system;
         document.getElementById("origin").value = hydratedCurrentSystem;
+        document.getElementById("multi-origin").value = hydratedCurrentSystem;
       }
       if (ship.cargo_capacity) {
         document.getElementById("capacity").value = ship.cargo_capacity;
+        document.getElementById("multi-capacity").value = ship.cargo_capacity;
       }
       if (mergeHydratedRoute(payload.selected_trade_route || payload.running_trade_route)) {
         renderRows();
@@ -696,12 +978,12 @@ let routes = [];
       renderActivityLog();
     }
 
-    document.getElementById("route-rows").addEventListener("click", (event) => {
-      const row = event.target.closest("tr[data-index]");
-      if (!row) {
+    document.getElementById("route-results").addEventListener("click", (event) => {
+      const card = event.target.closest("[data-index]");
+      if (!card) {
         return;
       }
-      selectedRouteIndex = Number(row.dataset.index);
+      selectedRouteIndex = Number(card.dataset.index);
       renderRows();
       renderSelected();
       persistSelectedRoute(routeByIndex(selectedRouteIndex));
@@ -750,10 +1032,16 @@ let routes = [];
     document.getElementById("reset-search").addEventListener("click", () => {
       document.getElementById("origin").value = hydratedCurrentSystem;
       document.getElementById("destination").value = "";
-      document.getElementById("route-distance").value = "500 ly";
-      document.getElementById("station-distance").value = "Any";
+      document.getElementById("route-distance").value = "500";
+      document.getElementById("route-distance-range").value = "500";
+      document.getElementById("station-distance").value = "1000000";
+      document.getElementById("station-distance-range").value = "1000000";
       document.getElementById("capacity").value = "784";
       document.getElementById("metric").value = "Profit / hour";
+      document.getElementById("starting-capital").value = "2000000000";
+      document.getElementById("max-hop-distance").value = "60";
+      document.getElementById("max-hops").value = "5";
+      document.getElementById("max-hops-range").value = "5";
     });
 
     document.getElementById("prev-routes").addEventListener("click", () => {
@@ -822,6 +1110,60 @@ let routes = [];
       })
         .then(() => {
           appendActivity("Two-way haul accepted by backend.", "Haul", "success");
+        })
+        .catch((error) => {
+          appendActivity(error.message, "Haul", "warning");
+        });
+    });
+
+    document.getElementById("multi-search-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      multiLegRoutes = [buildMultiLegPreviewRoute()];
+      selectedMultiLegIndex = 1;
+      renderMultiLegResults();
+      appendActivity("Multi-leg haul preview calculated locally.", "Haul", "success");
+    });
+
+    document.getElementById("multi-route-results").addEventListener("click", (event) => {
+      const card = event.target.closest("[data-multi-index]");
+      if (!card) {
+        return;
+      }
+      selectedMultiLegIndex = Number(card.dataset.multiIndex);
+      renderMultiLegResults();
+    });
+
+    document.getElementById("reset-multi-search").addEventListener("click", () => {
+      document.getElementById("multi-origin").value = hydratedCurrentSystem;
+      document.getElementById("multi-starting-capital").value = "2000000000";
+      document.getElementById("multi-capacity").value = document.getElementById("capacity").value || "784";
+      document.getElementById("multi-hop-distance").value = "60";
+      document.getElementById("multi-max-hops").value = "5";
+      document.getElementById("multi-station-distance").value = "1000000";
+      document.getElementById("multi-station-distance-range").value = "1000000";
+      document.getElementById("multi-market-age").value = "";
+      updateMultiCommandPreview();
+    });
+
+    document.getElementById("start-multi-haul").addEventListener("click", () => {
+      if (!multiLegRouteByIndex(selectedMultiLegIndex)) {
+        appendActivity("Calculate and select a multi-leg route before starting.", "Haul", "warning");
+        return;
+      }
+      if (!accessToken) {
+        appendActivity("Enter and save an access token to start multi-leg haul.", "Haul", "warning");
+        return;
+      }
+      if (clientRole !== "active_operator") {
+        appendActivity("Connect to the backend before starting multi-leg haul.", "Haul", "warning");
+        return;
+      }
+      sendCommand("command.dispatch_multi_leg_haul", {
+        params: multiLegCommandPayload(),
+        raw_command: "web multi_leg_haul start"
+      })
+        .then(() => {
+          appendActivity("Multi-leg haul accepted by backend.", "Haul", "success");
         })
         .catch((error) => {
           appendActivity(error.message, "Haul", "warning");
@@ -965,8 +1307,17 @@ let routes = [];
         saveAccessToken();
       }
     });
+    document.querySelectorAll(".nav-item[data-view]").forEach((button) => {
+      button.addEventListener("click", () => setView(button.dataset.view));
+    });
+    syncRange("max-hops-range", "max-hops");
+    syncRange("route-distance-range", "route-distance");
+    syncRange("station-distance-range", "station-distance");
+    syncRange("multi-station-distance-range", "multi-station-distance");
 
+    setView(window.location.pathname.includes("multi") ? "multi-leg" : "two-way");
     renderRows();
     renderSelected();
+    renderMultiLegResults();
     renderActivityLog();
     connectWebsocket();

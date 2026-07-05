@@ -565,6 +565,23 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertIn('window.EDCR_SERVER_DEFAULT_ACCESS_TOKEN = "";', response.text)
         self.assertEqual(response.headers["cache-control"], "no-store")
 
+    def test_multi_haul_endpoint_serves_shared_web_shell(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        app = build_observer_server_app(
+            data_provider=_base_data_read_model,
+            command_handler=None,
+            broker=broker,
+            auth=SharedAccessTokenAuth("secret-token"),
+        )
+
+        with TestClient(app) as client:
+            response = client.get("/multi-haul")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Multi-leg haul", response.text)
+        self.assertIn('id="multi-leg-view"', response.text)
+        self.assertEqual(response.headers["cache-control"], "no-store")
+
     def test_haul_web_endpoint_can_inject_implicit_serve_token(self) -> None:
         broker = InMemoryObserverSessionBroker()
         app = build_observer_server_app(
