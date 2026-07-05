@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `230`
-- Latest generated iteration number: `363`
+- Generated iteration count: `231`
+- Latest generated iteration number: `364`
 
 ## Iteration 134
 
@@ -6362,6 +6362,34 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - Backend support is still needed before the multi-leg page can run real Spansh calculations or dispatch live multi-leg routes.
 
 ## Iteration 363
+
+- When: `2026-07-05 21:52`
+- Area: `control-room`
+- Title: `haul-web-ship-defaults`
+- Source: [2026-07-05-21-52_control-room_haul-web-ship-defaults.md](iteration-logs/2026-07-05-21-52_control-room_haul-web-ship-defaults.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `haul-web-ship-defaults`
+- Started: `2026-07-05 21:52`
+
+## Summary
+
+- Defaulted the web haul planner inputs from current ship hydrate data where available.
+
+## Changes
+
+- Added `max_jump_range_ly` to the ship state/read-model path from journal `Loadout.MaxJumpRange`.
+- Web `/haul` and `/multi-haul` now default starting capital from current credits, cargo capacity from current hold capacity, hop distance from hydrated jump range, and the large-pad checkbox from known ship type.
+- Two-way web search payload now includes the Spansh-style capital, hop, hops, market-age, and route-filter fields for future backend support.
+
+## Follow-ups
+
+- The UI accepts future `ship.laden_jump_range_ly` / `ship.jump_range_ly` hydrate fields, but today the backend only provides journal `MaxJumpRange`.
+- Pad-size inference is a client-side known-ship map; unknown ship types keep the conservative large-pad default.
+
+## Iteration 364
 
 - When: `2026-07-06 14:01`
 - Area: `ci-release`
