@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `225`
-- Latest generated iteration number: `358`
+- Generated iteration count: `226`
+- Latest generated iteration number: `359`
 
 ## Iteration 134
 
@@ -6251,3 +6251,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Publish the `v1.19.0` tag and GitHub release once the release-prep commit is pushed.
+
+## Iteration 359
+
+- When: `2026-07-05 05:49`
+- Area: `web`
+- Title: `root-entry-point`
+- Source: [2026-07-05-05-49_____web______root-entry-point.md](iteration-logs/2026-07-05-05-49_____web______root-entry-point.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `root-entry-point`
+- Started: `2026-07-05 05:49`
+
+## Summary
+
+- Made the observer web root `/` serve the same haul web entry point as `/haul`.
+
+## Changes
+
+- Added a root route constant and mounted it to the existing haul web HTML handler, preserving the no-store response behavior and token injection path.
+- Added server regression coverage for the root web entry point.
+- Updated the Control Room status handoff to mention both web entry paths.
+
+## Follow-ups
+
+- None.

@@ -34,6 +34,7 @@ from edap.control_room.server.messages import protocol_message
 
 MESSAGE_SCHEMA_URL_PATH = "/schema/control_room_message.json"
 BROWSER_PROBE_URL_PATH = "/browser-probe"
+HAUL_WEB_ENTRY_URL_PATH = "/"
 HAUL_WEB_URL_PATH = "/haul"
 _MESSAGE_SCHEMA_PATH = (
     Path(__file__).resolve().parents[3] / "docs" / "schemas" / "control_room_message.schema.json"
@@ -175,6 +176,7 @@ def build_observer_server_app(
             Route("/hydrate", hydrate),
             Route(MESSAGE_SCHEMA_URL_PATH, message_schema),
             Route(BROWSER_PROBE_URL_PATH, browser_probe),
+            Route(HAUL_WEB_ENTRY_URL_PATH, haul_web),
             Route(HAUL_WEB_URL_PATH, haul_web),
             WebSocketRoute("/session", session),
         ]

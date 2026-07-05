@@ -44,6 +44,7 @@ from edap.control_room.server import app as server_app
 from edap.control_room.server.app import (
     BROWSER_PROBE_URL_PATH,
     CONTROL_ROOM_MESSAGE_SCHEMA,
+    HAUL_WEB_ENTRY_URL_PATH,
     HAUL_WEB_URL_PATH,
     MESSAGE_SCHEMA_URL_PATH,
     SUPPORTED_COMMAND_MESSAGE_TYPES,
@@ -545,6 +546,23 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertIn("handleAccessTokenRejected", response.text)
         self.assertIn("Access token rejected", response.text)
         self.assertNotIn("window.prompt", response.text)
+        self.assertIn('const SERVER_DEFAULT_ACCESS_TOKEN = "";', response.text)
+        self.assertEqual(response.headers["cache-control"], "no-store")
+
+    def test_root_endpoint_serves_haul_web_entry_point(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        app = build_observer_server_app(
+            data_provider=_base_data_read_model,
+            command_handler=None,
+            broker=broker,
+            auth=SharedAccessTokenAuth("secret-token"),
+        )
+
+        with TestClient(app) as client:
+            response = client.get(HAUL_WEB_ENTRY_URL_PATH)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Two-way haul control", response.text)
         self.assertIn('const SERVER_DEFAULT_ACCESS_TOKEN = "";', response.text)
         self.assertEqual(response.headers["cache-control"], "no-store")
 
