@@ -1316,69 +1316,6 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
-      .route-table,
-      .route-table tbody,
-      .route-table tr,
-      .route-table td {
-        display: block;
-        width: 100%;
-      }
-
-      .route-table thead {
-        display: none;
-      }
-
-      .route-table tr {
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-        background: var(--bg-0);
-        padding: 10px;
-        margin-bottom: 10px;
-      }
-
-      .route-table tr.selected {
-        background: var(--bg-2);
-        box-shadow: inset 3px 0 0 var(--amber);
-      }
-
-      .route-table td {
-        display: grid;
-        grid-template-columns: 88px minmax(0, 1fr);
-        gap: 8px;
-        border-top: 0;
-        padding: 4px 0;
-        text-align: left;
-      }
-
-      .route-table td::before {
-        color: var(--text-3);
-        content: "";
-        font-size: 10px;
-        font-weight: 650;
-        text-transform: uppercase;
-      }
-
-      .route-table td:nth-child(1)::before { content: "#"; }
-      .route-table td:nth-child(2)::before { content: "Profit / hr"; }
-      .route-table td:nth-child(3)::before { content: "Cargo"; }
-      .route-table td:nth-child(4)::before { content: "Station 1"; }
-      .route-table td:nth-child(5)::before { content: "Station 2"; }
-      .route-table td:nth-child(6)::before { content: "Distance"; }
-      .route-table td:nth-child(7)::before { content: "Route"; }
-
-      .route-table td.empty-route-message {
-        display: block;
-      }
-
-      .route-table td.empty-route-message::before {
-        display: none;
-      }
-
-      .route-table .num {
-        text-align: left;
-        white-space: normal;
-      }
-
       .result-card-head {
         flex-direction: column;
       }
@@ -1469,7 +1406,7 @@
         display: none;
       }
 
-      .route-table td {
+      .commodity-table td {
         grid-template-columns: 78px minmax(0, 1fr);
       }
     }
