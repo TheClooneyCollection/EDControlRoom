@@ -57,6 +57,20 @@ class ControlRoomHaulWebTests(unittest.TestCase):
             html,
         )
 
+    def test_haul_web_active_routine_treats_sell_as_final_step(self) -> None:
+        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+
+        expected_steps = [
+            'data-phase="buy"><div class="step-label">1. Buy',
+            'data-phase="undock"><div class="step-label">2. Undock',
+            'data-phase="depart"><div class="step-label">3. Depart',
+            'data-phase="transit"><div class="step-label">4. Transit',
+            'data-phase="sell"><div class="step-label">5. Sell',
+        ]
+        step_positions = [html.index(step) for step in expected_steps]
+        self.assertEqual(step_positions, sorted(step_positions))
+        self.assertIn('const phaseOrder = ["buy", "undock", "depart", "transit", "sell"];', html)
+
     def test_haul_web_exposes_connection_error_recovery_ui(self) -> None:
         html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
 

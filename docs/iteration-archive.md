@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `227`
-- Latest generated iteration number: `360`
+- Generated iteration count: `228`
+- Latest generated iteration number: `361`
 
 ## Iteration 134
 
@@ -6304,3 +6304,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - None.
+
+## Iteration 361
+
+- When: `2026-07-05 07:36`
+- Area: `haul`
+- Title: `sell-final-web-routine-step`
+- Source: [2026-07-05-07-36_____haul_____sell-final-web-routine-step.md](iteration-logs/2026-07-05-07-36_____haul_____sell-final-web-routine-step.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `sell-final-web-routine-step`
+- Started: `2026-07-05 07:36`
+
+## Summary
+
+- Reordered the Haul Web V1 active routine timeline so sell is presented as the final step in a hauling leg.
+
+## Changes
+
+- Updated `web/haul-v1.html` to display `Buy -> Undock -> Depart -> Transit -> Sell`.
+- Updated the routine panel phase completion order to match the displayed timeline.
+- Added a focused static web test that asserts sell remains the fifth/final displayed step and that the JavaScript phase order matches.
+
+## Follow-ups
+
+- No server or protocol changes appear necessary; the existing hydrate phase names are sufficient for the frontend order change.

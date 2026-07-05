@@ -1315,11 +1315,11 @@
           </div>
           <div class="panel-body">
             <div class="routine-bar" id="routine-steps" aria-label="Routine phase timeline">
-              <div class="step" data-phase="sell"><div class="step-label">1. Sell</div><div class="step-value">Pending</div></div>
-              <div class="step" data-phase="buy"><div class="step-label">2. Buy</div><div class="step-value">Pending</div></div>
-              <div class="step" data-phase="undock"><div class="step-label">3. Undock</div><div class="step-value">Pending</div></div>
-              <div class="step" data-phase="depart"><div class="step-label">4. Depart</div><div class="step-value">Pending</div></div>
-              <div class="step" data-phase="transit"><div class="step-label">5. Transit</div><div class="step-value">Pending</div></div>
+              <div class="step" data-phase="buy"><div class="step-label">1. Buy</div><div class="step-value">Pending</div></div>
+              <div class="step" data-phase="undock"><div class="step-label">2. Undock</div><div class="step-value">Pending</div></div>
+              <div class="step" data-phase="depart"><div class="step-label">3. Depart</div><div class="step-value">Pending</div></div>
+              <div class="step" data-phase="transit"><div class="step-label">4. Transit</div><div class="step-value">Pending</div></div>
+              <div class="step" data-phase="sell"><div class="step-label">5. Sell</div><div class="step-value">Pending</div></div>
             </div>
 
             <div class="mini-metrics">
@@ -2027,7 +2027,7 @@
       const phase = routine.haul_phase || null;
       const stationIndex = routine.haul_phase_station_index || null;
       const stationLabel = stationIndex ? `Station ${stationIndex}` : "";
-      const phaseOrder = ["sell", "buy", "undock", "depart", "transit"];
+      const phaseOrder = ["buy", "undock", "depart", "transit", "sell"];
       const phaseIndex = phase ? phaseOrder.indexOf(phase) : -1;
       let routineStatus = "Running";
       if (routine.haul_paused) {
