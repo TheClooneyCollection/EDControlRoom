@@ -581,7 +581,9 @@ class ControlRoomServerTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Multi-leg haul", response.text)
-        self.assertIn('id="multi-leg-view"', response.text)
+        self.assertIn('id="multi-search-form"', response.text)
+        self.assertIn('src="/assets/multi-haul.js"', response.text)
+        self.assertNotIn('src="/assets/haul-ui.js"', response.text)
         self.assertEqual(response.headers["cache-control"], "no-store")
 
     def test_haul_web_endpoint_can_inject_implicit_serve_token(self) -> None:
@@ -647,6 +649,7 @@ class ControlRoomServerTests(unittest.TestCase):
         with TestClient(app) as client:
             css_response = client.get("/assets/haul-ui.css")
             js_response = client.get("/assets/haul-ui.js")
+            multi_js_response = client.get("/assets/multi-haul.js")
             missing_response = client.get("/assets/unknown.js")
 
         self.assertEqual(css_response.status_code, 200)
@@ -658,6 +661,9 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertIn("showAccessTokenPrompt", js_response.text)
         self.assertIn("handleAccessTokenRejected", js_response.text)
         self.assertIn("Access token rejected", js_response.text)
+        self.assertEqual(multi_js_response.status_code, 200)
+        self.assertEqual(multi_js_response.headers["cache-control"], "no-store")
+        self.assertIn("command.dispatch_multi_leg_haul", multi_js_response.text)
         self.assertEqual(missing_response.status_code, 404)
 
     def test_haul_web_renderer_rereads_html_file_without_server_restart(self) -> None:

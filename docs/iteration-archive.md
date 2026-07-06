@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `232`
-- Latest generated iteration number: `365`
+- Generated iteration count: `233`
+- Latest generated iteration number: `366`
 
 ## Iteration 134
 
@@ -6418,6 +6418,34 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - Consider adding a richer web defaults model if multi-leg planning gains backend-owned settings beyond the current route-search and haul timing defaults.
 
 ## Iteration 365
+
+- When: `2026-07-06 11:07`
+- Area: `control-room`
+- Title: `restore-two-way-haul-web`
+- Source: [2026-07-06-11-07_control-room_restore-two-way-haul-web.md](iteration-logs/2026-07-06-11-07_control-room_restore-two-way-haul-web.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `restore-two-way-haul-web`
+- Started: `2026-07-06 11:07`
+
+## Summary
+
+- Restored the existing `/haul` two-way web page after the Spansh planner work had incorrectly changed its visible UI.
+
+## Changes
+
+- Reverted `web/haul-v1.html` and `web/haul-ui.js` back to the pre-redesign two-way route table/search surface while preserving the shared asset setup.
+- Added separate `web/multi-haul.html` and `web/multi-haul.js` for the Spansh-style multi-leg planner and dedicated `command.dispatch_multi_leg_haul` preview path.
+- Updated the observer server so `/multi-haul` serves the separate page and `/assets/multi-haul.js` is available without changing `/haul`.
+- Moved web tests so two-way assertions cover the original route table surface and Spansh/multi-leg assertions cover the separate multi page.
+
+## Follow-ups
+
+- `/multi-haul` remains UI-only until backend multi-leg route calculation/dispatch support is implemented.
+
+## Iteration 366
 
 - When: `2026-07-06 14:01`
 - Area: `ci-release`

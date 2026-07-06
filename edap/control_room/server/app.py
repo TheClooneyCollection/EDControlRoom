@@ -45,6 +45,7 @@ _BROWSER_PROBE_PATH = (
     Path(__file__).resolve().parents[3] / "tools" / "scratch" / "control_room_remote_browser.html"
 )
 _HAUL_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "haul-v1.html"
+_MULTI_HAUL_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "multi-haul.html"
 _HAUL_WEB_ASSET_DIR = Path(__file__).resolve().parents[3] / "web"
 CONTROL_ROOM_MESSAGE_SCHEMA = json.loads(_MESSAGE_SCHEMA_PATH.read_text(encoding="utf-8"))
 CONTROL_ROOM_BROWSER_PROBE_HTML = _BROWSER_PROBE_PATH.read_text(encoding="utf-8")
@@ -52,13 +53,44 @@ _HAUL_WEB_CONFIG_SENTINEL = "window.EDCR_WEB_CONFIG = {};"
 
 
 def _render_haul_web_html(*, web_config: dict[str, Any] | None = None, web_default_access_token: str = "") -> str:
+    return _render_web_html(
+        _HAUL_WEB_PATH,
+        web_config=web_config,
+        web_default_access_token=web_default_access_token,
+    )
+
+
+def _render_multi_haul_web_html(
+    *,
+    web_config: dict[str, Any] | None = None,
+    web_default_access_token: str = "",
+) -> str:
+    return _render_web_html(
+        _MULTI_HAUL_WEB_PATH,
+        web_config=web_config,
+        web_default_access_token=web_default_access_token,
+    )
+
+
+def _render_web_html(
+    path: Path,
+    *,
+    web_config: dict[str, Any] | None = None,
+    web_default_access_token: str = "",
+) -> str:
     resolved_config = dict(web_config or {})
     if web_default_access_token and "defaultAccessToken" not in resolved_config:
         resolved_config["defaultAccessToken"] = web_default_access_token
-    return _HAUL_WEB_PATH.read_text(encoding="utf-8").replace(
+    html = path.read_text(encoding="utf-8").replace(
         _HAUL_WEB_CONFIG_SENTINEL,
         f"window.EDCR_WEB_CONFIG = {json.dumps(resolved_config, sort_keys=True)};",
     )
+    if "defaultAccessToken" in resolved_config:
+        html = html.replace(
+            'window.EDCR_SERVER_DEFAULT_ACCESS_TOKEN = "";',
+            f"window.EDCR_SERVER_DEFAULT_ACCESS_TOKEN = {json.dumps(resolved_config['defaultAccessToken'])};",
+        )
+    return html
 
 
 def _haul_web_config(
@@ -165,11 +197,26 @@ def build_observer_server_app(
             headers={"Cache-Control": "no-store"},
         )
 
+    async def multi_haul_web(request):
+        data = data_provider()
+        return HTMLResponse(
+            _render_multi_haul_web_html(
+                web_config=_haul_web_config(
+                    data,
+                    auth=auth,
+                    request=request,
+                    web_default_access_token=web_default_access_token,
+                )
+            ),
+            headers={"Cache-Control": "no-store"},
+        )
+
     async def haul_web_asset(request):
         asset_name = request.path_params["asset_name"]
         allowed_assets = {
             "haul-ui.css": "text/css; charset=utf-8",
             "haul-ui.js": "text/javascript; charset=utf-8",
+            "multi-haul.js": "text/javascript; charset=utf-8",
         }
         media_type = allowed_assets.get(asset_name)
         if media_type is None:
@@ -237,7 +284,7 @@ def build_observer_server_app(
             Route(BROWSER_PROBE_URL_PATH, browser_probe),
             Route(HAUL_WEB_ENTRY_URL_PATH, haul_web),
             Route(HAUL_WEB_URL_PATH, haul_web),
-            Route(MULTI_HAUL_WEB_URL_PATH, haul_web),
+            Route(MULTI_HAUL_WEB_URL_PATH, multi_haul_web),
             Route(HAUL_WEB_ASSET_URL_PATH, haul_web_asset),
             WebSocketRoute("/session", session),
         ]

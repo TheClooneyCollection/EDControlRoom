@@ -15,6 +15,14 @@ def _haul_web_source() -> str:
     )
 
 
+def _multi_haul_web_source() -> str:
+    web_dir = Path(__file__).resolve().parents[1] / "web"
+    return "\n".join(
+        (web_dir / name).read_text(encoding="utf-8")
+        for name in ("multi-haul.html", "haul-ui.css", "multi-haul.js")
+    )
+
+
 class ControlRoomHaulWebTests(unittest.TestCase):
     def test_two_way_phase_projection_compacts_phase_and_station_for_web(self) -> None:
         self.assertEqual(_project_two_way_phase(Phase.AT_STATION_1_SELL), ("sell", 1))
@@ -66,7 +74,7 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         )
 
     def test_haul_web_active_routine_shows_secondary_route_context(self) -> None:
-        html = _haul_web_source()
+        html = _multi_haul_web_source()
 
         self.assertIn('id="routine-buying"', html)
         self.assertIn('id="routine-selling"', html)
@@ -137,38 +145,36 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn("apiRoute: { ...route, index }", html)
 
     def test_haul_web_uses_spansh_style_parameters_and_result_cards(self) -> None:
-        html = _haul_web_source()
+        html = _multi_haul_web_source()
 
         self.assertIn("Starting system / station", html)
-        self.assertIn('id="starting-capital"', html)
-        self.assertIn('id="max-hop-distance"', html)
-        self.assertIn('id="max-hops-range"', html)
-        self.assertIn('id="station-distance-range"', html)
+        self.assertIn('id="multi-starting-capital"', html)
+        self.assertIn('id="multi-hop-distance"', html)
+        self.assertIn('id="multi-max-hops"', html)
+        self.assertIn('id="multi-station-distance-range"', html)
         self.assertIn("Maximum market age", html)
         self.assertIn("Requires large pad", html)
-        self.assertIn('id="route-results"', html)
-        self.assertIn("function routeResultCard(route, index, cumulativeProfit = \"\")", html)
+        self.assertIn('id="multi-route-results"', html)
+        self.assertIn("function multiLegResultCard(route)", html)
         self.assertIn("Cumulative Profit", html)
 
     def test_haul_web_defaults_spansh_parameters_from_current_ship(self) -> None:
-        html = _haul_web_source()
+        html = _multi_haul_web_source()
 
         self.assertIn("function applyShipDefaults(ship)", html)
-        self.assertIn('setInputValue("starting-capital", ship.credits)', html)
         self.assertIn('setInputValue("multi-starting-capital", ship.credits)', html)
-        self.assertIn('setInputValue("capacity", ship.cargo_capacity)', html)
         self.assertIn('setInputValue("multi-capacity", ship.cargo_capacity)', html)
         self.assertIn('ship.laden_jump_range_ly || ship.max_jump_range_ly || ship.jump_range_ly', html)
         self.assertIn("function requiresLargePadForShip(ship)", html)
-        self.assertIn('document.getElementById("requires-large-pad").checked = requiresLargePad', html)
-        self.assertIn('starting_capital: document.getElementById("starting-capital").value', html)
-        self.assertIn('max_hop_distance_ly: document.getElementById("max-hop-distance").value', html)
-        self.assertIn('requires_large_pad: document.getElementById("requires-large-pad").checked', html)
+        self.assertIn('document.getElementById("multi-requires-large-pad").checked = requiresLargePad', html)
+        self.assertIn('starting_capital: document.getElementById("multi-starting-capital").value', html)
+        self.assertIn('max_hop_distance_ly: document.getElementById("multi-hop-distance").value', html)
+        self.assertIn('requires_large_pad: document.getElementById("multi-requires-large-pad").checked', html)
 
     def test_haul_web_exposes_multi_leg_page_with_dedicated_command(self) -> None:
-        html = _haul_web_source()
+        html = _multi_haul_web_source()
 
-        self.assertIn('id="multi-leg-view"', html)
+        self.assertIn("Multi-leg haul control", html)
         self.assertIn('id="multi-search-form"', html)
         self.assertIn('id="multi-route-results"', html)
         self.assertIn('id="start-multi-haul"', html)
@@ -176,12 +182,22 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn("function multiLegResultCard(route)", html)
         self.assertIn("multi-cargo ready", html)
 
+    def test_two_way_haul_web_keeps_original_route_table_surface(self) -> None:
+        html = _haul_web_source()
+
+        self.assertIn('id="search-form"', html)
+        self.assertIn('class="route-table"', html)
+        self.assertIn('id="route-rows"', html)
+        self.assertIn("Route results", html)
+        self.assertNotIn('id="multi-search-form"', html)
+        self.assertNotIn("Starting capital", html)
+
     def test_haul_web_includes_mobile_layout_breakpoints(self) -> None:
         html = _haul_web_source()
 
         self.assertNotIn("min-width: 1160px", html)
         self.assertIn("@media (max-width: 760px)", html)
         self.assertIn(".shell {\n        display: block;", html)
-        self.assertIn(".commodity-table td:nth-child(2)::before { content: \"Amount\"; }", html)
+        self.assertIn(".route-table td:nth-child(2)::before { content: \"Profit / hr\"; }", html)
         self.assertIn("empty-route-message", html)
         self.assertIn("@media (max-width: 480px)", html)

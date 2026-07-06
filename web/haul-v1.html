@@ -14,24 +14,20 @@
         <div class="brand-mark">ED</div>
         <div>
           <div class="brand-name">Control Room</div>
-          <div class="brand-sub">haul control</div>
+          <div class="brand-sub">web haul prototype</div>
         </div>
       </div>
 
-      <div class="nav-label">Haul</div>
-      <button class="nav-item active" id="nav-two-way" type="button" data-view="two-way" aria-selected="true">
+      <div class="nav-label">V1 Scope</div>
+      <button class="nav-item active" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 12h5l2 5 4-14 2 9h5"/></svg>
         Two-way haul
       </button>
-      <button class="nav-item" id="nav-multi-leg" type="button" data-view="multi-leg" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 18h5l3-12 3 12h5"/><path d="M4 6h4m8 0h4"/></svg>
-        Multi-leg haul
-      </button>
 
       <div class="sidebar-foot">
-        <div class="status-row"><span><span class="dot"></span>Runtime</span><span id="status-runtime">-</span></div>
-        <div class="status-row"><span><span class="dot"></span>Journal</span><span id="status-journal">-</span></div>
-        <div class="status-row"><span><span class="dot"></span>Input target</span><span id="status-input-target">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>ED client</span><span>Running</span></div>
+        <div class="status-row"><span><span class="dot"></span>Journal</span><span>Live</span></div>
+        <div class="status-row"><span><span class="dot"></span>CrossOver</span><span>Targeted</span></div>
       </div>
     </aside>
 
@@ -39,12 +35,12 @@
       <header class="topbar">
         <div>
           <div class="topbar-title">Haul</div>
-          <div class="topbar-sub">Web control for two-way station, carrier, and multi-leg hauling.</div>
+          <div class="topbar-sub">Web V1 for two-way station and carrier hauling. Market page and settlement route support are not included.</div>
         </div>
         <div class="chips" aria-label="Session status">
-          <div class="chip">Host <strong id="session-host">-</strong></div>
-          <div class="chip">Target <strong id="session-target">-</strong></div>
-          <div class="chip">Role <strong id="session-role">-</strong></div>
+          <div class="chip">Host <strong>MacBook Pro</strong></div>
+          <div class="chip">Target <strong>edserver.exe</strong></div>
+          <div class="chip">Role <strong>Active operator</strong></div>
           <div class="token-control">
             <input class="token-input" id="access-token" type="password" placeholder="Access token" autocomplete="off" aria-label="Access token">
             <button class="token-button" id="save-token" type="button">Save</button>
@@ -63,8 +59,8 @@
       <main>
         <div class="page-head">
           <div>
-            <h1 id="page-title">Two-way haul control</h1>
-            <div class="page-description" id="page-description">
+            <h1>Two-way haul control</h1>
+            <div class="page-description">
               Search routes, inspect the selected station-to-station route, and start a two-way haul with structured dispatch. Route selection stays local to this browser; server-side search results are shared data.
             </div>
           </div>
@@ -93,19 +89,19 @@
           </div>
           <div class="summary-cell">
             <div class="summary-label">Cargo</div>
-            <div class="summary-value mono" id="summary-cargo">0 / 0 t</div>
+            <div class="summary-value mono" id="summary-cargo">420 / 784 t</div>
           </div>
           <div class="summary-cell">
             <div class="summary-label">Routine</div>
-            <div class="summary-value" id="summary-routine">Two-way haul</div>
+            <div class="summary-value">Two-way haul</div>
           </div>
           <div class="summary-cell">
             <div class="summary-label">Completed runs</div>
-            <div class="summary-value mono" id="summary-runs">0</div>
+            <div class="summary-value mono" id="summary-runs">3</div>
           </div>
           <div class="summary-cell">
             <div class="summary-label">Accumulated profit</div>
-            <div class="summary-value success mono" id="summary-profit">0 CR</div>
+            <div class="summary-value success mono" id="summary-profit">129.4m CR</div>
           </div>
         </section>
 
@@ -121,29 +117,6 @@
               <div class="step" data-phase="depart"><div class="step-label">3. Depart</div><div class="step-value">Pending</div></div>
               <div class="step" data-phase="transit"><div class="step-label">4. Transit</div><div class="step-value">Pending</div></div>
               <div class="step" data-phase="sell"><div class="step-label">5. Sell</div><div class="step-value">Pending</div></div>
-            </div>
-
-            <div class="routine-context" aria-label="Active haul details">
-              <div class="context-card">
-                <div class="context-label">Buying</div>
-                <div class="context-value" id="routine-buying">-</div>
-                <div class="context-sub" id="routine-buying-sub">Waiting for a selected route</div>
-              </div>
-              <div class="context-card">
-                <div class="context-label">Selling</div>
-                <div class="context-value" id="routine-selling">-</div>
-                <div class="context-sub" id="routine-selling-sub">Waiting for cargo context</div>
-              </div>
-              <div class="context-card">
-                <div class="context-label">Transit</div>
-                <div class="context-value" id="routine-transit">-</div>
-                <div class="context-sub" id="routine-transit-sub">No route active</div>
-              </div>
-              <div class="context-card">
-                <div class="context-label">Next sale</div>
-                <div class="context-value" id="routine-next-sale">-</div>
-                <div class="context-sub" id="routine-next-sale-sub">No sell order queued</div>
-              </div>
             </div>
 
             <div class="mini-metrics">
@@ -167,89 +140,61 @@
           </div>
         </section>
 
-        <section class="page-view active" id="two-way-view" data-view="two-way">
-          <section class="layout">
+        <section class="layout">
           <div class="left-stack">
             <section class="panel" aria-labelledby="search-title">
               <div class="panel-head">
-                <div class="panel-title" id="search-title">Haul parameters</div>
+                <div class="panel-title" id="search-title">Haul search</div>
                 <div class="panel-action">Operator connection required</div>
               </div>
               <div class="panel-body">
                 <div class="banner">
-                  <div class="banner-title">Spansh-style route search</div>
-                  <div class="banner-text">UI-only parity pass for route inputs. Current backend search still maps to the existing station/carrier route command.</div>
+                  <div class="banner-title">Station and carrier routes only</div>
+                  <div class="banner-text">V1 search excludes land settlements. Surface destinations are intentionally disabled until route metadata is reliable.</div>
                 </div>
 
-                <form class="spansh-form" id="search-form">
-                  <label class="spansh-field">
-                    <span class="field-label">Starting system / station</span>
-                    <input class="field" id="origin" value="" placeholder="Current system / station" autocomplete="off">
+                <form class="form-grid" id="search-form">
+                  <label>
+                    <span class="field-label">Origin system</span>
+                    <input class="field" id="origin" value="" placeholder="Current system" autocomplete="off">
                   </label>
-                  <label class="spansh-field">
-                    <span class="field-label">Destination filter</span>
-                    <input class="field" id="destination" value="" placeholder="Any profitable endpoint" autocomplete="off">
+                  <label>
+                    <span class="field-label">Destination system or station</span>
+                    <input class="field" id="destination" value="" autocomplete="off">
                   </label>
                   <div class="field-row">
-                    <label class="spansh-field">
-                      <span class="field-label">Starting capital</span>
-                      <input class="field mono" id="starting-capital" value="" inputmode="numeric">
+                    <label>
+                      <span class="field-label">Max route distance</span>
+                      <select class="select" id="route-distance">
+                        <option>250 ly</option>
+                        <option selected>500 ly</option>
+                        <option>750 ly</option>
+                      </select>
                     </label>
-                    <label class="spansh-field">
-                      <span class="field-label">Maximum hop distance</span>
-                      <input class="field mono" id="max-hop-distance" value="" inputmode="decimal">
+                    <label>
+                      <span class="field-label">Station distance</span>
+                      <select class="select" id="station-distance">
+                        <option selected>Any</option>
+                        <option>1,000 ls</option>
+                        <option>5,000 ls</option>
+                      </select>
                     </label>
                   </div>
                   <div class="field-row">
-                    <label class="spansh-field">
-                      <span class="field-label">Maximum cargo capacity</span>
-                      <input class="field mono" id="capacity" value="" inputmode="numeric">
+                    <label>
+                      <span class="field-label">Cargo capacity</span>
+                      <input class="field mono" id="capacity" value="784" inputmode="numeric">
                     </label>
-                    <label class="spansh-field">
-                      <span class="field-label">Sort by</span>
+                    <label>
+                      <span class="field-label">Profit metric</span>
                       <select class="select" id="metric">
                         <option selected>Profit / hour</option>
                         <option>Profit / trip</option>
                       </select>
                     </label>
                   </div>
-                  <label class="spansh-field">
-                    <span class="field-label">Maximum hops</span>
-                    <div class="range-row">
-                      <input class="range-field" id="max-hops-range" type="range" min="1" max="12" value="5">
-                      <input class="field mono" id="max-hops" value="" inputmode="numeric">
-                    </div>
-                  </label>
-                  <label class="spansh-field">
-                    <span class="field-label">Maximum route distance</span>
-                    <div class="range-row">
-                      <input class="range-field" id="route-distance-range" type="range" min="50" max="1000" step="50" value="500">
-                      <input class="field mono" id="route-distance" value="" inputmode="numeric">
-                    </div>
-                  </label>
-                  <label class="spansh-field">
-                    <span class="field-label">Maximum distance to arrival</span>
-                    <div class="range-row">
-                      <input class="range-field" id="station-distance-range" type="range" min="0" max="1000000" step="1000" value="1000000">
-                      <input class="field mono" id="station-distance" value="" inputmode="numeric">
-                    </div>
-                    <div class="field-help">Use 0 for any arrival distance when the backend route search is wired for that convention.</div>
-                  </label>
-                  <label class="spansh-field">
-                    <span class="field-label">Maximum market age</span>
-                    <input class="field" id="market-age" type="datetime-local">
-                  </label>
-                  <div class="check-grid" aria-label="Route filters">
-                    <label class="check-item"><input id="requires-large-pad" type="checkbox" checked> Requires large pad</label>
-                    <label class="check-item"><input id="allow-planetary" type="checkbox"> Allow planetary</label>
-                    <label class="check-item"><input id="allow-player-owned" type="checkbox"> Allow player owned</label>
-                    <label class="check-item"><input id="allow-restricted" type="checkbox"> Allow restricted access</label>
-                    <label class="check-item"><input id="allow-prohibited" type="checkbox"> Allow prohibited</label>
-                    <label class="check-item"><input id="avoid-loops" type="checkbox"> Avoid loops</label>
-                    <label class="check-item"><input id="allow-permit-systems" type="checkbox"> Allow permit systems</label>
-                  </div>
                   <div class="btn-row">
-                    <button class="btn primary block" type="submit">Calculate</button>
+                    <button class="btn primary block" type="submit">Search routes</button>
                     <button class="btn ghost" type="button" id="reset-search">Reset</button>
                   </div>
                 </form>
@@ -269,11 +214,11 @@
                   <div class="field-row">
                     <label>
                       <span class="field-label">Galmap settle time</span>
-                      <input class="field mono" id="galaxy-settle" value="">
+                      <input class="field mono" id="galaxy-settle" value="2.0">
                     </label>
                     <label>
                       <span class="field-label">Transit wait time</span>
-                      <input class="field mono" id="dock-timeout" value="">
+                      <input class="field mono" id="dock-timeout" value="1200">
                     </label>
                   </div>
                 </div>
@@ -293,11 +238,24 @@
 
           <section class="panel" aria-labelledby="results-title">
             <div class="panel-head">
-              <div class="panel-title" id="results-title">Results</div>
+              <div class="panel-title" id="results-title">Route results</div>
               <div class="panel-action" id="result-count">Search routes to load results</div>
             </div>
             <div class="panel-body">
-              <div class="result-stack" id="route-results" aria-label="Haul route results"></div>
+              <table class="route-table" aria-label="Haul route results">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Profit / hr</th>
+                    <th>Cargo</th>
+                    <th>Station 1</th>
+                    <th>Station 2</th>
+                    <th class="num">Distance</th>
+                    <th class="num">Route</th>
+                  </tr>
+                </thead>
+                <tbody id="route-rows"></tbody>
+              </table>
               <div class="pager" aria-label="Route result pages">
                 <button class="btn ghost" type="button" id="prev-routes">Prev</button>
                 <div class="pager-status" id="route-page-status">0-0 of 0</div>
@@ -305,109 +263,14 @@
               </div>
             </div>
           </section>
-          </section>
-        </section>
 
-        <section class="page-view" id="multi-leg-view" data-view="multi-leg">
-          <section class="layout">
-            <div class="left-stack">
-              <section class="panel" aria-labelledby="multi-search-title">
-                <div class="panel-head">
-                  <div class="panel-title" id="multi-search-title">Multi-leg parameters</div>
-                  <div class="panel-action">Dedicated command path</div>
-                </div>
-                <div class="panel-body">
-                  <div class="banner">
-                    <div class="banner-title">Finite multi-leg route</div>
-                    <div class="banner-text">This view prepares a dedicated multi-leg haul command. Backend execution is intentionally separate from two-way haul.</div>
-                  </div>
-                  <form class="spansh-form" id="multi-search-form">
-                    <label class="spansh-field">
-                      <span class="field-label">Starting system / station</span>
-                      <input class="field" id="multi-origin" value="" placeholder="Current system / station" autocomplete="off">
-                    </label>
-                    <div class="field-row">
-                      <label class="spansh-field">
-                        <span class="field-label">Starting capital</span>
-                        <input class="field mono" id="multi-starting-capital" value="" inputmode="numeric">
-                      </label>
-                      <label class="spansh-field">
-                        <span class="field-label">Maximum cargo capacity</span>
-                        <input class="field mono" id="multi-capacity" value="" inputmode="numeric">
-                      </label>
-                    </div>
-                    <div class="field-row">
-                      <label class="spansh-field">
-                        <span class="field-label">Maximum hop distance</span>
-                        <input class="field mono" id="multi-hop-distance" value="" inputmode="decimal">
-                      </label>
-                      <label class="spansh-field">
-                        <span class="field-label">Maximum hops</span>
-                        <input class="field mono" id="multi-max-hops" value="" inputmode="numeric">
-                      </label>
-                    </div>
-                    <label class="spansh-field">
-                      <span class="field-label">Maximum distance to arrival</span>
-                      <div class="range-row">
-                        <input class="range-field" id="multi-station-distance-range" type="range" min="0" max="1000000" step="1000" value="1000000">
-                        <input class="field mono" id="multi-station-distance" value="" inputmode="numeric">
-                      </div>
-                    </label>
-                    <label class="spansh-field">
-                      <span class="field-label">Maximum market age</span>
-                      <input class="field" id="multi-market-age" type="datetime-local">
-                    </label>
-                    <div class="check-grid" aria-label="Multi-leg route filters">
-                      <label class="check-item"><input id="multi-requires-large-pad" type="checkbox" checked> Requires large pad</label>
-                      <label class="check-item"><input id="multi-allow-planetary" type="checkbox"> Allow planetary</label>
-                      <label class="check-item"><input id="multi-allow-player-owned" type="checkbox"> Allow player owned</label>
-                      <label class="check-item"><input id="multi-allow-restricted" type="checkbox"> Allow restricted access</label>
-                      <label class="check-item"><input id="multi-allow-prohibited" type="checkbox"> Allow prohibited</label>
-                      <label class="check-item"><input id="multi-avoid-loops" type="checkbox" checked> Avoid loops</label>
-                      <label class="check-item"><input id="multi-allow-permit-systems" type="checkbox"> Allow permit systems</label>
-                    </div>
-                    <div class="btn-row">
-                      <button class="btn primary block" type="submit" id="calculate-multi-haul">Calculate</button>
-                      <button class="btn ghost" type="button" id="reset-multi-search">Reset</button>
-                    </div>
-                  </form>
-                </div>
-              </section>
-
-              <section class="panel setup-panel" aria-labelledby="multi-setup-title">
-                <div class="panel-head">
-                  <div class="panel-title" id="multi-setup-title">Start multi-leg route</div>
-                  <div class="panel-action">UI preview</div>
-                </div>
-                <div class="panel-body">
-                  <div class="selected-route-title" id="multi-selected-title">Select a generated multi-leg route.</div>
-                  <details class="debug-disclosure" open>
-                    <summary>Dedicated command preview</summary>
-                    <pre class="command-preview mono" id="multi-command-preview">command.dispatch_multi_leg_haul</pre>
-                  </details>
-                  <button class="btn success block" type="button" id="start-multi-haul">Start multi-leg route</button>
-                </div>
-              </section>
+          <section class="panel activity-panel" aria-labelledby="activity-title">
+            <div class="panel-head">
+              <div class="panel-title" id="activity-title">Activity</div>
+              <div class="panel-action" id="activity-status">Live</div>
             </div>
-
-            <section class="panel" aria-labelledby="multi-results-title">
-              <div class="panel-head">
-                <div class="panel-title" id="multi-results-title">Results</div>
-                <div class="panel-action" id="multi-result-count">Calculate to preview multi-leg results</div>
-              </div>
-              <div class="panel-body">
-                <div class="result-stack" id="multi-route-results" aria-label="Multi-leg route results"></div>
-              </div>
-            </section>
+            <div class="panel-body activity-list" id="activity-list" role="log" aria-live="polite" tabindex="0"></div>
           </section>
-        </section>
-
-        <section class="panel activity-panel" aria-labelledby="activity-title">
-          <div class="panel-head">
-            <div class="panel-title" id="activity-title">Activity</div>
-            <div class="panel-action" id="activity-status">Live</div>
-          </div>
-          <div class="panel-body activity-list" id="activity-list" role="log" aria-live="polite" tabindex="0"></div>
         </section>
       </main>
     </div>
@@ -427,6 +290,7 @@
 
   <script>
     window.EDCR_WEB_CONFIG = {};
+    window.EDCR_SERVER_DEFAULT_ACCESS_TOKEN = "";
   </script>
   <script src="/assets/haul-ui.js" defer></script>
 

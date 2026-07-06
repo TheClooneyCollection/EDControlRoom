@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ED Control Room - Multi-leg Haul</title>
+  <link rel="stylesheet" href="/assets/haul-ui.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Navigation">
+      <div class="brand">
+        <div class="brand-mark">ED</div>
+        <div>
+          <div class="brand-name">Control Room</div>
+          <div class="brand-sub">web haul prototype</div>
+        </div>
+      </div>
+
+      <div class="nav-label">Haul</div>
+      <a class="nav-item link" href="/haul">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 12h5l2 5 4-14 2 9h5"/></svg>
+        Two-way haul
+      </a>
+      <a class="nav-item link active" href="/multi-haul" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 18h5l3-12 3 12h5"/><path d="M4 6h4m8 0h4"/></svg>
+        Multi-leg haul
+      </a>
+
+      <div class="sidebar-foot">
+        <div class="status-row"><span><span class="dot"></span>ED client</span><span>Running</span></div>
+        <div class="status-row"><span><span class="dot"></span>Journal</span><span>Live</span></div>
+        <div class="status-row"><span><span class="dot"></span>CrossOver</span><span>Targeted</span></div>
+      </div>
+    </aside>
+
+    <div>
+      <header class="topbar">
+        <div>
+          <div class="topbar-title">Multi-leg haul</div>
+          <div class="topbar-sub">Spansh-style route planner UI for future finite multi-stop hauling.</div>
+        </div>
+        <div class="chips" aria-label="Session status">
+          <div class="chip">Host <strong id="host-label">-</strong></div>
+          <div class="chip">Target <strong id="target-label">foreground window</strong></div>
+          <div class="chip">Role <strong id="role-label">Observer</strong></div>
+          <div class="token-control">
+            <input class="token-input" id="access-token" type="password" placeholder="Access token" autocomplete="off" aria-label="Access token">
+            <button class="token-button" id="save-token" type="button">Save</button>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <div class="page-head">
+          <div>
+            <h1>Multi-leg haul control</h1>
+            <div class="page-description">
+              Build a finite multi-stop haul plan without changing the existing two-way haul page. Backend route calculation and execution are intentionally still pending.
+            </div>
+          </div>
+        </div>
+
+        <section class="summary-strip" aria-label="Current ship summary">
+          <div class="summary-cell">
+            <div class="summary-label">Current system</div>
+            <div class="summary-value" id="summary-current">-</div>
+          </div>
+          <div class="summary-cell">
+            <div class="summary-label">Ship</div>
+            <div class="summary-value" id="summary-ship">-</div>
+          </div>
+          <div class="summary-cell">
+            <div class="summary-label">Cargo</div>
+            <div class="summary-value mono" id="summary-cargo">0 / 0 t</div>
+          </div>
+          <div class="summary-cell">
+            <div class="summary-label">Capital</div>
+            <div class="summary-value success mono" id="summary-capital">0 CR</div>
+          </div>
+        </section>
+
+        <section class="panel routine-panel" aria-labelledby="routine-title">
+          <div class="panel-head">
+            <div class="panel-title" id="routine-title">Active haul routine</div>
+            <div class="panel-action" id="routine-status">Idle</div>
+          </div>
+          <div class="panel-body">
+            <div class="routine-bar" aria-label="Routine phase timeline">
+              <div class="step"><div class="step-label">1. Buy</div><div class="step-value">Pending</div></div>
+              <div class="step"><div class="step-label">2. Undock</div><div class="step-value">Pending</div></div>
+              <div class="step"><div class="step-label">3. Depart</div><div class="step-value">Pending</div></div>
+              <div class="step"><div class="step-label">4. Transit</div><div class="step-value">Pending</div></div>
+              <div class="step"><div class="step-label">5. Sell</div><div class="step-value">Pending</div></div>
+            </div>
+            <div class="routine-context" aria-label="Active haul details">
+              <div class="context-card">
+                <div class="context-label">Buying</div>
+                <div class="context-value" id="routine-buying">-</div>
+                <div class="context-sub" id="routine-buying-sub">Waiting for a route</div>
+              </div>
+              <div class="context-card">
+                <div class="context-label">Selling</div>
+                <div class="context-value" id="routine-selling">-</div>
+                <div class="context-sub" id="routine-selling-sub">Waiting for a route</div>
+              </div>
+              <div class="context-card">
+                <div class="context-label">Transit</div>
+                <div class="context-value" id="routine-transit">-</div>
+                <div class="context-sub" id="routine-transit-sub">No route selected</div>
+              </div>
+              <div class="context-card">
+                <div class="context-label">Next sale</div>
+                <div class="context-value" id="routine-next-sale">-</div>
+                <div class="context-sub" id="routine-next-sale-sub">No sell order queued</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="layout">
+          <div class="left-stack">
+            <section class="panel" aria-labelledby="multi-search-title">
+              <div class="panel-head">
+                <div class="panel-title" id="multi-search-title">Multi-leg parameters</div>
+                <div class="panel-action">Dedicated command path</div>
+              </div>
+              <div class="panel-body">
+                <div class="banner">
+                  <div class="banner-title">Spansh-style route search</div>
+                  <div class="banner-text">Defaults come from current ship data where the Control Room hydrate provides it.</div>
+                </div>
+                <form class="spansh-form" id="multi-search-form">
+                  <label class="spansh-field">
+                    <span class="field-label">Starting system / station</span>
+                    <input class="field" id="multi-origin" placeholder="Current system / station" autocomplete="off">
+                  </label>
+                  <div class="field-row">
+                    <label class="spansh-field">
+                      <span class="field-label">Starting capital</span>
+                      <input class="field mono" id="multi-starting-capital" value="2000000000" inputmode="numeric">
+                    </label>
+                    <label class="spansh-field">
+                      <span class="field-label">Maximum cargo capacity</span>
+                      <input class="field mono" id="multi-capacity" value="784" inputmode="numeric">
+                    </label>
+                  </div>
+                  <div class="field-row">
+                    <label class="spansh-field">
+                      <span class="field-label">Maximum hop distance</span>
+                      <input class="field mono" id="multi-hop-distance" value="60" inputmode="decimal">
+                    </label>
+                    <label class="spansh-field">
+                      <span class="field-label">Maximum hops</span>
+                      <input class="field mono" id="multi-max-hops" value="5" inputmode="numeric">
+                    </label>
+                  </div>
+                  <label class="spansh-field">
+                    <span class="field-label">Maximum distance to arrival</span>
+                    <div class="range-row">
+                      <input class="range-field" id="multi-station-distance-range" type="range" min="0" max="1000000" step="1000" value="1000000">
+                      <input class="field mono" id="multi-station-distance" value="1000000" inputmode="numeric">
+                    </div>
+                  </label>
+                  <label class="spansh-field">
+                    <span class="field-label">Maximum market age</span>
+                    <input class="field" id="multi-market-age" type="datetime-local">
+                  </label>
+                  <div class="check-grid" aria-label="Multi-leg route filters">
+                    <label class="check-item"><input id="multi-requires-large-pad" type="checkbox" checked> Requires large pad</label>
+                    <label class="check-item"><input id="multi-allow-planetary" type="checkbox"> Allow planetary</label>
+                    <label class="check-item"><input id="multi-allow-player-owned" type="checkbox"> Allow player owned</label>
+                    <label class="check-item"><input id="multi-allow-restricted" type="checkbox"> Allow restricted access</label>
+                    <label class="check-item"><input id="multi-allow-prohibited" type="checkbox"> Allow prohibited</label>
+                    <label class="check-item"><input id="multi-avoid-loops" type="checkbox" checked> Avoid loops</label>
+                    <label class="check-item"><input id="multi-allow-permit-systems" type="checkbox"> Allow permit systems</label>
+                  </div>
+                  <div class="btn-row">
+                    <button class="btn primary block" type="submit" id="calculate-multi-haul">Calculate</button>
+                    <button class="btn ghost" type="button" id="reset-multi-search">Reset</button>
+                  </div>
+                </form>
+              </div>
+            </section>
+
+            <section class="panel setup-panel" aria-labelledby="multi-setup-title">
+              <div class="panel-head">
+                <div class="panel-title" id="multi-setup-title">Start multi-leg route</div>
+                <div class="panel-action">UI preview</div>
+              </div>
+              <div class="panel-body">
+                <div class="selected-route-title" id="multi-selected-title">Select a generated multi-leg route.</div>
+                <details class="debug-disclosure" open>
+                  <summary>Dedicated command preview</summary>
+                  <pre class="command-preview mono" id="multi-command-preview">command.dispatch_multi_leg_haul</pre>
+                </details>
+                <button class="btn success block" type="button" id="start-multi-haul">Start multi-leg route</button>
+              </div>
+            </section>
+          </div>
+
+          <section class="panel" aria-labelledby="multi-results-title">
+            <div class="panel-head">
+              <div class="panel-title" id="multi-results-title">Results</div>
+              <div class="panel-action" id="multi-result-count">Calculate to preview multi-leg results</div>
+            </div>
+            <div class="panel-body">
+              <div class="result-stack" id="multi-route-results" aria-label="Multi-leg route results"></div>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    window.EDCR_WEB_CONFIG = {};
+    window.EDCR_SERVER_DEFAULT_ACCESS_TOKEN = "";
+  </script>
+  <script src="/assets/multi-haul.js" defer></script>
+</body>
+</html>
