@@ -16,6 +16,7 @@ from edap.control_room import (
     routines_nav,
     routines_station,
     routines_trade,
+    routines_travel,
     workers as _workers,
 )
 from edap.control_room_state import CommandHistoryEntry
@@ -246,6 +247,38 @@ class ControlRoomFacade:
             raw_command=raw_command,
         )
 
+    def cmd_travel(
+        self,
+        rest: str,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        routines_travel.cmd_travel(
+            self._app,
+            rest,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+
+    def dispatch_travel(
+        self,
+        *,
+        system: str,
+        station: str,
+        on_land: bool = False,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        routines_travel.dispatch_travel(
+            self._app,
+            system=system,
+            station=station,
+            on_land=on_land,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+
     def start_haul_confirm_prompt(self, station: str) -> None:
         _prompts.start_haul_confirm_prompt(self._app, station)
 
@@ -356,11 +389,13 @@ FACADE_METHOD_MAP = {
     "_sell_all": "sell_all",
     "_cmd_haul": "cmd_haul",
     "_cmd_multi_leg_haul": "cmd_multi_leg_haul",
+    "_cmd_travel": "cmd_travel",
     "_start_haul_confirm_prompt": "start_haul_confirm_prompt",
     "_handle_haul_confirm_prompt": "handle_haul_confirm_prompt",
     "_handle_haul_prompt": "handle_haul_prompt",
     "_dispatch_haul_loop": "dispatch_haul_loop",
     "_dispatch_haul_search": "dispatch_haul_search",
+    "_dispatch_travel": "dispatch_travel",
     "_load_trade_route": "load_trade_route",
     "_cmd_reload": "cmd_reload",
     "_dispatch_command": "dispatch_command",

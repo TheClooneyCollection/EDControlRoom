@@ -406,6 +406,17 @@ class _RemoteBackendStub:
     ) -> None:
         return None
 
+    def dispatch_travel(
+        self,
+        *,
+        system: str,
+        station: str,
+        on_land: bool = False,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        return None
+
     def handle_haul_prompt(self, value: str) -> None:
         return None
 
@@ -1933,6 +1944,33 @@ on_land = true
         self.assertEqual(self.app._prompt_state.haul_prompt_defaults["station_2_buying"], "Bauxite")
         self.assertEqual(self.app._prompt_state.haul_prompt_defaults["station_1"], "Savitskaya Orbital")
         self.assertEqual(self.app._prompt_state.haul_prompt_defaults["station_2"], "Nyberg Vision")
+
+    def test_haul_start_dispatches_selected_trade_route(self) -> None:
+        route = TradeRoute(
+            index=2,
+            from_station="Savitskaya Orbital",
+            from_system="TSONGORIS",
+            to_station="Nyberg Vision",
+            to_system="NJOKUJINUN",
+            source_buy_commodity="Beryllium",
+            target_buy_commodity="Bauxite",
+            profit_per_trip="43.1m",
+        )
+        self.app._trade_routes = TradeRoutesData(
+            system_name="Praea Euq AK-A d25",
+            routes=[route],
+        )
+        self.app._selected_trade_route_index = 2
+
+        with patch("edap.control_room.routines_haul.dispatch_haul_loop") as dispatch:
+            self.app._cmd_haul("start", raw_command="haul start")
+
+        dispatch.assert_called_once()
+        self.assertEqual(self.app._haul_params["station_1_buying"], "Beryllium")
+        self.assertEqual(self.app._haul_params["station_1"], "Savitskaya Orbital")
+        self.assertEqual(self.app._haul_params["station_2"], "Nyberg Vision")
+        self.assertEqual(self.app._haul_params["route_profit_per_trip"], "43.1m")
+        self.assertEqual(self.app._saved_state.selected_trade_route, route)
 
     def test_haul_dispatch_passes_on_land_flags(self) -> None:
         captured: dict[str, object] = {}

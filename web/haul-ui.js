@@ -717,6 +717,7 @@ let routes = [];
       if (!route) {
         document.getElementById("selected-title").textContent = "Select a route before starting.";
         document.getElementById("command-preview").textContent = "";
+        updateTravelTarget(null);
         startButton.disabled = true;
         destinationButton.disabled = true;
         return;
@@ -725,7 +726,13 @@ let routes = [];
       destinationButton.disabled = clientRole !== "active_operator";
       document.getElementById("selected-title").textContent =
         `${route.buySystem} (${route.buyStation}) -> ${route.sellSystem} (${route.sellStation})`;
+      updateTravelTarget(route);
       updateCommandPreview();
+    }
+
+    function updateTravelTarget(route) {
+      document.getElementById("travel-system").value = route ? route.buySystem || "" : "";
+      document.getElementById("travel-station").value = route ? route.buyStation || "" : "";
     }
 
     function selectedHaulParams() {
@@ -904,6 +911,44 @@ let routes = [];
         })
         .catch((error) => {
           appendActivity(error.message, "Nav", "warning");
+        });
+    });
+
+    document.getElementById("travel-from-selected").addEventListener("click", () => {
+      const route = routeByIndex(selectedRouteIndex);
+      if (!route) {
+        appendActivity("Select a route before loading travel target.", "Travel", "warning");
+        return;
+      }
+      updateTravelTarget(route);
+    });
+
+    document.getElementById("start-travel").addEventListener("click", () => {
+      const system = document.getElementById("travel-system").value.trim();
+      const station = document.getElementById("travel-station").value.trim();
+      if (!system || !station) {
+        appendActivity("Enter a target system and station before starting travel.", "Travel", "warning");
+        return;
+      }
+      if (!accessToken) {
+        appendActivity("Enter and save an access token to start travel.", "Travel", "warning");
+        return;
+      }
+      if (clientRole !== "active_operator") {
+        appendActivity("Connect to the backend before starting travel.", "Travel", "warning");
+        return;
+      }
+      sendCommand("command.dispatch_travel", {
+        system,
+        station,
+        on_land: false,
+        raw_command: `web travel ${system} / ${station}`
+      })
+        .then(() => {
+          appendActivity(`Travel accepted for ${station}.`, "Travel", "success");
+        })
+        .catch((error) => {
+          appendActivity(error.message, "Travel", "warning");
         });
     });
 

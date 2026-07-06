@@ -280,6 +280,17 @@ class _BackendStub(ControlRoomBackend):
     ) -> None:
         return None
 
+    def dispatch_travel(
+        self,
+        *,
+        system: str,
+        station: str,
+        on_land: bool = False,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        return None
+
     def handle_haul_prompt(self, value: str) -> None:
         return None
 
@@ -321,6 +332,7 @@ class _ExecutionRecorder:
         self.dispatched_commands: list[tuple[str, bool | None]] = []
         self.dispatched_destinations: list[tuple[str, float, bool, str | None]] = []
         self.dispatched_hauls: list[tuple[dict[str, str] | None, bool, str | None]] = []
+        self.dispatched_travels: list[tuple[str, str, bool, bool, str | None]] = []
 
     def submit_command(self, raw: str, *, skip_delay: bool | None = None) -> None:
         self.dispatched_commands.append((raw, skip_delay))
@@ -345,6 +357,17 @@ class _ExecutionRecorder:
         raw_command: str | None = None,
     ) -> None:
         self.dispatched_hauls.append((params, skip_delay, raw_command))
+
+    def dispatch_travel(
+        self,
+        *,
+        system: str,
+        station: str,
+        on_land: bool = False,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self.dispatched_travels.append((system, station, on_land, skip_delay, raw_command))
 
     def load_trade_route(self, route: TradeRoute, *, raw_command: str | None = None) -> None:
         return None
@@ -543,6 +566,7 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.assertTrue(event.prevented)
         self.assertFalse(app._trade_route_picker_open)
         self.assertEqual(execution.dispatched_commands, [("haul route 2", None)])
+        self.assertEqual(app._saved_state.selected_trade_route.from_station, "Savitskaya Orbital")
 
     def test_trade_route_picker_escape_closes_without_dispatch(self) -> None:
         backend = _IntentRecorderBackend()
@@ -592,6 +616,39 @@ class ControlRoomProtocolSnapshotTests(unittest.TestCase):
         self.assertTrue(event.prevented)
         self.assertFalse(app._trade_route_picker_open)
         self.assertEqual(execution.dispatched_commands, [("dest TSONGORIS", None)])
+        self.assertEqual(app._saved_state.selected_trade_route.from_station, "Savitskaya Orbital")
+
+    def test_trade_route_picker_t_starts_travel_to_first_station(self) -> None:
+        backend = _IntentRecorderBackend()
+        execution = _ExecutionRecorder()
+        app = _RenderHarnessApp(
+            _make_context(Path(self.tmpdir.name)),
+            backend=backend,
+        )
+        app._dependencies = replace(app._dependencies, execution=execution)
+        app._trade_routes.routes = [
+            TradeRoute(
+                index=2,
+                from_station="Savitskaya Orbital",
+                from_system="TSONGORIS",
+                to_station="Nyberg Vision",
+                to_system="NJOKUJINUN",
+                source_buy_commodity="Beryllium",
+            )
+        ]
+        app._selected_trade_route_index = 2
+        app._trade_route_picker_open = True
+
+        event = _KeyEventStub("t")
+        app.on_key(event)
+
+        self.assertTrue(event.prevented)
+        self.assertFalse(app._trade_route_picker_open)
+        self.assertEqual(
+            execution.dispatched_travels,
+            [("TSONGORIS", "Savitskaya Orbital", False, False, "travel TSONGORIS / Savitskaya Orbital")],
+        )
+        self.assertEqual(app._saved_state.selected_trade_route.from_station, "Savitskaya Orbital")
 
     def test_replay_open_arrow_keys_move_local_selection(self) -> None:
         backend = _IntentRecorderBackend()

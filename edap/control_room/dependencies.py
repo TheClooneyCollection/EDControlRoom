@@ -109,6 +109,16 @@ class ControlRoomExecution(Protocol):
         raw_command: str | None = None,
     ) -> None: ...
 
+    def dispatch_travel(
+        self,
+        *,
+        system: str,
+        station: str,
+        on_land: bool = False,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None: ...
+
     def load_trade_route(
         self,
         route: TradeRoute,
@@ -277,6 +287,23 @@ class LocalControlRoomExecution:
         if params is not None:
             self._app._haul_params = {str(key): str(value) for key, value in params.items()}
         self._app._facade.dispatch_haul_loop(
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+
+    def dispatch_travel(
+        self,
+        *,
+        system: str,
+        station: str,
+        on_land: bool = False,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self._app._facade.dispatch_travel(
+            system=system,
+            station=station,
+            on_land=on_land,
             skip_delay=skip_delay,
             raw_command=raw_command,
         )

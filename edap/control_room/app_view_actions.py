@@ -63,8 +63,20 @@ class ControlRoomAppTradeRoutePickerActionDependencies:
     def set_picker_open(self, is_open: bool) -> None:
         self._app._trade_route_picker_state.open = is_open
 
+    def persist_selected_route(self, route: TradeRoute) -> None:
+        self._app._saved_state.selected_trade_route = route
+        self._app._save_saved_state()
+        self._app._publish_protocol_data_refresh()
+
     def submit_command(self, raw: str) -> None:
         self._app._dispatch_command(raw)
+
+    def dispatch_travel(self, *, system: str, station: str) -> None:
+        self._app._dispatch_travel(
+            system=system,
+            station=station,
+            raw_command=f"travel {system} / {station}",
+        )
 
     def picker_changed(self) -> None:
         self._app._refresh_trade_route_picker()

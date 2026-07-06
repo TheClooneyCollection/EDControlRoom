@@ -9,26 +9,21 @@ from edap.actions import ActionDispatchResult
 from edap.cargo_manifest import cargo_item_matches_commodity, commodity_name_key
 from edap.routines._base import RoutineResult
 from edap.routines.callbacks import ProgressCallback
-from edap.routines.docking import _undock_until_undocked, _wait_for_clear_of_station, dock, station_refuel_menu
-from edap.routines.escape import escape_mass_lock
 from edap.routines.haul_support import (
     HaulRuntime,
-    TransitResumeState,
-    detect_transit_resume_state,
-    engage_hyperspace_after_escape,
-    is_manual_landing_result,
-    manual_landing_result,
-    open_navigation_panel_after_arrival,
     read_cargo_json,
     read_last_cargo_capacity,
-    read_latest_journal_events,
-    read_market_station,
     sellable_cargo,
-    set_galaxy_map_destination_for_haul,
-    wait_for_arrival_or_approach_event,
-    wait_for_on_land_handoff,
 )
 from edap.routines.market import market_buy, market_sell
+from edap.routines.transit import (
+    depart_system_to_route,
+    is_manual_landing_result,
+    read_market_station,
+    transit_to_station,
+    undock_and_route_to_system,
+    wait_for_arrival_or_approach_event,
+)
 from edap.state import get_latest_journal_log, read_ship_state
 from edap.status import read_status
 from edap.tts import AnnouncementId
@@ -36,12 +31,10 @@ from edap.tts import AnnouncementId
 
 _read_cargo_json = read_cargo_json
 _read_last_cargo_capacity = read_last_cargo_capacity
-_read_latest_journal_events = read_latest_journal_events
 _read_market_station = read_market_station
 _sellable_cargo = sellable_cargo
-_wait_for_arrival_or_approach_event = wait_for_arrival_or_approach_event
-_manual_landing_result = manual_landing_result
 _is_manual_landing_result = is_manual_landing_result
+_wait_for_arrival_or_approach_event = wait_for_arrival_or_approach_event
 
 
 def _inventory_has_commodity(inventory: list[dict], commodity: str) -> bool:
@@ -604,16 +597,6 @@ def _error_routine_result(reason: str) -> RoutineResult:
     )
 
 
-def _should_set_galaxy_map_destination(*, current_system: str, destination_system: str) -> bool:
-    current_system_normalized = current_system.strip().lower()
-    destination_system_normalized = destination_system.strip().lower()
-    if not destination_system_normalized:
-        return False
-    if current_system_normalized and current_system_normalized == destination_system_normalized:
-        return False
-    return True
-
-
 def _undock_and_route(
     ctx: _HaulCtx,
     *,
@@ -621,64 +604,14 @@ def _undock_and_route(
     destination_system: str,
     next_phase: Phase,
 ) -> tuple[RoutineResult, Phase]:
-    runtime = ctx.runtime
-    runtime.progress_fn(f"Undocking from {current_leg.label}...")
-    result, pending_events = _undock_until_undocked(
-        runtime.controls,
-        runtime.watcher,
-        undock_timeout_s=runtime.timing.undock_timeout_s,
-        step_delay_s=runtime.timing.step_delay_s,
-        time_fn=runtime.time_fn,
-        sleeper=runtime.sleeper,
-        progress_fn=runtime.progress_fn,
-    )
-    if result.dispatch.status != "ok":
-        return result, next_phase
-
-    route_confirmed = True
-    if _should_set_galaxy_map_destination(
-        current_system=current_leg.system,
-        destination_system=destination_system,
-    ):
-        runtime.progress_fn(f"Setting galaxy map destination: {destination_system}...")
-        runtime.announce_fn(AnnouncementId.DESTINATION_SET, system_name=destination_system)
-        route_confirmed = set_galaxy_map_destination_for_haul(
-            runtime=runtime,
-            destination_system=destination_system,
-        )
-
-    clear_result = _wait_for_clear_of_station(
-        runtime.watcher,
-        undocked_event=result.trigger_event,
-        no_track_timeout_s=runtime.timing.undock_no_track_timeout_s,
-        time_fn=runtime.time_fn,
-        progress_fn=runtime.progress_fn,
-        pending_events=pending_events,
-    )
-    if clear_result.dispatch.status != "ok":
-        runtime.progress_fn(
-            "Error: "
-            f"{clear_result.dispatch.reason}; haul aborted. You can resume haul with replay / ctrl-r."
-        )
-        runtime.announce_fn(AnnouncementId.HAUL_ABORTED)
-        return clear_result, next_phase
-    escape_mass_lock(
-        runtime.controls,
-        journal_dir=runtime.journal_dir,
-        step_delay_s=runtime.timing.step_delay_s,
-        boost_delay_s=runtime.timing.mass_lock_boost_delay_s,
-        sleeper=runtime.sleeper,
-        progress_fn=runtime.progress_fn,
-    )
-    if route_confirmed:
-        engage_hyperspace_after_escape(
-            runtime,
-            progress_message="Mass lock cleared - engaging hyperspace via HyperSuperCombination...",
-        )
-    else:
-        runtime.progress_fn("Skipping automatic FSD engage because the galaxy-map route is unconfirmed.")
     return (
-        clear_result if clear_result.dispatch.status == "ok" else result,
+        undock_and_route_to_system(
+            ctx.runtime,
+            current_label=current_leg.label,
+            current_system=current_leg.system,
+            destination_system=destination_system,
+            routine_name="haul",
+        ),
         next_phase,
     )
 
@@ -690,35 +623,16 @@ def _depart_system(
     destination_system: str,
     next_phase: Phase,
 ) -> tuple[RoutineResult | None, Phase]:
-    runtime = ctx.runtime
-    runtime.progress_fn(f"Departing {current_leg.label} system in normal space...")
-    route_confirmed = True
-    if _should_set_galaxy_map_destination(
-        current_system=current_leg.system,
-        destination_system=destination_system,
-    ):
-        runtime.progress_fn(f"Setting galaxy map destination: {destination_system}...")
-        runtime.announce_fn(AnnouncementId.DESTINATION_SET, system_name=destination_system)
-        route_confirmed = set_galaxy_map_destination_for_haul(
-            runtime=runtime,
+    return (
+        depart_system_to_route(
+            ctx.runtime,
+            current_label=current_leg.label,
+            current_system=current_leg.system,
             destination_system=destination_system,
-        )
-    escape_mass_lock(
-        runtime.controls,
-        journal_dir=runtime.journal_dir,
-        step_delay_s=runtime.timing.step_delay_s,
-        boost_delay_s=runtime.timing.mass_lock_boost_delay_s,
-        sleeper=runtime.sleeper,
-        progress_fn=runtime.progress_fn,
+            routine_name="haul",
+        ),
+        next_phase,
     )
-    if route_confirmed:
-        engage_hyperspace_after_escape(
-            runtime,
-            progress_message="Mass lock cleared - engaging hyperspace via HyperSuperCombination...",
-        )
-    else:
-        runtime.progress_fn("Skipping automatic FSD engage because the galaxy-map route is unconfirmed.")
-    return None, next_phase
 
 
 def _run_transit(
@@ -727,116 +641,15 @@ def _run_transit(
     destination_leg: StationLeg,
     next_phase: Phase,
 ) -> tuple[RoutineResult, Phase]:
-    runtime = ctx.runtime
-    recent_events = _read_latest_journal_events(runtime.journal_dir)
-    resume_state = detect_transit_resume_state(recent_events, destination_leg)
-    pending_events: list[dict[str, object]] = []
-    if resume_state == TransitResumeState.AWAITING_DOCKED:
-        runtime.progress_fn(f"Docking already in progress for {destination_leg.label} - waiting for Docked.")
-    elif resume_state == TransitResumeState.ARRIVED_IN_DESTINATION_SYSTEM:
-        runtime.progress_fn(f"Already in supercruise in {destination_leg.label} system - opening navigation panel.")
-    elif resume_state == TransitResumeState.POST_DROP_NEAR_STATION:
-        if destination_leg.on_land:
-            runtime.progress_fn(
-                f"Already in normal space near on-land {destination_leg.label} - handing off for manual landing."
-            )
-        else:
-            runtime.progress_fn(f"Already in normal space near {destination_leg.label} - skipping drop wait.")
-    else:
-        runtime.progress_fn(f"Waiting for hyperspace arrival in {destination_leg.label} system...")
-
-    if resume_state == TransitResumeState.AWAITING_DOCKED:
-        return (
-            station_refuel_menu(
-                runtime.controls,
-                runtime.watcher,
-                dock_timeout_s=runtime.timing.dock_timeout_s,
-                settle_s=runtime.timing.settle_s,
-                time_fn=runtime.time_fn,
-                sleeper=runtime.sleeper,
-                progress_fn=runtime.progress_fn,
-            ),
-            next_phase,
-        )
-
-    if resume_state == TransitResumeState.NONE:
-        arrival_observed, pending_events = _wait_for_arrival_or_approach_event(
-            runtime.watcher,
-            destination_system=destination_leg.system,
-            deadline=runtime.time_fn() + runtime.timing.dock_timeout_s,
-            time_fn=runtime.time_fn,
-        )
-        if not arrival_observed:
-            runtime.progress_fn("Warning: hyperspace arrival event not observed; continuing toward station.")
-        else:
-            runtime.progress_fn("Arrived in destination system")
-            open_navigation_panel_after_arrival(runtime, station_name=destination_leg.station)
-    elif resume_state == TransitResumeState.ARRIVED_IN_DESTINATION_SYSTEM:
-        open_navigation_panel_after_arrival(runtime, station_name=destination_leg.station)
-
-    if destination_leg.on_land:
-        if resume_state == TransitResumeState.POST_DROP_NEAR_STATION:
-            runtime.progress_fn(
-                f"{destination_leg.label} is marked on-land; manual landing required from normal space. "
-                "Resume haul after landing."
-            )
-            return _manual_landing_result(destination_leg), next_phase
-        runtime.progress_fn(
-            f"{destination_leg.label} is marked on-land; waiting for SupercruiseExit before handing off."
-        )
-        drop_event = wait_for_on_land_handoff(
-            runtime.watcher,
+    return (
+        transit_to_station(
+            ctx.runtime,
             destination=destination_leg,
-            pending_events=pending_events,
-            deadline=runtime.time_fn() + runtime.timing.dock_timeout_s,
-            time_fn=runtime.time_fn,
-        )
-        if drop_event is None:
-            return (
-                RoutineResult(
-                    action="manual_landing",
-                    dispatch=ActionDispatchResult(
-                        action="manual_landing",
-                        status="error",
-                        reason=f"timed out waiting for SupercruiseExit near {destination_leg.station}",
-                    ),
-                ),
-                next_phase,
-            )
-        runtime.progress_fn(
-            f"Reached normal space near on-land {destination_leg.label}; manual landing required. "
-            "Resume haul after landing."
-        )
-        return _manual_landing_result(destination_leg), next_phase
-
-    result = dock(
-        runtime.controls,
-        runtime.watcher,
-        wait_for_supercruise_exit=resume_state != TransitResumeState.POST_DROP_NEAR_STATION,
-        auto_refuel=True,
-        max_retries=runtime.travel.max_dock_retries,
-        request_timeout_s=runtime.timing.request_timeout_s,
-        dock_timeout_s=runtime.timing.dock_timeout_s,
-        settle_s=runtime.timing.settle_s,
-        step_delay_s=runtime.timing.step_delay_s,
-        supercruise_exit_settle_s=runtime.timing.supercruise_exit_settle_s,
-        boost_settle_s=runtime.timing.boost_settle_s,
-        deny_retry_delay_s=runtime.timing.deny_retry_delay_s,
-        abort_on_interdiction=True,
-        time_fn=runtime.time_fn,
-        sleeper=runtime.sleeper,
-        progress_fn=runtime.progress_fn,
-        pending_events=pending_events,
-        announce_fn=runtime.announce_fn,
-        announce_station_name=destination_leg.station,
+            destination_label=destination_leg.label,
+            routine_name="haul",
+        ),
+        next_phase,
     )
-    if result.action == "Interdicted" and result.dispatch.status != "ok":
-        runtime.progress_fn(
-            "Interdiction detected during haul transit; haul aborted. "
-            "Escape or re-enter supercruise, then resume haul."
-        )
-        runtime.announce_fn(AnnouncementId.HAUL_ABORTED)
-    return result, next_phase
 
 
 def _run_station_1_sell(ctx: _HaulCtx) -> tuple[RoutineResult, Phase]:

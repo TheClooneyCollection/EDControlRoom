@@ -27,6 +27,8 @@ class TradeRoutePickerActions(Protocol):
 
     def set_destination_for_selected(self) -> None: ...
 
+    def travel_to_selected(self) -> None: ...
+
 
 class MarketPanelActionDependencies(Protocol):
     def current_tab(self) -> str: ...
@@ -53,7 +55,11 @@ class TradeRoutePickerActionDependencies(Protocol):
 
     def set_picker_open(self, is_open: bool) -> None: ...
 
+    def persist_selected_route(self, route: TradeRoute) -> None: ...
+
     def submit_command(self, raw: str) -> None: ...
+
+    def dispatch_travel(self, *, system: str, station: str) -> None: ...
 
     def picker_changed(self) -> None: ...
 
@@ -121,6 +127,7 @@ class TradeRoutePickerViewActions:
         route = self._dependencies.selected_route()
         if route is None:
             return
+        self._dependencies.persist_selected_route(route)
         self.close()
         self._dependencies.submit_command(f"haul route {route.index}")
 
@@ -128,5 +135,17 @@ class TradeRoutePickerViewActions:
         route = self._dependencies.selected_route()
         if route is None or not route.from_system:
             return
+        self._dependencies.persist_selected_route(route)
         self.close()
         self._dependencies.submit_command(f"dest {route.from_system}")
+
+    def travel_to_selected(self) -> None:
+        route = self._dependencies.selected_route()
+        if route is None or not route.from_system or not route.from_station:
+            return
+        self._dependencies.persist_selected_route(route)
+        self.close()
+        self._dependencies.dispatch_travel(
+            system=route.from_system,
+            station=route.from_station,
+        )

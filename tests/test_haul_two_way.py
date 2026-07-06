@@ -1155,7 +1155,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             _write_cargo(journal_dir, [])
             (journal_dir / "Status.json").write_text(json.dumps({"Flags": 0}), encoding="utf-8")
 
-            with patch("edap.routines.haul_two_way.dock") as dock_mock:
+            with patch("edap.routines.transit.dock") as dock_mock:
                 dock_mock.return_value = RoutineResult(
                     action="dock",
                     dispatch=ActionDispatchResult(action="dock", status="error", reason="stop after first transit"),
@@ -1206,7 +1206,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             _write_cargo(journal_dir, [])
             (journal_dir / "Status.json").write_text(json.dumps({"Flags": 0}), encoding="utf-8")
 
-            with patch("edap.routines.haul_two_way.dock") as dock_mock:
+            with patch("edap.routines.transit.dock") as dock_mock:
                 dock_mock.return_value = RoutineResult(
                     action="dock",
                     dispatch=ActionDispatchResult(action="dock", status="error", reason="stop after first transit"),
@@ -1271,8 +1271,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             )
 
             with (
-                patch("edap.routines.haul_support.set_gal_map_destination", side_effect=[route_failure, route_failure]) as route_mock,
-                patch("edap.routines.haul_two_way.dock") as dock_mock,
+                patch("edap.routines.transit.set_gal_map_destination", side_effect=[route_failure, route_failure]) as route_mock,
+                patch("edap.routines.transit.dock") as dock_mock,
             ):
                 dock_mock.return_value = RoutineResult(
                     action="dock",
@@ -1586,7 +1586,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 ],
             )
             _write_cargo(journal_dir, [])
-            with patch("edap.routines.haul_two_way.dock") as dock_mock:
+            with patch("edap.routines.transit.dock") as dock_mock:
                 result = haul_loop_two_way(
                     controls,
                     watcher,
@@ -1641,7 +1641,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             _write_cargo(journal_dir, [{"Name": "bertrandite", "Count": 64, "Stolen": 0}])
             with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
                 "edap.routines.haul_two_way.market_buy"
-            ) as market_buy_mock, patch("edap.routines.haul_support.set_gal_map_destination") as set_destination_mock:
+            ) as market_buy_mock, patch("edap.routines.transit.set_gal_map_destination") as set_destination_mock:
                 market_sell_mock.return_value = RoutineResult(
                     action="market_sell",
                     dispatch=ActionDispatchResult(action="market_sell", status="error", reason="stop after same-system undock transit"),
@@ -1705,7 +1705,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             )
             _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 64, "Stolen": 0}])
             with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
-                "edap.routines.haul_support.set_gal_map_destination"
+                "edap.routines.transit.set_gal_map_destination"
             ) as set_destination_mock:
                 market_sell_mock.return_value = RoutineResult(
                     action="market_sell",
@@ -1942,7 +1942,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             )
             _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 64, "Stolen": 0}])
 
-            with patch("edap.routines.haul_two_way.dock") as dock_mock:
+            with patch("edap.routines.transit.dock") as dock_mock:
                 dock_mock.return_value = RoutineResult(
                     action="dock",
                     dispatch=ActionDispatchResult(action="dock", status="error", reason="stop after first dock call"),
@@ -1986,8 +1986,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             )
             _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 64, "Stolen": 0}])
 
-            with patch("edap.routines.haul_two_way.dock") as dock_mock, patch(
-                "edap.routines.haul_two_way.station_refuel_menu"
+            with patch("edap.routines.transit.dock") as dock_mock, patch(
+                "edap.routines.transit.station_refuel_menu"
             ) as station_refuel_menu_mock:
                 station_refuel_menu_mock.return_value = RoutineResult(
                     action="UI_Down",
@@ -2225,7 +2225,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             _write_cargo(journal_dir, [])
             (journal_dir / "Status.json").write_text(json.dumps({"Flags": 0}), encoding="utf-8")
 
-            with patch("edap.routines.haul_two_way.dock") as dock_mock:
+            with patch("edap.routines.transit.dock") as dock_mock:
                 dock_mock.return_value = RoutineResult(
                     action="dock",
                     dispatch=ActionDispatchResult(action="dock", status="error", reason="stop after first transit"),

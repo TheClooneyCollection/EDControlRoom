@@ -1014,7 +1014,7 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertIsInstance(received[0], ActivityLogAppendedEvent)
         self.assertEqual(received[0].entry.message_text, "Observer route loading is client-local.")
 
-    def test_remote_backend_enqueues_dispatch_destination_and_haul_loop(self) -> None:
+    def test_remote_backend_enqueues_dispatch_destination_haul_loop_and_travel(self) -> None:
         backend = self._backend()
 
         backend.dispatch_destination(
@@ -1027,9 +1027,15 @@ class ControlRoomClientTests(unittest.TestCase):
             params={"station_1_buying": "Silver", "station_1": "Savitskaya Orbital"},
             raw_command="haul Silver",
         )
+        backend.dispatch_travel(
+            system="Sol",
+            station="Abraham Lincoln",
+            raw_command="travel Sol / Abraham Lincoln",
+        )
 
         destination_message = backend._outgoing_messages.get_nowait()
         haul_message = backend._outgoing_messages.get_nowait()
+        travel_message = backend._outgoing_messages.get_nowait()
         self.assertEqual(destination_message["message_type"], "command.dispatch_destination")
         self.assertEqual(destination_message["payload"]["destination"], "Achenar")
         self.assertEqual(destination_message["payload"]["galaxy_map_settle"], 3.5)
@@ -1037,6 +1043,10 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(haul_message["message_type"], "command.dispatch_haul_loop")
         self.assertEqual(haul_message["payload"]["params"]["station_1_buying"], "Silver")
         self.assertEqual(haul_message["payload"]["raw_command"], "haul Silver")
+        self.assertEqual(travel_message["message_type"], "command.dispatch_travel")
+        self.assertEqual(travel_message["payload"]["system"], "Sol")
+        self.assertEqual(travel_message["payload"]["station"], "Abraham Lincoln")
+        self.assertEqual(travel_message["payload"]["raw_command"], "travel Sol / Abraham Lincoln")
 
     def test_remote_execution_delegates_to_remote_backend(self) -> None:
         backend = self._backend()
@@ -1045,10 +1055,12 @@ class ControlRoomClientTests(unittest.TestCase):
         execution.submit_command("jump", skip_delay=True)
         execution.dispatch_destination("Achenar", 3.5, raw_command="dest Achenar")
         execution.dispatch_haul_loop(params={"station_1_buying": "Silver"}, raw_command="haul")
+        execution.dispatch_travel(system="Sol", station="Abraham Lincoln", raw_command="travel Sol / Abraham Lincoln")
 
         command_message = backend._outgoing_messages.get_nowait()
         destination_message = backend._outgoing_messages.get_nowait()
         haul_message = backend._outgoing_messages.get_nowait()
+        travel_message = backend._outgoing_messages.get_nowait()
 
         self.assertEqual(command_message["message_type"], "command.submit_input")
         self.assertEqual(command_message["payload"]["raw_input"], "jump")
@@ -1057,6 +1069,8 @@ class ControlRoomClientTests(unittest.TestCase):
         self.assertEqual(destination_message["payload"]["destination"], "Achenar")
         self.assertEqual(haul_message["message_type"], "command.dispatch_haul_loop")
         self.assertEqual(haul_message["payload"]["params"]["station_1_buying"], "Silver")
+        self.assertEqual(travel_message["message_type"], "command.dispatch_travel")
+        self.assertEqual(travel_message["payload"]["station"], "Abraham Lincoln")
 
     def test_remote_data_source_hydrates_current_read_model(self) -> None:
         data_source = RemoteObserverDataSource(_data_read_model(system_name="Sol"))

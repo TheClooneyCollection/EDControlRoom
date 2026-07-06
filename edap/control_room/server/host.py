@@ -223,6 +223,24 @@ class HeadlessControlRoomHost(ControlRoomApp):
         )
         self._publish_data_refresh()
 
+    def dispatch_travel(
+        self,
+        *,
+        system: str,
+        station: str,
+        on_land: bool = False,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self._backend.dispatch_travel(
+            system=system,
+            station=station,
+            on_land=on_land,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+        self._publish_data_refresh()
+
     def persist_trade_route_state(
         self,
         *,

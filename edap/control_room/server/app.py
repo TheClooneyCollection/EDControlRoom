@@ -707,6 +707,62 @@ def _handle_session_message(
             correlation_message_id=correlation_message_id,
         )
 
+    if message_type == "command.dispatch_travel":
+        if command_handler is None:
+            return _transport_unavailable_error(correlation_message_id)
+        system = payload.get("system")
+        station = payload.get("station")
+        raw_command_value = payload.get("raw_command")
+        raw_command = raw_command_value if isinstance(raw_command_value, str) else None
+        if not isinstance(system, str) or not system.strip():
+            return protocol_message(
+                "response.error",
+                {
+                    "error_code": "invalid_command",
+                    "error_message": "Travel dispatch commands must include a system string.",
+                    "recommended_action": "Send a non-empty destination system value.",
+                    "retryable": True,
+                },
+                correlation_message_id=correlation_message_id,
+            )
+        if not isinstance(station, str) or not station.strip():
+            return protocol_message(
+                "response.error",
+                {
+                    "error_code": "invalid_command",
+                    "error_message": "Travel dispatch commands must include a station string.",
+                    "recommended_action": "Send a non-empty destination station value.",
+                    "retryable": True,
+                },
+                correlation_message_id=correlation_message_id,
+            )
+        try:
+            skip_delay_value = payload.get("skip_delay")
+            skip_delay = bool(skip_delay_value) if isinstance(skip_delay_value, bool) else False
+            on_land_value = payload.get("on_land")
+            on_land = bool(on_land_value) if isinstance(on_land_value, bool) else False
+            command_handler.dispatch_travel(
+                system=system.strip(),
+                station=station.strip(),
+                on_land=on_land,
+                skip_delay=skip_delay,
+                raw_command=raw_command,
+            )
+        except Exception as exc:
+            return _command_execution_failed_error(exc, correlation_message_id)
+        return protocol_message(
+            "response.success",
+            {
+                "accepted": True,
+                "message_text": "Travel routine accepted.",
+                "result": {
+                    "system": system.strip(),
+                    "station": station.strip(),
+                },
+            },
+            correlation_message_id=correlation_message_id,
+        )
+
     if message_type == "command.dispatch_haul_loop":
         if command_handler is None:
             return _transport_unavailable_error(correlation_message_id)

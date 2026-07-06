@@ -15,7 +15,7 @@ Routine commands (type in the input bar):
     buy <item> [N]     buy N units (default MAX) of commodity
     sell [item] [N]    sell commodity (default: market filter); amount default MAX
     jump               FSD jump sequence
-    haul [commodity]   start haul loop; or use `haul load [path]` / `haul search [system]` / `haul search url <inara-url>` / `haul route <n>`
+    haul [commodity]   start haul loop; or use `haul start` / `haul load [path]` / `haul search [system]` / `haul search url <inara-url>` / `haul route <n>`
     multi_leg_haul <route.json|spansh-url>   run a standalone multi-leg haul route
     dest <system>      open galaxy map and plot a route to the named system
     set_dest <system>  alias for dest
@@ -160,7 +160,7 @@ _STARTUP_BINDING_WARNING_IGNORED_ACTIONS = frozenset({
     "YawRightButton",
 })
 
-_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul load | haul search [system] | haul search url <url> | haul route <n> | pause | resume | multi_leg_haul <route> | dest <system> | home | set_pid | set_hwnd | market ... | instant | new_session | stop | reload | q"
+_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul start | haul load | haul search [system] | haul search url <url> | haul route <n> | travel <system> / <station> | pause | resume | multi_leg_haul <route> | dest <system> | home | set_pid | set_hwnd | market ... | instant | new_session | stop | reload | q"
 _ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS = 10.0
 _JOURNAL_ARTIFACT_LOG_PATH = Path("artifacts/control-room.log")
 _DEBUG_ARTIFACT_LOG_PATH = Path("artifacts/control-room-debug.log")
@@ -799,7 +799,7 @@ class ControlRoomApp(App[None]):
                 yield Static(id="haul")
         with Vertical(id="trade-route-picker"):
             yield Static(
-                "Haul routes  |  Up/Down move  |  Enter load route  |  d set destination  |  Esc/q close",
+                "Haul routes  |  Up/Down move  |  Enter load  |  d dest  |  t travel  |  haul start runs selected  |  Esc/q close",
                 id="trade-route-help",
             )
             yield OptionList(id="trade-route-list")
@@ -1602,6 +1602,9 @@ class ControlRoomApp(App[None]):
     def _set_destination_for_selected_trade_route(self) -> None:
         self._view_actions.trade_routes.set_destination_for_selected()
 
+    def _travel_to_selected_trade_route(self) -> None:
+        self._view_actions.trade_routes.travel_to_selected()
+
     def _update_resume_detail(self) -> None:
         _replay.update_resume_detail(self)
 
@@ -2027,6 +2030,9 @@ class ControlRoomApp(App[None]):
             elif event.key == "d":
                 event.prevent_default()
                 self._set_destination_for_selected_trade_route()
+            elif event.key == "t":
+                event.prevent_default()
+                self._travel_to_selected_trade_route()
             elif event.key == "enter":
                 event.prevent_default()
                 self._load_selected_trade_route()
@@ -2195,6 +2201,23 @@ class ControlRoomApp(App[None]):
     ) -> None:
         self._dependencies.execution.dispatch_haul_loop(
             params=dict(self._haul_params),
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+
+    def _dispatch_travel(
+        self,
+        *,
+        system: str,
+        station: str,
+        on_land: bool = False,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self._dependencies.execution.dispatch_travel(
+            system=system,
+            station=station,
+            on_land=on_land,
             skip_delay=skip_delay,
             raw_command=raw_command,
         )

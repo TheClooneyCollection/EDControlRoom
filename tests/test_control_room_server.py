@@ -235,6 +235,7 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
         self.submitted_inputs: list[tuple[str, bool | None]] = []
         self.dispatched_destinations: list[tuple[str, float, bool, str | None]] = []
         self.dispatched_hauls: list[tuple[dict[str, str] | None, bool, str | None]] = []
+        self.dispatched_travels: list[tuple[str, str, bool, bool, str | None]] = []
         self.loaded_trade_routes: list[tuple[object, str | None]] = []
         self.cancel_modes: list[str] = []
         self.persisted_selected_trade_route = None
@@ -263,6 +264,17 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
         raw_command: str | None = None,
     ) -> None:
         self.dispatched_hauls.append((params, skip_delay, raw_command))
+
+    def dispatch_travel(
+        self,
+        *,
+        system: str,
+        station: str,
+        on_land: bool = False,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self.dispatched_travels.append((system, station, on_land, skip_delay, raw_command))
 
     def load_trade_route(self, route, *, raw_command: str | None = None) -> None:
         self.loaded_trade_routes.append((route, raw_command))
@@ -1317,6 +1329,35 @@ class ControlRoomServerTests(unittest.TestCase):
         )
         self.assertEqual(response["message_type"], "response.success")
         self.assertEqual(response["correlation_message_id"], "message-haul")
+
+    def test_active_operator_dispatch_travel_calls_handler(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        command_handler = _CommandHandlerRecorder()
+
+        response = _handle_session_message(
+            {
+                "message_type": "command.dispatch_travel",
+                "message_id": "message-travel",
+                "payload": {
+                    "system": "Sol",
+                    "station": "Abraham Lincoln",
+                    "on_land": False,
+                    "skip_delay": True,
+                    "raw_command": "web travel Sol / Abraham Lincoln",
+                },
+            },
+            session_id="observer-travel",
+            client_role="active_operator",
+            command_handler=command_handler,
+            broker=broker,
+        )
+
+        self.assertEqual(
+            command_handler.dispatched_travels,
+            [("Sol", "Abraham Lincoln", False, True, "web travel Sol / Abraham Lincoln")],
+        )
+        self.assertEqual(response["message_type"], "response.success")
+        self.assertEqual(response["correlation_message_id"], "message-travel")
 
     def test_active_operator_cancel_active_routine_calls_handler(self) -> None:
         broker = InMemoryObserverSessionBroker()

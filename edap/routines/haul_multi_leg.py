@@ -7,26 +7,21 @@ from typing import Callable
 from edap.actions import ActionDispatchResult
 from edap.multi_leg_haul import CargoTransfer, MultiLegHaulDefinition, RouteStop, build_route_stops
 from edap.routines._base import RoutineResult
-from edap.routines.docking import _undock_until_undocked, _wait_for_clear_of_station, dock, station_refuel_menu
-from edap.routines.escape import escape_mass_lock
 from edap.routines.haul_support import (
     HaulRuntime,
-    TransitResumeState,
-    detect_transit_resume_state,
-    engage_hyperspace_after_escape,
-    is_manual_landing_result,
-    manual_landing_result,
-    open_navigation_panel_after_arrival,
     read_cargo_json,
-    read_latest_journal_events,
-    read_market_station,
     sellable_cargo,
-    set_galaxy_map_destination_for_haul,
-    wait_for_arrival_or_approach_event,
-    wait_for_on_land_handoff,
 )
 from edap.routines.market import market_buy, market_sell
-from edap.state import get_latest_journal_log, read_ship_state
+from edap.routines.transit import (
+    depart_system_to_route,
+    is_manual_landing_result,
+    read_market_station,
+    read_ship_position,
+    transit_to_station,
+    undock_and_route_to_system,
+    wait_for_arrival_or_approach_event,
+)
 from edap.tts import AnnouncementId
 
 
@@ -77,34 +72,8 @@ def _has_any_cargo(inventory: list[dict], cargo: tuple[CargoTransfer, ...]) -> b
 
 
 def _read_ship_position(journal_dir: Path) -> tuple[str, str, str]:
-    ship_status = "unknown"
-    current_station = ""
-    current_system = ""
-    log_path = get_latest_journal_log(journal_dir)
-    if log_path is not None:
-        try:
-            state = read_ship_state(log_path)
-        except Exception:
-            state = None
-        if state is not None:
-            current_station = str(state.station or "")
-            current_system = str(state.location or "")
-            status = str(state.status or "")
-            if status == "in_station":
-                ship_status = "docked"
-            elif status in {"in_space", "in_undocking", "starting_docking", "in_docking"}:
-                ship_status = "normal_space"
-            elif status in {"in_supercruise", "starting_hyperspace", "starting_supercruise"}:
-                ship_status = "supercruise"
-    if ship_status in {"docked", "unknown"}:
-        market_station, market_system = _read_market_station(journal_dir)
-        if not current_station and market_station:
-            current_station = market_station
-        if not current_system and market_system:
-            current_system = market_system
-        if current_station:
-            ship_status = "docked"
-    return ship_status, current_station, current_system
+    position = read_ship_position(journal_dir)
+    return position.status, position.station, position.system
 
 
 def _detect_start_state(ctx: _Ctx) -> tuple[int, Phase]:
@@ -209,174 +178,32 @@ def _run_buy(ctx: _Ctx, stop: RouteStop) -> RoutineResult:
 
 
 def _undock_and_route(ctx: _Ctx, stop: RouteStop, next_stop: RouteStop) -> RoutineResult:
-    runtime = ctx.runtime
-    runtime.progress_fn(f"Undocking from {stop.label}...")
-    result, pending_events = _undock_until_undocked(
-        runtime.controls,
-        runtime.watcher,
-        undock_timeout_s=runtime.timing.undock_timeout_s,
-        step_delay_s=runtime.timing.step_delay_s,
-        time_fn=runtime.time_fn,
-        sleeper=runtime.sleeper,
-        progress_fn=runtime.progress_fn,
+    return undock_and_route_to_system(
+        ctx.runtime,
+        current_label=stop.label,
+        current_system=stop.endpoint.system,
+        destination_system=next_stop.endpoint.system,
+        routine_name="multi-leg haul",
     )
-    if result.dispatch.status != "ok":
-        return result
-    route_confirmed = True
-    if next_stop.endpoint.system:
-        runtime.progress_fn(f"Setting galaxy map destination: {next_stop.endpoint.system}...")
-        runtime.announce_fn(AnnouncementId.DESTINATION_SET, system_name=next_stop.endpoint.system)
-        route_confirmed = set_galaxy_map_destination_for_haul(
-            runtime=runtime,
-            destination_system=next_stop.endpoint.system,
-        )
-    clear_result = _wait_for_clear_of_station(
-        runtime.watcher,
-        undocked_event=result.trigger_event,
-        no_track_timeout_s=runtime.timing.undock_no_track_timeout_s,
-        time_fn=runtime.time_fn,
-        progress_fn=runtime.progress_fn,
-        pending_events=pending_events,
-    )
-    if clear_result.dispatch.status != "ok":
-        runtime.progress_fn(f"Error: {clear_result.dispatch.reason}; haul aborted. You can resume with replay / ctrl-r.")
-        runtime.announce_fn(AnnouncementId.HAUL_ABORTED)
-        return clear_result
-    escape_mass_lock(
-        runtime.controls,
-        journal_dir=runtime.journal_dir,
-        step_delay_s=runtime.timing.step_delay_s,
-        boost_delay_s=runtime.timing.mass_lock_boost_delay_s,
-        sleeper=runtime.sleeper,
-        progress_fn=runtime.progress_fn,
-    )
-    if route_confirmed:
-        engage_hyperspace_after_escape(runtime, progress_message="Mass lock cleared - engaging hyperspace...")
-    else:
-        runtime.progress_fn("Skipping automatic FSD engage because the galaxy-map route is unconfirmed.")
-    return clear_result
 
 
 def _depart_system(ctx: _Ctx, stop: RouteStop, next_stop: RouteStop) -> RoutineResult:
-    runtime = ctx.runtime
-    runtime.progress_fn(f"Departing {stop.label} system in normal space...")
-    route_confirmed = True
-    if next_stop.endpoint.system:
-        runtime.progress_fn(f"Setting galaxy map destination: {next_stop.endpoint.system}...")
-        runtime.announce_fn(AnnouncementId.DESTINATION_SET, system_name=next_stop.endpoint.system)
-        route_confirmed = set_galaxy_map_destination_for_haul(
-            runtime=runtime,
-            destination_system=next_stop.endpoint.system,
-        )
-    escape_mass_lock(
-        runtime.controls,
-        journal_dir=runtime.journal_dir,
-        step_delay_s=runtime.timing.step_delay_s,
-        boost_delay_s=runtime.timing.mass_lock_boost_delay_s,
-        sleeper=runtime.sleeper,
-        progress_fn=runtime.progress_fn,
+    return depart_system_to_route(
+        ctx.runtime,
+        current_label=stop.label,
+        current_system=stop.endpoint.system,
+        destination_system=next_stop.endpoint.system,
+        routine_name="multi-leg haul",
     )
-    if route_confirmed:
-        engage_hyperspace_after_escape(runtime, progress_message="Mass lock cleared - engaging hyperspace...")
-    else:
-        runtime.progress_fn("Skipping automatic FSD engage because the galaxy-map route is unconfirmed.")
-    return RoutineResult(action="depart_system", dispatch=ActionDispatchResult(action="depart_system", status="ok"))
 
 
 def _run_transit(ctx: _Ctx, next_stop: RouteStop) -> RoutineResult:
-    runtime = ctx.runtime
-    recent_events = read_latest_journal_events(runtime.journal_dir)
-    resume_state = detect_transit_resume_state(recent_events, next_stop.endpoint)
-    pending_events: list[dict[str, object]] = []
-    if resume_state == TransitResumeState.AWAITING_DOCKED:
-        runtime.progress_fn(f"Docking already in progress for {next_stop.label} - waiting for Docked.")
-        return station_refuel_menu(
-            runtime.controls,
-            runtime.watcher,
-            dock_timeout_s=runtime.timing.dock_timeout_s,
-            settle_s=runtime.timing.settle_s,
-            time_fn=runtime.time_fn,
-            sleeper=runtime.sleeper,
-            progress_fn=runtime.progress_fn,
-        )
-    if resume_state == TransitResumeState.NONE:
-        arrival_observed, pending_events = _wait_for_arrival_or_approach_event(
-            runtime.watcher,
-            destination_system=next_stop.endpoint.system,
-            deadline=runtime.time_fn() + runtime.timing.dock_timeout_s,
-            time_fn=runtime.time_fn,
-        )
-        if arrival_observed:
-            runtime.progress_fn("Arrived in destination system")
-            open_navigation_panel_after_arrival(runtime, station_name=next_stop.endpoint.station)
-    elif resume_state == TransitResumeState.ARRIVED_IN_DESTINATION_SYSTEM:
-        open_navigation_panel_after_arrival(runtime, station_name=next_stop.endpoint.station)
-    elif resume_state == TransitResumeState.POST_DROP_NEAR_STATION:
-        if next_stop.endpoint.on_land:
-            runtime.progress_fn(f"Already in normal space near on-land {next_stop.label} - handing off for manual landing.")
-        else:
-            runtime.progress_fn(f"Already in normal space near {next_stop.label} - skipping drop wait.")
-
-    if next_stop.endpoint.on_land:
-        if resume_state == TransitResumeState.POST_DROP_NEAR_STATION:
-            runtime.progress_fn(
-                f"{next_stop.label} is marked on-land; manual landing required from normal space. "
-                "Resume multi-leg haul after landing."
-            )
-            return manual_landing_result(next_stop.endpoint)
-        runtime.progress_fn(
-            f"{next_stop.label} is marked on-land; waiting for SupercruiseExit before handing off."
-        )
-        drop_event = wait_for_on_land_handoff(
-            runtime.watcher,
-            destination=next_stop.endpoint,
-            pending_events=pending_events,
-            deadline=runtime.time_fn() + runtime.timing.dock_timeout_s,
-            time_fn=runtime.time_fn,
-        )
-        if drop_event is None:
-            return RoutineResult(
-                action="manual_landing",
-                dispatch=ActionDispatchResult(
-                    action="manual_landing",
-                    status="error",
-                    reason=f"timed out waiting for SupercruiseExit near {next_stop.endpoint.station}",
-                ),
-            )
-        runtime.progress_fn(
-            f"Reached normal space near on-land {next_stop.label}; manual landing required. "
-            "Resume multi-leg haul after landing."
-        )
-        return manual_landing_result(next_stop.endpoint)
-
-    result = dock(
-        runtime.controls,
-        runtime.watcher,
-        wait_for_supercruise_exit=resume_state != TransitResumeState.POST_DROP_NEAR_STATION,
-        auto_refuel=True,
-        max_retries=runtime.travel.max_dock_retries,
-        request_timeout_s=runtime.timing.request_timeout_s,
-        dock_timeout_s=runtime.timing.dock_timeout_s,
-        settle_s=runtime.timing.settle_s,
-        step_delay_s=runtime.timing.step_delay_s,
-        supercruise_exit_settle_s=runtime.timing.supercruise_exit_settle_s,
-        boost_settle_s=runtime.timing.boost_settle_s,
-        deny_retry_delay_s=runtime.timing.deny_retry_delay_s,
-        abort_on_interdiction=True,
-        time_fn=runtime.time_fn,
-        sleeper=runtime.sleeper,
-        progress_fn=runtime.progress_fn,
-        pending_events=pending_events,
-        announce_fn=runtime.announce_fn,
-        announce_station_name=next_stop.endpoint.station,
+    return transit_to_station(
+        ctx.runtime,
+        destination=next_stop.endpoint,
+        destination_label=next_stop.label,
+        routine_name="multi-leg haul",
     )
-    if result.action == "Interdicted" and result.dispatch.status != "ok":
-        runtime.progress_fn(
-            "Interdiction detected during multi-leg haul transit; haul aborted. "
-            "Escape or re-enter supercruise, then resume haul."
-        )
-        runtime.announce_fn(AnnouncementId.HAUL_ABORTED)
-    return result
 
 
 def multi_leg_haul(

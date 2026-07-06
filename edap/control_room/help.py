@@ -48,9 +48,9 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
     ),
     CommandHelp(
         name="haul",
-        usage="haul [commodity] | haul load [path] | haul search [system] | haul search url <inara-url> | haul route <n>",
+        usage="haul [commodity] | haul start | haul load [path] | haul search [system] | haul search url <inara-url> | haul route <n>",
         summary="Run the two-station haul loop, load a saved haul profile, or fetch live Inara trade routes.",
-        detail="Starts a two-station loop: each station sells the other station's outbound cargo if present, then buys its own outbound cargo if configured. Plain `haul` still prompts for both station names, both systems, both outbound cargo names, the galaxy-map settle delay, and the docking timeout. `haul load` reads `haul.toml` by default, or a supplied TOML path, then launches the same routine with those values. `haul search [system]` opens one editable all-parameters-at-once Inara search line seeded from ignored local `haul_search.toml`, the current ship system, and current ship cargo capacity; `haul search home` uses the saved `control_room.home_system`. `haul search url <inara-url>` skips the prompt and runs the pasted Inara query directly. When results load, the haul route picker opens so Enter can load the highlighted route into the haul prompt, `d` can set `dest` to the highlighted route's first-system entry, and Esc can dismiss it; `haul route <n>` still loads one shown result directly with station and commodity defaults prefilled. At least one station buy commodity is required for the loop mode.",
+        detail="Starts a two-station loop: each station sells the other station's outbound cargo if present, then buys its own outbound cargo if configured. Plain `haul` still prompts for both station names, both systems, both outbound cargo names, the galaxy-map settle delay, and the docking timeout. `haul load` reads `haul.toml` by default, or a supplied TOML path, then launches the same routine with those values. `haul search [system]` opens one editable all-parameters-at-once Inara search line seeded from ignored local `haul_search.toml`, the current ship system, and current ship cargo capacity; `haul search home` uses the saved `control_room.home_system`. `haul search url <inara-url>` skips the prompt and runs the pasted Inara query directly. When results load, the haul route picker opens so Enter can load the highlighted route into the haul prompt, `d` can set `dest` to the highlighted route's first-system entry, `t` can start travel to that first station, and Esc can dismiss it. `haul start` starts the currently selected or saved route directly; `haul route <n>` still loads one shown result directly with station and commodity defaults prefilled. At least one station buy commodity is required for the loop mode.",
     ),
     CommandHelp(
         name="multi_leg_haul",
@@ -58,6 +58,12 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
         summary="Run a standalone multi-leg haul route from our JSON schema or a Spansh result.",
         detail="Loads a generalized multi-leg haul definition, then resumes from live journal/cargo/market state rather than persisted session state. Use this for finite multi-hop trading routes that buy and sell the exact commodity list on each leg.",
         aliases=("mult",),
+    ),
+    CommandHelp(
+        name="travel",
+        usage="travel <system> / <station>",
+        summary="Assist travel from the current ship state to a target station.",
+        detail="Starts an assistive station travel routine that can launch from a docked state, set the galaxy-map route when the target is in another system, wait through multi-jump transit, announce the target station, open the nav panel in-system, and request docking. Web clients use the same structured travel dispatch path.",
     ),
     CommandHelp(
         name="dest",

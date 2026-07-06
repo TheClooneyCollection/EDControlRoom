@@ -7,6 +7,7 @@ Read this file first, then open the area files that match the work you are touch
 - `docs-process.md`: handoff workflow, iteration docs, status maintenance rules
 - `haul.md`: two-way haul, multi-leg haul, station-flow caveats
 - `runtime.md`: platform validation, journal/runtime plumbing, CV gap
+- `travel.md`: assistive station travel routine and shared transit support
 
 Rules:
 

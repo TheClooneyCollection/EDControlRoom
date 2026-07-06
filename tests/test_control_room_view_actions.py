@@ -39,6 +39,8 @@ class _TradeRouteDependencies:
         self.selected_index: int | None = routes[0].index if routes else None
         self.open = True
         self.commands: list[str] = []
+        self.travel_targets: list[tuple[str, str]] = []
+        self.persisted_routes: list[TradeRoute] = []
         self.changed_count = 0
         self.closed_count = 0
 
@@ -57,8 +59,14 @@ class _TradeRouteDependencies:
     def set_picker_open(self, is_open: bool) -> None:
         self.open = is_open
 
+    def persist_selected_route(self, route: TradeRoute) -> None:
+        self.persisted_routes.append(route)
+
     def submit_command(self, raw: str) -> None:
         self.commands.append(raw)
+
+    def dispatch_travel(self, *, system: str, station: str) -> None:
+        self.travel_targets.append((system, station))
 
     def picker_changed(self) -> None:
         self.changed_count += 1
@@ -133,9 +141,13 @@ class ControlRoomViewActionsTests(unittest.TestCase):
         actions.load_selected()
         dependencies.open = True
         actions.set_destination_for_selected()
+        dependencies.open = True
+        actions.travel_to_selected()
 
         self.assertEqual(dependencies.commands, ["haul route 7", "dest TSONGORIS"])
-        self.assertEqual(dependencies.closed_count, 2)
+        self.assertEqual(dependencies.travel_targets, [("TSONGORIS", "A")])
+        self.assertEqual(dependencies.persisted_routes, [route, route, route])
+        self.assertEqual(dependencies.closed_count, 3)
 
 
 if __name__ == "__main__":

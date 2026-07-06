@@ -119,6 +119,13 @@ def cmd_haul(
 ) -> None:
     station_1_buying = rest.strip()
     parts = station_1_buying.split(None, 1)
+    if parts and parts[0].lower() == "start":
+        start_selected_haul_route(
+            app,
+            skip_delay=skip_delay,
+            raw_command=raw_command or f"{'!' if skip_delay else ''}haul start".strip(),
+        )
+        return
     if parts and parts[0].lower() == "route":
         route_index_raw = parts[1].strip() if len(parts) > 1 else ""
         if not route_index_raw:
@@ -247,20 +254,58 @@ def load_haul_from_trade_route_entry(
     app._start_haul_prompt(
         commodity="",
         prompt_for_commodity=True,
-        seed={
-            "station_1_buying": route.source_buy_commodity,
-            "station_1": route.from_station,
-            "station_1_system": route.from_system,
-            "station_1_on_land": "false",
-            "station_2_buying": route.target_buy_commodity or "",
-            "station_2": route.to_station,
-            "station_2_system": route.to_system,
-            "station_2_on_land": "false",
-            "route_profit_per_trip": route.profit_per_trip or "",
-        },
+        seed=haul_params_from_trade_route(route),
         skip_delay=skip_delay,
         raw_command=raw_command,
     )
+
+
+def start_selected_haul_route(
+    app: HaulHost,
+    *,
+    skip_delay: bool = False,
+    raw_command: str | None = None,
+) -> None:
+    route = selected_or_saved_trade_route(app)
+    if route is None:
+        app._log("[red]No selected haul route is available. Run `haul search`, select a result, then use `haul start`.[/]")
+        return
+    if not route.source_buy_commodity:
+        app._log(
+            "[red]The selected route does not expose a source buy commodity, so it cannot start haul.[/]"
+        )
+        return
+    app._saved_state.selected_trade_route = route
+    app._save_saved_state()
+    app._haul_params = haul_params_from_trade_route(route)
+    dispatch_haul_loop(
+        app,
+        skip_delay=skip_delay,
+        raw_command=raw_command or f"{'!' if skip_delay else ''}haul start".strip(),
+    )
+
+
+def selected_or_saved_trade_route(app: HaulHost) -> TradeRoute | None:
+    selected_index = app._selected_trade_route_index
+    if selected_index is not None:
+        route = next((item for item in app._trade_routes.routes if item.index == selected_index), None)
+        if route is not None:
+            return route
+    return app._saved_state.selected_trade_route
+
+
+def haul_params_from_trade_route(route: TradeRoute) -> dict[str, str]:
+    return {
+        "station_1_buying": route.source_buy_commodity or "",
+        "station_1": route.from_station,
+        "station_1_system": route.from_system,
+        "station_1_on_land": "false",
+        "station_2_buying": route.target_buy_commodity or "",
+        "station_2": route.to_station,
+        "station_2_system": route.to_system,
+        "station_2_on_land": "false",
+        "route_profit_per_trip": route.profit_per_trip or "",
+    }
 
 
 def open_trade_route_picker(app: HaulHost) -> None:

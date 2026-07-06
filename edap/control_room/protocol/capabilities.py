@@ -15,6 +15,7 @@ SUPPORTED_COMMAND_MESSAGE_TYPES = [
     "command.submit_input",
     "command.dispatch_destination",
     "command.dispatch_haul_loop",
+    "command.dispatch_travel",
     "command.search_haul_routes",
     "command.select_trade_route",
     "command.cancel_active_routine",

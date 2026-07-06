@@ -187,6 +187,26 @@ class RemoteObserverBackend(ControlRoomBackend):
             },
         )
 
+    def dispatch_travel(
+        self,
+        *,
+        system: str,
+        station: str,
+        on_land: bool = False,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self._send_command(
+            "command.dispatch_travel",
+            {
+                "system": system,
+                "station": station,
+                "on_land": on_land,
+                "skip_delay": skip_delay,
+                "raw_command": raw_command,
+            },
+        )
+
     def load_trade_route(
         self,
         route: TradeRoute,
@@ -368,6 +388,23 @@ class RemoteObserverExecution:
     ) -> None:
         self._backend.dispatch_haul_loop(
             params=params,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+
+    def dispatch_travel(
+        self,
+        *,
+        system: str,
+        station: str,
+        on_land: bool = False,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self._backend.dispatch_travel(
+            system=system,
+            station=station,
+            on_land=on_land,
             skip_delay=skip_delay,
             raw_command=raw_command,
         )

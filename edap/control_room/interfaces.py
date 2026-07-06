@@ -50,6 +50,13 @@ class CommandHost(Protocol):
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None: ...
+    def _cmd_travel(
+        self,
+        rest: str,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None: ...
     def _cmd_dest(
         self,
         destination: str,
@@ -136,12 +143,14 @@ class TradeHost(RoutineHost, Protocol):
 
 class HaulHost(RoutineHost, Protocol):
     _haul_params: dict[str, str]
+    _saved_state: ControlRoomState
     _trade_route_picker_open: bool
     _selected_trade_route_index: int | None
     _presented_trade_route_query_url: str
     _presented_trade_route_searched_at: str
 
     def _record_history_entry(self, entry: CommandHistoryEntry) -> None: ...
+    def _save_saved_state(self) -> None: ...
     def _start_haul_search_prompt(
         self,
         *,
@@ -179,6 +188,10 @@ class HaulHost(RoutineHost, Protocol):
     ) -> None: ...
     def _stop_haul_stats(self) -> None: ...
     def _wait_for_haul_resume(self, station_index: int) -> None: ...
+
+
+class TravelHost(RoutineHost, Protocol):
+    def _record_history_entry(self, entry: CommandHistoryEntry) -> None: ...
 
 
 class ReplayInputHost(Protocol):

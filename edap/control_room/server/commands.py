@@ -26,6 +26,16 @@ class ObserverSessionCommandHandler(Protocol):
         raw_command: str | None = None,
     ) -> None: ...
 
+    def dispatch_travel(
+        self,
+        *,
+        system: str,
+        station: str,
+        on_land: bool = False,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None: ...
+
     def cancel_active_routine(self, *, stop_mode: RoutineStopMode = "toggle") -> None: ...
 
 

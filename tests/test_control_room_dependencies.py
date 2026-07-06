@@ -26,6 +26,9 @@ class _FakeFacade:
     def dispatch_haul_loop(self, *args, **kwargs) -> None:
         self.calls.append(("dispatch_haul_loop", args, kwargs))
 
+    def dispatch_travel(self, *args, **kwargs) -> None:
+        self.calls.append(("dispatch_travel", args, kwargs))
+
     def load_trade_route(self, *args, **kwargs) -> None:
         self.calls.append(("load_trade_route", args, kwargs))
 
@@ -48,6 +51,9 @@ class _FakeExecution:
 
     def dispatch_haul_loop(self, *args, **kwargs) -> None:
         self.calls.append(("dispatch_haul_loop", args, kwargs))
+
+    def dispatch_travel(self, *args, **kwargs) -> None:
+        self.calls.append(("dispatch_travel", args, kwargs))
 
     def load_trade_route(self, *args, **kwargs) -> None:
         self.calls.append(("load_trade_route", args, kwargs))
@@ -164,6 +170,7 @@ class ControlRoomDependenciesTests(unittest.TestCase):
         execution.submit_command("dest sol", skip_delay=True)
         execution.dispatch_destination("Sol", 2.0, raw_command="dest sol")
         execution.dispatch_haul_loop(params={"commodity": "gold"}, raw_command="haul")
+        execution.dispatch_travel(system="Sol", station="Abraham Lincoln", raw_command="travel")
         execution.handle_haul_prompt("gold")
         execution.handle_haul_confirm_prompt("yes")
         execution.cancel_active_routine()
@@ -174,6 +181,7 @@ class ControlRoomDependenciesTests(unittest.TestCase):
                 "dispatch_command",
                 "dispatch_dest",
                 "dispatch_haul_loop",
+                "dispatch_travel",
                 "handle_haul_prompt",
                 "handle_haul_confirm_prompt",
                 "interrupt",
@@ -192,6 +200,7 @@ class ControlRoomDependenciesTests(unittest.TestCase):
         backend.dispatch_command("dest sol", skip_delay=True)
         backend.dispatch_destination("Sol", 2.0, raw_command="dest sol")
         backend.dispatch_haul_loop(params={"commodity": "gold"}, raw_command="haul")
+        backend.dispatch_travel(system="Sol", station="Abraham Lincoln", raw_command="travel")
         backend.load_trade_route(route)
         backend.handle_haul_prompt("gold")
         backend.handle_haul_confirm_prompt("yes")
@@ -202,6 +211,7 @@ class ControlRoomDependenciesTests(unittest.TestCase):
                 "submit_command",
                 "dispatch_destination",
                 "dispatch_haul_loop",
+                "dispatch_travel",
                 "load_trade_route",
                 "handle_haul_prompt",
                 "handle_haul_confirm_prompt",

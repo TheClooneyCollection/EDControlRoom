@@ -38,6 +38,14 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn('id="stop-now"', html)
         self.assertIn('sendCommand("command.cancel_active_routine", { mode })', html)
 
+    def test_haul_web_exposes_travel_dispatch(self) -> None:
+        html = _haul_web_source()
+
+        self.assertIn('id="start-travel"', html)
+        self.assertIn('sendCommand("command.dispatch_travel"', html)
+        self.assertIn("updateTravelTarget(route)", html)
+        self.assertIn('document.getElementById("travel-system").value = route ? route.buySystem || "" : ""', html)
+
     def test_haul_web_exposes_instant_mode_toggle(self) -> None:
         html = _haul_web_source()
 

@@ -371,8 +371,8 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
                 ),
             )
             with (
-                patch("edap.routines.haul_support.set_gal_map_destination", side_effect=[route_failure, route_failure]) as route_mock,
-                patch("edap.routines.haul_multi_leg.dock") as dock_mock,
+                patch("edap.routines.transit.set_gal_map_destination", side_effect=[route_failure, route_failure]) as route_mock,
+                patch("edap.routines.transit.dock") as dock_mock,
             ):
                 dock_mock.return_value = RoutineResult(
                     action="dock",
@@ -453,7 +453,7 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
                 '{"Inventory":[{"Name":"water purifiers","Name_Localised":"Water Purifiers","Count":460,"Stolen":0}]}\n',
                 encoding="utf-8",
             )
-            with patch("edap.routines.haul_multi_leg.dock") as dock_mock:
+            with patch("edap.routines.transit.dock") as dock_mock:
                 result = multi_leg_haul(
                     controls,
                     watcher,

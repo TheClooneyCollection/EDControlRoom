@@ -25,6 +25,7 @@ from edap.routines.haul_two_way import haul_loop_two_way
 from edap.routines.jump import jump
 from edap.routines.market import market_buy, market_sell
 from edap.routines.throttle import auto_zero_throttle_on_arrival, set_speed_zero_then_wait
+from edap.routines.travel import travel_to_station
 
 haul_loop = haul_loop_two_way
 
@@ -55,4 +56,5 @@ __all__ = [
     "station_refuel_menu",
     "station_refuel_menu_sequence",
     "undock",
+    "travel_to_station",
 ]
