@@ -658,13 +658,28 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.app._routine_active = True
         self.app._routine_worker = worker
         self.app._active_routine_name = "haul"
+        self.app._tts = _FakeTTS()
 
         self.app._dispatch_command("pause")
 
         self.assertFalse(worker.cancelled)
         self.assertTrue(self.app._haul_pause_requested)
         self.assertFalse(self.app._haul_paused)
+        self.assertIn((AnnouncementId.HAUL_PAUSE_REQUESTED, {}), self.app._tts.calls)
         self.assertIn("haul will pause at the next station", "\n".join(self.app.logged))
+
+    def test_enter_haul_pause_announces_station_pause(self) -> None:
+        self.app._haul_pause_requested = True
+        self.app._tts = _FakeTTS()
+
+        self.app._enter_haul_pause(2)
+
+        self.assertTrue(self.app._haul_paused)
+        self.assertIn(
+            (AnnouncementId.HAUL_PAUSED, {"station_index": 2}),
+            self.app._tts.calls,
+        )
+        self.assertIn("Haul paused at station 2", "\n".join(self.app.logged))
 
     def test_resume_command_cancels_pending_pause_before_station(self) -> None:
         self.app._routine_active = True

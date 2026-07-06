@@ -1725,6 +1725,7 @@ class ControlRoomApp(App[None]):
             return
         self._haul_pause_requested = True
         self._log(f"[yellow]{escape(source)} received — haul will pause at the next station.[/]")
+        self._announce_tts(AnnouncementId.HAUL_PAUSE_REQUESTED)
         self._publish_protocol_data_refresh()
 
     def _resume_haul(self, source: str) -> None:
@@ -1749,6 +1750,7 @@ class ControlRoomApp(App[None]):
             self._haul_paused = True
             self._pause_haul_stats()
             self._log(f"[yellow]Haul paused at station {station_index}; type `resume` to continue.[/]")
+            self._announce_tts(AnnouncementId.HAUL_PAUSED, station_index=station_index)
         self._publish_protocol_data_refresh()
 
     def _exit_haul_pause(self, station_index: int) -> None:

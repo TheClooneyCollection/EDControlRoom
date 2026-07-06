@@ -101,6 +101,14 @@ class LoadConfigTests(unittest.TestCase):
                 "Please relog, then resume haul.",
             )
             self.assertEqual(
+                config.tts.phrases["haul_pause_requested"],
+                "Roger {title}, we will pause hauling at the next station.",
+            )
+            self.assertEqual(
+                config.tts.phrases["haul_paused"],
+                "{title}, haul paused at station {station_index}.",
+            )
+            self.assertEqual(
                 config.error_messages.templates["station_mismatch_message"],
                 "Station mismatch: market data indicates {market_station}, but we are docked at {docked_station}.",
             )
