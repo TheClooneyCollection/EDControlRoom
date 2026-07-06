@@ -1441,6 +1441,7 @@ class ControlRoomApp(App[None]):
         station_2_buying: str,
         station_1: str,
         station_2: str,
+        expected_profit_per_trip_text: str = "",
     ) -> None:
         _haul_tracking.start_haul_stats(
             self,
@@ -1448,6 +1449,7 @@ class ControlRoomApp(App[None]):
             station_2_buying=station_2_buying,
             station_1=station_1,
             station_2=station_2,
+            expected_profit_per_trip_text=expected_profit_per_trip_text,
         )
 
     def _stop_haul_stats(self) -> None:

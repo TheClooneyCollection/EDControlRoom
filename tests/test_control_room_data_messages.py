@@ -31,6 +31,9 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
                 active=True,
                 current_run_started_at=75.0,
                 clean_run_active=True,
+                expected_profit_per_trip=43_100_000,
+                expected_profit_per_trip_text="43.1m",
+                last_run_profit_delta=1_200_000,
             ),
             _saved_state=ControlRoomState(),
             _config=SimpleNamespace(
@@ -90,6 +93,9 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
         self.assertEqual(message["payload"]["haul_session"]["session_elapsed_s"], 75.0)
         self.assertIsNone(message["payload"]["haul_session"]["current_run_started_at"])
         self.assertEqual(message["payload"]["haul_session"]["current_run_elapsed_s"], 50.0)
+        self.assertEqual(message["payload"]["haul_session"]["expected_profit_per_trip"], 43_100_000)
+        self.assertEqual(message["payload"]["haul_session"]["expected_profit_per_trip_text"], "43.1m")
+        self.assertEqual(message["payload"]["haul_session"]["last_run_profit_delta"], 1_200_000)
         self.assertEqual(message["payload"]["routine"]["haul_phase"], "transit")
         self.assertEqual(message["payload"]["routine"]["haul_phase_station_index"], 2)
         self.assertEqual(message["payload"]["selected_trade_route"]["from_station"], "Galileo")
@@ -112,6 +118,9 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
         self.assertEqual(parsed.haul_session.cargo_moved_t, 156)
         self.assertIsNone(parsed.haul_session.session_started_at)
         self.assertEqual(parsed.haul_session.session_elapsed_s, 75.0)
+        self.assertEqual(parsed.haul_session.expected_profit_per_trip, 43_100_000)
+        self.assertEqual(parsed.haul_session.expected_profit_per_trip_text, "43.1m")
+        self.assertEqual(parsed.haul_session.last_run_profit_delta, 1_200_000)
         self.assertEqual(parsed.routine.haul_phase, "transit")
         self.assertEqual(parsed.routine.haul_phase_station_index, 2)
         self.assertEqual(parsed.activity_log.entries[0].message_text, "Starting haul loop.")

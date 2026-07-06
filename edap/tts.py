@@ -39,6 +39,7 @@ class AnnouncementId(str, Enum):
     UNDOCKING = "undocking"
     CARGO_LOADED = "cargo_loaded"
     ROUTE_COMPLETE = "route_complete"
+    ROUTE_PROFIT_DELTA = "route_profit_delta"
     SESSION_COMPLETE = "session_complete"
     MARKET_LEVEL_LOW = "market_level_low"
 

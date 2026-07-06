@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Callable, Protocol
 
 from edap.control_room.models import HaulStats, ShipState
 from edap.tts import AnnouncementId, format_credits_short
+
+_CREDIT_AMOUNT_RE = re.compile(
+    r"(?P<amount>[+-]?\d+(?:[\d,]*\d)?(?:\.\d+)?)\s*"
+    r"(?P<suffix>billion|bn|b|million|mil|m|thousand|k)?",
+    re.IGNORECASE,
+)
 
 
 class HaulTrackingHost(Protocol):
@@ -24,6 +31,7 @@ def start_haul_stats(
     station_2_buying: str,
     station_1: str,
     station_2: str,
+    expected_profit_per_trip_text: str = "",
 ) -> None:
     at_station_1 = bool(
         station_1
@@ -33,6 +41,7 @@ def start_haul_stats(
     )
     previous = app._haul_stats
     started_at = app._time_fn()
+    expected_profit_per_trip = parse_credit_amount(expected_profit_per_trip_text)
     app._haul_stats = HaulStats(
         station_1_buying=station_1_buying,
         station_2_buying=station_2_buying,
@@ -45,10 +54,13 @@ def start_haul_stats(
         current_run_started_at=started_at,
         waiting_for_station_1_departure=at_station_1,
         resumed_mid_run=not at_station_1,
+        expected_profit_per_trip=expected_profit_per_trip,
+        expected_profit_per_trip_text=expected_profit_per_trip_text,
         accumulated_profit=previous.accumulated_profit,
         cargo_moved_t=previous.cargo_moved_t,
         completed_runs=previous.completed_runs,
         last_run_profit=previous.last_run_profit,
+        last_run_profit_delta=previous.last_run_profit_delta,
         last_run_elapsed_s=previous.last_run_elapsed_s,
         total_run_elapsed_s=previous.total_run_elapsed_s,
     )
@@ -113,6 +125,7 @@ def finalize_completed_haul_run(app: HaulTrackingHost) -> None:
     stats.completed_runs += 1
     stats.last_run_elapsed_s = elapsed
     stats.last_run_profit = stats.current_run_profit
+    _compare_completed_run_to_expected_route(app, stats)
     stats.total_run_elapsed_s += elapsed
     stats.accumulated_profit += stats.current_run_profit
     stats.clean_run_active = False
@@ -128,6 +141,61 @@ def finalize_completed_haul_run(app: HaulTrackingHost) -> None:
         total_profit_short=format_credits_short(stats.accumulated_profit),
     )
     app._save_saved_state()
+
+
+def parse_credit_amount(value: str | None) -> int | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    match = _CREDIT_AMOUNT_RE.search(text.replace(",", ""))
+    if match is None:
+        return None
+    try:
+        amount = float(match.group("amount"))
+    except (TypeError, ValueError):
+        return None
+    suffix = (match.group("suffix") or "").lower()
+    multiplier = 1
+    if suffix in {"billion", "bn", "b"}:
+        multiplier = 1_000_000_000
+    elif suffix in {"million", "mil", "m"}:
+        multiplier = 1_000_000
+    elif suffix in {"thousand", "k"}:
+        multiplier = 1_000
+    return int(round(amount * multiplier))
+
+
+def _compare_completed_run_to_expected_route(app: HaulTrackingHost, stats: HaulStats) -> None:
+    expected = stats.expected_profit_per_trip
+    actual = stats.last_run_profit
+    if expected is None or actual is None:
+        stats.last_run_profit_delta = None
+        return
+    delta = actual - expected
+    stats.last_run_profit_delta = delta
+    actual_text = format_credits_short(actual)
+    expected_text = format_credits_short(expected)
+    if delta == 0:
+        comparison_text = "the expected amount"
+        log_comparison = "exactly the expected route profit"
+        color = "green"
+    elif delta > 0:
+        comparison_text = f"{format_credits_short(delta)} more"
+        log_comparison = f"{format_credits_short(delta)} more than expected"
+        color = "green"
+    else:
+        comparison_text = f"{format_credits_short(abs(delta))} less"
+        log_comparison = f"{format_credits_short(abs(delta))} less than expected"
+        color = "yellow"
+    app._log(
+        f"[{color}]Completed haul run profit "
+        f"{actual_text}; {log_comparison} "
+        f"(planned route {expected_text}).[/{color}]"
+    )
+    app._announce_tts(
+        AnnouncementId.ROUTE_PROFIT_DELTA,
+        comparison_text=comparison_text,
+    )
 
 
 def handle_haul_event(

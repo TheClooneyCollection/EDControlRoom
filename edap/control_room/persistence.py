@@ -91,6 +91,7 @@ def clear_session_stats(app: PersistenceHost) -> None:
     stats.completed_runs = 0
     stats.total_run_elapsed_s = 0.0
     stats.last_run_profit = None
+    stats.last_run_profit_delta = None
     stats.last_run_elapsed_s = None
     stats.current_run_profit = 0
     if stats.active:
@@ -131,7 +132,10 @@ def _restore_persisted_session(app: PersistenceHost) -> None:
     stats.completed_runs = saved.session_completed_runs
     stats.total_run_elapsed_s = saved.session_total_run_elapsed_seconds
     stats.last_run_profit = saved.session_last_run_profit
+    stats.last_run_profit_delta = saved.session_last_run_profit_delta
     stats.last_run_elapsed_s = saved.session_last_run_elapsed_seconds
+    stats.expected_profit_per_trip = saved.session_expected_profit_per_trip
+    stats.expected_profit_per_trip_text = saved.session_expected_profit_per_trip_text
 
 
 def _capture_persisted_session(app: PersistenceHost) -> None:
@@ -148,4 +152,7 @@ def _capture_persisted_session(app: PersistenceHost) -> None:
     saved.session_completed_runs = stats.completed_runs
     saved.session_total_run_elapsed_seconds = stats.total_run_elapsed_s
     saved.session_last_run_profit = stats.last_run_profit
+    saved.session_last_run_profit_delta = stats.last_run_profit_delta
     saved.session_last_run_elapsed_seconds = stats.last_run_elapsed_s
+    saved.session_expected_profit_per_trip = stats.expected_profit_per_trip
+    saved.session_expected_profit_per_trip_text = stats.expected_profit_per_trip_text

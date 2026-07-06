@@ -927,6 +927,7 @@ class ControlRoomServerTests(unittest.TestCase):
                                     "to_system": "Alioth",
                                     "source_buy_commodity": "Agronomic Treatment",
                                     "route_distance": "221.34 ly",
+                                    "profit_per_trip": "43.1m",
                                 },
                                 "raw_command": "web haul start Galileo -> Irkutsk",
                             },
@@ -949,6 +950,7 @@ class ControlRoomServerTests(unittest.TestCase):
                 "station_2": "Irkutsk",
                 "station_2_system": "Alioth",
                 "station_2_on_land": "false",
+                "route_profit_per_trip": "43.1m",
             },
         )
         self.assertEqual(broker.server_state.running_trade_route().from_station, "Galileo")

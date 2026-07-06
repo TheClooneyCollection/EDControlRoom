@@ -251,6 +251,7 @@ def load_haul_from_trade_route_entry(
             "station_2": route.to_station,
             "station_2_system": route.to_system,
             "station_2_on_land": "false",
+            "route_profit_per_trip": route.profit_per_trip or "",
         },
         skip_delay=skip_delay,
         raw_command=raw_command,
@@ -418,6 +419,7 @@ def dispatch_haul_loop(
     station_2 = app._haul_params.get("station_2", "")
     station_2_system = app._haul_params.get("station_2_system", "")
     station_2_on_land = _haul_param_as_bool(app._haul_params.get("station_2_on_land", ""))
+    route_profit_per_trip = app._haul_params.get("route_profit_per_trip", "")
     galaxy_map_settle_raw = app._haul_params.get("galaxy_map_settle", "")
     dock_timeout_raw = app._haul_params.get("dock_timeout", "")
 
@@ -494,6 +496,7 @@ def dispatch_haul_loop(
             "station_2": station_2,
             "station_2_system": station_2_system,
             "station_2_on_land": "true" if station_2_on_land else "false",
+            "route_profit_per_trip": route_profit_per_trip,
             "galaxy_map_settle": str(galaxy_map_settle),
             "dock_timeout": str(dock_timeout),
         },
@@ -520,6 +523,8 @@ def dispatch_haul_loop(
         label_parts.append(f"station 2 sys: [cyan]{escape(station_2_system)}[/]")
     if station_2_on_land:
         label_parts.append("station 2 landing: [cyan]on land[/]")
+    if route_profit_per_trip:
+        label_parts.append(f"route trip profit: [green]{escape(route_profit_per_trip)}[/]")
     label_parts.append(f"map settle: [cyan]{galaxy_map_settle:.1f}s[/]")
     label_parts.append(f"dock timeout: [cyan]{dock_timeout:.1f}s[/]")
 
@@ -531,6 +536,7 @@ def dispatch_haul_loop(
             station_2_buying=station_2_buying,
             station_1=station_1,
             station_2=station_2,
+            expected_profit_per_trip_text=route_profit_per_trip,
         )
 
     app._start_delayed_routine(

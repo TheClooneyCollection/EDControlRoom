@@ -157,10 +157,17 @@ def _haul_stats(payload: dict[str, Any]) -> HaulStats:
         current_run_started_at=_optional_float(payload.get("current_run_started_at")),
         current_run_elapsed_s=_optional_float(payload.get("current_run_elapsed_s")),
         current_run_profit=_int(payload.get("current_run_profit"), 0),
+        expected_profit_per_trip=_optional_int(payload.get("expected_profit_per_trip")),
+        expected_profit_per_trip_text=(
+            str(payload.get("expected_profit_per_trip_text"))
+            if payload.get("expected_profit_per_trip_text") is not None
+            else ""
+        ),
         completed_runs=_int(payload.get("completed_runs"), 0),
         accumulated_profit=_int(payload.get("accumulated_profit"), 0),
         cargo_moved_t=_int(payload.get("cargo_moved_t"), 0),
         last_run_profit=_optional_int(payload.get("last_run_profit")),
+        last_run_profit_delta=_optional_int(payload.get("last_run_profit_delta")),
         last_run_elapsed_s=_optional_float(payload.get("last_run_elapsed_s")),
         total_run_elapsed_s=_float(payload.get("total_run_elapsed_s"), 0.0),
         paused=bool(payload.get("paused", False)),

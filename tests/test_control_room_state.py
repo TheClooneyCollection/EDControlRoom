@@ -36,7 +36,10 @@ class ControlRoomStateTests(unittest.TestCase):
                 session_completed_runs=4,
                 session_total_run_elapsed_seconds=600.0,
                 session_last_run_profit=456_000,
+                session_last_run_profit_delta=-44_000,
                 session_last_run_elapsed_seconds=150.0,
+                session_expected_profit_per_trip=500_000,
+                session_expected_profit_per_trip_text="500,000 Cr",
                 selected_trade_route=TradeRoute(
                     index=7,
                     from_station="Galileo",
@@ -75,7 +78,10 @@ class ControlRoomStateTests(unittest.TestCase):
         self.assertEqual(loaded.session_completed_runs, 4)
         self.assertEqual(loaded.session_total_run_elapsed_seconds, 600.0)
         self.assertEqual(loaded.session_last_run_profit, 456_000)
+        self.assertEqual(loaded.session_last_run_profit_delta, -44_000)
         self.assertEqual(loaded.session_last_run_elapsed_seconds, 150.0)
+        self.assertEqual(loaded.session_expected_profit_per_trip, 500_000)
+        self.assertEqual(loaded.session_expected_profit_per_trip_text, "500,000 Cr")
         self.assertIsNotNone(loaded.selected_trade_route)
         self.assertEqual(loaded.selected_trade_route.to_system, "Alioth")
         self.assertEqual(loaded.selected_trade_route.profit_per_hour, "88.3m")

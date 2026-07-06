@@ -678,7 +678,7 @@ let routes = [];
         const message = hasSearchedRoutes
           ? "No station/carrier routes found."
           : "Search routes to load station/carrier results.";
-        tbody.innerHTML = `<tr><td colspan="7" class="route-sub empty-route-message">${message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="route-sub empty-route-message">${message}</td></tr>`;
         routePage = 1;
         updateRoutePager(0, 0, 0, 1);
         return;
@@ -691,6 +691,7 @@ let routes = [];
         <tr class="${route.index === selectedRouteIndex ? "selected" : ""}" data-index="${route.index}">
           <td class="mono">${escapeHtml(route.index)}</td>
           <td class="num profit">${escapeHtml(profitHourLabel(route))}</td>
+          <td class="num profit">${escapeHtml(route.profitTrip || "-")}</td>
           <td>
             <div class="route-main">${escapeHtml(route.commodity || "No buy commodity")} / ${escapeHtml(route.targetCommodity || "No buy commodity")}</div>
           </td>
@@ -743,6 +744,7 @@ let routes = [];
         station_2: route.sellStation || "",
         station_2_system: route.sellSystem || "",
         station_2_on_land: "false",
+        route_profit_per_trip: route.profitTrip !== "-" ? route.profitTrip : "",
         galaxy_map_settle: settle,
         dock_timeout: timeout
       };

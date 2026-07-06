@@ -493,6 +493,7 @@ def begin_haul_prompt(
         "station_2": "",
         "station_2_system": "",
         "station_2_on_land": "",
+        "route_profit_per_trip": haul_prompt_defaults.get("route_profit_per_trip", ""),
         "galaxy_map_settle": "",
         "dock_timeout": "",
     }

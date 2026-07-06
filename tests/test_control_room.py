@@ -44,6 +44,7 @@ from edap.control_room.backend import ControlRoomBackendEventHandler
 from edap.control_room.failure_messages import describe_routine_failure
 from edap.control_room.events import apply_ship_event
 from edap.control_room import rendering as control_room_rendering
+from edap.control_room.haul_tracking import parse_credit_amount
 from edap.control_room.models import HaulStats, MarketData, PromptState, ShipState, TradeRoutesData
 from edap.control_room.protocol import ActivityLogEntry
 from edap.control_room_state import CommandHistoryEntry
@@ -1093,6 +1094,12 @@ class ControlRoomCommandTests(unittest.TestCase):
             "1b 234.57M CR",
         )
 
+    def test_parse_credit_amount_handles_inara_profit_formats(self) -> None:
+        self.assertEqual(parse_credit_amount("17,435,380 Cr"), 17_435_380)
+        self.assertEqual(parse_credit_amount("43.1m"), 43_100_000)
+        self.assertEqual(parse_credit_amount("1.2 billion credits"), 1_200_000_000)
+        self.assertIsNone(parse_credit_amount(""))
+
     def test_haul_stats_markup_shows_session_and_live_profit(self) -> None:
         stats = HaulStats(
             station_1_buying="Aluminium",
@@ -1104,9 +1111,11 @@ class ControlRoomCommandTests(unittest.TestCase):
             clean_run_active=True,
             current_run_started_at=160.0,
             current_run_profit=12_500_000,
+            expected_profit_per_trip=17_435_380,
             completed_runs=2,
             accumulated_profit=987_654_321,
             last_run_profit=300_000,
+            last_run_profit_delta=-17_135_380,
             last_run_elapsed_s=240.0,
             total_run_elapsed_s=600.0,
         )
@@ -1123,6 +1132,10 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertIn("05:00", rendered)
         self.assertIn("Profit", rendered)
         self.assertIn("1b 000.15M CR", rendered)
+        self.assertIn("Route trip", rendered)
+        self.assertIn("17.44M CR", rendered)
+        self.assertIn("Vs route", rendered)
+        self.assertIn("-17.14M CR", rendered)
         self.assertIn("Balance", rendered)
         self.assertIn("1b 234.57M CR", rendered)
 
@@ -1176,13 +1189,14 @@ class ControlRoomCommandTests(unittest.TestCase):
                 to_station_distance="215 Ls",
                 distance_from_system="~167 Ly",
                 profit_per_unit="37,903 Cr",
+                profit_per_trip="17,435,380 Cr",
                 profit_per_hour="88,323,553 Cr",
             )
         )
 
         self.assertEqual(
             label,
-            "[88.3m/h] 1. Fontana City -> Stronghold Carrier [stn 148 Ls/215 Ls | dist ~167 Ly | buy Silver | return Robotics | ppu 37,903 Cr]",
+            "[88.3m/h] 1. Fontana City -> Stronghold Carrier [stn 148 Ls/215 Ls | dist ~167 Ly | buy Silver | return Robotics | ppu 37,903 Cr | trip 17,435,380 Cr]",
         )
 
     def test_load_market_json_seeds_ship_station_when_in_station(self) -> None:
@@ -1528,6 +1542,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
             "station_2_buying": "Bertrandite",
             "station_2": "Trevithick Dock",
             "station_2_system": "Achenar",
+            "route_profit_per_trip": "17,435,380 Cr",
             "galaxy_map_settle": "",
             "dock_timeout": "",
         }
@@ -1571,6 +1586,8 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.assertEqual(self.app._active_routine_name, "haul")
         self.assertEqual(self.app._haul_stats.station_1_buying, "Aluminium")
         self.assertEqual(self.app._haul_stats.station_2_buying, "Bertrandite")
+        self.assertEqual(self.app._haul_stats.expected_profit_per_trip, 17_435_380)
+        self.assertEqual(self.app._haul_stats.expected_profit_per_trip_text, "17,435,380 Cr")
         self.assertTrue(self.app._haul_stats.resumed_mid_run)
 
     def test_haul_dispatch_defaults_station_1_to_current_station(self) -> None:
@@ -2167,10 +2184,12 @@ on_land = true
             station_2_buying="Bertrandite",
             station_1="Pawelczyk Dock",
             station_2="Hutton Orbital",
+            expected_profit_per_trip_text="250,000 Cr",
         )
 
         self.assertTrue(self.app._haul_stats.waiting_for_station_1_departure)
         self.assertEqual(self.app._haul_stats.current_run_started_at, 100.0)
+        self.assertEqual(self.app._haul_stats.expected_profit_per_trip, 250_000)
 
         self.app._handle_haul_event(
             {"event": "MarketBuy", "TotalCost": 100_000, "Count": 128},
@@ -2207,6 +2226,7 @@ on_land = true
         self.app._handle_haul_event({"event": "MarketSell", "TotalSale": 400_000}, station_before="Pawelczyk Dock")
         self.assertEqual(self.app._haul_stats.completed_runs, 1)
         self.assertEqual(self.app._haul_stats.last_run_profit, 300_000)
+        self.assertEqual(self.app._haul_stats.last_run_profit_delta, 50_000)
         self.assertEqual(self.app._haul_stats.accumulated_profit, 300_000)
         self.assertEqual(self.app._haul_stats.last_run_elapsed_s, 200.0)
         self.assertIsNone(self.app._haul_stats.current_run_started_at)
@@ -2215,6 +2235,11 @@ on_land = true
             (AnnouncementId.ROUTE_COMPLETE, {"cycle_count": 1, "total_profit_short": "300 thousand credits"}),
             self.app._tts.calls,
         )
+        self.assertIn(
+            (AnnouncementId.ROUTE_PROFIT_DELTA, {"comparison_text": "50 thousand credits more"}),
+            self.app._tts.calls,
+        )
+        self.assertIn("50 thousand credits more than expected", "\n".join(self.app.logged))
 
         self.app._time_fn = lambda: 320.0
         self.app._handle_haul_event({"event": "MarketBuy", "TotalCost": 125_000}, station_before="Pawelczyk Dock")
@@ -3996,7 +4021,10 @@ class ControlRoomPromptStateTests(unittest.TestCase):
             prompt_state,
             commodity="Gold",
             prompt_for_commodity=True,
-            haul_prompt_defaults={"station_1_buying": "Aluminium"},
+            haul_prompt_defaults={
+                "station_1_buying": "Aluminium",
+                "route_profit_per_trip": "17,435,380 Cr",
+            },
             current_station="Jameson Memorial",
             raw_command="haul gold",
             skip_delay=False,
@@ -4004,6 +4032,7 @@ class ControlRoomPromptStateTests(unittest.TestCase):
 
         self.assertEqual(prompt_state.haul_prompt_step, "station_1_buying")
         self.assertEqual(prompt_state.haul_params["station_1_buying"], "Gold")
+        self.assertEqual(prompt_state.haul_params["route_profit_per_trip"], "17,435,380 Cr")
         self.assertEqual(prompt_state.haul_prompt_raw_command, "haul gold")
         self.assertEqual(ui_state.placeholder, "station 1 buying (Enter = Aluminium)...")
         self.assertEqual(ui_state.value, "Aluminium")

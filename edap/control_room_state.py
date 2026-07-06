@@ -29,7 +29,10 @@ class ControlRoomState:
     session_completed_runs: int = 0
     session_total_run_elapsed_seconds: float = 0.0
     session_last_run_profit: int | None = None
+    session_last_run_profit_delta: int | None = None
     session_last_run_elapsed_seconds: float | None = None
+    session_expected_profit_per_trip: int | None = None
+    session_expected_profit_per_trip_text: str = ""
     selected_trade_route: TradeRoute | None = None
     running_trade_route: TradeRoute | None = None
 
@@ -114,9 +117,18 @@ def load_control_room_state(path: Path) -> ControlRoomState:
     session_last_run_profit = raw.get("session_last_run_profit")
     if not isinstance(session_last_run_profit, int):
         session_last_run_profit = None
+    session_last_run_profit_delta = raw.get("session_last_run_profit_delta")
+    if not isinstance(session_last_run_profit_delta, int):
+        session_last_run_profit_delta = None
     session_last_run_elapsed_seconds = raw.get("session_last_run_elapsed_seconds")
     if not isinstance(session_last_run_elapsed_seconds, (int, float)):
         session_last_run_elapsed_seconds = None
+    session_expected_profit_per_trip = raw.get("session_expected_profit_per_trip")
+    if not isinstance(session_expected_profit_per_trip, int):
+        session_expected_profit_per_trip = None
+    session_expected_profit_per_trip_text = raw.get("session_expected_profit_per_trip_text", "")
+    if not isinstance(session_expected_profit_per_trip_text, str):
+        session_expected_profit_per_trip_text = ""
     selected_trade_route = _trade_route_from_payload(raw.get("selected_trade_route"))
     running_trade_route = _trade_route_from_payload(raw.get("running_trade_route"))
 
@@ -130,11 +142,14 @@ def load_control_room_state(path: Path) -> ControlRoomState:
         session_completed_runs=session_completed_runs,
         session_total_run_elapsed_seconds=float(session_total_run_elapsed_seconds),
         session_last_run_profit=session_last_run_profit,
+        session_last_run_profit_delta=session_last_run_profit_delta,
         session_last_run_elapsed_seconds=(
             float(session_last_run_elapsed_seconds)
             if session_last_run_elapsed_seconds is not None
             else None
         ),
+        session_expected_profit_per_trip=session_expected_profit_per_trip,
+        session_expected_profit_per_trip_text=session_expected_profit_per_trip_text,
         selected_trade_route=selected_trade_route,
         running_trade_route=running_trade_route,
     )
@@ -151,7 +166,10 @@ def save_control_room_state(path: Path, state: ControlRoomState) -> None:
         "session_completed_runs": state.session_completed_runs,
         "session_total_run_elapsed_seconds": state.session_total_run_elapsed_seconds,
         "session_last_run_profit": state.session_last_run_profit,
+        "session_last_run_profit_delta": state.session_last_run_profit_delta,
         "session_last_run_elapsed_seconds": state.session_last_run_elapsed_seconds,
+        "session_expected_profit_per_trip": state.session_expected_profit_per_trip,
+        "session_expected_profit_per_trip_text": state.session_expected_profit_per_trip_text,
         "selected_trade_route": _trade_route_to_payload(state.selected_trade_route),
         "running_trade_route": _trade_route_to_payload(state.running_trade_route),
         "history": [

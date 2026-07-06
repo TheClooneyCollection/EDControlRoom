@@ -712,11 +712,18 @@ def _handle_session_message(
         raw_command_value = payload.get("raw_command")
         raw_command = raw_command_value if isinstance(raw_command_value, str) else None
         trade_route = trade_route_from_payload(payload.get("trade_route"))
+        params_for_dispatch = {str(key): str(value) for key, value in params_value.items()}
+        if (
+            trade_route is not None
+            and trade_route.profit_per_trip
+            and not params_for_dispatch.get("route_profit_per_trip")
+        ):
+            params_for_dispatch["route_profit_per_trip"] = trade_route.profit_per_trip
         try:
             skip_delay_value = payload.get("skip_delay")
             skip_delay = bool(skip_delay_value) if isinstance(skip_delay_value, bool) else False
             command_handler.dispatch_haul_loop(
-                params={str(key): str(value) for key, value in params_value.items()},
+                params=params_for_dispatch,
                 skip_delay=skip_delay,
                 raw_command=raw_command,
             )

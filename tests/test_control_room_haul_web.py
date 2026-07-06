@@ -178,7 +178,15 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn('sendCommand("command.select_trade_route", { route: payload })', html)
         self.assertIn("mergeHydratedRoute(payload.selected_trade_route || payload.running_trade_route)", html)
         self.assertIn("trade_route: tradeRoutePayload(route)", html)
+        self.assertIn("route_profit_per_trip: route.profitTrip !== \"-\" ? route.profitTrip : \"\"", html)
         self.assertIn("apiRoute: { ...route, index }", html)
+
+    def test_haul_web_route_table_shows_trip_profit(self) -> None:
+        html = _haul_web_source()
+
+        self.assertIn("<th>Profit / trip</th>", html)
+        self.assertIn('<td class="num profit">${escapeHtml(route.profitTrip || "-")}</td>', html)
+        self.assertIn('colspan="8"', html)
 
     def test_haul_web_uses_spansh_style_parameters_and_result_cards(self) -> None:
         html = _multi_haul_web_source()

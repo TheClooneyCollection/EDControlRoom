@@ -249,6 +249,8 @@ def haul_panel_markup(
     row("Station 2", escape(stats.station_2 or "—"))
     row("Session", escape(fmt_duration(session_elapsed)))
     row("Profit", f"[green]{fmt_cr(session_profit)}[/]")
+    if stats.expected_profit_per_trip is not None:
+        row("Route trip", f"[green]{fmt_cr(stats.expected_profit_per_trip)}[/]")
     if current_balance is not None:
         row("Balance", f"[green]{fmt_cr(current_balance)}[/]")
     row(
@@ -264,6 +266,15 @@ def haul_panel_markup(
         f"[green]{fmt_cr(stats.last_run_profit)}[/]"
         if stats.last_run_profit is not None else "[dim]—[/]",
     )
+    if stats.last_run_profit_delta is not None:
+        delta = stats.last_run_profit_delta
+        if delta == 0:
+            delta_text = "[green]as planned[/]"
+        elif delta > 0:
+            delta_text = f"[green]+{fmt_cr(delta)}[/]"
+        else:
+            delta_text = f"[yellow]-{fmt_cr(abs(delta))}[/]"
+        row("Vs route", delta_text)
     row("Last time", escape(fmt_duration(stats.last_run_elapsed_s)))
     return "\n".join(rows)
 
@@ -373,6 +384,8 @@ def trade_route_option_label(route: TradeRoute) -> str:
         detail_bits.append(f"return {route.target_buy_commodity}")
     if route.profit_per_unit:
         detail_bits.append(f"ppu {route.profit_per_unit}")
+    if route.profit_per_trip:
+        detail_bits.append(f"trip {route.profit_per_trip}")
     tail = f" [{ ' | '.join(detail_bits) }]" if detail_bits else ""
     prefix_text = f"[{prefix}] " if prefix else ""
     return f"{prefix_text}{route.index}. {route.from_station} -> {route.to_station}{tail}"
