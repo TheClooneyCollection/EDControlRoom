@@ -227,7 +227,7 @@ class HeadlessControlRoomHost(ControlRoomApp):
         self,
         *,
         system: str,
-        station: str,
+        station: str | None = None,
         on_land: bool = False,
         skip_delay: bool = False,
         raw_command: str | None = None,

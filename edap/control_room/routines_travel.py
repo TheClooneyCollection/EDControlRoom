@@ -20,7 +20,7 @@ def cmd_travel(
 ) -> None:
     parsed = parse_travel_command(rest)
     if parsed is None:
-        app._log("[red]Usage: travel <system> / <station>[/]")
+        app._log("[red]Usage: travel <system> [/ <station>][/]")
         return
     system, station = parsed
     dispatch_travel(
@@ -36,20 +36,26 @@ def parse_travel_command(rest: str) -> tuple[str, str] | None:
     raw = rest.strip()
     if not raw:
         return None
+    if raw.startswith(("/", "|")):
+        return None
     for separator in (" / ", " | ", " -- "):
         if separator in raw:
             system, station = raw.split(separator, 1)
             system = system.strip()
             station = station.strip()
-            return (system, station) if system and station else None
-    return None
+            return (system, station) if system else None
+    for separator in ("/", "|"):
+        if raw.endswith(separator):
+            system = raw[:-1].strip()
+            return (system, "") if system else None
+    return (raw, "")
 
 
 def dispatch_travel(
     app: TravelHost,
     *,
     system: str,
-    station: str,
+    station: str | None = None,
     on_land: bool = False,
     skip_delay: bool = False,
     raw_command: str | None = None,
@@ -57,9 +63,9 @@ def dispatch_travel(
     if not app._check_routine_ready():
         return
     system = system.strip()
-    station = station.strip()
-    if not system or not station:
-        app._log("[red]Travel needs both destination system and station.[/]")
+    station = "" if station is None else station.strip()
+    if not system:
+        app._log("[red]Travel needs a destination system.[/]")
         return
 
     progress = app._make_progress()
@@ -79,7 +85,7 @@ def dispatch_travel(
     destination = TravelDestination(system=system, station=station, on_land=on_land)
 
     app._record_history_entry(CommandHistoryEntry(
-        raw=raw_command or f"{'!' if skip_delay else ''}travel {system} / {station}",
+        raw=raw_command or _travel_raw_command(system=system, station=station, skip_delay=skip_delay),
         command="travel",
         params={
             "system": system,
@@ -90,9 +96,24 @@ def dispatch_travel(
     ))
 
     app._start_delayed_routine(
-        description=f"travel {system} / {station}",
-        start_message=f"Starting travel assist to [cyan]{escape(station)}[/] in [cyan]{escape(system)}[/]",
+        description=_travel_description(system=system, station=station),
+        start_message=_travel_start_message(system=system, station=station),
         skip_delay=skip_delay,
         fn=lambda: travel_to_station(runtime, destination=destination),
         active_routine_name="travel",
     )
+
+
+def _travel_raw_command(*, system: str, station: str, skip_delay: bool) -> str:
+    prefix = "!" if skip_delay else ""
+    return f"{prefix}travel {system} / {station}" if station else f"{prefix}travel {system}"
+
+
+def _travel_description(*, system: str, station: str) -> str:
+    return f"travel {system} / {station}" if station else f"travel {system}"
+
+
+def _travel_start_message(*, system: str, station: str) -> str:
+    if station:
+        return f"Starting travel assist to [cyan]{escape(station)}[/] in [cyan]{escape(system)}[/]"
+    return f"Starting travel assist to [cyan]{escape(system)}[/]"

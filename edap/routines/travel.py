@@ -13,6 +13,7 @@ from edap.routines.transit import (
     should_set_galaxy_map_destination,
     transit_to_station,
     undock_and_route_to_system,
+    wait_for_arrival_or_approach_event,
 )
 from edap.tts import AnnouncementId
 
@@ -20,7 +21,7 @@ from edap.tts import AnnouncementId
 @dataclass(frozen=True)
 class TravelDestination:
     system: str
-    station: str
+    station: str = ""
     on_land: bool = False
 
     @property
@@ -31,8 +32,6 @@ class TravelDestination:
 def travel_to_station(runtime: HaulRuntime, *, destination: TravelDestination) -> RoutineResult:
     if not destination.system.strip():
         raise ValueError("travel destination system is required")
-    if not destination.station.strip():
-        raise ValueError("travel destination station is required")
 
     position = read_ship_position(runtime.journal_dir)
     current_label = position.station or position.system or "current location"
@@ -41,6 +40,8 @@ def travel_to_station(runtime: HaulRuntime, *, destination: TravelDestination) -
         f"status={position.status}, station={position.station!r}, system={position.system!r}, "
         f"target={destination.label!r}"
     )
+    if not destination.station.strip() and _same_system(position.system, destination.system):
+        return _travel_system_arrival(runtime, destination, assume_arrived=True)
 
     if position.status == "docked":
         result = undock_and_route_to_system(
@@ -52,6 +53,12 @@ def travel_to_station(runtime: HaulRuntime, *, destination: TravelDestination) -
         )
         if result.dispatch.status != "ok":
             return result
+        if not destination.station.strip():
+            return _travel_system_arrival(
+                runtime,
+                destination,
+                assume_arrived=_same_system(position.system, destination.system),
+            )
         return _travel_transit(runtime, destination, assume_arrived=False)
 
     if position.status == "normal_space":
@@ -64,6 +71,12 @@ def travel_to_station(runtime: HaulRuntime, *, destination: TravelDestination) -
         )
         if result.dispatch.status != "ok":
             return result
+        if not destination.station.strip():
+            return _travel_system_arrival(
+                runtime,
+                destination,
+                assume_arrived=_same_system(position.system, destination.system),
+            )
         return _travel_transit(
             runtime,
             destination,
@@ -82,6 +95,12 @@ def travel_to_station(runtime: HaulRuntime, *, destination: TravelDestination) -
                 runtime.controls.hyper_super_combination()
             else:
                 runtime.progress_fn("Skipping automatic FSD engage because the galaxy-map route is unconfirmed.")
+        if not destination.station.strip():
+            return _travel_system_arrival(
+                runtime,
+                destination,
+                assume_arrived=_same_system(position.system, destination.system),
+            )
         return _travel_transit(
             runtime,
             destination,
@@ -89,7 +108,43 @@ def travel_to_station(runtime: HaulRuntime, *, destination: TravelDestination) -
         )
 
     runtime.progress_fn("Travel start location is unknown; waiting for route or approach journal events.")
+    if not destination.station.strip():
+        return _travel_system_arrival(runtime, destination, assume_arrived=False)
     return _travel_transit(runtime, destination, assume_arrived=False)
+
+
+def _travel_system_arrival(
+    runtime: HaulRuntime,
+    destination: TravelDestination,
+    *,
+    assume_arrived: bool,
+) -> RoutineResult:
+    if assume_arrived:
+        runtime.progress_fn(f"Already in {destination.system} system; travel complete.")
+    else:
+        runtime.progress_fn(f"Waiting for hyperspace arrival in {destination.system} system...")
+        arrival_observed, pending_events = wait_for_arrival_or_approach_event(
+            runtime.watcher,
+            destination_system=destination.system,
+            deadline=runtime.time_fn() + runtime.timing.dock_timeout_s,
+            time_fn=runtime.time_fn,
+        )
+        if not arrival_observed and not pending_events:
+            return RoutineResult(
+                action="travel",
+                dispatch=ActionDispatchResult(
+                    action="travel",
+                    status="error",
+                    reason=f"timed out waiting for arrival in {destination.system}",
+                ),
+                details={"system": destination.system, "station": destination.station},
+            )
+        runtime.progress_fn(f"Arrived in {destination.system} system; travel complete.")
+    return RoutineResult(
+        action="travel",
+        dispatch=ActionDispatchResult(action="travel", status="ok"),
+        details={"system": destination.system, "station": destination.station},
+    )
 
 
 def _travel_transit(

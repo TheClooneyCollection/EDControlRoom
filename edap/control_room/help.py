@@ -61,9 +61,9 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
     ),
     CommandHelp(
         name="travel",
-        usage="travel <system> / <station>",
-        summary="Assist travel from the current ship state to a target station.",
-        detail="Starts an assistive station travel routine that can launch from a docked state, set the galaxy-map route when the target is in another system, wait through multi-jump transit, announce the target station, open the nav panel in-system, and request docking. Web clients use the same structured travel dispatch path.",
+        usage="travel <system> [/ <station>]",
+        summary="Assist travel from the current ship state to a target system or station.",
+        detail="Starts an assistive travel routine that can launch from a docked state, set the galaxy-map route when the target is in another system, and wait through multi-jump transit. With a station, it announces the target station, opens the nav panel in-system, and requests docking. Without a station, it stops after arrival in the destination system. Web clients use the same structured travel dispatch path.",
     ),
     CommandHelp(
         name="dest",

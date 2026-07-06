@@ -2,6 +2,7 @@ let routes = [];
     let selectedRouteIndex = 0;
     let hasSearchedRoutes = false;
     let routePage = 1;
+    let travelTargetDirty = false;
     const ROUTES_PER_PAGE = 12;
     const RECONNECT_INITIAL_DELAY_MS = 1000;
     const RECONNECT_MAX_DELAY_MS = 30000;
@@ -717,7 +718,7 @@ let routes = [];
       if (!route) {
         document.getElementById("selected-title").textContent = "Select a route before starting.";
         document.getElementById("command-preview").textContent = "";
-        updateTravelTarget(null);
+        updateTravelTarget(null, { force: true });
         startButton.disabled = true;
         destinationButton.disabled = true;
         return;
@@ -730,7 +731,10 @@ let routes = [];
       updateCommandPreview();
     }
 
-    function updateTravelTarget(route) {
+    function updateTravelTarget(route, options = {}) {
+      if (travelTargetDirty && !options.force) {
+        return;
+      }
       document.getElementById("travel-system").value = route ? route.buySystem || "" : "";
       document.getElementById("travel-station").value = route ? route.buyStation || "" : "";
     }
@@ -920,14 +924,27 @@ let routes = [];
         appendActivity("Select a route before loading travel target.", "Travel", "warning");
         return;
       }
-      updateTravelTarget(route);
+      travelTargetDirty = false;
+      updateTravelTarget(route, { force: true });
+    });
+
+    ["travel-system", "travel-station"].forEach((id) => {
+      document.getElementById(id).addEventListener("input", () => {
+        travelTargetDirty = true;
+      });
+    });
+
+    document.getElementById("clear-travel-target").addEventListener("click", () => {
+      travelTargetDirty = true;
+      document.getElementById("travel-system").value = "";
+      document.getElementById("travel-station").value = "";
     });
 
     document.getElementById("start-travel").addEventListener("click", () => {
       const system = document.getElementById("travel-system").value.trim();
       const station = document.getElementById("travel-station").value.trim();
-      if (!system || !station) {
-        appendActivity("Enter a target system and station before starting travel.", "Travel", "warning");
+      if (!system) {
+        appendActivity("Enter a target system before starting travel.", "Travel", "warning");
         return;
       }
       if (!accessToken) {
@@ -942,10 +959,10 @@ let routes = [];
         system,
         station,
         on_land: false,
-        raw_command: `web travel ${system} / ${station}`
+        raw_command: station ? `web travel ${system} / ${station}` : `web travel ${system}`
       })
         .then(() => {
-          appendActivity(`Travel accepted for ${station}.`, "Travel", "success");
+          appendActivity(station ? `Travel accepted for ${station}.` : `Travel accepted for ${system}.`, "Travel", "success");
         })
         .catch((error) => {
           appendActivity(error.message, "Travel", "warning");

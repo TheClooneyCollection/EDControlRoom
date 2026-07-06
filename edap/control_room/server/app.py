@@ -711,7 +711,7 @@ def _handle_session_message(
         if command_handler is None:
             return _transport_unavailable_error(correlation_message_id)
         system = payload.get("system")
-        station = payload.get("station")
+        station = payload.get("station", "")
         raw_command_value = payload.get("raw_command")
         raw_command = raw_command_value if isinstance(raw_command_value, str) else None
         if not isinstance(system, str) or not system.strip():
@@ -725,13 +725,13 @@ def _handle_session_message(
                 },
                 correlation_message_id=correlation_message_id,
             )
-        if not isinstance(station, str) or not station.strip():
+        if not isinstance(station, str):
             return protocol_message(
                 "response.error",
                 {
                     "error_code": "invalid_command",
-                    "error_message": "Travel dispatch commands must include a station string.",
-                    "recommended_action": "Send a non-empty destination station value.",
+                    "error_message": "Travel dispatch commands must include a station string when station is present.",
+                    "recommended_action": "Send a station string or omit it for system-only travel.",
                     "retryable": True,
                 },
                 correlation_message_id=correlation_message_id,

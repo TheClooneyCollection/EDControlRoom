@@ -42,9 +42,12 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         html = _haul_web_source()
 
         self.assertIn('id="start-travel"', html)
+        self.assertIn('<button class="btn" type="button" id="clear-travel-target">Clear</button>', html)
         self.assertIn('sendCommand("command.dispatch_travel"', html)
         self.assertIn("updateTravelTarget(route)", html)
-        self.assertIn('document.getElementById("travel-system").value = route ? route.buySystem || "" : ""', html)
+        self.assertIn('if (travelTargetDirty && !options.force)', html)
+        self.assertIn('raw_command: station ? `web travel ${system} / ${station}` : `web travel ${system}`', html)
+        self.assertIn('appendActivity("Enter a target system before starting travel."', html)
 
     def test_haul_web_exposes_instant_mode_toggle(self) -> None:
         html = _haul_web_source()

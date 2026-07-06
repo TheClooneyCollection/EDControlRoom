@@ -1359,6 +1359,32 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(response["message_type"], "response.success")
         self.assertEqual(response["correlation_message_id"], "message-travel")
 
+    def test_active_operator_dispatch_travel_allows_system_only_target(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        command_handler = _CommandHandlerRecorder()
+
+        response = _handle_session_message(
+            {
+                "message_type": "command.dispatch_travel",
+                "message_id": "message-travel",
+                "payload": {
+                    "system": "Sol",
+                    "raw_command": "web travel Sol",
+                },
+            },
+            session_id="observer-travel",
+            client_role="active_operator",
+            command_handler=command_handler,
+            broker=broker,
+        )
+
+        self.assertEqual(
+            command_handler.dispatched_travels,
+            [("Sol", "", False, False, "web travel Sol")],
+        )
+        self.assertEqual(response["message_type"], "response.success")
+        self.assertEqual(response["payload"]["result"], {"system": "Sol", "station": ""})
+
     def test_active_operator_cancel_active_routine_calls_handler(self) -> None:
         broker = InMemoryObserverSessionBroker()
         command_handler = _CommandHandlerRecorder()

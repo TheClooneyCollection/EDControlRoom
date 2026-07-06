@@ -71,7 +71,7 @@ class ControlRoomAppTradeRoutePickerActionDependencies:
     def submit_command(self, raw: str) -> None:
         self._app._dispatch_command(raw)
 
-    def dispatch_travel(self, *, system: str, station: str) -> None:
+    def dispatch_travel(self, *, system: str, station: str | None = None) -> None:
         self._app._dispatch_travel(
             system=system,
             station=station,

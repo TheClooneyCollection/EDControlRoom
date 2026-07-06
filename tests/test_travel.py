@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from edap.actions import ActionDispatchResult
 from edap.config import default_haul_routine_defaults
+from edap.control_room.routines_travel import parse_travel_command
 from edap.routines._base import RoutineResult
 from edap.routines.callbacks import noop_progress
 from edap.routines.haul_support import HaulMarketSettings, HaulRuntime, HaulTiming, HaulTravelSettings
@@ -82,6 +83,13 @@ def _ticking_clock(start: float = 0.0, step: float = 1.0):
 
 
 class TravelRoutineTests(unittest.TestCase):
+    def test_parse_travel_command_accepts_optional_station(self) -> None:
+        self.assertEqual(parse_travel_command("Sol"), ("Sol", ""))
+        self.assertEqual(parse_travel_command("Sol / Abraham Lincoln"), ("Sol", "Abraham Lincoln"))
+        self.assertEqual(parse_travel_command("Sol / "), ("Sol", ""))
+        self.assertIsNone(parse_travel_command(""))
+        self.assertIsNone(parse_travel_command(" / Abraham Lincoln"))
+
     def test_same_system_supercruise_announces_station_and_opens_nav_panel(self) -> None:
         controls = FakeShipControls()
         announcements: list[tuple[AnnouncementId, dict[str, object]]] = []
@@ -154,6 +162,48 @@ class TravelRoutineTests(unittest.TestCase):
         self.assertEqual(result.dispatch.status, "ok")
         set_route_mock.assert_called_once()
         transit_mock.assert_called_once()
+
+    def test_system_only_travel_completes_after_arrival_without_station_docking(self) -> None:
+        progress: list[str] = []
+        watcher = FakeWatcher([
+            [{"event": "FSDJump", "StarSystem": "Sol"}],
+        ])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            runtime = _runtime(journal_dir, watcher=watcher, progress=progress)
+
+            with patch("edap.routines.transit.dock") as dock_mock:
+                result = travel_to_station(
+                    runtime,
+                    destination=TravelDestination(system="Sol"),
+                )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(result.details, {"system": "Sol", "station": ""})
+        self.assertIn("Arrived in Sol system; travel complete.", progress)
+        dock_mock.assert_not_called()
+
+    def test_system_only_travel_already_in_system_does_not_undock(self) -> None:
+        controls = FakeShipControls()
+        progress: list[str] = []
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            (journal_dir / "Journal.240101000000.01.log").write_text(
+                '{"event":"Location","Docked":true,"StarSystem":"Sol","StationName":"Abraham Lincoln"}\n',
+                encoding="utf-8",
+            )
+            runtime = _runtime(journal_dir, controls=controls, progress=progress)
+
+            result = travel_to_station(
+                runtime,
+                destination=TravelDestination(system="Sol"),
+            )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(controls.calls, [])
+        self.assertIn("Already in Sol system; travel complete.", progress)
 
 
 if __name__ == "__main__":
