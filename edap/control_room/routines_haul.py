@@ -11,6 +11,11 @@ from edap.control_room.interfaces import HaulHost
 from edap.control_room.models import TradeRoutesData
 from edap.control_room_state import CommandHistoryEntry
 from edap.haul_config import DEFAULT_HAUL_CONFIG_PATH, HaulConfigError, load_haul_config
+from edap.haul_search_config import (
+    GENERATED_HAUL_SEARCH_FIELDS,
+    HaulSearchConfigError,
+    save_haul_search_config,
+)
 from edap.inara.trade_routes import (
     TradeRoute,
     build_trade_routes_url,
@@ -350,6 +355,10 @@ def dispatch_haul_search(
     raw_command: str | None = None,
 ) -> None:
     query_url = build_trade_routes_url(system_name, query_params=query_params)
+    try:
+        save_haul_search_config(query_params, exclude=GENERATED_HAUL_SEARCH_FIELDS)
+    except (OSError, HaulSearchConfigError) as exc:
+        app._log(f"[yellow]Failed to save haul search defaults: {escape(str(exc))}[/]")
     history_params = {
         "mode": "search",
         "near_system": system_name,

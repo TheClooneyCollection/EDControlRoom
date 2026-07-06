@@ -728,7 +728,10 @@ class ControlRoomServerTests(unittest.TestCase):
             ),
         )
 
-        with patch("edap.control_room.server.app.search_trade_routes", return_value=result) as search:
+        with (
+            patch("edap.control_room.server.app.search_trade_routes", return_value=result) as search,
+            patch("edap.control_room.server.app.save_haul_search_config") as save_defaults,
+        ):
             response = _handle_session_message(
                 {
                     "message_type": "command.search_haul_routes",
@@ -768,12 +771,19 @@ class ControlRoomServerTests(unittest.TestCase):
                 "order_by": "best_profit",
             },
         )
+        save_defaults.assert_called_once()
+        self.assertEqual(save_defaults.call_args.args[0]["max_route_distance_ly"], "500")
+        self.assertEqual(save_defaults.call_args.args[0]["max_station_distance_ls"], "any")
+        self.assertEqual(save_defaults.call_args.kwargs["exclude"], ("cargo_capacity",))
 
     def test_connected_observer_search_haul_routes_is_allowed(self) -> None:
         broker = InMemoryObserverSessionBroker()
         observer = broker.register_observer("bridge-ipad")
 
-        with patch("edap.control_room.server.app.search_trade_routes") as search:
+        with (
+            patch("edap.control_room.server.app.search_trade_routes") as search,
+            patch("edap.control_room.server.app.save_haul_search_config"),
+        ):
             search.return_value = TradeRouteSearchResult(
                 system_name="Sol",
                 query_url="https://inara.cz/elite/market-traderoutes/?ps1=Sol",
@@ -882,7 +892,10 @@ class ControlRoomServerTests(unittest.TestCase):
                 search_ran_outside_event_loop = True
             return result
 
-        with patch("edap.control_room.server.app.search_trade_routes", side_effect=fake_search_trade_routes):
+        with (
+            patch("edap.control_room.server.app.search_trade_routes", side_effect=fake_search_trade_routes),
+            patch("edap.control_room.server.app.save_haul_search_config"),
+        ):
             with TestClient(app) as client:
                 with client.websocket_connect(
                     "/session?client_name=web-haul&access_token=secret-token"

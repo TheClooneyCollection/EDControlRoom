@@ -4,7 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from edap.haul_search_config import HaulSearchConfigError, load_haul_search_config
+from edap.haul_search_config import (
+    HaulSearchConfigError,
+    load_haul_search_config,
+    save_haul_search_config,
+)
 
 
 class HaulSearchConfigTests(unittest.TestCase):
@@ -48,6 +52,31 @@ cargo_capacity = "460"
 
             with self.assertRaises(HaulSearchConfigError):
                 load_haul_search_config(config_path)
+
+    def test_save_haul_search_config_writes_non_generated_overrides(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "haul_search.toml"
+
+            saved_path = save_haul_search_config(
+                {
+                    "cargo_capacity": "784",
+                    "max_route_distance_ly": "700",
+                    "max_station_distance_ls": "any",
+                    "order_by": "route_distance",
+                },
+                config_path,
+                exclude=("cargo_capacity",),
+            )
+            saved = config_path.read_text(encoding="utf-8")
+            loaded = load_haul_search_config(config_path)
+
+        self.assertEqual(saved_path, config_path)
+        self.assertIn("[haul_search]", saved)
+        self.assertNotIn("cargo_capacity", saved)
+        self.assertEqual(loaded["cargo_capacity"], "")
+        self.assertEqual(loaded["max_route_distance_ly"], "700")
+        self.assertEqual(loaded["max_station_distance_ls"], "any")
+        self.assertEqual(loaded["order_by"], "route_distance")
 
 
 if __name__ == "__main__":

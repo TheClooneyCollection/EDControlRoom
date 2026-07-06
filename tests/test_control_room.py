@@ -1785,7 +1785,10 @@ on_land = true
             ),
         )
 
-        with patch("edap.control_room.routines_haul.search_trade_routes", return_value=result):
+        with (
+            patch("edap.control_room.routines_haul.search_trade_routes", return_value=result),
+            patch("edap.control_room.routines_haul.save_haul_search_config") as save_defaults,
+        ):
             self.app._cmd_haul("search", raw_command="haul search")
             self.assertEqual(self.app._prompt_state.haul_prompt_mode, "search")
             self.assertEqual(self.app._haul_prompt_step, "search_edit")
@@ -1802,6 +1805,9 @@ on_land = true
         self.assertEqual(self.app._saved_state.history[-1].params["mode"], "search")
         self.assertEqual(self.app._saved_state.history[-1].params["near_system"], "Praea Euq AK-A d25")
         self.assertEqual(self.app._saved_state.history[-1].params["cargo_capacity"], "460")
+        save_defaults.assert_called_once()
+        self.assertIn("max_route_distance_ly", save_defaults.call_args.args[0])
+        self.assertEqual(save_defaults.call_args.kwargs["exclude"], ("cargo_capacity",))
         self.assertIn("Loaded 1 Inara route(s)", "\n".join(self.app.logged))
 
     def test_haul_search_accepts_any_for_max_station_distance(self) -> None:
@@ -1817,7 +1823,10 @@ on_land = true
             routes=(),
         )
 
-        with patch("edap.control_room.routines_haul.search_trade_routes", return_value=result):
+        with (
+            patch("edap.control_room.routines_haul.search_trade_routes", return_value=result),
+            patch("edap.control_room.routines_haul.save_haul_search_config") as save_defaults,
+        ):
             self.app._cmd_haul("search", raw_command="haul search")
             self.app._handle_haul_prompt(
                 "near_system=Ix cargo_capacity=460 max_route_distance_ly=500 "
@@ -1828,6 +1837,10 @@ on_land = true
 
         self.assertEqual(
             self.app._saved_state.history[-1].params["max_station_distance_ls"],
+            "any",
+        )
+        self.assertEqual(
+            save_defaults.call_args.args[0]["max_station_distance_ls"],
             "any",
         )
         self.assertIn("Max. station distance (Ls): [cyan]Any[/]", "\n".join(self.app.logged))
@@ -1884,7 +1897,10 @@ on_land = true
             "&pi10=460&pi2=500&pi5=8&pi3=3&pi9=500&pi4=1&pi7=5000&pi12=5000&pi8=1&pi14=0&pi15=0&pi1=4"
         )
 
-        with patch("edap.control_room.routines_haul.search_trade_routes", return_value=result):
+        with (
+            patch("edap.control_room.routines_haul.search_trade_routes", return_value=result),
+            patch("edap.control_room.routines_haul.save_haul_search_config") as save_defaults,
+        ):
             self.app._cmd_haul(f"search url {url}", raw_command=f"haul search url {url}")
 
         self.assertEqual(self.app._trade_routes.system_name, "Praea Euq AK-A d25")
@@ -1892,6 +1908,7 @@ on_land = true
         self.assertEqual(self.app._saved_state.history[-1].params["mode"], "search")
         self.assertEqual(self.app._saved_state.history[-1].params["near_system"], "Praea Euq AK-A d25")
         self.assertEqual(self.app._saved_state.history[-1].params["order_by"], "best_profit_per_hour_estimate")
+        self.assertEqual(save_defaults.call_args.args[0]["max_route_distance_ly"], "500")
 
     def test_haul_route_loads_trade_route_into_haul_prompt(self) -> None:
         self.app._trade_routes = TradeRoutesData(

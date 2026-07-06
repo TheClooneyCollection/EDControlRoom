@@ -16,6 +16,11 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 from edap.control_room.server.auth import ObserverServerAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
 from edap.control_room.server.commands import ObserverSessionCommandHandler, trade_route_from_payload
+from edap.haul_search_config import (
+    GENERATED_HAUL_SEARCH_FIELDS,
+    HaulSearchConfigError,
+    save_haul_search_config,
+)
 from edap.inara.trade_routes import (
     TradeRoute,
     TradeRouteSearchResult,
@@ -383,6 +388,7 @@ async def _handle_search_haul_routes_message_async(
             correlation_message_id=correlation_message_id,
         )
     query_params = _haul_search_query_params(payload, data=data)
+    await asyncio.to_thread(_save_haul_search_defaults, query_params)
     destination_filter = (
         _payload_string(payload, "destination")
         or _payload_string(payload, "destination_filter")
@@ -473,6 +479,13 @@ def _numberish_string(value: str) -> str:
         return "any"
     first = stripped.split()[0].replace(",", "")
     return first if first else stripped
+
+
+def _save_haul_search_defaults(query_params: dict[str, str]) -> None:
+    try:
+        save_haul_search_config(query_params, exclude=GENERATED_HAUL_SEARCH_FIELDS)
+    except (OSError, HaulSearchConfigError):
+        return None
 
 
 def _route_matches_destination(route: TradeRoute, destination_filter: str) -> bool:
@@ -791,6 +804,7 @@ def _handle_session_message(
                 correlation_message_id=correlation_message_id,
             )
         query_params = _haul_search_query_params(payload, data=data)
+        _save_haul_search_defaults(query_params)
         destination_filter = (
             _payload_string(payload, "destination")
             or _payload_string(payload, "destination_filter")
