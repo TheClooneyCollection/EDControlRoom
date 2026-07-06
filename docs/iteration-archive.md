@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `228`
-- Latest generated iteration number: `361`
+- Generated iteration count: `229`
+- Latest generated iteration number: `362`
 
 ## Iteration 134
 
@@ -6331,3 +6331,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - No server or protocol changes appear necessary; the existing hydrate phase names are sufficient for the frontend order change.
+
+## Iteration 362
+
+- When: `2026-07-06 14:01`
+- Area: `ci-release`
+- Title: `prepare-v1-20-0-release`
+- Source: [2026-07-06-14-01__ci-release__prepare-v1-20-0-release.md](iteration-logs/2026-07-06-14-01__ci-release__prepare-v1-20-0-release.md)
+
+# Iteration Log
+
+- Area: `ci-release`
+- Title: `prepare-v1-20-0-release`
+- Started: `2026-07-06 14:01`
+
+## Summary
+
+- Rewound `main` to `bce43a7` with `git rebase --onto` and prepared the next stable release commit.
+
+## Changes
+
+- Bumped project metadata to `1.20.0`.
+- Updated the CI/release handoff for the `v1.20.0` release scope and rewind point.
+- Regenerated `docs/iteration-archive.md` and refreshed `uv.lock` after the version bump.
+- Verified the release prep with `uv run python3 -m unittest discover -s tests`: `678` tests passed in `0.530s`; because this exceeded the `0.4068s` timing gate, ran the required slow-test report and saw the slowest test at `0.017s`.
+
+## Follow-ups
+
+- Push the rewritten `main` history with care, tag `v1.20.0`, and publish the GitHub release from the release-prep commit.
