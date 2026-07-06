@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `243`
-- Latest generated iteration number: `376`
+- Generated iteration count: `244`
+- Latest generated iteration number: `377`
 
 ## Iteration 134
 
@@ -6757,3 +6757,32 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Watch the post-push `Tests` workflow and Discord notifier path for the `v1.21.0` release commit/tag.
+
+## Iteration 377
+
+- When: `2026-07-06 22:45`
+- Area: `ci-release`
+- Title: `test-runtime-investigation`
+- Source: [2026-07-06-22-45__ci-release__test-runtime-investigation.md](iteration-logs/2026-07-06-22-45__ci-release__test-runtime-investigation.md)
+
+# Iteration Log
+
+- Area: `ci-release`
+- Title: `test-runtime-investigation`
+- Started: `2026-07-06 22:45`
+
+## Summary
+
+- Investigated why the `701`-test unittest suite exceeds the repo timing budget.
+- Confirmed the full suite still passes and is timing-sensitive: earlier runs reported `0.698-0.770s` with `1.230s` wall through `tools/check_test_timing.py`, while a later warm run reported `0.401s`.
+
+## Changes
+
+- Captured a timing report with `tools/report_test_timing.py --top 20 --sort slowest`; the slowest individual test was only `0.024s`.
+- Grouped timings by module/class and found the cost is distributed: `test_control_room` dominates by volume, especially command/bindings/dispatch tests that construct full Textual `ControlRoomApp` harnesses per test.
+- Profiled the suite with `cProfile`; import/discovery, repeated app setup, and cache-sensitive filesystem/module work are the main contributors, with no single test sleep or obvious pathological outlier.
+- Updated `docs/status/ci-release.md` with the current timing diagnosis.
+
+## Follow-ups
+
+- To lower runtime materially, split pure command/dispatch behavior away from full Textual app fixtures or add lightweight test harnesses that bypass repeated `ControlRoomApp` construction.

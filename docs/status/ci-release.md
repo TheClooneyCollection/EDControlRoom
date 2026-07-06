@@ -2,7 +2,7 @@
 ## Current
 - Latest stable release is `v1.21.0`, published from tag `v1.21.0` for station travel assist, haul web route/search defaults, profit comparison, and cargo-recovery fixes.
 - The unittest timing budget now scales as `0.0006s` per executed test, so the current `701`-test suite budget is `0.4206s`; when a release-prep or CI run exceeds that computed ceiling, capture a timing report before wrapping up.
-- The latest full `uv run python3 -m unittest discover -s tests` release-prep run passed `701` tests in `0.882s`, above the `0.4206s` timing gate; the required slow-test report also passed, with the slowest test at `0.017s`.
+- Latest timing investigation: full suite passed `701` tests in `0.401s` reported time when warm, while earlier cold-ish runs reported `0.698-0.770s` (`1.230s` wall); variance comes from broad setup/import overhead, especially repeated Textual `ControlRoomApp` harness construction, not one slow test.
 - The Discord workflow-failure notifier is now split into a checked-in Python script plus a thin workflow wrapper, so the same payload/fetch/post path can be dry-run locally against saved jobs JSON and exercised in CI without keeping the logic trapped inside inline workflow shell.
 - `main` is now the rolling-update branch, and stable features or releases are identified with tags instead of `dev -> main` promotion.
 - The legacy `.github/workflows/promote-dev-to-main.yml` automation has been removed; release/process automation now centers on `main`, semantic version tags, and manual GitHub release publishing.
