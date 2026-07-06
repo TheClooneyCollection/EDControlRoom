@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `233`
-- Latest generated iteration number: `366`
+- Generated iteration count: `234`
+- Latest generated iteration number: `367`
 
 ## Iteration 134
 
@@ -6446,6 +6446,35 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - `/multi-haul` remains UI-only until backend multi-leg route calculation/dispatch support is implemented.
 
 ## Iteration 366
+
+- When: `2026-07-06 11:25`
+- Area: `web`
+- Title: `reapply-web-config-defaults`
+- Source: [2026-07-06-11-25_____web______reapply-web-config-defaults.md](iteration-logs/2026-07-06-11-25_____web______reapply-web-config-defaults.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `reapply-web-config-defaults`
+- Started: `2026-07-06 11:25`
+
+## Summary
+
+- Reapplied the injected web-config/defaults cleanup after the two-way haul UI restore split `/haul` and `/multi-haul` into separate web pages.
+
+## Changes
+
+- Removed restored machine/process/demo literals from the two-way haul page while preserving its route-table UI.
+- Routed two-way route search, haul timing defaults, websocket auth query naming, and session/status labels through `window.EDCR_WEB_CONFIG` again.
+- Applied the same neutral static defaults and config-driven reset behavior to the new standalone multi-haul page.
+- Removed the legacy `EDCR_SERVER_DEFAULT_ACCESS_TOKEN` fallback path from the served web templates and renderer.
+- Added a regression test to prevent runtime-specific demo defaults from returning to the web pages.
+
+## Follow-ups
+
+- Keep future web UI restores on top of the injected config contract instead of reintroducing page-local runtime defaults.
+
+## Iteration 367
 
 - When: `2026-07-06 14:01`
 - Area: `ci-release`

@@ -192,6 +192,18 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertNotIn('id="multi-search-form"', html)
         self.assertNotIn("Starting capital", html)
 
+    def test_web_pages_do_not_embed_runtime_specific_demo_defaults(self) -> None:
+        html = _haul_web_source() + _multi_haul_web_source()
+
+        self.assertIn("window.EDCR_WEB_CONFIG = {}", html)
+        self.assertNotIn("window.EDCR_SERVER_DEFAULT_ACCESS_TOKEN", html)
+        self.assertNotIn("MacBook Pro", html)
+        self.assertNotIn("edserver.exe", html)
+        self.assertNotIn("420 / 784 t", html)
+        self.assertNotIn("129.4m CR", html)
+        self.assertNotIn("2000000000", html)
+        self.assertNotIn("value=\"784\"", html)
+
     def test_haul_web_includes_mobile_layout_breakpoints(self) -> None:
         html = _haul_web_source()
 

@@ -13,7 +13,7 @@
         <div class="brand-mark">ED</div>
         <div>
           <div class="brand-name">Control Room</div>
-          <div class="brand-sub">web haul prototype</div>
+          <div class="brand-sub">haul control</div>
         </div>
       </div>
 
@@ -28,9 +28,9 @@
       </a>
 
       <div class="sidebar-foot">
-        <div class="status-row"><span><span class="dot"></span>ED client</span><span>Running</span></div>
-        <div class="status-row"><span><span class="dot"></span>Journal</span><span>Live</span></div>
-        <div class="status-row"><span><span class="dot"></span>CrossOver</span><span>Targeted</span></div>
+        <div class="status-row"><span><span class="dot"></span>Runtime</span><span id="status-runtime">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Journal</span><span id="status-journal">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Input target</span><span id="status-input-target">-</span></div>
       </div>
     </aside>
 
@@ -42,8 +42,8 @@
         </div>
         <div class="chips" aria-label="Session status">
           <div class="chip">Host <strong id="host-label">-</strong></div>
-          <div class="chip">Target <strong id="target-label">foreground window</strong></div>
-          <div class="chip">Role <strong id="role-label">Observer</strong></div>
+          <div class="chip">Target <strong id="target-label">-</strong></div>
+          <div class="chip">Role <strong id="role-label">-</strong></div>
           <div class="token-control">
             <input class="token-input" id="access-token" type="password" placeholder="Access token" autocomplete="off" aria-label="Access token">
             <button class="token-button" id="save-token" type="button">Save</button>
@@ -138,28 +138,28 @@
                   <div class="field-row">
                     <label class="spansh-field">
                       <span class="field-label">Starting capital</span>
-                      <input class="field mono" id="multi-starting-capital" value="2000000000" inputmode="numeric">
+                      <input class="field mono" id="multi-starting-capital" value="" inputmode="numeric">
                     </label>
                     <label class="spansh-field">
                       <span class="field-label">Maximum cargo capacity</span>
-                      <input class="field mono" id="multi-capacity" value="784" inputmode="numeric">
+                      <input class="field mono" id="multi-capacity" value="" inputmode="numeric">
                     </label>
                   </div>
                   <div class="field-row">
                     <label class="spansh-field">
                       <span class="field-label">Maximum hop distance</span>
-                      <input class="field mono" id="multi-hop-distance" value="60" inputmode="decimal">
+                      <input class="field mono" id="multi-hop-distance" value="" inputmode="decimal">
                     </label>
                     <label class="spansh-field">
                       <span class="field-label">Maximum hops</span>
-                      <input class="field mono" id="multi-max-hops" value="5" inputmode="numeric">
+                      <input class="field mono" id="multi-max-hops" value="" inputmode="numeric">
                     </label>
                   </div>
                   <label class="spansh-field">
                     <span class="field-label">Maximum distance to arrival</span>
                     <div class="range-row">
                       <input class="range-field" id="multi-station-distance-range" type="range" min="0" max="1000000" step="1000" value="1000000">
-                      <input class="field mono" id="multi-station-distance" value="1000000" inputmode="numeric">
+                      <input class="field mono" id="multi-station-distance" value="" inputmode="numeric">
                     </div>
                   </label>
                   <label class="spansh-field">
@@ -215,7 +215,6 @@
 
   <script>
     window.EDCR_WEB_CONFIG = {};
-    window.EDCR_SERVER_DEFAULT_ACCESS_TOKEN = "";
   </script>
   <script src="/assets/multi-haul.js" defer></script>
 </body>

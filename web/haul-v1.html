@@ -14,20 +14,20 @@
         <div class="brand-mark">ED</div>
         <div>
           <div class="brand-name">Control Room</div>
-          <div class="brand-sub">web haul prototype</div>
+          <div class="brand-sub">haul control</div>
         </div>
       </div>
 
-      <div class="nav-label">V1 Scope</div>
+      <div class="nav-label">Haul</div>
       <button class="nav-item active" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 12h5l2 5 4-14 2 9h5"/></svg>
         Two-way haul
       </button>
 
       <div class="sidebar-foot">
-        <div class="status-row"><span><span class="dot"></span>ED client</span><span>Running</span></div>
-        <div class="status-row"><span><span class="dot"></span>Journal</span><span>Live</span></div>
-        <div class="status-row"><span><span class="dot"></span>CrossOver</span><span>Targeted</span></div>
+        <div class="status-row"><span><span class="dot"></span>Runtime</span><span id="status-runtime">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Journal</span><span id="status-journal">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Input target</span><span id="status-input-target">-</span></div>
       </div>
     </aside>
 
@@ -35,12 +35,12 @@
       <header class="topbar">
         <div>
           <div class="topbar-title">Haul</div>
-          <div class="topbar-sub">Web V1 for two-way station and carrier hauling. Market page and settlement route support are not included.</div>
+          <div class="topbar-sub">Web control for two-way station and carrier hauling. Market page and settlement route support are not included.</div>
         </div>
         <div class="chips" aria-label="Session status">
-          <div class="chip">Host <strong>MacBook Pro</strong></div>
-          <div class="chip">Target <strong>edserver.exe</strong></div>
-          <div class="chip">Role <strong>Active operator</strong></div>
+          <div class="chip">Host <strong id="session-host">-</strong></div>
+          <div class="chip">Target <strong id="session-target">-</strong></div>
+          <div class="chip">Role <strong id="session-role">-</strong></div>
           <div class="token-control">
             <input class="token-input" id="access-token" type="password" placeholder="Access token" autocomplete="off" aria-label="Access token">
             <button class="token-button" id="save-token" type="button">Save</button>
@@ -89,7 +89,7 @@
           </div>
           <div class="summary-cell">
             <div class="summary-label">Cargo</div>
-            <div class="summary-value mono" id="summary-cargo">420 / 784 t</div>
+            <div class="summary-value mono" id="summary-cargo">0 / 0 t</div>
           </div>
           <div class="summary-cell">
             <div class="summary-label">Routine</div>
@@ -97,11 +97,11 @@
           </div>
           <div class="summary-cell">
             <div class="summary-label">Completed runs</div>
-            <div class="summary-value mono" id="summary-runs">3</div>
+            <div class="summary-value mono" id="summary-runs">0</div>
           </div>
           <div class="summary-cell">
             <div class="summary-label">Accumulated profit</div>
-            <div class="summary-value success mono" id="summary-profit">129.4m CR</div>
+            <div class="summary-value success mono" id="summary-profit">0 CR</div>
           </div>
         </section>
 
@@ -183,7 +183,7 @@
                   <div class="field-row">
                     <label>
                       <span class="field-label">Cargo capacity</span>
-                      <input class="field mono" id="capacity" value="784" inputmode="numeric">
+                      <input class="field mono" id="capacity" value="" inputmode="numeric">
                     </label>
                     <label>
                       <span class="field-label">Profit metric</span>
@@ -214,11 +214,11 @@
                   <div class="field-row">
                     <label>
                       <span class="field-label">Galmap settle time</span>
-                      <input class="field mono" id="galaxy-settle" value="2.0">
+                      <input class="field mono" id="galaxy-settle" value="">
                     </label>
                     <label>
                       <span class="field-label">Transit wait time</span>
-                      <input class="field mono" id="dock-timeout" value="1200">
+                      <input class="field mono" id="dock-timeout" value="">
                     </label>
                   </div>
                 </div>
@@ -290,7 +290,6 @@
 
   <script>
     window.EDCR_WEB_CONFIG = {};
-    window.EDCR_SERVER_DEFAULT_ACCESS_TOKEN = "";
   </script>
   <script src="/assets/haul-ui.js" defer></script>
 

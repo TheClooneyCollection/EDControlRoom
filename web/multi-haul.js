@@ -1,7 +1,9 @@
 const WEB_CONFIG = window.EDCR_WEB_CONFIG || {};
 const TOKEN_STORAGE_KEY = "edcr.haul.accessToken";
-const SERVER_DEFAULT_ACCESS_TOKEN = WEB_CONFIG.defaultAccessToken || window.EDCR_SERVER_DEFAULT_ACCESS_TOKEN || "";
-const queryAccessToken = new URLSearchParams(window.location.search).get(WEB_CONFIG.authQueryParameterName || "access_token") || "";
+const AUTH_QUERY_PARAMETER_NAME = WEB_CONFIG.authQueryParameterName || "access_token";
+const SERVER_DEFAULT_ACCESS_TOKEN = WEB_CONFIG.defaultAccessToken || "";
+const queryParams = new URLSearchParams(window.location.search);
+const queryAccessToken = queryParams.get(AUTH_QUERY_PARAMETER_NAME) || queryParams.get("access_token") || "";
 const cachedAccessToken = window.localStorage.getItem(TOKEN_STORAGE_KEY) || "";
 let accessToken = queryAccessToken || cachedAccessToken || SERVER_DEFAULT_ACCESS_TOKEN;
 let socket = null;
@@ -11,6 +13,19 @@ let hydratedCurrentSystem = "";
 let selectedMultiLegIndex = 1;
 let multiLegRoutes = [];
 const pendingCommands = new Map();
+const WEB_DEFAULTS = {
+  startingCapital: "",
+  cargoCapacity: "",
+  maxHopDistanceLy: "",
+  maxHops: "5",
+  maxStationDistanceLs: "1000000",
+  maxStationDistanceRange: "1000000",
+  maxMarketAge: "",
+  requiresLargePad: "true",
+  allowPlanetary: "false",
+  multiAvoidLoops: "true",
+  ...(WEB_CONFIG.webDefaults || {})
+};
 
 const LARGE_PAD_SHIPS = new Set([
   "anaconda", "belugaliner", "cutter", "empire_cutter", "federation_corvette", "orca",
@@ -46,6 +61,57 @@ function setInputValue(id, value) {
   if (input && value !== null && value !== undefined && value !== "") {
     input.value = String(value);
   }
+}
+
+function setFieldValue(id, value) {
+  const input = document.getElementById(id);
+  if (input) {
+    input.value = String(value ?? "");
+  }
+}
+
+function setChecked(id, value) {
+  const input = document.getElementById(id);
+  if (input) {
+    input.checked = String(value).toLowerCase() === "true";
+  }
+}
+
+function roleLabel(role) {
+  return String(role || "observer").replace(/_/g, " ");
+}
+
+function numericStationDistanceDefault() {
+  const raw = String(WEB_DEFAULTS.maxStationDistanceLs || "").trim();
+  if (!raw || raw.toLowerCase() === "any") {
+    return WEB_DEFAULTS.maxStationDistanceRange;
+  }
+  const numeric = Number(raw.replace(/,/g, "").split(/\s+/)[0]);
+  return Number.isFinite(numeric) ? String(numeric) : WEB_DEFAULTS.maxStationDistanceRange;
+}
+
+function applyWebConfigLabels() {
+  setText("host-label", WEB_CONFIG.hostLabel || window.location.host || "-");
+  setText("target-label", WEB_CONFIG.inputTargetSummary || "-");
+  setText("role-label", roleLabel(WEB_CONFIG.sessionRole));
+  setText("status-runtime", WEB_CONFIG.runtimePlatform || "-");
+  setText("status-journal", WEB_CONFIG.journalStatus || "-");
+  setText("status-input-target", WEB_CONFIG.inputTargetSummary || "-");
+}
+
+function applyMultiDefaults() {
+  const stationDistance = numericStationDistanceDefault();
+  setFieldValue("multi-origin", hydratedCurrentSystem);
+  setFieldValue("multi-starting-capital", WEB_DEFAULTS.startingCapital);
+  setFieldValue("multi-capacity", WEB_DEFAULTS.cargoCapacity);
+  setFieldValue("multi-hop-distance", WEB_DEFAULTS.maxHopDistanceLy);
+  setFieldValue("multi-max-hops", WEB_DEFAULTS.maxHops);
+  setFieldValue("multi-station-distance", stationDistance);
+  setFieldValue("multi-station-distance-range", stationDistance);
+  setFieldValue("multi-market-age", WEB_DEFAULTS.maxMarketAge);
+  setChecked("multi-requires-large-pad", WEB_DEFAULTS.requiresLargePad);
+  setChecked("multi-allow-planetary", WEB_DEFAULTS.allowPlanetary);
+  setChecked("multi-avoid-loops", WEB_DEFAULTS.multiAvoidLoops);
 }
 
 function formatCredits(value) {
@@ -149,7 +215,7 @@ function updateRoutineContext() {
 
 function buildMultiLegPreviewRoute() {
   const origin = document.getElementById("multi-origin").value || hydratedCurrentSystem || "Current system";
-  const capacity = document.getElementById("multi-capacity").value || "784";
+  const capacity = document.getElementById("multi-capacity").value || WEB_DEFAULTS.cargoCapacity || "-";
   return {
     index: 1,
     name: `${origin} / 3-stop haul preview`,
@@ -231,17 +297,21 @@ function applyShipDefaults(ship) {
   setText("summary-cargo", `${ship.cargo_count || 0} / ${ship.cargo_capacity || 0} t`);
   setText("summary-capital", formatCredits(ship.credits || 0));
   if (ship.credits) {
+    WEB_DEFAULTS.startingCapital = String(ship.credits);
     setInputValue("multi-starting-capital", ship.credits);
   }
   if (ship.cargo_capacity) {
+    WEB_DEFAULTS.cargoCapacity = String(ship.cargo_capacity);
     setInputValue("multi-capacity", ship.cargo_capacity);
   }
   const jumpRange = formattedJumpRange(ship);
   if (jumpRange) {
+    WEB_DEFAULTS.maxHopDistanceLy = jumpRange;
     setInputValue("multi-hop-distance", jumpRange);
   }
   const requiresLargePad = requiresLargePadForShip(ship);
   if (requiresLargePad !== null) {
+    WEB_DEFAULTS.requiresLargePad = requiresLargePad ? "true" : "false";
     document.getElementById("multi-requires-large-pad").checked = requiresLargePad;
   }
   updateMultiCommandPreview();
@@ -250,9 +320,9 @@ function applyShipDefaults(ship) {
 function websocketUrl() {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const params = new URLSearchParams({
-    client_name: "web-multi-haul",
-    [WEB_CONFIG.authQueryParameterName || "access_token"]: accessToken
+    client_name: "web-multi-haul"
   });
+  params.set(AUTH_QUERY_PARAMETER_NAME, accessToken);
   return `${protocol}//${window.location.host}/session?${params.toString()}`;
 }
 
@@ -284,12 +354,17 @@ function connectWebsocket() {
   socket.addEventListener("message", (event) => {
     const message = JSON.parse(event.data);
     if (message.message_type === "event.connection_ready") {
-      clientRole = "active_operator";
-      setText("role-label", clientRole.replace("_", " "));
+      clientRole = message.payload.client_role || "observer";
+      setText("role-label", roleLabel(clientRole));
       return;
     }
     if (message.message_type === "control_room.hydrate") {
       const payload = message.payload || {};
+      const serverStatus = payload.server_status || {};
+      setText("status-runtime", serverStatus.runtime_platform || WEB_CONFIG.runtimePlatform || "-");
+      setText("status-journal", serverStatus.journal_source_status || WEB_CONFIG.journalStatus || "-");
+      setText("status-input-target", serverStatus.input_target_summary || WEB_CONFIG.inputTargetSummary || "-");
+      setText("target-label", serverStatus.input_target_summary || WEB_CONFIG.inputTargetSummary || "-");
       applyShipDefaults(payload.ship || {});
       setText("routine-status", payload.routine?.routine_active ? payload.routine.active_routine_name || "Running" : "Idle");
       return;
@@ -321,8 +396,8 @@ function syncRange(rangeId, inputId) {
   });
 }
 
-document.getElementById("host-label").textContent = WEB_CONFIG.hostLabel || "-";
-document.getElementById("target-label").textContent = WEB_CONFIG.inputTargetSummary || "foreground window";
+applyWebConfigLabels();
+applyMultiDefaults();
 document.getElementById("access-token").value = accessToken;
 document.getElementById("save-token").addEventListener("click", () => {
   accessToken = document.getElementById("access-token").value.trim();
@@ -348,14 +423,7 @@ document.getElementById("multi-route-results").addEventListener("click", (event)
   renderMultiLegResults();
 });
 document.getElementById("reset-multi-search").addEventListener("click", () => {
-  setInputValue("multi-origin", hydratedCurrentSystem);
-  setInputValue("multi-starting-capital", "2000000000");
-  setInputValue("multi-capacity", "784");
-  setInputValue("multi-hop-distance", "60");
-  setInputValue("multi-max-hops", "5");
-  setInputValue("multi-station-distance", "1000000");
-  document.getElementById("multi-station-distance-range").value = "1000000";
-  document.getElementById("multi-market-age").value = "";
+  applyMultiDefaults();
   renderMultiLegResults();
 });
 document.getElementById("start-multi-haul").addEventListener("click", () => {

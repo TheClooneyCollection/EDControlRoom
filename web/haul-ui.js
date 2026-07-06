@@ -7,8 +7,10 @@ let routes = [];
     const RECONNECT_MAX_DELAY_MS = 30000;
     const TOKEN_STORAGE_KEY = "edcr.haul.accessToken";
     const WEB_CONFIG = window.EDCR_WEB_CONFIG || {};
-    const SERVER_DEFAULT_ACCESS_TOKEN = WEB_CONFIG.defaultAccessToken || window.EDCR_SERVER_DEFAULT_ACCESS_TOKEN || "";
-    const queryAccessToken = new URLSearchParams(window.location.search).get("access_token") || "";
+    const AUTH_QUERY_PARAMETER_NAME = WEB_CONFIG.authQueryParameterName || "access_token";
+    const SERVER_DEFAULT_ACCESS_TOKEN = WEB_CONFIG.defaultAccessToken || "";
+    const queryParams = new URLSearchParams(window.location.search);
+    const queryAccessToken = queryParams.get(AUTH_QUERY_PARAMETER_NAME) || queryParams.get("access_token") || "";
     const cachedAccessToken = window.localStorage.getItem(TOKEN_STORAGE_KEY) || "";
     let accessToken = queryAccessToken || cachedAccessToken || SERVER_DEFAULT_ACCESS_TOKEN;
     let socket = null;
@@ -23,6 +25,15 @@ let routes = [];
     let reconnectAttempts = 0;
     const pendingCommands = new Map();
     const activityEntries = new Map();
+    const WEB_DEFAULTS = {
+      cargoCapacity: "",
+      maxRouteDistanceLy: "500",
+      maxStationDistanceLs: "any",
+      metric: "Profit / hour",
+      galaxyMapSettle: "2.0",
+      dockTimeout: "1200",
+      ...(WEB_CONFIG.webDefaults || {})
+    };
 
     function routeByIndex(index) {
       return routes.find((route) => route.index === index) || routes[0] || null;
@@ -36,6 +47,83 @@ let routes = [];
         "\"": "&quot;",
         "'": "&#39;"
       }[char]));
+    }
+
+    function setText(id, value) {
+      const element = document.getElementById(id);
+      if (element) {
+        element.textContent = value;
+      }
+    }
+
+    function roleLabel(role) {
+      return String(role || "observer").replace(/_/g, " ");
+    }
+
+    function setElementValue(id, value) {
+      const element = document.getElementById(id);
+      if (element) {
+        element.value = String(value ?? "");
+      }
+    }
+
+    function selectHasValue(select, value) {
+      return Array.from(select.options).some((option) => option.value === value);
+    }
+
+    function setSelectValue(id, value) {
+      const select = document.getElementById(id);
+      if (!select) {
+        return;
+      }
+      const resolved = String(value ?? "");
+      if (resolved && !selectHasValue(select, resolved)) {
+        select.add(new Option(resolved, resolved));
+      }
+      select.value = resolved;
+    }
+
+    function routeDistanceLabel(value) {
+      const raw = String(value || WEB_DEFAULTS.maxRouteDistanceLy || "").trim();
+      if (!raw) {
+        return "";
+      }
+      return raw.toLowerCase().includes("ly") ? raw : `${raw} ly`;
+    }
+
+    function stationDistanceLabel(value) {
+      const raw = String(value || WEB_DEFAULTS.maxStationDistanceLs || "").trim();
+      if (!raw || raw.toLowerCase() === "any") {
+        return "Any";
+      }
+      const numeric = Number(raw.replace(/,/g, "").split(/\s+/)[0]);
+      if (Number.isFinite(numeric)) {
+        return `${numeric.toLocaleString()} ls`;
+      }
+      return raw;
+    }
+
+    function applyWebConfigLabels() {
+      setText("session-host", WEB_CONFIG.hostLabel || window.location.host || "-");
+      setText("session-target", WEB_CONFIG.inputTargetSummary || "-");
+      setText("session-role", roleLabel(WEB_CONFIG.sessionRole));
+      setText("status-runtime", WEB_CONFIG.runtimePlatform || "-");
+      setText("status-journal", WEB_CONFIG.journalStatus || "-");
+      setText("status-input-target", WEB_CONFIG.inputTargetSummary || "-");
+    }
+
+    function applySearchDefaults() {
+      setElementValue("origin", hydratedCurrentSystem);
+      setElementValue("destination", "");
+      setSelectValue("route-distance", routeDistanceLabel(WEB_DEFAULTS.maxRouteDistanceLy));
+      setSelectValue("station-distance", stationDistanceLabel(WEB_DEFAULTS.maxStationDistanceLs));
+      setElementValue("capacity", WEB_DEFAULTS.cargoCapacity);
+      setSelectValue("metric", WEB_DEFAULTS.metric);
+    }
+
+    function applyHaulDefaults() {
+      setElementValue("galaxy-settle", WEB_DEFAULTS.galaxyMapSettle);
+      setElementValue("dock-timeout", WEB_DEFAULTS.dockTimeout);
     }
 
     function routeFromApi(route, fallbackIndex) {
@@ -215,6 +303,7 @@ let routes = [];
       const routineActive = Boolean(currentRoutine.routine_active);
       const instantMode = Boolean(currentRoutine.instant_mode);
       const instantToggle = document.getElementById("instant-toggle");
+      setText("session-role", roleLabel(clientRole));
       document.getElementById("start-haul").disabled = !active || !routeByIndex(selectedRouteIndex);
       document.getElementById("set-destination").disabled = !active || !routeByIndex(selectedRouteIndex);
       instantToggle.disabled = !active;
@@ -267,9 +356,9 @@ let routes = [];
     function websocketUrl() {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const params = new URLSearchParams({
-        client_name: "web-haul",
-        access_token: accessToken
+        client_name: WEB_CONFIG.clientName || "web-haul"
       });
+      params.set(AUTH_QUERY_PARAMETER_NAME, accessToken);
       return `${protocol}//${window.location.host}/session?${params.toString()}`;
     }
 
@@ -638,8 +727,8 @@ let routes = [];
       if (!route) {
         return {};
       }
-      const settle = document.getElementById("galaxy-settle").value || "2.0";
-      const timeout = document.getElementById("dock-timeout").value || "1200";
+      const settle = document.getElementById("galaxy-settle").value || WEB_DEFAULTS.galaxyMapSettle;
+      const timeout = document.getElementById("dock-timeout").value || WEB_DEFAULTS.dockTimeout;
       return {
         station_1_buying: route.commodity || "",
         station_1: route.buyStation || "",
@@ -655,8 +744,9 @@ let routes = [];
     }
 
     function galmapSettleTime() {
-      const value = Number(document.getElementById("galaxy-settle").value || "2.0");
-      return Number.isFinite(value) ? value : 2.0;
+      const fallback = Number(WEB_DEFAULTS.galaxyMapSettle || 0);
+      const value = Number(document.getElementById("galaxy-settle").value || WEB_DEFAULTS.galaxyMapSettle);
+      return Number.isFinite(value) ? value : fallback;
     }
 
     function updateCommandPreview() {
@@ -671,7 +761,12 @@ let routes = [];
       const haulSession = payload.haul_session || {};
       const routine = payload.routine || {};
       const activity = payload.activity_log || {};
+      const serverStatus = payload.server_status || {};
       currentRoutine = routine;
+      setText("status-runtime", serverStatus.runtime_platform || WEB_CONFIG.runtimePlatform || "-");
+      setText("status-journal", serverStatus.journal_source_status || WEB_CONFIG.journalStatus || "-");
+      setText("status-input-target", serverStatus.input_target_summary || WEB_CONFIG.inputTargetSummary || "-");
+      setText("session-target", serverStatus.input_target_summary || WEB_CONFIG.inputTargetSummary || "-");
       document.getElementById("summary-current").textContent = ship.system || "-";
       document.getElementById("summary-home").textContent = payload.home_system || "-";
       document.getElementById("summary-destination").textContent = ship.destination_system || "-";
@@ -683,6 +778,7 @@ let routes = [];
         document.getElementById("origin").value = hydratedCurrentSystem;
       }
       if (ship.cargo_capacity) {
+        WEB_DEFAULTS.cargoCapacity = String(ship.cargo_capacity);
         document.getElementById("capacity").value = ship.cargo_capacity;
       }
       if (mergeHydratedRoute(payload.selected_trade_route || payload.running_trade_route)) {
@@ -749,12 +845,7 @@ let routes = [];
     });
 
     document.getElementById("reset-search").addEventListener("click", () => {
-      document.getElementById("origin").value = hydratedCurrentSystem;
-      document.getElementById("destination").value = "";
-      document.getElementById("route-distance").value = "500 ly";
-      document.getElementById("station-distance").value = "Any";
-      document.getElementById("capacity").value = "784";
-      document.getElementById("metric").value = "Profit / hour";
+      applySearchDefaults();
     });
 
     document.getElementById("prev-routes").addEventListener("click", () => {
@@ -967,6 +1058,9 @@ let routes = [];
       }
     });
 
+    applyWebConfigLabels();
+    applySearchDefaults();
+    applyHaulDefaults();
     renderRows();
     renderSelected();
     renderActivityLog();

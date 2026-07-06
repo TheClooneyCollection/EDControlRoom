@@ -85,11 +85,6 @@ def _render_web_html(
         _HAUL_WEB_CONFIG_SENTINEL,
         f"window.EDCR_WEB_CONFIG = {json.dumps(resolved_config, sort_keys=True)};",
     )
-    if "defaultAccessToken" in resolved_config:
-        html = html.replace(
-            'window.EDCR_SERVER_DEFAULT_ACCESS_TOKEN = "";',
-            f"window.EDCR_SERVER_DEFAULT_ACCESS_TOKEN = {json.dumps(resolved_config['defaultAccessToken'])};",
-        )
     return html
 
 
