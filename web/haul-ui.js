@@ -619,6 +619,10 @@ let routes = [];
       return `${amount} CR`;
     }
 
+    function sessionProfit(haulSession) {
+      return Number(haulSession.accumulated_profit || 0) + Number(haulSession.current_run_profit || 0);
+    }
+
     function updateRoutinePanel(routine, haulSession, ship) {
       const phase = routine.haul_phase || null;
       const stationIndex = routine.haul_phase_station_index || null;
@@ -785,7 +789,7 @@ let routes = [];
         renderRows();
         renderSelected();
       }
-      document.getElementById("summary-profit").textContent = formatCredits(haulSession.accumulated_profit || 0);
+      document.getElementById("summary-profit").textContent = formatCredits(sessionProfit(haulSession));
       updateRoutinePanel(routine, haulSession, ship);
       updateOperatorState();
       activityEntries.clear();

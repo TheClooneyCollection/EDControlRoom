@@ -73,6 +73,17 @@ class ControlRoomHaulWebTests(unittest.TestCase):
             html,
         )
 
+    def test_haul_web_summary_profit_includes_current_run(self) -> None:
+        html = _haul_web_source()
+
+        self.assertIn("Session profit", html)
+        self.assertIn("function sessionProfit(haulSession)", html)
+        self.assertIn(
+            "Number(haulSession.accumulated_profit || 0) + Number(haulSession.current_run_profit || 0)",
+            html,
+        )
+        self.assertIn('formatCredits(sessionProfit(haulSession))', html)
+
     def test_haul_web_active_routine_shows_secondary_route_context(self) -> None:
         html = _multi_haul_web_source()
 
