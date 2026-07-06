@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `242`
-- Latest generated iteration number: `375`
+- Generated iteration count: `243`
+- Latest generated iteration number: `376`
 
 ## Iteration 134
 
@@ -6730,3 +6730,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Live-validate `travel` under CrossOver/macOS from docked, normal-space, same-system supercruise, and remote-system starts.
 - Decide whether Travel Assist deserves a dedicated `/travel` web page after live behavior stabilizes.
+
+## Iteration 376
+
+- When: `2026-07-06 22:40`
+- Area: `ci-release`
+- Title: `prepare-v1-21-0-release`
+- Source: [2026-07-06-22-40__ci-release__prepare-v1-21-0-release.md](iteration-logs/2026-07-06-22-40__ci-release__prepare-v1-21-0-release.md)
+
+# Iteration Log
+
+- Area: `ci-release`
+- Title: `prepare-v1-21-0-release`
+- Started: `2026-07-06 22:40`
+
+## Summary
+
+- Prepared `v1.21.0` as the next stable release after `v1.20.0`.
+
+## Changes
+
+- Bumped `[project].version` and `uv.lock` metadata from `1.20.0` to `1.21.0`.
+- Updated release status with the new release scope and current test timing.
+- Ran the full unittest suite and required slow-test report because the suite exceeded the per-test timing budget.
+
+## Follow-ups
+
+- Watch the post-push `Tests` workflow and Discord notifier path for the `v1.21.0` release commit/tag.
