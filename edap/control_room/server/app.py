@@ -48,13 +48,43 @@ _HAUL_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "haul-v1.html"
 _HAUL_WEB_ASSET_DIR = Path(__file__).resolve().parents[3] / "web"
 CONTROL_ROOM_MESSAGE_SCHEMA = json.loads(_MESSAGE_SCHEMA_PATH.read_text(encoding="utf-8"))
 CONTROL_ROOM_BROWSER_PROBE_HTML = _BROWSER_PROBE_PATH.read_text(encoding="utf-8")
+_HAUL_WEB_CONFIG_SENTINEL = "window.EDCR_WEB_CONFIG = {};"
 
 
-def _render_haul_web_html(*, web_default_access_token: str = "") -> str:
+def _render_haul_web_html(*, web_config: dict[str, Any] | None = None, web_default_access_token: str = "") -> str:
+    resolved_config = dict(web_config or {})
+    if web_default_access_token and "defaultAccessToken" not in resolved_config:
+        resolved_config["defaultAccessToken"] = web_default_access_token
     return _HAUL_WEB_PATH.read_text(encoding="utf-8").replace(
-        'window.EDCR_SERVER_DEFAULT_ACCESS_TOKEN = "";',
-        f"window.EDCR_SERVER_DEFAULT_ACCESS_TOKEN = {json.dumps(web_default_access_token)};",
+        _HAUL_WEB_CONFIG_SENTINEL,
+        f"window.EDCR_WEB_CONFIG = {json.dumps(resolved_config, sort_keys=True)};",
     )
+
+
+def _haul_web_config(
+    data: object,
+    *,
+    auth: ObserverServerAuth,
+    request: Request,
+    web_default_access_token: str,
+) -> dict[str, Any]:
+    auth_description = auth.describe()
+    server_status = getattr(data, "server_status", None)
+    session = getattr(data, "session", None)
+    return {
+        "authQueryParameterName": auth_description.query_parameter_name or "access_token",
+        "clientName": "web-haul",
+        "defaultAccessToken": web_default_access_token,
+        "hostLabel": request.url.netloc,
+        "serverName": getattr(server_status, "server_name", "ED Control Room"),
+        "serverVersion": getattr(server_status, "server_version", ""),
+        "runtimePlatform": getattr(server_status, "runtime_platform", ""),
+        "journalStatus": getattr(server_status, "journal_source_status", ""),
+        "bindingsStatus": getattr(server_status, "bindings_source_status", ""),
+        "inputTargetSummary": getattr(server_status, "input_target_summary", "foreground window"),
+        "sessionRole": getattr(session, "client_role", "observer"),
+        "webDefaults": dict(getattr(server_status, "web_form_defaults", {}) or {}),
+    }
 
 
 def build_observer_server_app(
@@ -122,8 +152,16 @@ def build_observer_server_app(
         return HTMLResponse(CONTROL_ROOM_BROWSER_PROBE_HTML)
 
     async def haul_web(request):
+        data = data_provider()
         return HTMLResponse(
-            _render_haul_web_html(web_default_access_token=web_default_access_token),
+            _render_haul_web_html(
+                web_config=_haul_web_config(
+                    data,
+                    auth=auth,
+                    request=request,
+                    web_default_access_token=web_default_access_token,
+                )
+            ),
             headers={"Cache-Control": "no-store"},
         )
 

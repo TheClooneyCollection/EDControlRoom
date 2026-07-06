@@ -245,6 +245,11 @@ def _server_status(payload: dict[str, Any]) -> ServerStatusReadModel:
         if isinstance(capability_names, (list, tuple))
         else (),
         operator_mode=str(payload.get("operator_mode", "")),
+        input_target_summary=str(payload.get("input_target_summary", "foreground window")),
+        web_form_defaults={
+            str(key): str(value)
+            for key, value in _mapping(payload.get("web_form_defaults", {})).items()
+        },
     )
 
 

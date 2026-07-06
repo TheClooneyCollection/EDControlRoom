@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `231`
-- Latest generated iteration number: `364`
+- Generated iteration count: `232`
+- Latest generated iteration number: `365`
 
 ## Iteration 134
 
@@ -6390,6 +6390,34 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - Pad-size inference is a client-side known-ship map; unknown ship types keep the conservative large-pad default.
 
 ## Iteration 364
+
+- When: `2026-07-06 10:14`
+- Area: `web`
+- Title: `web-config-injection`
+- Source: [2026-07-06-10-14_____web______web-config-injection.md](iteration-logs/2026-07-06-10-14_____web______web-config-injection.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `web-config-injection`
+- Started: `2026-07-06 10:14`
+
+## Summary
+
+- Removed environment/demo assumptions from the haul web HTML by moving server, auth, role, target, and form-default data into an injected `window.EDCR_WEB_CONFIG` payload.
+
+## Changes
+
+- Added input-target summary and web form defaults to the Control Room data read model so the server can expose runtime-aware web defaults.
+- Updated `/`, `/haul`, and `/multi-haul` rendering to inject host/auth/runtime/default config from the current server data provider instead of only replacing a token string.
+- Neutralized static haul HTML values for host, target, role, cargo, runs, profit, and route parameters; browser JS now applies defaults and reset values from the injected config plus hydrate/ship data.
+- Cleared stale localhost/token defaults from the scratch remote browser probe.
+
+## Follow-ups
+
+- Consider adding a richer web defaults model if multi-leg planning gains backend-owned settings beyond the current route-search and haul timing defaults.
+
+## Iteration 365
 
 - When: `2026-07-06 14:01`
 - Area: `ci-release`

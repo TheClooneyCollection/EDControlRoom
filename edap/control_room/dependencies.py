@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
 from edap.control_room.models import HaulStats, MarketData, ShipState
 from edap.control_room.routine_stop import RoutineStopMode
 from edap.control_room_state import CommandHistoryEntry
-from edap.inara.trade_routes import TradeRoute
+from edap.haul_search_config import HaulSearchConfigError, load_haul_search_config
+from edap.inara.trade_routes import TradeRoute, trade_route_search_defaults
 
 if TYPE_CHECKING:
     from edap.control_room.app import ControlRoomApp
@@ -65,6 +66,8 @@ class ServerStatusReadModel:
     bindings_loaded: bool
     capability_names: tuple[str, ...] = ()
     operator_mode: str = "embedded_local"
+    input_target_summary: str = "foreground window"
+    web_form_defaults: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -190,11 +193,56 @@ class LocalControlRoomDataSource:
                 journal_source_status=app._ctx.journal.cli_source_status(),
                 bindings_source_status=app._ctx.bindings.cli_source_status(),
                 bindings_loaded=app._ctx.binding_lookup is not None,
+                input_target_summary=_input_target_summary(app),
+                web_form_defaults=_web_form_defaults(app),
             ),
             home_system=app._config.control_room.home_system,
             selected_trade_route=_selected_trade_route(app) or app._saved_state.selected_trade_route,
             running_trade_route=app._saved_state.running_trade_route,
         )
+
+
+def _input_target_summary(app: ControlRoomApp) -> str:
+    describe_input_target = getattr(app, "_describe_input_target", None)
+    if callable(describe_input_target):
+        return str(describe_input_target())
+    return "foreground window"
+
+
+def _web_form_defaults(app: ControlRoomApp) -> dict[str, str]:
+    search_defaults = trade_route_search_defaults()
+    try:
+        search_defaults.update(load_haul_search_config())
+    except FileNotFoundError:
+        pass
+    except HaulSearchConfigError:
+        search_defaults = trade_route_search_defaults()
+
+    if app._ship.cargo_capacity:
+        search_defaults["cargo_capacity"] = str(app._ship.cargo_capacity)
+
+    min_landing_pad = search_defaults.get("min_landing_pad", "").strip().lower()
+    use_surface_stations = search_defaults.get("use_surface_stations", "").strip().lower()
+    order_by = search_defaults.get("order_by", "").strip()
+    controls = getattr(getattr(app, "_config", None), "controls", None)
+    return {
+        "startingCapital": str(app._ship.credits or ""),
+        "cargoCapacity": search_defaults.get("cargo_capacity", ""),
+        "maxRouteDistanceLy": search_defaults.get("max_route_distance_ly", ""),
+        "maxStationDistanceLs": search_defaults.get("max_station_distance_ls", ""),
+        "maxMarketAge": "",
+        "requiresLargePad": "true" if min_landing_pad == "large" else "false",
+        "allowPlanetary": "true" if use_surface_stations in {"yes", "true", "1"} else "false",
+        "metric": "Profit / trip" if order_by == "best_profit" else "Profit / hour",
+        "galaxyMapSettle": _format_web_number(getattr(controls, "galaxy_map_settle_seconds", "")),
+        "dockTimeout": _format_web_number(getattr(controls, "haul_dock_timeout_seconds", "")),
+    }
+
+
+def _format_web_number(value: object) -> str:
+    if value == "":
+        return ""
+    return str(value)
 
 
 class LocalControlRoomExecution:

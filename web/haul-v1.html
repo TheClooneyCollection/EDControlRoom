@@ -14,11 +14,11 @@
         <div class="brand-mark">ED</div>
         <div>
           <div class="brand-name">Control Room</div>
-          <div class="brand-sub">web haul prototype</div>
+          <div class="brand-sub">haul control</div>
         </div>
       </div>
 
-      <div class="nav-label">V1 Scope</div>
+      <div class="nav-label">Haul</div>
       <button class="nav-item active" id="nav-two-way" type="button" data-view="two-way" aria-selected="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 12h5l2 5 4-14 2 9h5"/></svg>
         Two-way haul
@@ -29,9 +29,9 @@
       </button>
 
       <div class="sidebar-foot">
-        <div class="status-row"><span><span class="dot"></span>ED client</span><span>Running</span></div>
-        <div class="status-row"><span><span class="dot"></span>Journal</span><span>Live</span></div>
-        <div class="status-row"><span><span class="dot"></span>CrossOver</span><span>Targeted</span></div>
+        <div class="status-row"><span><span class="dot"></span>Runtime</span><span id="status-runtime">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Journal</span><span id="status-journal">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Input target</span><span id="status-input-target">-</span></div>
       </div>
     </aside>
 
@@ -39,12 +39,12 @@
       <header class="topbar">
         <div>
           <div class="topbar-title">Haul</div>
-          <div class="topbar-sub">Web V1 for two-way station and carrier hauling. Market page and settlement route support are not included.</div>
+          <div class="topbar-sub">Web control for two-way station, carrier, and multi-leg hauling.</div>
         </div>
         <div class="chips" aria-label="Session status">
-          <div class="chip">Host <strong>MacBook Pro</strong></div>
-          <div class="chip">Target <strong>edserver.exe</strong></div>
-          <div class="chip">Role <strong>Active operator</strong></div>
+          <div class="chip">Host <strong id="session-host">-</strong></div>
+          <div class="chip">Target <strong id="session-target">-</strong></div>
+          <div class="chip">Role <strong id="session-role">-</strong></div>
           <div class="token-control">
             <input class="token-input" id="access-token" type="password" placeholder="Access token" autocomplete="off" aria-label="Access token">
             <button class="token-button" id="save-token" type="button">Save</button>
@@ -93,7 +93,7 @@
           </div>
           <div class="summary-cell">
             <div class="summary-label">Cargo</div>
-            <div class="summary-value mono" id="summary-cargo">420 / 784 t</div>
+            <div class="summary-value mono" id="summary-cargo">0 / 0 t</div>
           </div>
           <div class="summary-cell">
             <div class="summary-label">Routine</div>
@@ -101,11 +101,11 @@
           </div>
           <div class="summary-cell">
             <div class="summary-label">Completed runs</div>
-            <div class="summary-value mono" id="summary-runs">3</div>
+            <div class="summary-value mono" id="summary-runs">0</div>
           </div>
           <div class="summary-cell">
             <div class="summary-label">Accumulated profit</div>
-            <div class="summary-value success mono" id="summary-profit">129.4m CR</div>
+            <div class="summary-value success mono" id="summary-profit">0 CR</div>
           </div>
         </section>
 
@@ -193,17 +193,17 @@
                   <div class="field-row">
                     <label class="spansh-field">
                       <span class="field-label">Starting capital</span>
-                      <input class="field mono" id="starting-capital" value="2000000000" inputmode="numeric">
+                      <input class="field mono" id="starting-capital" value="" inputmode="numeric">
                     </label>
                     <label class="spansh-field">
                       <span class="field-label">Maximum hop distance</span>
-                      <input class="field mono" id="max-hop-distance" value="60" inputmode="decimal">
+                      <input class="field mono" id="max-hop-distance" value="" inputmode="decimal">
                     </label>
                   </div>
                   <div class="field-row">
                     <label class="spansh-field">
                       <span class="field-label">Maximum cargo capacity</span>
-                      <input class="field mono" id="capacity" value="784" inputmode="numeric">
+                      <input class="field mono" id="capacity" value="" inputmode="numeric">
                     </label>
                     <label class="spansh-field">
                       <span class="field-label">Sort by</span>
@@ -217,21 +217,21 @@
                     <span class="field-label">Maximum hops</span>
                     <div class="range-row">
                       <input class="range-field" id="max-hops-range" type="range" min="1" max="12" value="5">
-                      <input class="field mono" id="max-hops" value="5" inputmode="numeric">
+                      <input class="field mono" id="max-hops" value="" inputmode="numeric">
                     </div>
                   </label>
                   <label class="spansh-field">
                     <span class="field-label">Maximum route distance</span>
                     <div class="range-row">
                       <input class="range-field" id="route-distance-range" type="range" min="50" max="1000" step="50" value="500">
-                      <input class="field mono" id="route-distance" value="500" inputmode="numeric">
+                      <input class="field mono" id="route-distance" value="" inputmode="numeric">
                     </div>
                   </label>
                   <label class="spansh-field">
                     <span class="field-label">Maximum distance to arrival</span>
                     <div class="range-row">
                       <input class="range-field" id="station-distance-range" type="range" min="0" max="1000000" step="1000" value="1000000">
-                      <input class="field mono" id="station-distance" value="1000000" inputmode="numeric">
+                      <input class="field mono" id="station-distance" value="" inputmode="numeric">
                     </div>
                     <div class="field-help">Use 0 for any arrival distance when the backend route search is wired for that convention.</div>
                   </label>
@@ -269,11 +269,11 @@
                   <div class="field-row">
                     <label>
                       <span class="field-label">Galmap settle time</span>
-                      <input class="field mono" id="galaxy-settle" value="2.0">
+                      <input class="field mono" id="galaxy-settle" value="">
                     </label>
                     <label>
                       <span class="field-label">Transit wait time</span>
-                      <input class="field mono" id="dock-timeout" value="1200">
+                      <input class="field mono" id="dock-timeout" value="">
                     </label>
                   </div>
                 </div>
@@ -329,28 +329,28 @@
                     <div class="field-row">
                       <label class="spansh-field">
                         <span class="field-label">Starting capital</span>
-                        <input class="field mono" id="multi-starting-capital" value="2000000000" inputmode="numeric">
+                        <input class="field mono" id="multi-starting-capital" value="" inputmode="numeric">
                       </label>
                       <label class="spansh-field">
                         <span class="field-label">Maximum cargo capacity</span>
-                        <input class="field mono" id="multi-capacity" value="784" inputmode="numeric">
+                        <input class="field mono" id="multi-capacity" value="" inputmode="numeric">
                       </label>
                     </div>
                     <div class="field-row">
                       <label class="spansh-field">
                         <span class="field-label">Maximum hop distance</span>
-                        <input class="field mono" id="multi-hop-distance" value="60" inputmode="decimal">
+                        <input class="field mono" id="multi-hop-distance" value="" inputmode="decimal">
                       </label>
                       <label class="spansh-field">
                         <span class="field-label">Maximum hops</span>
-                        <input class="field mono" id="multi-max-hops" value="5" inputmode="numeric">
+                        <input class="field mono" id="multi-max-hops" value="" inputmode="numeric">
                       </label>
                     </div>
                     <label class="spansh-field">
                       <span class="field-label">Maximum distance to arrival</span>
                       <div class="range-row">
                         <input class="range-field" id="multi-station-distance-range" type="range" min="0" max="1000000" step="1000" value="1000000">
-                        <input class="field mono" id="multi-station-distance" value="1000000" inputmode="numeric">
+                        <input class="field mono" id="multi-station-distance" value="" inputmode="numeric">
                       </div>
                     </label>
                     <label class="spansh-field">
@@ -426,7 +426,7 @@
   </dialog>
 
   <script>
-    window.EDCR_SERVER_DEFAULT_ACCESS_TOKEN = "";
+    window.EDCR_WEB_CONFIG = {};
   </script>
   <script src="/assets/haul-ui.js" defer></script>
 

@@ -9,8 +9,11 @@ let routes = [];
     const RECONNECT_INITIAL_DELAY_MS = 1000;
     const RECONNECT_MAX_DELAY_MS = 30000;
     const TOKEN_STORAGE_KEY = "edcr.haul.accessToken";
-    const SERVER_DEFAULT_ACCESS_TOKEN = window.EDCR_SERVER_DEFAULT_ACCESS_TOKEN || "";
-    const queryAccessToken = new URLSearchParams(window.location.search).get("access_token") || "";
+    const WEB_CONFIG = window.EDCR_WEB_CONFIG || {};
+    const AUTH_QUERY_PARAMETER_NAME = WEB_CONFIG.authQueryParameterName || "access_token";
+    const SERVER_DEFAULT_ACCESS_TOKEN = WEB_CONFIG.defaultAccessToken || "";
+    const queryParams = new URLSearchParams(window.location.search);
+    const queryAccessToken = queryParams.get(AUTH_QUERY_PARAMETER_NAME) || queryParams.get("access_token") || "";
     const cachedAccessToken = window.localStorage.getItem(TOKEN_STORAGE_KEY) || "";
     let accessToken = queryAccessToken || cachedAccessToken || SERVER_DEFAULT_ACCESS_TOKEN;
     let socket = null;
@@ -25,6 +28,24 @@ let routes = [];
     let reconnectAttempts = 0;
     const pendingCommands = new Map();
     const activityEntries = new Map();
+    const WEB_DEFAULTS = {
+      startingCapital: "",
+      cargoCapacity: "",
+      maxHopDistanceLy: "",
+      maxHops: "5",
+      maxRouteDistanceLy: "500",
+      maxStationDistanceLs: "any",
+      maxStationDistanceRange: "1000000",
+      maxMarketAge: "",
+      metric: "Profit / hour",
+      requiresLargePad: "true",
+      allowPlanetary: "false",
+      avoidLoops: "false",
+      multiAvoidLoops: "true",
+      galaxyMapSettle: "2",
+      dockTimeout: "1200",
+      ...(WEB_CONFIG.webDefaults || {})
+    };
 
     const VIEW_COPY = {
       "two-way": {
@@ -74,6 +95,88 @@ let routes = [];
       if (element) {
         element.textContent = value;
       }
+    }
+
+    function roleLabel(role) {
+      return String(role || "observer").replace(/_/g, " ");
+    }
+
+    function setElementValue(id, value) {
+      const element = document.getElementById(id);
+      if (element) {
+        element.value = String(value ?? "");
+      }
+    }
+
+    function setElementChecked(id, value) {
+      const element = document.getElementById(id);
+      if (element) {
+        element.checked = String(value).toLowerCase() === "true";
+      }
+    }
+
+    function rangeValueForNumericDefault(value, fallback) {
+      const numeric = Number(String(value ?? "").replace(/,/g, ""));
+      return Number.isFinite(numeric) ? String(numeric) : fallback;
+    }
+
+    function applyWebConfigLabels() {
+      setText("session-host", WEB_CONFIG.hostLabel || window.location.host || "-");
+      setText("session-target", WEB_CONFIG.inputTargetSummary || "-");
+      setText("session-role", roleLabel(WEB_CONFIG.sessionRole));
+      setText("status-runtime", WEB_CONFIG.runtimePlatform || "-");
+      setText("status-journal", WEB_CONFIG.journalStatus || "-");
+      setText("status-input-target", WEB_CONFIG.inputTargetSummary || "-");
+    }
+
+    function applySearchDefaults() {
+      setElementValue("origin", hydratedCurrentSystem);
+      setElementValue("destination", "");
+      setElementValue("starting-capital", WEB_DEFAULTS.startingCapital);
+      setElementValue("max-hop-distance", WEB_DEFAULTS.maxHopDistanceLy);
+      setElementValue("capacity", WEB_DEFAULTS.cargoCapacity);
+      setElementValue("metric", WEB_DEFAULTS.metric);
+      setElementValue("max-hops", WEB_DEFAULTS.maxHops);
+      setElementValue("max-hops-range", rangeValueForNumericDefault(WEB_DEFAULTS.maxHops, "5"));
+      setElementValue("route-distance", WEB_DEFAULTS.maxRouteDistanceLy);
+      setElementValue("route-distance-range", rangeValueForNumericDefault(WEB_DEFAULTS.maxRouteDistanceLy, "500"));
+      setElementValue("station-distance", WEB_DEFAULTS.maxStationDistanceLs);
+      setElementValue(
+        "station-distance-range",
+        rangeValueForNumericDefault(WEB_DEFAULTS.maxStationDistanceLs, WEB_DEFAULTS.maxStationDistanceRange)
+      );
+      setElementValue("market-age", WEB_DEFAULTS.maxMarketAge);
+      setElementChecked("requires-large-pad", WEB_DEFAULTS.requiresLargePad);
+      setElementChecked("allow-planetary", WEB_DEFAULTS.allowPlanetary);
+      setElementChecked("avoid-loops", WEB_DEFAULTS.avoidLoops);
+    }
+
+    function applyHaulDefaults() {
+      setElementValue("galaxy-settle", WEB_DEFAULTS.galaxyMapSettle);
+      setElementValue("dock-timeout", WEB_DEFAULTS.dockTimeout);
+    }
+
+    function applyMultiSearchDefaults() {
+      setElementValue("multi-origin", hydratedCurrentSystem);
+      setElementValue("multi-starting-capital", WEB_DEFAULTS.startingCapital);
+      setElementValue("multi-capacity", document.getElementById("capacity").value || WEB_DEFAULTS.cargoCapacity);
+      setElementValue("multi-hop-distance", WEB_DEFAULTS.maxHopDistanceLy);
+      setElementValue("multi-max-hops", WEB_DEFAULTS.maxHops);
+      setElementValue("multi-station-distance", WEB_DEFAULTS.maxStationDistanceLs);
+      setElementValue(
+        "multi-station-distance-range",
+        rangeValueForNumericDefault(WEB_DEFAULTS.maxStationDistanceLs, WEB_DEFAULTS.maxStationDistanceRange)
+      );
+      setElementValue("multi-market-age", WEB_DEFAULTS.maxMarketAge);
+      setElementChecked("multi-requires-large-pad", WEB_DEFAULTS.requiresLargePad);
+      setElementChecked("multi-allow-planetary", WEB_DEFAULTS.allowPlanetary);
+      setElementChecked("multi-avoid-loops", WEB_DEFAULTS.multiAvoidLoops);
+    }
+
+    function applyFormDefaults() {
+      applySearchDefaults();
+      applyHaulDefaults();
+      applyMultiSearchDefaults();
     }
 
     function selectedRouteForCurrentView() {
@@ -260,20 +363,24 @@ let routes = [];
 
     function applyShipDefaults(ship) {
       if (ship.credits) {
+        WEB_DEFAULTS.startingCapital = String(ship.credits);
         setInputValue("starting-capital", ship.credits);
         setInputValue("multi-starting-capital", ship.credits);
       }
       if (ship.cargo_capacity) {
+        WEB_DEFAULTS.cargoCapacity = String(ship.cargo_capacity);
         setInputValue("capacity", ship.cargo_capacity);
         setInputValue("multi-capacity", ship.cargo_capacity);
       }
       const jumpRange = formattedJumpRange(ship);
       if (jumpRange) {
+        WEB_DEFAULTS.maxHopDistanceLy = jumpRange;
         setInputValue("max-hop-distance", jumpRange);
         setInputValue("multi-hop-distance", jumpRange);
       }
       const requiresLargePad = requiresLargePadForShip(ship);
       if (requiresLargePad !== null) {
+        WEB_DEFAULTS.requiresLargePad = requiresLargePad ? "true" : "false";
         document.getElementById("requires-large-pad").checked = requiresLargePad;
         document.getElementById("multi-requires-large-pad").checked = requiresLargePad;
       }
@@ -457,6 +564,7 @@ let routes = [];
       const routineActive = Boolean(currentRoutine.routine_active);
       const instantMode = Boolean(currentRoutine.instant_mode);
       const instantToggle = document.getElementById("instant-toggle");
+      setText("session-role", roleLabel(clientRole));
       document.getElementById("start-haul").disabled = !active || !routeByIndex(selectedRouteIndex);
       document.getElementById("set-destination").disabled = !active || !routeByIndex(selectedRouteIndex);
       document.getElementById("start-multi-haul").disabled = !active || !multiLegRouteByIndex(selectedMultiLegIndex);
@@ -510,9 +618,9 @@ let routes = [];
     function websocketUrl() {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const params = new URLSearchParams({
-        client_name: "web-haul",
-        access_token: accessToken
+        client_name: WEB_CONFIG.clientName || "web-haul"
       });
+      params.set(AUTH_QUERY_PARAMETER_NAME, accessToken);
       return `${protocol}//${window.location.host}/session?${params.toString()}`;
     }
 
@@ -908,8 +1016,8 @@ let routes = [];
       if (!route) {
         return {};
       }
-      const settle = document.getElementById("galaxy-settle").value || "2.0";
-      const timeout = document.getElementById("dock-timeout").value || "1200";
+      const settle = document.getElementById("galaxy-settle").value || WEB_DEFAULTS.galaxyMapSettle;
+      const timeout = document.getElementById("dock-timeout").value || WEB_DEFAULTS.dockTimeout;
       return {
         station_1_buying: route.commodity || "",
         station_1: route.buyStation || "",
@@ -925,8 +1033,9 @@ let routes = [];
     }
 
     function galmapSettleTime() {
-      const value = Number(document.getElementById("galaxy-settle").value || "2.0");
-      return Number.isFinite(value) ? value : 2.0;
+      const fallback = Number(WEB_DEFAULTS.galaxyMapSettle || 0);
+      const value = Number(document.getElementById("galaxy-settle").value || WEB_DEFAULTS.galaxyMapSettle);
+      return Number.isFinite(value) ? value : fallback;
     }
 
     function updateCommandPreview() {
@@ -982,7 +1091,7 @@ let routes = [];
 
     function buildMultiLegPreviewRoute() {
       const origin = document.getElementById("multi-origin").value || hydratedCurrentSystem || "Current system";
-      const capacity = document.getElementById("multi-capacity").value || "784";
+      const capacity = document.getElementById("multi-capacity").value || WEB_DEFAULTS.cargoCapacity || "-";
       return {
         index: 1,
         name: `${origin} / 3-stop haul preview`,
@@ -1017,7 +1126,12 @@ let routes = [];
       const haulSession = payload.haul_session || {};
       const routine = payload.routine || {};
       const activity = payload.activity_log || {};
+      const serverStatus = payload.server_status || {};
       currentRoutine = routine;
+      setText("status-runtime", serverStatus.runtime_platform || WEB_CONFIG.runtimePlatform || "-");
+      setText("status-journal", serverStatus.journal_source_status || WEB_CONFIG.journalStatus || "-");
+      setText("status-input-target", serverStatus.input_target_summary || WEB_CONFIG.inputTargetSummary || "-");
+      setText("session-target", serverStatus.input_target_summary || WEB_CONFIG.inputTargetSummary || "-");
       document.getElementById("summary-current").textContent = ship.system || "-";
       document.getElementById("summary-home").textContent = payload.home_system || "-";
       document.getElementById("summary-destination").textContent = ship.destination_system || "-";
@@ -1105,18 +1219,7 @@ let routes = [];
     });
 
     document.getElementById("reset-search").addEventListener("click", () => {
-      document.getElementById("origin").value = hydratedCurrentSystem;
-      document.getElementById("destination").value = "";
-      document.getElementById("route-distance").value = "500";
-      document.getElementById("route-distance-range").value = "500";
-      document.getElementById("station-distance").value = "1000000";
-      document.getElementById("station-distance-range").value = "1000000";
-      document.getElementById("capacity").value = "784";
-      document.getElementById("metric").value = "Profit / hour";
-      document.getElementById("starting-capital").value = "2000000000";
-      document.getElementById("max-hop-distance").value = "60";
-      document.getElementById("max-hops").value = "5";
-      document.getElementById("max-hops-range").value = "5";
+      applySearchDefaults();
     });
 
     document.getElementById("prev-routes").addEventListener("click", () => {
@@ -1209,14 +1312,7 @@ let routes = [];
     });
 
     document.getElementById("reset-multi-search").addEventListener("click", () => {
-      document.getElementById("multi-origin").value = hydratedCurrentSystem;
-      document.getElementById("multi-starting-capital").value = "2000000000";
-      document.getElementById("multi-capacity").value = document.getElementById("capacity").value || "784";
-      document.getElementById("multi-hop-distance").value = "60";
-      document.getElementById("multi-max-hops").value = "5";
-      document.getElementById("multi-station-distance").value = "1000000";
-      document.getElementById("multi-station-distance-range").value = "1000000";
-      document.getElementById("multi-market-age").value = "";
+      applyMultiSearchDefaults();
       updateMultiCommandPreview();
     });
 
@@ -1390,6 +1486,8 @@ let routes = [];
     syncRange("station-distance-range", "station-distance");
     syncRange("multi-station-distance-range", "multi-station-distance");
 
+    applyWebConfigLabels();
+    applyFormDefaults();
     setView(window.location.pathname.includes("multi") ? "multi-leg" : "two-way");
     renderRows();
     renderSelected();
