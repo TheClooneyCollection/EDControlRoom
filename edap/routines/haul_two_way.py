@@ -86,6 +86,18 @@ def _wrong_buy_commodity_from_inventory(inventory: list[dict], expected_commodit
     return ""
 
 
+def _unexpected_cargo_before_buy(inventory: list[dict], expected_commodity: str) -> list[str]:
+    unexpected: list[str] = []
+    for item in inventory:
+        count = item.get("Count", 0)
+        if isinstance(count, bool) or not isinstance(count, (int, float)) or count <= 0:
+            continue
+        if _inventory_item_matches(item, expected_commodity):
+            continue
+        unexpected.append(f"{int(count)}t {_inventory_item_display_name(item)}")
+    return unexpected
+
+
 def _inventory_used_capacity(inventory: list[dict]) -> int:
     used = 0
     for item in inventory:
@@ -375,6 +387,16 @@ def _run_market_buy(
             ),
             next_phase,
         )
+    unexpected_cargo = _unexpected_cargo_before_buy(_read_cargo_json(runtime.journal_dir), leg.buy_commodity)
+    if unexpected_cargo:
+        reason = (
+            f"Cannot buy {leg.buy_commodity} at {leg.label}: cargo hold already contains "
+            f"non-haul cargo ({', '.join(unexpected_cargo)}). Clear or sell that cargo manually, "
+            "then resume haul."
+        )
+        runtime.progress_fn(f"Error: {reason}")
+        runtime.announce_fn(AnnouncementId.HAUL_ABORTED)
+        return _error_routine_result(reason), next_phase
     stale_cargo_count = _stale_cargo_state_before_buy(runtime.journal_dir)
     if stale_cargo_count is not None:
         reason = (
