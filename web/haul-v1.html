@@ -165,11 +165,22 @@
                   <div class="field-row">
                     <label>
                       <span class="field-label">Max route distance</span>
-                      <select class="select" id="route-distance">
-                        <option>250 ly</option>
-                        <option selected>500 ly</option>
-                        <option>750 ly</option>
-                      </select>
+                      <span class="combo-field">
+                        <input class="field mono" id="route-distance" value="500 Ly" inputmode="numeric" autocomplete="off">
+                        <select class="select combo-select" id="route-distance-preset" aria-label="Route distance presets">
+                          <option value="" selected>Presets</option>
+                          <option value="10 Ly">10 Ly</option>
+                          <option value="20 Ly">20 Ly</option>
+                          <option value="30 Ly">30 Ly</option>
+                          <option value="40 Ly">40 Ly</option>
+                          <option value="50 Ly">50 Ly</option>
+                          <option value="60 Ly">60 Ly</option>
+                          <option value="70 Ly">70 Ly</option>
+                          <option value="80 Ly">80 Ly</option>
+                          <option value="500 Ly">500 Ly</option>
+                          <option value="1,000 Ly">1,000 Ly</option>
+                        </select>
+                      </span>
                     </label>
                     <label>
                       <span class="field-label">Station distance</span>

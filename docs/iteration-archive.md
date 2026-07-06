@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `234`
-- Latest generated iteration number: `367`
+- Generated iteration count: `237`
+- Latest generated iteration number: `370`
 
 ## Iteration 134
 
@@ -6475,6 +6475,90 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - Keep future web UI restores on top of the injected config contract instead of reintroducing page-local runtime defaults.
 
 ## Iteration 367
+
+- When: `2026-07-06 12:12`
+- Area: `haul`
+- Title: `guard-unrelated-preloaded-cargo`
+- Source: [2026-07-06-12-12_____haul_____guard-unrelated-preloaded-cargo.md](iteration-logs/2026-07-06-12-12_____haul_____guard-unrelated-preloaded-cargo.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `guard-unrelated-preloaded-cargo`
+- Started: `2026-07-06 12:12`
+
+## Summary
+
+- Fixed the two-way haul bug where pre-existing cargo unrelated to the configured haul leg could be treated as wrong-buy recovery cargo and sold automatically.
+
+## Changes
+
+- Added a pre-buy guard in `edap/routines/haul_two_way.py` that aborts before market input when `Cargo.json` already contains positive-count cargo that does not match the current leg's expected buy commodity.
+- The abort tells the operator to clear or sell the non-haul cargo manually, emits the generic haul-aborted announcement, and preserves the existing stale-cargo guard for the separate `Status.json` cargo / empty `Cargo.json` case.
+- Added regression coverage for unrelated preloaded cargo, for partially loaded expected cargo continuing into buy, and adjusted existing sell mocks so successful fake sells clear cargo state.
+- Verified `uv run python3 -m unittest tests/test_haul_two_way.py` and the full suite `uv run python3 -m unittest discover -s tests` passed; full suite reported `689 tests in 0.406s`.
+
+## Follow-ups
+
+- Live-check the abort wording in a real haul resume/start flow with unrelated cargo aboard to confirm the operator-facing message is clear enough before adding a more specific TTS phrase.
+
+## Iteration 368
+
+- When: `2026-07-06 12:38`
+- Area: `web`
+- Title: `show-live-haul-session-profit`
+- Source: [2026-07-06-12-38_____web______show-live-haul-session-profit.md](iteration-logs/2026-07-06-12-38_____web______show-live-haul-session-profit.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `show-live-haul-session-profit`
+- Started: `2026-07-06 12:38`
+
+## Summary
+
+- Fixed the `/haul` summary profit tile so it shows live haul session profit instead of completed-run-only accumulated profit.
+
+## Changes
+
+- Renamed the summary tile from `Accumulated profit` to `Session profit`.
+- Added a `sessionProfit()` frontend helper that calculates `accumulated_profit + current_run_profit`, matching the TUI haul panel and persisted session-profit semantics.
+- Left the active routine mini metric as `Current / Accumulated` so operators can still see the current run contribution separately from completed runs.
+- Added static web coverage that locks the session-profit calculation into `tests/test_control_room_haul_web.py`.
+- Verified `uv run python3 -m unittest tests/test_control_room_haul_web.py` and `uv run python3 -m unittest discover -s tests` passed. The first full-suite report was slow at `690 tests in 0.968s`, then the required timing report passed at `690 tests in 0.387s`.
+
+## Follow-ups
+
+- Live-check the `/haul` tile during an active loop after buy and sell events to confirm the signed current-run contribution matches operator expectations.
+
+## Iteration 369
+
+- When: `2026-07-06 13:47`
+- Area: `web`
+- Title: `editable-route-distance-defaults`
+- Source: [2026-07-06-13-47_____web______editable-route-distance-defaults.md](iteration-logs/2026-07-06-13-47_____web______editable-route-distance-defaults.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `editable-route-distance-defaults`
+- Started: `2026-07-06 13:47`
+
+## Summary
+
+- Matched the `/haul` route-distance search control to INARA's visible preset values while keeping the field editable for custom distances.
+
+## Changes
+
+- Replaced the route-distance select in `web/haul-v1.html` with an editable text input paired with a visible preset selector containing `10 Ly`, `20 Ly`, `30 Ly`, `40 Ly`, `50 Ly`, `60 Ly`, `70 Ly`, `80 Ly`, `500 Ly`, and `1,000 Ly`.
+- Updated `web/haul-ui.js` so search reset/default hydration writes directly to the editable route-distance input, formats numeric defaults with `Ly`, and copies selected presets into the input.
+- Added styling for the joined input/preset control and web regression coverage proving the submitted value still comes from `max_route_distance_ly`.
+
+## Follow-ups
+
+- Live-check the hybrid route-distance control in the browser once the next `/haul` UI pass is running locally.
+
+## Iteration 370
 
 - When: `2026-07-06 14:01`
 - Area: `ci-release`

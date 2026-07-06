@@ -631,6 +631,25 @@
       gap: 10px;
     }
 
+    .combo-field {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 94px;
+      width: 100%;
+    }
+
+    .combo-field .field {
+      border-top-right-radius: 0;
+      border-bottom-right-radius: 0;
+    }
+
+    .combo-field .combo-select {
+      border-left: 0;
+      border-top-left-radius: 0;
+      border-bottom-left-radius: 0;
+      padding-left: 8px;
+      padding-right: 8px;
+    }
+
     .range-row {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 92px;

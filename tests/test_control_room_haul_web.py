@@ -84,6 +84,31 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         )
         self.assertIn('formatCredits(sessionProfit(haulSession))', html)
 
+    def test_haul_web_route_distance_matches_inara_defaults_and_allows_custom_input(self) -> None:
+        html = _haul_web_source()
+
+        self.assertIn('id="route-distance" value="500 Ly" inputmode="numeric"', html)
+        self.assertIn('id="route-distance-preset" aria-label="Route distance presets"', html)
+        self.assertIn('max_route_distance_ly: document.getElementById("route-distance").value', html)
+        self.assertIn('setElementValue("route-distance", routeDistanceLabel(WEB_DEFAULTS.maxRouteDistanceLy))', html)
+        self.assertIn('setSelectValue("route-distance-preset", "")', html)
+        self.assertIn('document.getElementById("route-distance-preset").addEventListener("change"', html)
+        self.assertIn('document.getElementById("route-distance").value = value;', html)
+        self.assertIn('return raw.toLowerCase().includes("ly") ? raw : `${raw} Ly`;', html)
+        for option in (
+            "10 Ly",
+            "20 Ly",
+            "30 Ly",
+            "40 Ly",
+            "50 Ly",
+            "60 Ly",
+            "70 Ly",
+            "80 Ly",
+            "500 Ly",
+            "1,000 Ly",
+        ):
+            self.assertIn(f'<option value="{option}">{option}</option>', html)
+
     def test_haul_web_active_routine_shows_secondary_route_context(self) -> None:
         html = _multi_haul_web_source()
 

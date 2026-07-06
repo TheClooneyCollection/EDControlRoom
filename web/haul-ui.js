@@ -88,7 +88,7 @@ let routes = [];
       if (!raw) {
         return "";
       }
-      return raw.toLowerCase().includes("ly") ? raw : `${raw} ly`;
+      return raw.toLowerCase().includes("ly") ? raw : `${raw} Ly`;
     }
 
     function stationDistanceLabel(value) {
@@ -115,7 +115,8 @@ let routes = [];
     function applySearchDefaults() {
       setElementValue("origin", hydratedCurrentSystem);
       setElementValue("destination", "");
-      setSelectValue("route-distance", routeDistanceLabel(WEB_DEFAULTS.maxRouteDistanceLy));
+      setElementValue("route-distance", routeDistanceLabel(WEB_DEFAULTS.maxRouteDistanceLy));
+      setSelectValue("route-distance-preset", "");
       setSelectValue("station-distance", stationDistanceLabel(WEB_DEFAULTS.maxStationDistanceLs));
       setElementValue("capacity", WEB_DEFAULTS.cargoCapacity);
       setSelectValue("metric", WEB_DEFAULTS.metric);
@@ -850,6 +851,14 @@ let routes = [];
 
     document.getElementById("reset-search").addEventListener("click", () => {
       applySearchDefaults();
+    });
+
+    document.getElementById("route-distance-preset").addEventListener("change", (event) => {
+      const value = event.target.value;
+      if (value) {
+        document.getElementById("route-distance").value = value;
+        event.target.value = "";
+      }
     });
 
     document.getElementById("prev-routes").addEventListener("click", () => {
