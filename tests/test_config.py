@@ -101,6 +101,12 @@ class LoadConfigTests(unittest.TestCase):
                 "Please relog, then resume haul.",
             )
             self.assertEqual(
+                config.tts.phrases["haul_unrelated_cargo_loaded"],
+                "{title}, unrelated cargo is already loaded: {cargo_summary}. "
+                "Selling cargo before continuing haul.",
+            )
+            self.assertEqual(config.tts.phrases["selling_all_cargo"], "Selling all cargo.")
+            self.assertEqual(
                 config.tts.phrases["haul_pause_requested"],
                 "Roger {title}, we will pause hauling at the next station.",
             )

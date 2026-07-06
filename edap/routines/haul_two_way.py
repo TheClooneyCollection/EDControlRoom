@@ -98,6 +98,19 @@ def _unexpected_cargo_before_buy(inventory: list[dict], expected_commodity: str)
     return unexpected
 
 
+def _sellable_cargo_targets(inventory: list[dict]) -> list[str]:
+    targets: list[str] = []
+    seen: set[str] = set()
+    for item in _sellable_cargo(inventory):
+        target = _inventory_item_display_name(item)
+        key = commodity_name_key(target)
+        if not key or key in seen:
+            continue
+        targets.append(target)
+        seen.add(key)
+    return targets
+
+
 def _inventory_used_capacity(inventory: list[dict]) -> int:
     used = 0
     for item in inventory:
@@ -387,16 +400,31 @@ def _run_market_buy(
             ),
             next_phase,
         )
-    unexpected_cargo = _unexpected_cargo_before_buy(_read_cargo_json(runtime.journal_dir), leg.buy_commodity)
+    starting_inventory = _read_cargo_json(runtime.journal_dir)
+    unexpected_cargo = _unexpected_cargo_before_buy(starting_inventory, leg.buy_commodity)
     if unexpected_cargo:
-        reason = (
-            f"Cannot buy {leg.buy_commodity} at {leg.label}: cargo hold already contains "
-            f"non-haul cargo ({', '.join(unexpected_cargo)}). Clear or sell that cargo manually, "
-            "then resume haul."
+        sell_result = _sell_all_cargo_before_buy(
+            ctx,
+            leg=leg,
+            inventory=starting_inventory,
+            cargo_summary=unexpected_cargo,
         )
-        runtime.progress_fn(f"Error: {reason}")
-        runtime.announce_fn(AnnouncementId.HAUL_ABORTED)
-        return _error_routine_result(reason), next_phase
+        if sell_result.dispatch.status != "ok":
+            return sell_result, next_phase
+        remaining_unexpected_cargo = _unexpected_cargo_before_buy(
+            _read_cargo_json(runtime.journal_dir),
+            leg.buy_commodity,
+        )
+        if remaining_unexpected_cargo:
+            reason = (
+                f"Cannot buy {leg.buy_commodity} at {leg.label}: cargo hold still contains "
+                f"non-haul cargo ({', '.join(remaining_unexpected_cargo)}) after sell-all recovery. "
+                "Clear or sell that cargo manually, then resume haul."
+            )
+            runtime.progress_fn(f"Error: {reason}")
+            runtime.announce_fn(AnnouncementId.HAUL_ABORTED)
+            return _error_routine_result(reason), next_phase
+        runtime.progress_fn("Unrelated cargo sold; retrying intended buy.")
     stale_cargo_count = _stale_cargo_state_before_buy(runtime.journal_dir)
     if stale_cargo_count is not None:
         reason = (
@@ -452,6 +480,55 @@ def _run_market_buy(
         runtime.progress_fn("Wrong cargo sold; retrying intended buy.")
 
 
+def _sell_all_cargo_before_buy(
+    ctx: _HaulCtx,
+    *,
+    leg: StationLeg,
+    inventory: list[dict],
+    cargo_summary: list[str],
+) -> RoutineResult:
+    runtime = ctx.runtime
+    targets = _sellable_cargo_targets(inventory)
+    if not targets:
+        reason = (
+            f"Cannot buy {leg.buy_commodity} at {leg.label}: cargo hold already contains "
+            f"non-haul cargo ({', '.join(cargo_summary)}), but none of it can be sold automatically. "
+            "Clear that cargo manually, then resume haul."
+        )
+        runtime.progress_fn(f"Error: {reason}")
+        runtime.announce_fn(
+            AnnouncementId.HAUL_UNRELATED_CARGO_LOADED,
+            cargo_summary=", ".join(cargo_summary),
+        )
+        runtime.announce_fn(AnnouncementId.HAUL_ABORTED)
+        return _error_routine_result(reason)
+
+    runtime.progress_fn(
+        f"Cargo hold contains non-haul cargo before buying {leg.buy_commodity} at {leg.label}: "
+        f"{', '.join(cargo_summary)}. Selling all sellable cargo before retrying."
+    )
+    runtime.announce_fn(
+        AnnouncementId.HAUL_UNRELATED_CARGO_LOADED,
+        cargo_summary=", ".join(cargo_summary),
+    )
+    runtime.announce_fn(AnnouncementId.SELLING_ALL_CARGO)
+    for target in targets:
+        runtime.progress_fn(f"Selling cargo before buy recovery: {target} (MAX)...")
+        result = _sell_cargo_target(ctx, target)
+        if result.dispatch.status != "ok":
+            return result
+        if runtime.timing.post_sell_settle_s > 0:
+            runtime.sleeper(runtime.timing.post_sell_settle_s)
+    return RoutineResult(
+        action="market_sell",
+        dispatch=ActionDispatchResult(
+            action="market_sell",
+            status="ok",
+            reason="sold cargo before buy recovery",
+        ),
+    )
+
+
 def _wrong_buy_commodity_after_buy(
     journal_dir: Path,
     expected_commodity: str,
@@ -472,13 +549,17 @@ def _wrong_buy_commodity_after_buy(
 
 
 def _sell_wrong_buy_cargo(ctx: _HaulCtx, wrong_commodity: str) -> RoutineResult:
+    ctx.runtime.announce_fn(AnnouncementId.SELLING_CARGO, commodity_name=wrong_commodity)
+    return _sell_cargo_target(ctx, wrong_commodity)
+
+
+def _sell_cargo_target(ctx: _HaulCtx, target: str) -> RoutineResult:
     runtime = ctx.runtime
-    runtime.announce_fn(AnnouncementId.SELLING_CARGO, commodity_name=wrong_commodity)
     return market_sell(
         runtime.controls,
         runtime.watcher,
         market_path=runtime.market_path,
-        target=wrong_commodity,
+        target=target,
         amount="MAX",
         step_delay_s=runtime.timing.step_delay_s,
         max_hold_s=runtime.timing.max_hold_s,

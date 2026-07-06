@@ -682,10 +682,16 @@ class TwoWayHaulLoopTests(unittest.TestCase):
         self.assertIn("Wrong cargo sold; retrying intended buy.", progress)
         self.assertIn((AnnouncementId.SELLING_CARGO, {"commodity_name": "Gold"}), announcements)
 
-    def test_buy_phase_aborts_when_unrelated_cargo_is_already_loaded(self) -> None:
+    def test_buy_phase_sells_unrelated_cargo_before_buying(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             journal_dir = Path(tmp)
-            _write_cargo(journal_dir, [{"Name": "Gold", "Count": 64, "Stolen": 0}])
+            _write_cargo(
+                journal_dir,
+                [
+                    {"Name": _CARGO_1, "Count": 10, "Stolen": 0},
+                    {"Name": "Gold", "Count": 64, "Stolen": 0},
+                ],
+            )
             controls = FakeShipControls()
             watcher = FakeWatcher([])
             progress: list[str] = []
@@ -701,20 +707,40 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 station_1=_station_1_leg(),
                 station_2=_station_2_leg(),
             )
+            calls: list[tuple[str, str]] = []
 
-            with patch("edap.routines.haul_two_way.market_buy") as market_buy_mock, patch(
-                "edap.routines.haul_two_way.market_sell"
-            ) as market_sell_mock:
+            def fake_buy(controls, watcher, **kwargs):
+                calls.append(("buy", kwargs["target"]))
+                _write_cargo(journal_dir, [{"Name": _CARGO_1, "Count": 64, "Stolen": 0}])
+                return RoutineResult(
+                    action="MarketBuy",
+                    dispatch=ActionDispatchResult(action="MarketBuy", status="ok"),
+                )
+
+            def fake_sell(controls, watcher, **kwargs):
+                calls.append(("sell", kwargs["target"]))
+                _write_cargo(journal_dir, [])
+                return RoutineResult(
+                    action="MarketSell",
+                    dispatch=ActionDispatchResult(action="MarketSell", status="ok"),
+                )
+
+            with patch("edap.routines.haul_two_way.market_buy", side_effect=fake_buy), patch(
+                "edap.routines.haul_two_way.market_sell",
+                side_effect=fake_sell,
+            ):
                 result, next_phase = _run_market_buy(ctx, leg=ctx.station_1, next_phase=Phase.UNDOCK_STATION_1)
 
-        self.assertEqual(result.dispatch.status, "error")
+        self.assertEqual(result.dispatch.status, "ok")
         self.assertEqual(next_phase, Phase.UNDOCK_STATION_1)
-        market_buy_mock.assert_not_called()
-        market_sell_mock.assert_not_called()
-        self.assertIn("non-haul cargo (64t Gold)", result.dispatch.reason or "")
-        self.assertIn("Clear or sell that cargo manually", result.dispatch.reason or "")
-        self.assertTrue(any("non-haul cargo (64t Gold)" in line for line in progress))
-        self.assertIn((AnnouncementId.HAUL_ABORTED, {}), announcements)
+        self.assertEqual(calls, [("sell", _CARGO_1), ("sell", "Gold"), ("buy", _CARGO_1)])
+        self.assertTrue(any("non-haul cargo before buying" in line for line in progress))
+        self.assertIn("Unrelated cargo sold; retrying intended buy.", progress)
+        self.assertIn(
+            (AnnouncementId.HAUL_UNRELATED_CARGO_LOADED, {"cargo_summary": "64t Gold"}),
+            announcements,
+        )
+        self.assertIn((AnnouncementId.SELLING_ALL_CARGO, {}), announcements)
 
     def test_buy_phase_allows_existing_expected_cargo(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2432,15 +2458,19 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
                 "edap.routines.haul_two_way.market_buy"
             ) as market_buy_mock:
-                market_sell_mock.side_effect = lambda controls, watcher, **kwargs: RoutineResult(
-                    action="market_sell",
-                    dispatch=ActionDispatchResult(action="market_sell", status="ok"),
-                )
+                def fake_sell(controls, watcher, **kwargs):
+                    _write_cargo(journal_dir, [])
+                    return RoutineResult(
+                        action="market_sell",
+                        dispatch=ActionDispatchResult(action="market_sell", status="ok"),
+                    )
+
+                market_sell_mock.side_effect = fake_sell
 
                 def fake_buy(controls, watcher, **kwargs):
                     _write_cargo(
                         journal_dir,
-                        [{"Name": kwargs["target"].lower(), "Count": 64, "Stolen": 0}],
+                        [{"Name": kwargs["target"], "Count": 64, "Stolen": 0}],
                     )
                     return RoutineResult(
                         action="market_buy",
