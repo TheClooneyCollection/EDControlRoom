@@ -4,10 +4,15 @@ from __future__ import annotations
 from edap.control_room.interfaces import RoutineHost
 from edap.routines import dock, undock
 
+
+def _should_wait_for_supercruise_exit(status: str | None) -> bool:
+    return status in {"in_supercruise", "supercruise"}
+
+
 def cmd_dock(app: RoutineHost, *, skip_delay: bool = False) -> None:
     if not app._check_routine_ready():
         return
-    skip_scx = app._ship.status == "in_space"
+    wait_for_scx = _should_wait_for_supercruise_exit(app._ship.status)
     progress = app._make_progress()
     controls = app._make_controls(progress)
     sleeper = app._make_sleeper()
@@ -16,7 +21,7 @@ def cmd_dock(app: RoutineHost, *, skip_delay: bool = False) -> None:
     supercruise_exit_settle = app._config.controls.dock_supercruise_exit_settle_seconds
     watcher = app._make_watcher()
 
-    label = "dock (already in space)" if skip_scx else "dock (waiting for supercruise exit)"
+    label = "dock (waiting for supercruise exit)" if wait_for_scx else "dock (already in space)"
     app._start_delayed_routine(
         description=label,
         start_message=f"Starting {label}, auto-refuel/repair on...",
@@ -24,7 +29,7 @@ def cmd_dock(app: RoutineHost, *, skip_delay: bool = False) -> None:
         fn=lambda: dock(
             controls,
             watcher,
-            wait_for_supercruise_exit=not skip_scx,
+            wait_for_supercruise_exit=wait_for_scx,
             auto_refuel=True,
             step_delay_s=step_delay,
             supercruise_exit_settle_s=supercruise_exit_settle,

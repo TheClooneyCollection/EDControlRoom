@@ -1332,8 +1332,31 @@ class ControlRoomBindingsTests(unittest.TestCase):
         with patch("edap.control_room.routines_station.dock", new=fake_dock):
             self.app._cmd_dock()
 
+        self.assertEqual(captured["kwargs"]["wait_for_supercruise_exit"], True)
         self.assertEqual(captured["kwargs"]["supercruise_exit_settle_s"], 3.0)
         self.assertEqual(captured["kwargs"]["step_delay_s"], 0.3)
+
+    def test_dock_command_starts_immediately_from_normal_space(self) -> None:
+        captured: dict[str, object] = {}
+
+        self.app._controls = object()
+        self.app._ship.status = "in_space"
+        self.app._make_progress = lambda: (lambda _: None)
+        self.app._make_controls = lambda progress: object()
+        self.app._make_sleeper = lambda: (lambda _: None)
+        self.app._make_watcher = lambda: object()
+        self.app._run_in_thread = lambda fn: fn()
+
+        def fake_dock(controls, watcher, **kwargs):
+            captured["controls"] = controls
+            captured["watcher"] = watcher
+            captured["kwargs"] = kwargs
+            return None
+
+        with patch("edap.control_room.routines_station.dock", new=fake_dock):
+            self.app._cmd_dock()
+
+        self.assertEqual(captured["kwargs"]["wait_for_supercruise_exit"], False)
 
     def test_dest_dispatch_passes_fibonacci_settle_retries(self) -> None:
         captured: dict[str, object] = {}
