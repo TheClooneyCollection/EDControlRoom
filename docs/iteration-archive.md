@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `245`
-- Latest generated iteration number: `378`
+- Generated iteration count: `246`
+- Latest generated iteration number: `379`
 
 ## Iteration 134
 
@@ -6813,3 +6813,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Live-validate system-only travel from docked, normal-space, supercruise, and remote-system starts under CrossOver/macOS.
+
+## Iteration 379
+
+- When: `2026-07-09 12:35`
+- Area: `control-room`
+- Title: `direct-dock-normal-space`
+- Source: [2026-07-09-12-35_control-room_direct-dock-normal-space.md](iteration-logs/2026-07-09-12-35_control-room_direct-dock-normal-space.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `direct-dock-normal-space`
+- Started: `2026-07-09 12:35`
+
+## Summary
+
+- Fixed direct `dock` so it waits for `SupercruiseExit` only when Control Room state says the ship is in supercruise.
+
+## Changes
+
+- Added an explicit direct-command predicate in `edap/control_room/routines_station.py`; normal space now skips the drop wait and starts docking attempts immediately.
+- Added Control Room regression coverage for supercruise wait behavior and normal-space immediate docking.
+- Documented the current direct-command vs transit-wrapper station routine split in `docs/devlog/0003-station-routine-split.md`.
+
+## Follow-ups
+
+- Consider moving shared station command policy into a neutral helper if direct station commands and transit wrappers continue to accumulate parallel state decisions.
