@@ -29,6 +29,25 @@ def apply_ship_event(ship: ShipState, ev: dict[str, Any]) -> None:
         max_jump_range = ev.get("MaxJumpRange")
         if isinstance(max_jump_range, (int, float)) and not isinstance(max_jump_range, bool):
             ship.max_jump_range_ly = float(max_jump_range)
+        fsd_item = next(
+            (
+                m.get("Item", "")
+                for m in ev.get("Modules", [])
+                if m.get("Slot") == "FrameShiftDrive"
+            ),
+            None,
+        )
+        if fsd_item is not None:
+            item_lower = fsd_item.lower()
+            if "overchargebooster_mkii" in item_lower:
+                ship.fsd_type = "overcharge_mkii"
+                ship.supercharge_multiplier = 6
+            elif "hyperdrive_overcharge" in item_lower:
+                ship.fsd_type = "sco"
+                ship.supercharge_multiplier = 4
+            else:
+                ship.fsd_type = "standard"
+                ship.supercharge_multiplier = 4
 
     if event in {"Location", "FSDJump"} and "StarSystem" in ev:
         ship.system = ev["StarSystem"]

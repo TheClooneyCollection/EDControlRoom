@@ -22,6 +22,8 @@ class ShipState:
     target: str | None
     cargo_capacity: int | None
     max_jump_range_ly: float | None
+    fsd_type: str | None
+    supercharge_multiplier: int | None
     fuel_capacity: float | None
     fuel_level: float | None
     fuel_percent: int
@@ -128,6 +130,8 @@ def read_ship_state(log_path: Path) -> ShipState:
         "target": None,
         "cargo_capacity": None,
         "max_jump_range_ly": None,
+        "fsd_type": None,
+        "supercharge_multiplier": None,
         "fuel_capacity": None,
         "fuel_level": None,
         "fuel_percent": 10,
@@ -195,6 +199,25 @@ def read_ship_state(log_path: Path) -> ShipState:
                 max_jump_range = log.get("MaxJumpRange")
                 if isinstance(max_jump_range, (int, float)) and not isinstance(max_jump_range, bool):
                     ship["max_jump_range_ly"] = float(max_jump_range)
+                fsd_item = next(
+                    (
+                        m.get("Item", "")
+                        for m in log.get("Modules", [])
+                        if m.get("Slot") == "FrameShiftDrive"
+                    ),
+                    None,
+                )
+                if fsd_item is not None:
+                    item_lower = fsd_item.lower()
+                    if "overchargebooster_mkii" in item_lower:
+                        ship["fsd_type"] = "overcharge_mkii"
+                        ship["supercharge_multiplier"] = 6
+                    elif "hyperdrive_overcharge" in item_lower:
+                        ship["fsd_type"] = "sco"
+                        ship["supercharge_multiplier"] = 4
+                    else:
+                        ship["fsd_type"] = "standard"
+                        ship["supercharge_multiplier"] = 4
 
             if "FuelLevel" in log and ship["ship_type"] != "TestBuggy":
                 ship["fuel_level"] = log["FuelLevel"]

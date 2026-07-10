@@ -3898,6 +3898,41 @@ class ControlRoomEventReducerTests(unittest.TestCase):
         self.assertEqual(ship.status, "in_space")
         self.assertIsNone(ship.station)
 
+    def _loadout_ev(self, item: str) -> dict:
+        return {
+            "event": "Loadout",
+            "Ship": "anaconda",
+            "CargoCapacity": 468,
+            "MaxJumpRange": 50.0,
+            "Modules": [{"Slot": "FrameShiftDrive", "Item": item}],
+        }
+
+    def test_apply_ship_event_fsd_standard(self) -> None:
+        ship = ShipState()
+        apply_ship_event(ship, self._loadout_ev("int_hyperdrive_size5_class3"))
+        self.assertEqual(ship.fsd_type, "standard")
+        self.assertEqual(ship.supercharge_multiplier, 4)
+
+    def test_apply_ship_event_fsd_sco(self) -> None:
+        ship = ShipState()
+        apply_ship_event(ship, self._loadout_ev("int_hyperdrive_overcharge_size5_class5"))
+        self.assertEqual(ship.fsd_type, "sco")
+        self.assertEqual(ship.supercharge_multiplier, 4)
+
+    def test_apply_ship_event_fsd_overcharge_mkii(self) -> None:
+        ship = ShipState()
+        apply_ship_event(
+            ship,
+            self._loadout_ev("int_hyperdrive_overcharge_size8_class5_overchargebooster_mkii"),
+        )
+        self.assertEqual(ship.fsd_type, "overcharge_mkii")
+        self.assertEqual(ship.supercharge_multiplier, 6)
+
+    def test_apply_ship_event_fsd_none_before_loadout(self) -> None:
+        ship = ShipState()
+        self.assertIsNone(ship.fsd_type)
+        self.assertIsNone(ship.supercharge_multiplier)
+
 
 class ControlRoomFailureMessageTests(unittest.TestCase):
     def setUp(self) -> None:

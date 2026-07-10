@@ -227,3 +227,56 @@ class StateTests(unittest.TestCase):
 
             self.assertEqual(events, [])
             self.assertEqual(sleep_calls, [0.5, 0.5])
+
+    def _loadout_with_fsd(self, item: str) -> str:
+        return (
+            '{"event":"Loadout","Ship":"anaconda","CargoCapacity":468,"MaxJumpRange":50.0,'
+            '"Modules":[{"Slot":"FrameShiftDrive","Item":"' + item + '"}]}'
+        )
+
+    def test_fsd_type_standard(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            log_path = Path(temp_dir) / "Journal.log"
+            _write_lines(log_path, [self._loadout_with_fsd("int_hyperdrive_size5_class3")])
+            os.utime(log_path, None)
+
+            state = read_ship_state(log_path)
+
+            self.assertEqual(state.fsd_type, "standard")
+            self.assertEqual(state.supercharge_multiplier, 4)
+
+    def test_fsd_type_sco(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            log_path = Path(temp_dir) / "Journal.log"
+            _write_lines(log_path, [self._loadout_with_fsd("int_hyperdrive_overcharge_size5_class5")])
+            os.utime(log_path, None)
+
+            state = read_ship_state(log_path)
+
+            self.assertEqual(state.fsd_type, "sco")
+            self.assertEqual(state.supercharge_multiplier, 4)
+
+    def test_fsd_type_overcharge_mkii(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            log_path = Path(temp_dir) / "Journal.log"
+            _write_lines(
+                log_path,
+                [self._loadout_with_fsd("int_hyperdrive_overcharge_size8_class5_overchargebooster_mkii")],
+            )
+            os.utime(log_path, None)
+
+            state = read_ship_state(log_path)
+
+            self.assertEqual(state.fsd_type, "overcharge_mkii")
+            self.assertEqual(state.supercharge_multiplier, 6)
+
+    def test_fsd_type_none_when_no_loadout(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            log_path = Path(temp_dir) / "Journal.log"
+            _write_lines(log_path, ['{"event":"LoadGame","Ship":"anaconda"}'])
+            os.utime(log_path, None)
+
+            state = read_ship_state(log_path)
+
+            self.assertIsNone(state.fsd_type)
+            self.assertIsNone(state.supercharge_multiplier)
