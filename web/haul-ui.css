@@ -1502,3 +1502,54 @@
       border-radius: 4px;
       padding: 1px 5px;
     }
+
+    .tag {
+      font-size: 10px;
+      font-weight: 600;
+      background: var(--bg-3);
+      color: var(--text-2);
+      border: 1px solid var(--border-strong);
+      border-radius: 999px;
+      padding: 2px 8px;
+      margin-left: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .rc-status {
+      margin-top: 8px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-2);
+    }
+    .rc-status.error { color: var(--danger, #f87171); }
+
+    .rc-results.hidden { display: none; }
+
+    .rc-summary {
+      margin-top: 12px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border-strong);
+      background: var(--bg-3);
+      font-weight: 600;
+    }
+    .rc-summary.verdict-spansh_better { border-color: #22c55e; color: #22c55e; }
+    .rc-summary.verdict-in_game_better { border-color: #f59e0b; color: #f59e0b; }
+    .rc-summary.verdict-even { border-color: var(--border-strong); }
+
+    .rc-side-by-side {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .rc-side-head {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-2);
+      margin-bottom: 6px;
+    }
+    @media (max-width: 900px) {
+      .rc-side-by-side { grid-template-columns: 1fr; }
+    }

@@ -75,6 +75,7 @@ def serve_observer_mode(
         broker=broker,
         auth=SharedAccessTokenAuth(access_token),
         web_default_access_token=web_default_access_token,
+        journal_dir=journal_dir,
     )
     try:
         uvicorn.run(app, host=host, port=port, log_level="info")

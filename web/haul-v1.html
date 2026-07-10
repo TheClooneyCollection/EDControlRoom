@@ -246,6 +246,64 @@
               </div>
             </section>
 
+            <section class="panel" aria-labelledby="route-compare-title" id="route-compare-panel">
+              <div class="panel-head">
+                <div class="panel-title" id="route-compare-title">Route Comparison <span class="tag">beta</span></div>
+                <div class="panel-action" id="route-compare-verdict">Idle</div>
+              </div>
+              <div class="panel-body">
+                <div class="form-grid">
+                  <div class="field-row">
+                    <label>
+                      <span class="field-label">From system</span>
+                      <input class="field" id="rc-from" value="" autocomplete="off">
+                    </label>
+                    <label>
+                      <span class="field-label">To system</span>
+                      <input class="field" id="rc-to" value="" autocomplete="off">
+                    </label>
+                  </div>
+                  <div class="field-row">
+                    <label>
+                      <span class="field-label">Jump range (LY, unladen)</span>
+                      <input class="field mono" id="rc-range" value="60" inputmode="decimal">
+                    </label>
+                    <label>
+                      <span class="field-label">Efficiency</span>
+                      <input class="field mono" id="rc-efficiency" value="60" inputmode="numeric">
+                    </label>
+                    <label>
+                      <span class="field-label">Supercharge</span>
+                      <select class="select" id="rc-supercharge">
+                        <option value="4">Normal (4x)</option>
+                        <option value="6">Overcharge (6x)</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="btn-row action-row">
+                    <button class="btn primary" type="button" id="rc-compare">Compare</button>
+                    <button class="btn" type="button" id="rc-fixture-normal">Load Normal fixture</button>
+                    <button class="btn" type="button" id="rc-fixture-overcharge">Load Overcharge fixture</button>
+                    <button class="btn ghost" type="button" id="rc-switch" disabled title="coming soon">Switch to Spansh</button>
+                  </div>
+                </div>
+                <div id="rc-status" class="rc-status"></div>
+                <div id="rc-results" class="rc-results hidden">
+                  <div class="rc-summary" id="rc-summary"></div>
+                  <div class="rc-side-by-side">
+                    <div class="rc-side">
+                      <div class="rc-side-head" id="rc-in-game-head">In-game route</div>
+                      <table class="route-table"><thead><tr><th>#</th><th>System</th><th>Class</th><th class="num">+LY</th><th class="num">Total</th></tr></thead><tbody id="rc-in-game-rows"></tbody></table>
+                    </div>
+                    <div class="rc-side">
+                      <div class="rc-side-head" id="rc-spansh-head">Spansh route</div>
+                      <table class="route-table"><thead><tr><th>#</th><th>System</th><th>N?</th><th class="num">+LY</th><th class="num">Total</th></tr></thead><tbody id="rc-spansh-rows"></tbody></table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
             <section class="panel setup-panel" aria-labelledby="travel-title">
               <div class="panel-head">
                 <div class="panel-title" id="travel-title">Travel assist</div>
@@ -330,6 +388,7 @@
     window.EDCR_WEB_CONFIG = {};
   </script>
   <script src="/assets/haul-ui.js" defer></script>
+  <script src="/assets/route-compare.js" defer></script>
 
 </body>
 </html>

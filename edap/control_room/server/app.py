@@ -16,6 +16,12 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 from edap.control_room.server.auth import ObserverServerAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
 from edap.control_room.server.commands import ObserverSessionCommandHandler, trade_route_from_payload
+from edap.routing.web import (
+    available_fixtures,
+    build_live_comparison,
+    comparison_to_payload,
+    load_fixture_comparison,
+)
 from edap.haul_search_config import (
     GENERATED_HAUL_SEARCH_FIELDS,
     HaulSearchConfigError,
@@ -126,6 +132,7 @@ def build_observer_server_app(
     broker: InMemoryObserverSessionBroker,
     auth: ObserverServerAuth,
     web_default_access_token: str = "",
+    journal_dir: Path | None = None,
 ) -> Starlette:
     def unauthorized_response() -> JSONResponse:
         return JSONResponse(
@@ -217,6 +224,7 @@ def build_observer_server_app(
             "haul-ui.css": "text/css; charset=utf-8",
             "haul-ui.js": "text/javascript; charset=utf-8",
             "multi-haul.js": "text/javascript; charset=utf-8",
+            "route-compare.js": "text/javascript; charset=utf-8",
         }
         media_type = allowed_assets.get(asset_name)
         if media_type is None:
@@ -229,6 +237,57 @@ def build_observer_server_app(
             media_type=media_type,
             headers={"Cache-Control": "no-store"},
         )
+
+    async def route_compare(request: Request) -> JSONResponse:
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        params = request.query_params
+        fixture_name = params.get("fixture")
+        if fixture_name:
+            try:
+                comparison = await asyncio.to_thread(load_fixture_comparison, fixture_name)
+            except ValueError as exc:
+                return JSONResponse(
+                    {"detail": str(exc), "available_fixtures": list(available_fixtures())},
+                    status_code=400,
+                )
+            return JSONResponse(comparison_to_payload(comparison))
+
+        source_system = (params.get("from") or "").strip()
+        destination_system = (params.get("to") or "").strip()
+        range_raw = params.get("range")
+        if not source_system or not destination_system or not range_raw:
+            return JSONResponse(
+                {"detail": "from, to, and range are required (or pass fixture=<name>)"},
+                status_code=400,
+            )
+        if journal_dir is None:
+            return JSONResponse(
+                {"detail": "server has no journal_dir configured; live comparison unavailable"},
+                status_code=503,
+            )
+        try:
+            range_ly = float(range_raw)
+            efficiency = int(params.get("efficiency", "60"))
+            supercharge_multiplier = int(params.get("supercharge_multiplier", "4"))
+        except ValueError as exc:
+            return JSONResponse({"detail": f"invalid numeric parameter: {exc}"}, status_code=400)
+        try:
+            comparison = await asyncio.to_thread(
+                build_live_comparison,
+                journal_dir=journal_dir,
+                source_system=source_system,
+                destination_system=destination_system,
+                range_ly=range_ly,
+                efficiency=efficiency,
+                supercharge_multiplier=supercharge_multiplier,
+            )
+        except FileNotFoundError:
+            return JSONResponse({"detail": "NavRoute.json not found; plot a route in game first"}, status_code=404)
+        except Exception as exc:
+            return JSONResponse({"detail": f"route comparison failed: {exc}"}, status_code=502)
+        return JSONResponse(comparison_to_payload(comparison))
 
     async def session(websocket: WebSocket) -> None:
         if not auth.is_websocket_authorized(websocket):
@@ -285,6 +344,7 @@ def build_observer_server_app(
             Route(HAUL_WEB_ENTRY_URL_PATH, haul_web),
             Route(HAUL_WEB_URL_PATH, haul_web),
             Route(MULTI_HAUL_WEB_URL_PATH, multi_haul_web),
+            Route("/api/route-compare", route_compare),
             Route(HAUL_WEB_ASSET_URL_PATH, haul_web_asset),
             WebSocketRoute("/session", session),
         ]
