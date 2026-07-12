@@ -13,6 +13,6 @@
 - Live validation is still needed for all start states under CrossOver/macOS, especially docked launch into same-system station travel and multi-jump resume.
 - Surface/on-land travel currently inherits manual landing handoff behavior; settlement approach automation is not implemented.
 ## Next
+- Follow-up roadmap for the Spansh/travel integration lives in `docs/plans/0010-spansh-neutron-route-comparison.md` under "Follow-up Roadmap"; treat that as canonical. Top must-do is the neutron travel routine that flies the Spansh waypoint list (enables the disabled "Switch to Spansh" button).
 - Wire the route-compare panel's supercharge default to ship state's `supercharge_multiplier` and prefill From/Range from current system + `Loadout.MaxJumpRange`.
-- Build the neutron travel routine that flies each Spansh waypoint (enables the disabled "Switch to Spansh" button).
 - Live-validate `travel` from docked, same-system supercruise, normal-space, and remote-system starts before expanding the web UI or adding route-search handoff affordances.

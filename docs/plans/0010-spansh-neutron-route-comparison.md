@@ -2,7 +2,7 @@
 
 ## Status
 
-In progress.
+v1 shipped. Follow-ups pending — see [Follow-up Roadmap](#follow-up-roadmap) below. This plan is the canonical roadmap for finishing the Spansh/travel integration; `docs/status/travel.md` links here.
 
 ## Why
 
@@ -157,3 +157,24 @@ Under `tests/fixtures/routing/`:
 - Actually flying a Spansh route.
 - Any TUI work.
 - Any change to existing `travel` routine behavior.
+
+## Follow-up Roadmap
+
+Ordered roughly by how much they unlock. Pick the top item unless the user redirects.
+
+### Must-do to fulfill the travel vision
+
+1. **Neutron travel routine.** A routine that consumes the Spansh waypoint list and drives per-waypoint jumps plus jet-cone supercharge handling. Wires up the currently disabled "Switch to Spansh" button on `/haul`. This is the load-bearing gap — until it lands, the panel is advisory only.
+2. **Ship-state prefill on the panel.** Default supercharge from `ShipState.supercharge_multiplier`, prefill `From` from current system, prefill `Range` from `Loadout.MaxJumpRange`. Plumbing is already there; just wire the form.
+3. **Live validation under CrossOver/macOS.** Confirm the panel + TTS fan-out + (once landed) the neutron routine work with the real game running. Everything above ships fixture-tested; none of it has been exercised against a live journal end-to-end.
+
+### Nice-to-have
+
+4. **Laden jump-range calc.** Use current cargo mass so the range sent to Spansh is honest for hauling scenarios, not just unladen.
+5. **TUI comparison view.** Mirror the `/haul` panel in the TUI so operators without a browser open can still review a Spansh plot.
+
+### Parked ideas (not must-do)
+
+- **Auto-plot on new NavRoute.** When a fresh `NavRoute.json` lands mid-session, auto-fetch Spansh and offer a review without the operator clicking Compare. Only worth doing if the manual flow proves too high-friction in practice.
+- **Verdict scoring beyond jump count.** Today `verdict = spansh_better` iff `jumps_delta < 0`. Could factor in neutron overhead, galaxy-map visits, wear, etc. Deferred until we have a real reason.
+- **Replacing the existing travel panel.** Route Comparison lives alongside Travel Assist today. Consolidation only makes sense after the neutron routine lands and both panels obviously want to merge.
