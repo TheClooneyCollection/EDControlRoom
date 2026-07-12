@@ -16,12 +16,15 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 from edap.control_room.server.auth import ObserverServerAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
 from edap.control_room.server.commands import ObserverSessionCommandHandler, trade_route_from_payload
+from edap.routing.comparison import RouteComparison
 from edap.routing.web import (
     available_fixtures,
     build_live_comparison,
     comparison_to_payload,
     load_fixture_comparison,
 )
+from edap.control_room.protocol import build_announcement_event
+from edap.tts import AnnouncementId
 from edap.haul_search_config import (
     GENERATED_HAUL_SEARCH_FIELDS,
     HaulSearchConfigError,
@@ -252,6 +255,7 @@ def build_observer_server_app(
                     {"detail": str(exc), "available_fixtures": list(available_fixtures())},
                     status_code=400,
                 )
+            _publish_spansh_route_ready(broker, comparison)
             return JSONResponse(comparison_to_payload(comparison))
 
         source_system = (params.get("from") or "").strip()
@@ -287,6 +291,7 @@ def build_observer_server_app(
             return JSONResponse({"detail": "NavRoute.json not found; plot a route in game first"}, status_code=404)
         except Exception as exc:
             return JSONResponse({"detail": f"route comparison failed: {exc}"}, status_code=502)
+        _publish_spansh_route_ready(broker, comparison)
         return JSONResponse(comparison_to_payload(comparison))
 
     async def session(websocket: WebSocket) -> None:
@@ -356,6 +361,23 @@ def build_observer_server_app(
         allow_headers=["Authorization", "Content-Type"],
     )
     return app
+
+
+def _publish_spansh_route_ready(
+    broker: InMemoryObserverSessionBroker,
+    comparison: RouteComparison,
+) -> None:
+    message_values: dict[str, Any] = {
+        "jump_summary": comparison.jump_summary,
+        "neutron_summary": comparison.neutron_summary,
+    }
+    broker.publish_announcement(
+        build_announcement_event(
+            announcement_id=AnnouncementId.SPANSH_ROUTE_READY.value,
+            message_text=comparison.tts_phrase,
+            message_values=message_values,
+        )
+    )
 
 
 def _response_error(

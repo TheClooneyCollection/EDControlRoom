@@ -91,20 +91,7 @@
       verdictEl.textContent = verdictText;
     }
 
-    if (payload.tts_phrase) {
-      speakOnce(payload.tts_phrase);
-    }
-
     document.getElementById("rc-results").classList.remove("hidden");
-  }
-
-  function speakOnce(phrase) {
-    try {
-      if (typeof window.speechSynthesis === "undefined") return;
-      window.speechSynthesis.cancel();
-      const utter = new window.SpeechSynthesisUtterance(phrase);
-      window.speechSynthesis.speak(utter);
-    } catch (e) { /* ignore */ }
   }
 
   async function fetchComparison(url) {

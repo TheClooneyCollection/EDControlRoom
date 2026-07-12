@@ -36,3 +36,4 @@ route_complete = "Haul cycle {cycle_count} complete. Total profit {total_profit_
 route_profit_delta = "Making {comparison_text} compared to the planned route."
 session_complete = "Haul session complete. {cycle_count} cycles flown. Total profit {total_profit_short}."
 market_level_low = "Station {market_side} for {commodity_name} is low at {units} units."
+spansh_route_ready = "{title}, Spansh route came back and it {jump_summary}, {neutron_summary}, would you like to review?"

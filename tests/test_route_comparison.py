@@ -29,6 +29,8 @@ class RouteComparisonTests(unittest.TestCase):
         self.assertEqual(result.verdict, "in_game_better")
         self.assertIn("adds", result.tts_phrase)
         self.assertIn("Commander,", result.tts_phrase)
+        self.assertTrue(result.jump_summary.startswith("adds"))
+        self.assertIn("neutron jumps", result.neutron_summary)
 
     def test_spansh_overcharge_beats_in_game(self) -> None:
         result = compare(self.in_game, self.spansh_overcharge)

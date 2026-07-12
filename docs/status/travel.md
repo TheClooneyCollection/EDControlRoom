@@ -1,6 +1,7 @@
 # Travel Status
 ## Current
-- `/haul` includes a new "Route Comparison (beta)" panel backed by `/api/route-compare` that renders the in-game `NavRoute.json` and a Spansh neutron plot side-by-side; fires a TTS phrase on completion. `?fixture=hd232819_xinca_{normal,overcharge}` bypasses live sources for offline dev.
+- `/haul` "Route Comparison (beta)" panel is now a full-width section above the layout grid; the endpoint publishes an `AnnouncementEvent(spansh_route_ready)` through the broker so all connected observers speak the phrase via the existing TTS pipeline (browser SpeechSynthesis path removed).
+- `/haul` includes a "Route Comparison (beta)" panel backed by `/api/route-compare` that renders the in-game `NavRoute.json` and a Spansh neutron plot side-by-side. `?fixture=hd232819_xinca_{normal,overcharge}` bypasses live sources for offline dev.
 - Ship state now exposes `fsd_type` (`standard`/`sco`/`overcharge_mkii`) and `supercharge_multiplier` (4 or 6) from Loadout, detected by FSD module Item marker `overchargebooster_mkii`.
 - `travel <system> [/ <station>]` starts server-first assistive travel; station is optional, and system-only travel stops after destination-system arrival instead of docking.
 - TUI haul search results support `t` to save the highlighted route and start `travel` to its first station; the `/haul` web Travel Assist fields autofill from the selected route until manually edited or cleared.

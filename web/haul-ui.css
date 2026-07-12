@@ -1553,3 +1553,10 @@
     @media (max-width: 900px) {
       .rc-side-by-side { grid-template-columns: 1fr; }
     }
+
+    .route-compare-full {
+      margin-top: 16px;
+    }
+    .route-compare-full .field-row {
+      flex-wrap: wrap;
+    }

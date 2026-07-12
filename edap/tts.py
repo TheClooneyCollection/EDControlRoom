@@ -44,6 +44,7 @@ class AnnouncementId(str, Enum):
     ROUTE_PROFIT_DELTA = "route_profit_delta"
     SESSION_COMPLETE = "session_complete"
     MARKET_LEVEL_LOW = "market_level_low"
+    SPANSH_ROUTE_READY = "spansh_route_ready"
 
 
 def parse_announcement_id(value: str) -> AnnouncementId | None:

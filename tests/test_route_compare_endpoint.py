@@ -22,11 +22,11 @@ def _stub_data():
 
 
 class RouteCompareEndpointTests(unittest.TestCase):
-    def _client(self, *, token: str = "test-token") -> TestClient:
+    def _client(self, *, token: str = "test-token", broker: InMemoryObserverSessionBroker | None = None) -> TestClient:
         app = build_observer_server_app(
             data_provider=_stub_data,
             command_handler=None,
-            broker=InMemoryObserverSessionBroker(),
+            broker=broker or InMemoryObserverSessionBroker(),
             auth=SharedAccessTokenAuth(token),
         )
         return TestClient(app)
@@ -68,6 +68,19 @@ class RouteCompareEndpointTests(unittest.TestCase):
         with self._client() as client:
             response = self._get(client, "/api/route-compare?from=A&to=B&range=60")
             self.assertEqual(response.status_code, 503)
+
+    def test_fixture_publishes_spansh_route_ready_announcement(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        with self._client(broker=broker) as client:
+            response = self._get(client, "/api/route-compare?fixture=hd232819_xinca_overcharge")
+            self.assertEqual(response.status_code, 200)
+        announcements = broker.server_state.announcements()
+        self.assertEqual(len(announcements), 1)
+        event = announcements[0]
+        self.assertEqual(event.announcement_id, "spansh_route_ready")
+        self.assertIn("jump_summary", event.message_values)
+        self.assertIn("neutron_summary", event.message_values)
+        self.assertIn("Spansh route came back", event.message_text)
 
     def test_auth_required(self) -> None:
         with self._client(token="secret") as client:

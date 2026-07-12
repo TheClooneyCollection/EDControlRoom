@@ -16,6 +16,8 @@ class RouteComparison:
     jumps_delta: int
     neutron_delta: int
     verdict: Verdict
+    jump_summary: str
+    neutron_summary: str
     tts_phrase: str
 
 
@@ -35,36 +37,35 @@ def compare(
     else:
         verdict = "even"
 
+    jump_summary = _jump_summary(jumps_delta)
+    neutron_summary = _neutron_summary(neutron_delta)
+
     return RouteComparison(
         in_game=in_game,
         spansh=spansh,
         jumps_delta=jumps_delta,
         neutron_delta=neutron_delta,
         verdict=verdict,
-        tts_phrase=_build_tts_phrase(
-            title=title,
-            jumps_delta=jumps_delta,
-            neutron_delta=neutron_delta,
+        jump_summary=jump_summary,
+        neutron_summary=neutron_summary,
+        tts_phrase=(
+            f"{title}, Spansh route came back and it {jump_summary}, "
+            f"{neutron_summary}, would you like to review?"
         ),
     )
 
 
-def _build_tts_phrase(*, title: str, jumps_delta: int, neutron_delta: int) -> str:
+def _jump_summary(jumps_delta: int) -> str:
     if jumps_delta < 0:
-        jumps_part = f"saves {abs(jumps_delta)} jumps"
-    elif jumps_delta > 0:
-        jumps_part = f"adds {jumps_delta} jumps"
-    else:
-        jumps_part = "matches on jumps"
+        return f"saves {abs(jumps_delta)} jumps"
+    if jumps_delta > 0:
+        return f"adds {jumps_delta} jumps"
+    return "matches on jumps"
 
+
+def _neutron_summary(neutron_delta: int) -> str:
     if neutron_delta > 0:
-        neutron_part = f"with {neutron_delta} more neutron jumps"
-    elif neutron_delta < 0:
-        neutron_part = f"with {abs(neutron_delta)} fewer neutron jumps"
-    else:
-        neutron_part = "with the same number of neutron jumps"
-
-    return (
-        f"{title}, Spansh route came back and it {jumps_part}, "
-        f"{neutron_part}, would you like to review?"
-    )
+        return f"with {neutron_delta} more neutron jumps"
+    if neutron_delta < 0:
+        return f"with {abs(neutron_delta)} fewer neutron jumps"
+    return "with the same number of neutron jumps"
