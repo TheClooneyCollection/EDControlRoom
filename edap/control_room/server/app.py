@@ -3,8 +3,11 @@ from __future__ import annotations
 import asyncio
 from dataclasses import asdict, replace
 import json
+import logging
 from pathlib import Path
 from typing import Any, Callable
+
+logger = logging.getLogger(__name__)
 
 from starlette.applications import Starlette
 from starlette.middleware.cors import CORSMiddleware
@@ -290,6 +293,7 @@ def build_observer_server_app(
         except FileNotFoundError:
             return JSONResponse({"detail": "NavRoute.json not found; plot a route in game first"}, status_code=404)
         except Exception as exc:
+            logger.exception("route comparison failed")
             return JSONResponse({"detail": f"route comparison failed: {exc}"}, status_code=502)
         _publish_spansh_route_ready(broker, comparison)
         return JSONResponse(comparison_to_payload(comparison))
@@ -360,6 +364,12 @@ def build_observer_server_app(
         allow_methods=["GET", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type"],
     )
+
+    async def _log_unhandled_exception(request: Request, exc: Exception) -> JSONResponse:
+        logger.exception("unhandled exception on %s %s", request.method, request.url.path)
+        return JSONResponse({"detail": "internal server error"}, status_code=500)
+
+    app.add_exception_handler(Exception, _log_unhandled_exception)
     return app
 
 
@@ -483,6 +493,7 @@ async def _handle_search_haul_routes_message_async(
             query_params=query_params,
         )
     except Exception as exc:
+        logger.exception("haul search failed (async)")
         return _response_error(
             "haul_search_failed",
             str(exc) or "Failed to search haul routes.",
@@ -719,6 +730,7 @@ def _handle_session_message(
             skip_delay = skip_delay_value if isinstance(skip_delay_value, bool) else None
             command_handler.submit_input(raw_input, skip_delay=skip_delay)
         except Exception as exc:
+            logger.exception("submit_input dispatch failed")
             return protocol_message(
                 "response.error",
                 {
@@ -778,6 +790,7 @@ def _handle_session_message(
                 raw_command=raw_command,
             )
         except Exception as exc:
+            logger.exception("dispatch_destination failed")
             return _command_execution_failed_error(exc, correlation_message_id)
         return protocol_message(
             "response.success",
@@ -831,6 +844,7 @@ def _handle_session_message(
                 raw_command=raw_command,
             )
         except Exception as exc:
+            logger.exception("dispatch_travel failed")
             return _command_execution_failed_error(exc, correlation_message_id)
         return protocol_message(
             "response.success",
@@ -879,6 +893,7 @@ def _handle_session_message(
                 raw_command=raw_command,
             )
         except Exception as exc:
+            logger.exception("dispatch_haul_loop failed")
             return _command_execution_failed_error(exc, correlation_message_id)
         if trade_route is not None:
             broker.server_state.set_selected_trade_route(trade_route)
@@ -954,6 +969,7 @@ def _handle_session_message(
                 query_params=query_params,
             )
         except Exception as exc:
+            logger.exception("haul search failed (sync)")
             return _response_error(
                 "haul_search_failed",
                 str(exc) or "Failed to search haul routes.",
@@ -998,6 +1014,7 @@ def _handle_session_message(
         try:
             command_handler.cancel_active_routine(stop_mode=stop_mode)
         except Exception as exc:
+            logger.exception("cancel_active_routine failed")
             return protocol_message(
                 "response.error",
                 {

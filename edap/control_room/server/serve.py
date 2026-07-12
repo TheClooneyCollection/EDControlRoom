@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import sys
 
 import uvicorn
@@ -76,6 +77,11 @@ def serve_observer_mode(
         auth=SharedAccessTokenAuth(access_token),
         web_default_access_token=web_default_access_token,
         journal_dir=journal_dir,
+    )
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        stream=sys.stderr,
     )
     try:
         uvicorn.run(app, host=host, port=port, log_level="info")
