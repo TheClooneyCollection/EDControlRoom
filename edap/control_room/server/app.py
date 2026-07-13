@@ -20,6 +20,8 @@ from edap.control_room.server.auth import ObserverServerAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
 from edap.control_room.server.commands import ObserverSessionCommandHandler, trade_route_from_payload
 from edap.routing.comparison import RouteComparison
+from edap.routing.route_cache import RouteRequestKey
+from edap.routing.types import SpanshMetadata
 from edap.routing.web import (
     available_fixtures,
     build_live_comparison,
@@ -259,7 +261,10 @@ def build_observer_server_app(
                     status_code=400,
                 )
             _publish_spansh_route_ready(broker, comparison)
-            return JSONResponse(comparison_to_payload(comparison))
+            route_id = _cache_comparison_spansh_route(broker, comparison, range_ly=0.0)
+            payload = comparison_to_payload(comparison)
+            payload["route_id"] = route_id
+            return JSONResponse(payload)
 
         source_system = (params.get("from") or "").strip()
         destination_system = (params.get("to") or "").strip()
@@ -296,7 +301,10 @@ def build_observer_server_app(
             logger.exception("route comparison failed")
             return JSONResponse({"detail": f"route comparison failed: {exc}"}, status_code=502)
         _publish_spansh_route_ready(broker, comparison)
-        return JSONResponse(comparison_to_payload(comparison))
+        route_id = _cache_comparison_spansh_route(broker, comparison, range_ly=range_ly)
+        payload = comparison_to_payload(comparison)
+        payload["route_id"] = route_id
+        return JSONResponse(payload)
 
     async def session(websocket: WebSocket) -> None:
         if not auth.is_websocket_authorized(websocket):
@@ -371,6 +379,25 @@ def build_observer_server_app(
 
     app.add_exception_handler(Exception, _log_unhandled_exception)
     return app
+
+
+def _cache_comparison_spansh_route(
+    broker: InMemoryObserverSessionBroker,
+    comparison: RouteComparison,
+    *,
+    range_ly: float,
+) -> str:
+    metadata = comparison.spansh.metadata
+    efficiency = metadata.efficiency if isinstance(metadata, SpanshMetadata) else 60
+    supercharge_multiplier = metadata.supercharge_multiplier if isinstance(metadata, SpanshMetadata) else 4
+    request_key = RouteRequestKey(
+        source_system=comparison.spansh.source_system,
+        destination_system=comparison.spansh.destination_system,
+        range_ly=range_ly,
+        efficiency=efficiency,
+        supercharge_multiplier=supercharge_multiplier,
+    )
+    return broker.server_state.cache_spansh_route(comparison.spansh, request_key=request_key)
 
 
 def _publish_spansh_route_ready(

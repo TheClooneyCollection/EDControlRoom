@@ -3,6 +3,7 @@
   const WEB_CONFIG = window.EDCR_WEB_CONFIG || {};
   const AUTH_PARAM = WEB_CONFIG.authQueryParameterName || "access_token";
   const TOKEN_STORAGE_KEY = "edcr.haul.accessToken";
+  const state = { lastRouteId: null };
 
   function currentToken() {
     const input = document.getElementById("access-token");
@@ -95,6 +96,13 @@
     }
 
     document.getElementById("rc-results").classList.remove("hidden");
+
+    state.lastRouteId = payload.route_id || null;
+    const switchBtn = document.getElementById("rc-switch");
+    if (switchBtn) {
+      switchBtn.disabled = !state.lastRouteId;
+      switchBtn.title = state.lastRouteId ? "Fly the Spansh route waypoint by waypoint" : "Run Compare first";
+    }
   }
 
   async function fetchComparison(url) {
