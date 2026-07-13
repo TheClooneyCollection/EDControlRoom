@@ -396,12 +396,6 @@
     if (fetchSpanshBtn) fetchSpanshBtn.addEventListener("click", function () { fetchSpanshOnly(); });
     const allInOneBtn = document.getElementById("rc-all-in-one");
     if (allInOneBtn) allInOneBtn.addEventListener("click", function () { allInOne(); });
-    document.getElementById("rc-fixture-normal").addEventListener("click", function () {
-      fetchComparison("/api/route-compare?fixture=hd232819_xinca_normal");
-    });
-    document.getElementById("rc-fixture-overcharge").addEventListener("click", function () {
-      fetchComparison("/api/route-compare?fixture=hd232819_xinca_overcharge");
-    });
     const switchBtn = document.getElementById("rc-switch");
     if (switchBtn) switchBtn.addEventListener("click", dispatchSpanshRoute);
 

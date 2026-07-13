@@ -140,29 +140,45 @@
           </div>
         </section>
 
-        <section class="panel route-compare-full hidden" aria-labelledby="active-spansh-title" id="active-spansh-panel">
+        <section class="panel route-compare-full" aria-labelledby="active-spansh-title" id="active-spansh-panel">
           <div class="panel-head">
             <div class="panel-title" id="active-spansh-title">Active route</div>
-            <div class="panel-action" id="active-spansh-summary">-</div>
+            <div class="panel-action" id="active-spansh-status">Idle</div>
           </div>
           <div class="panel-body">
-            <div class="active-spansh-line" id="active-spansh-line">
-              <span class="active-spansh-node" id="active-spansh-last">-</span>
-              <span class="active-spansh-arrow">&rarr;</span>
-              <span class="active-spansh-gap mono" id="active-spansh-behind">- systems</span>
-              <span class="active-spansh-arrow">&rarr;</span>
-              <span class="active-spansh-node active-spansh-current" id="active-spansh-current">-</span>
-              <span class="active-spansh-arrow">&rarr;</span>
-              <span class="active-spansh-gap mono" id="active-spansh-ahead">- more systems</span>
-              <span class="active-spansh-arrow">&rarr;</span>
-              <span class="active-spansh-node" id="active-spansh-next">-</span>
+            <div class="active-spansh-empty" id="active-spansh-empty">
+              No active Spansh route. Dispatch one from <strong>Route Comparison</strong> and press <strong>Switch to Spansh</strong> to start.
+            </div>
+            <div class="active-spansh-content hidden" id="active-spansh-content">
+              <div class="routine-bar" id="active-spansh-waypoints" aria-label="Nearby waypoints"></div>
+              <div class="active-spansh-line" id="active-spansh-line">
+                <span class="active-spansh-node" id="active-spansh-last">-</span>
+                <span class="active-spansh-arrow">&rarr;</span>
+                <span class="active-spansh-node active-spansh-current" id="active-spansh-current">-</span>
+                <span class="active-spansh-arrow">&rarr;</span>
+                <span class="active-spansh-node" id="active-spansh-next">-</span>
+              </div>
+              <div class="mini-metrics">
+                <div class="metric">
+                  <div class="metric-label">Jumps remaining</div>
+                  <div class="metric-value mono" id="active-spansh-jumps-remaining">-</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">LY remaining</div>
+                  <div class="metric-value mono" id="active-spansh-ly-remaining">-</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">Boosts remaining</div>
+                  <div class="metric-value mono" id="active-spansh-boosts-remaining">-</div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
         <section class="panel route-compare-full" aria-labelledby="route-compare-title" id="route-compare-panel">
           <div class="panel-head">
-            <div class="panel-title" id="route-compare-title">Route Comparison <span class="tag">beta</span></div>
+            <div class="panel-title" id="route-compare-title">Route Comparison</div>
             <div class="panel-action" id="route-compare-verdict">Idle</div>
           </div>
           <div class="panel-body">
@@ -210,10 +226,6 @@
                 <button class="btn" type="button" id="rc-compare" title="Compare local NavRoute.json against Spansh">Compare</button>
                 <button class="btn primary" type="button" id="rc-all-in-one" title="Set in-game route, then fetch Spansh, then compare">All in one</button>
                 <button class="btn ghost" type="button" id="rc-switch" disabled title="Run Compare or Fetch Spansh first">Switch to Spansh</button>
-              </div>
-              <div class="btn-row action-row">
-                <button class="btn ghost" type="button" id="rc-fixture-normal">Load Normal fixture</button>
-                <button class="btn ghost" type="button" id="rc-fixture-overcharge">Load Overcharge fixture</button>
               </div>
             </div>
             <div id="rc-status" class="rc-status"></div>
