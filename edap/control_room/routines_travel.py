@@ -5,7 +5,7 @@ from rich.markup import escape
 
 from edap.control_room.history import now_iso
 from edap.control_room.interfaces import TravelHost
-from edap.control_room.routines_haul import _build_haul_runtime
+from edap.control_room.routine_runtime_builder import build_routine_runtime
 from edap.control_room_state import CommandHistoryEntry
 from edap.routines import travel_to_station
 from edap.routines.travel import TravelDestination
@@ -72,7 +72,7 @@ def dispatch_travel(
     controls = app._make_controls(progress)
     watcher = app._make_watcher()
     sleeper = app._make_sleeper()
-    runtime = _build_haul_runtime(
+    runtime = build_routine_runtime(
         app,
         controls=controls,
         watcher=watcher,

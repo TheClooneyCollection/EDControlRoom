@@ -8,7 +8,13 @@ from unittest.mock import patch
 
 from edap.config import default_haul_routine_defaults
 from edap.routines.callbacks import noop_announce, noop_progress
-from edap.routines.haul_support import HaulMarketSettings, HaulRuntime, HaulTiming, HaulTravelSettings
+from edap.routines.haul_support import (
+    HaulMarketSettings,
+    HaulRuntime,
+    HaulTravelSettings,
+    build_haul_runtime,
+    build_haul_timing,
+)
 from edap.routines.haul_two_way import (
     _HaulCtx,
     Phase,
@@ -37,12 +43,12 @@ def haul_loop_two_way(*args, **kwargs):
     journal_dir = kwargs.pop("journal_dir")
     station_1_buying = kwargs.pop("station_1_buying")
     station_2_buying = kwargs.pop("station_2_buying")
-    runtime = HaulRuntime(
+    runtime = build_haul_runtime(
         controls=controls,
         watcher=watcher,
         journal_dir=journal_dir,
         market_path=journal_dir / "Market.json",
-        timing=HaulTiming(
+        timing=build_haul_timing(
             step_delay_s=kwargs.pop("step_delay_s", 1.0),
             max_hold_s=kwargs.pop("max_hold_s", 10.0),
             dock_timeout_s=kwargs.pop("dock_timeout_s", _DEFAULTS.dock_timeout_seconds),
@@ -193,12 +199,12 @@ def _test_haul_runtime(
     progress_fn=noop_progress,
     announce_fn=noop_announce,
 ) -> HaulRuntime:
-    return HaulRuntime(
+    return build_haul_runtime(
         controls=controls,
         watcher=watcher,
         journal_dir=journal_dir,
         market_path=journal_dir / "Market.json",
-        timing=HaulTiming(
+        timing=build_haul_timing(
             step_delay_s=0.0,
             max_hold_s=10.0,
             dock_timeout_s=30.0,

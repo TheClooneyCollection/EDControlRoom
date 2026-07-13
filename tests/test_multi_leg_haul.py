@@ -19,7 +19,13 @@ from edap.multi_leg_haul import (
 )
 from edap.routines import RoutineResult
 from edap.routines.callbacks import noop_announce, noop_progress
-from edap.routines.haul_support import HaulMarketSettings, HaulRuntime, HaulTiming, HaulTravelSettings
+from edap.routines.haul_support import (
+    HaulMarketSettings,
+    HaulRuntime,
+    HaulTravelSettings,
+    build_haul_runtime,
+    build_haul_timing,
+)
 from edap.routines.haul_multi_leg import (
     Phase,
     _wait_for_arrival_or_approach_event,
@@ -43,12 +49,12 @@ def multi_leg_haul(*args, **kwargs):
     controls, watcher = args
     definition = kwargs.pop("definition")
     journal_dir = kwargs.pop("journal_dir")
-    runtime = HaulRuntime(
+    runtime = build_haul_runtime(
         controls=controls,
         watcher=watcher,
         journal_dir=journal_dir,
         market_path=journal_dir / "Market.json",
-        timing=HaulTiming(
+        timing=build_haul_timing(
             step_delay_s=kwargs.pop("step_delay_s", 1.0),
             max_hold_s=kwargs.pop("max_hold_s", 10.0),
             dock_timeout_s=kwargs.pop("dock_timeout_s", _DEFAULTS.dock_timeout_seconds),

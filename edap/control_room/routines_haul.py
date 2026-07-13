@@ -23,8 +23,9 @@ from edap.inara.trade_routes import (
     search_trade_routes,
 )
 from edap.multi_leg_haul import load_multi_leg_haul_definition
+from edap.control_room.routine_runtime_builder import build_routine_runtime
 from edap.routines import haul_loop_two_way, multi_leg_haul
-from edap.routines.haul_support import HaulMarketSettings, HaulRuntime, HaulTiming, HaulTravelSettings
+from edap.routines.haul_support import HaulMarketSettings, HaulRuntime, HaulTiming
 from edap.routines.haul_two_way import Phase, StationLeg, TwoWayHaulRoute
 
 
@@ -70,43 +71,36 @@ def _build_haul_runtime(
     deny_retry_delay_s: float = 5.0,
 ) -> HaulRuntime:
     cfg = app._config.controls
-    return HaulRuntime(
+    routine = build_routine_runtime(
+        app,
         controls=controls,
         watcher=watcher,
-        journal_dir=app._journal_dir,
+        sleeper=sleeper,
+        time_fn=time_fn,
+        progress_fn=progress_fn,
+        dock_timeout_s=dock_timeout_s,
+        galaxy_map_settle_s=galaxy_map_settle_s,
+        request_timeout_s=request_timeout_s,
+        settle_s=settle_s,
+        boost_settle_s=boost_settle_s,
+        deny_retry_delay_s=deny_retry_delay_s,
+    )
+    haul_timing = HaulTiming(
+        routine=routine.timing,
+        max_hold_s=cfg.market_buy_max_hold_seconds,
+        trade_timeout_s=trade_timeout_s,
+        post_sell_settle_s=cfg.haul_post_sell_settle_seconds,
+    )
+    return HaulRuntime(
+        routine=routine,
         market_path=app._journal_dir / "Market.json",
-        timing=HaulTiming(
-            step_delay_s=cfg.step_delay_seconds,
-            max_hold_s=cfg.market_buy_max_hold_seconds,
-            dock_timeout_s=dock_timeout_s,
-            request_timeout_s=request_timeout_s,
-            undock_timeout_s=cfg.undock_timeout_seconds,
-            undock_no_track_timeout_s=cfg.undock_no_track_timeout_seconds,
-            trade_timeout_s=trade_timeout_s,
-            settle_s=settle_s,
-            galaxy_map_settle_s=galaxy_map_settle_s,
-            supercruise_exit_settle_s=cfg.dock_supercruise_exit_settle_seconds,
-            boost_settle_s=boost_settle_s,
-            deny_retry_delay_s=deny_retry_delay_s,
-            mass_lock_boost_delay_s=cfg.mass_lock_boost_delay_seconds,
-            post_sell_settle_s=cfg.haul_post_sell_settle_seconds,
-            nav_panel_open_delay_s=cfg.haul_two_way_nav_panel_open_delay_seconds,
-        ),
         market=HaulMarketSettings(
             buy_hold_segments=cfg.market_buy_hold_segments,
             sell_quantity_restore_taps=cfg.market_sell_quantity_restore_taps,
             sell_quantity_restore_tap_delay_s=cfg.market_sell_quantity_restore_tap_delay_seconds,
             critical_level_multiplier=cfg.market_critical_level_multiplier,
         ),
-        travel=HaulTravelSettings(
-            auto_hyperspace_engage=cfg.haul_two_way_auto_hyperspace_engage,
-            open_nav_panel_after_hyperspace_arrival=cfg.haul_two_way_open_nav_panel_after_hyperspace_arrival,
-            max_dock_retries=3,
-        ),
-        time_fn=time_fn,
-        sleeper=sleeper,
-        progress_fn=progress_fn,
-        announce_fn=app._announce_tts,
+        haul_timing=haul_timing,
     )
 
 

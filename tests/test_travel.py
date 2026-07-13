@@ -10,7 +10,13 @@ from edap.config import default_haul_routine_defaults
 from edap.control_room.routines_travel import parse_travel_command
 from edap.routines._base import RoutineResult
 from edap.routines.callbacks import noop_progress
-from edap.routines.haul_support import HaulMarketSettings, HaulRuntime, HaulTiming, HaulTravelSettings
+from edap.routines.haul_support import (
+    HaulMarketSettings,
+    HaulRuntime,
+    HaulTravelSettings,
+    build_haul_runtime,
+    build_haul_timing,
+)
 from edap.routines.travel import TravelDestination, travel_to_station
 from edap.tts import AnnouncementId
 from tests.fakes import FakeShipControls, FakeWatcher
@@ -27,12 +33,12 @@ def _runtime(
     progress: list[str] | None = None,
     announcements: list[tuple[AnnouncementId, dict[str, object]]] | None = None,
 ) -> HaulRuntime:
-    return HaulRuntime(
+    return build_haul_runtime(
         controls=controls or FakeShipControls(),
         watcher=watcher or FakeWatcher([]),
         journal_dir=journal_dir,
         market_path=journal_dir / "Market.json",
-        timing=HaulTiming(
+        timing=build_haul_timing(
             step_delay_s=0.0,
             max_hold_s=1.0,
             dock_timeout_s=30.0,

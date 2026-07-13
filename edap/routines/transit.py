@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from edap.actions import ActionDispatchResult
-from edap.routines._base import RoutineResult, SupportsHaulControls, SupportsPollEvents, _is_in_supercruise_event
+from edap.routines._base import RoutineResult, SupportsRoutineControls, SupportsPollEvents, _is_in_supercruise_event
 from edap.routines.callbacks import AnnouncementCallback, ProgressCallback
 from edap.routines.docking import _undock_until_undocked, _wait_for_clear_of_station, dock, station_refuel_menu
 from edap.routines.escape import escape_mass_lock
@@ -44,7 +44,7 @@ class TransitTravelSettings(Protocol):
 
 
 class TransitRuntime(Protocol):
-    controls: SupportsHaulControls
+    controls: SupportsRoutineControls
     watcher: SupportsPollEvents
     journal_dir: Path
     timing: TransitTiming

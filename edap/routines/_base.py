@@ -133,7 +133,7 @@ class SupportsRawKeyControls(Protocol):
         """Tap a raw key without going through action binding lookup."""
 
 
-class SupportsHaulControls(
+class SupportsRoutineControls(
     SupportsDockingControls,
     SupportsUndockControls,
     SupportsMarketControls,
@@ -142,7 +142,7 @@ class SupportsHaulControls(
     SupportsRawKeyControls,
     Protocol,
 ):
-    """Combined protocol for all controls needed in the haul loop."""
+    """Combined controls protocol shared by every routine (haul, travel, spansh route)."""
 
 
 @dataclass(frozen=True)

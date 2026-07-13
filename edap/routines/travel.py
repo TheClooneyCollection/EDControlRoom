@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from edap.actions import ActionDispatchResult
 from edap.routines._base import RoutineResult
-from edap.routines.haul_support import HaulRuntime
+from edap.routines.runtime import RoutineRuntime
 from edap.routines.transit import (
     depart_system_to_route,
     is_manual_landing_result,
@@ -29,7 +29,7 @@ class TravelDestination:
         return f"{self.station} ({self.system})" if self.station and self.system else self.station or self.system
 
 
-def travel_to_station(runtime: HaulRuntime, *, destination: TravelDestination) -> RoutineResult:
+def travel_to_station(runtime: RoutineRuntime, *, destination: TravelDestination) -> RoutineResult:
     if not destination.system.strip():
         raise ValueError("travel destination system is required")
 
@@ -114,7 +114,7 @@ def travel_to_station(runtime: HaulRuntime, *, destination: TravelDestination) -
 
 
 def _travel_system_arrival(
-    runtime: HaulRuntime,
+    runtime: RoutineRuntime,
     destination: TravelDestination,
     *,
     assume_arrived: bool,
@@ -148,7 +148,7 @@ def _travel_system_arrival(
 
 
 def _travel_transit(
-    runtime: HaulRuntime,
+    runtime: RoutineRuntime,
     destination: TravelDestination,
     *,
     assume_arrived: bool,
@@ -175,7 +175,7 @@ def _travel_transit(
     return result
 
 
-def _set_route_from_supercruise(runtime: HaulRuntime, destination_system: str) -> bool:
+def _set_route_from_supercruise(runtime: RoutineRuntime, destination_system: str) -> bool:
     runtime.progress_fn(f"Setting galaxy map destination: {destination_system}...")
     runtime.announce_fn(AnnouncementId.DESTINATION_SET, system_name=destination_system)
     return set_galaxy_map_destination_for_transit(
