@@ -7,6 +7,7 @@ disabled_messages = []
 [tts.phrases]
 startup_greeting = "Hello {title}."
 destination_set = "Opening galaxy map to set destination to {system_name}."
+fsd_target_locked = "New FSD target acquired: {system_name}."
 station_cleared = "Station cleared. Frame shift drive online, {title}. Ready to jump."
 haul_aborted = "Haul aborted."
 haul_cancelled = "Haul cancelled."

@@ -2480,7 +2480,7 @@ on_land = true
 
         self.app._handle_event({"event": "FSDTarget", "Name": "Achenar"})
 
-        self.assertIn((AnnouncementId.DESTINATION_SET, {"system_name": "Achenar"}), self.app._tts.calls)
+        self.assertIn((AnnouncementId.FSD_TARGET_LOCKED, {"system_name": "Achenar"}), self.app._tts.calls)
 
     def test_handle_event_does_not_announce_undocking_outside_haul(self) -> None:
         self.app._tts = _FakeTTS()

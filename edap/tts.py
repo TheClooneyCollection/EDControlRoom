@@ -15,6 +15,7 @@ from edap.config import TTSConfig
 class AnnouncementId(str, Enum):
     STARTUP_GREETING = "startup_greeting"
     DESTINATION_SET = "destination_set"
+    FSD_TARGET_LOCKED = "fsd_target_locked"
     STATION_CLEARED = "station_cleared"
     HAUL_ABORTED = "haul_aborted"
     HAUL_CANCELLED = "haul_cancelled"

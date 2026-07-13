@@ -1495,7 +1495,7 @@ class ControlRoomApp(App[None]):
         if event == "FSDTarget":
             system_name = str(ev.get("Name", "")).strip()
             if system_name:
-                self._announce_tts(AnnouncementId.DESTINATION_SET, system_name=system_name)
+                self._announce_tts(AnnouncementId.FSD_TARGET_LOCKED, system_name=system_name)
         elif event == "Docked":
             self._announce_tts(AnnouncementId.DOCKING_COMPLETE)
         elif event == "Undocked" and station_before and self._haul_stats.active:
