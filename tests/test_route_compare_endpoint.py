@@ -440,5 +440,85 @@ class DispatchRouteAllInOneTests(unittest.TestCase):
         self.assertEqual(message["payload"]["error_code"], "active_operator_transport_unavailable")
 
 
+class ActiveSpanshRouteHydrateTests(unittest.TestCase):
+    def test_hydrate_omits_active_route_when_none(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        app = build_observer_server_app(
+            data_provider=_ws_data,
+            command_handler=None,
+            broker=broker,
+            auth=SharedAccessTokenAuth("test-token"),
+        )
+        with TestClient(app) as client:
+            response = client.get(
+                "/hydrate",
+                headers={"Authorization": "Bearer test-token"},
+            )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["payload"]
+        self.assertIsNone(payload.get("active_spansh_route"))
+
+    def test_dispatch_spansh_route_sets_active_and_hydrate_exposes_it(self) -> None:
+        from edap.routing.route_cache import RouteRequestKey
+
+        broker = InMemoryObserverSessionBroker()
+
+        class _RecordingHandler:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def dispatch_spansh_route(self, **_kwargs) -> None:
+                self.calls += 1
+
+        handler = _RecordingHandler()
+        route = _fake_spansh_route(source_system="Sol", destination_system="Xinca")
+        route_id = broker.server_state.cache_spansh_route(
+            route,
+            request_key=RouteRequestKey(
+                source_system="Sol",
+                destination_system="Xinca",
+                range_ly=60.0,
+                efficiency=60,
+                supercharge_multiplier=4,
+            ),
+        )
+        app = build_observer_server_app(
+            data_provider=_ws_data,
+            command_handler=handler,
+            broker=broker,
+            auth=SharedAccessTokenAuth("test-token"),
+        )
+        with TestClient(app) as client:
+            with client.websocket_connect("/session?client_name=web&access_token=test-token") as websocket:
+                websocket.receive_json()  # connection_ready
+                websocket.receive_json()  # initial hydrate
+                websocket.send_json({
+                    "message_type": "command.dispatch_spansh_route",
+                    "message_id": "msg-active-1",
+                    "payload": {"route_id": route_id, "station": ""},
+                })
+                messages = []
+                for _ in range(6):
+                    messages.append(websocket.receive_json())
+                    if any(m.get("correlation_message_id") == "msg-active-1" for m in messages):
+                        break
+
+        self.assertEqual(handler.calls, 1)
+        self.assertEqual(broker.server_state.active_spansh_route_id(), route_id)
+
+        with TestClient(app) as client:
+            response = client.get(
+                "/hydrate",
+                headers={"Authorization": "Bearer test-token"},
+            )
+        payload = response.json()["payload"]
+        active = payload.get("active_spansh_route")
+        self.assertIsNotNone(active)
+        self.assertEqual(active["route_id"], route_id)
+        self.assertEqual(active["route"]["destination_system"], "Xinca")
+        waypoints = active["route"]["waypoints"]
+        self.assertEqual([w["system"] for w in waypoints], ["Sol", "Barnard's Star"])
+
+
 if __name__ == "__main__":
     unittest.main()

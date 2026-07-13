@@ -103,6 +103,9 @@ def data_read_model_from_payload(payload: dict[str, Any]) -> ControlRoomDataRead
         home_system=str(payload.get("home_system", "")),
         selected_trade_route=_trade_route(payload.get("selected_trade_route")),
         running_trade_route=_trade_route(payload.get("running_trade_route")),
+        active_spansh_route=_mapping(payload.get("active_spansh_route")) or None
+        if payload.get("active_spansh_route") is not None
+        else None,
     )
 
 

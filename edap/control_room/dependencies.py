@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from edap.control_room.models import HaulStats, MarketData, ShipState
 from edap.control_room.routine_stop import RoutineStopMode
@@ -84,6 +84,7 @@ class ControlRoomDataReadModel:
     home_system: str = ""
     selected_trade_route: TradeRoute | None = None
     running_trade_route: TradeRoute | None = None
+    active_spansh_route: dict[str, Any] | None = None
 
 
 class ControlRoomDataSource(Protocol):

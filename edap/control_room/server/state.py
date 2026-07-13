@@ -21,6 +21,7 @@ class ControlRoomServerState:
         self._selected_trade_route: TradeRoute | None = None
         self._running_trade_route: TradeRoute | None = None
         self._spansh_route_cache = RouteCache(max_entries=spansh_route_cache_size)
+        self._active_spansh_route_id: str | None = None
 
     def replace_activity_log(self, entries: list[ActivityLogEntry]) -> None:
         self._activity_log = list(entries)[-self._activity_log_limit :]
@@ -56,3 +57,9 @@ class ControlRoomServerState:
 
     def get_spansh_route(self, route_id: str) -> Route | None:
         return self._spansh_route_cache.get(route_id)
+
+    def set_active_spansh_route(self, route_id: str | None) -> None:
+        self._active_spansh_route_id = route_id or None
+
+    def active_spansh_route_id(self) -> str | None:
+        return self._active_spansh_route_id

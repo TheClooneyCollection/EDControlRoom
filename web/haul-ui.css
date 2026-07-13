@@ -1557,6 +1557,26 @@
     .route-compare-full {
       margin-top: 16px;
     }
+    .active-spansh-line {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+    }
+    .active-spansh-node {
+      font-weight: 600;
+    }
+    .active-spansh-current {
+      color: var(--text-highlight, #7fdbff);
+    }
+    .active-spansh-gap {
+      color: var(--text-muted);
+      font-size: 0.9em;
+    }
+    .active-spansh-arrow {
+      color: var(--text-muted);
+    }
     .route-compare-full .field-row {
       flex-wrap: wrap;
     }

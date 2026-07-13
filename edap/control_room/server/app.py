@@ -237,6 +237,7 @@ def build_observer_server_app(
             "haul-ui.js": "text/javascript; charset=utf-8",
             "multi-haul.js": "text/javascript; charset=utf-8",
             "route-compare.js": "text/javascript; charset=utf-8",
+            "active-route.js": "text/javascript; charset=utf-8",
         }
         media_type = allowed_assets.get(asset_name)
         if media_type is None:
@@ -579,11 +580,23 @@ def _server_hydrate_data(
         broker.server_state.running_trade_route()
         or getattr(data, "running_trade_route", None)
     )
+    active_spansh_route = _active_spansh_route_payload(broker)
     return replace(
         data,
         selected_trade_route=selected_trade_route,
         running_trade_route=running_trade_route,
+        active_spansh_route=active_spansh_route,
     )
+
+
+def _active_spansh_route_payload(broker: InMemoryObserverSessionBroker) -> dict[str, Any] | None:
+    route_id = broker.server_state.active_spansh_route_id()
+    if not route_id:
+        return None
+    route = broker.server_state.get_spansh_route(route_id)
+    if route is None:
+        return None
+    return {"route_id": route_id, "route": route_payload(route)}
 
 
 def _publish_route_hydrate(
@@ -1259,6 +1272,8 @@ def _handle_session_message(
         except Exception as exc:
             logger.exception("dispatch_spansh_route failed")
             return _command_execution_failed_error(exc, correlation_message_id)
+        broker.server_state.set_active_spansh_route(route_id_value.strip())
+        _publish_route_hydrate(broker=broker, data_provider=data_provider)
         return protocol_message(
             "response.success",
             {

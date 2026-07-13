@@ -806,6 +806,8 @@ let routes = [];
         max_jump_range_ly: ship.max_jump_range_ly || null,
       };
       window.dispatchEvent(new CustomEvent("edcr:ship-state", { detail: window.EDCR_HAUL.shipState }));
+      window.EDCR_HAUL.lastHydrate = payload;
+      window.dispatchEvent(new CustomEvent("edcr:hydrate", { detail: payload }));
       if (ship.cargo_capacity) {
         WEB_DEFAULTS.cargoCapacity = String(ship.cargo_capacity);
         document.getElementById("capacity").value = ship.cargo_capacity;
