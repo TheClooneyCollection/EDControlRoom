@@ -17,6 +17,7 @@ SUPPORTED_COMMAND_MESSAGE_TYPES = [
     "command.dispatch_haul_loop",
     "command.dispatch_travel",
     "command.dispatch_spansh_route",
+    "command.dispatch_route_all_in_one",
     "command.search_haul_routes",
     "command.select_trade_route",
     "command.cancel_active_routine",

@@ -24,6 +24,13 @@ def _stub_data():
     return Stub()
 
 
+def _ws_data():
+    # Websocket path reads server_status fields; borrow the fixture from
+    # test_control_room_server so the /session handshake works.
+    from tests.test_control_room_server import _base_data_read_model
+    return _base_data_read_model()
+
+
 class RouteCompareEndpointTests(unittest.TestCase):
     def _client(self, *, token: str = "test-token", broker: InMemoryObserverSessionBroker | None = None) -> TestClient:
         app = build_observer_server_app(
@@ -227,6 +234,210 @@ class SpanshRouteEndpointTests(unittest.TestCase):
         with self._client(token="secret") as client:
             response = client.get("/api/spansh-route?from=A&to=B&range=60")
             self.assertEqual(response.status_code, 401)
+
+
+class _FakeCommandHandler:
+    def __init__(self) -> None:
+        self.dispatched_destinations: list[tuple[str, float, bool, str | None]] = []
+
+    def dispatch_destination(
+        self,
+        destination: str,
+        galaxy_map_settle: float,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self.dispatched_destinations.append((destination, galaxy_map_settle, skip_delay, raw_command))
+
+
+class DispatchRouteAllInOneTests(unittest.TestCase):
+    def _receive_until_response(self, websocket, correlation_id: str):
+        for _ in range(16):
+            message = websocket.receive_json()
+            if message.get("correlation_message_id") == correlation_id:
+                return message
+        self.fail(f"Did not receive response for {correlation_id}")
+
+    def _client(
+        self,
+        *,
+        broker: InMemoryObserverSessionBroker,
+        command_handler: _FakeCommandHandler,
+        journal_dir=None,
+    ) -> TestClient:
+        app = build_observer_server_app(
+            data_provider=_ws_data,
+            command_handler=command_handler,
+            broker=broker,
+            auth=SharedAccessTokenAuth("test-token"),
+            journal_dir=journal_dir,
+            route_compare_navroute_wait_seconds=0.0,
+            route_compare_compare_retry_attempts=3,
+        )
+        return TestClient(app)
+
+    def test_happy_path_dispatches_destination_and_returns_comparison(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        handler = _FakeCommandHandler()
+        fake_comparison_payload = {
+            "verdict": "spansh_better",
+            "jumps_delta": -1,
+            "neutron_delta": 1,
+            "in_game": {"waypoints": [], "total_jumps": 3, "total_ly": 100.0, "neutron_count": 0},
+            "spansh": {
+                "waypoints": [],
+                "total_jumps": 2,
+                "total_ly": 100.0,
+                "neutron_count": 1,
+                "source_system": "Sol",
+                "destination_system": "Xinca",
+                "metadata": {"efficiency": 60, "supercharge_multiplier": 6, "galaxy_map_visits": 2},
+            },
+            "route_id": "route-live-123",
+        }
+        with patch(
+            "edap.control_room.server.app.fetch_and_cache_spansh_route",
+            return_value=(None, "route-spansh-abc", {"spansh": {"waypoints": [1, 2, 3]}, "route_id": "route-spansh-abc"}),
+        ), patch(
+            "edap.control_room.server.app.build_and_cache_live_comparison",
+            return_value=fake_comparison_payload,
+        ):
+            with self._client(broker=broker, command_handler=handler) as client:
+                with client.websocket_connect("/session?client_name=web&access_token=test-token") as websocket:
+                    websocket.receive_json()
+                    websocket.receive_json()
+                    websocket.send_json({
+                        "message_type": "command.dispatch_route_all_in_one",
+                        "message_id": "msg-1",
+                        "payload": {
+                            "from": "Sol",
+                            "to": "Xinca",
+                            "range": 60,
+                            "efficiency": 60,
+                            "supercharge_multiplier": 6,
+                            "galaxy_map_settle": 1.5,
+                            "raw_command": "web all-in-one Sol -> Xinca",
+                        },
+                    })
+                    response = self._receive_until_response(websocket, "msg-1")
+        self.assertEqual(response["message_type"], "response.success")
+        result = response["payload"]["result"]
+        self.assertEqual(result["route_id"], "route-live-123")
+        self.assertEqual(result["comparison"]["verdict"], "spansh_better")
+        phases = result["phases"]
+        self.assertEqual([p["phase"] for p in phases], ["dispatch_destination", "fetch_spansh", "compare"])
+        self.assertTrue(all(p["status"] == "ok" for p in phases))
+        self.assertEqual(handler.dispatched_destinations, [("Xinca", 1.5, False, "web all-in-one Sol -> Xinca")])
+
+    def test_retries_compare_on_retryable_error_then_succeeds(self) -> None:
+        from edap.control_room.server.app import RouteCompareError
+
+        broker = InMemoryObserverSessionBroker()
+        handler = _FakeCommandHandler()
+        attempts = {"n": 0}
+
+        def compare_side_effect(**_kwargs):
+            attempts["n"] += 1
+            if attempts["n"] < 3:
+                raise RouteCompareError(status_code=404, detail="NavRoute.json not found", retryable=True)
+            return {"route_id": "route-final", "verdict": "even", "in_game": {}, "spansh": {}}
+
+        with patch(
+            "edap.control_room.server.app.fetch_and_cache_spansh_route",
+            return_value=(None, "route-spansh-abc", {"spansh": {"waypoints": []}, "route_id": "route-spansh-abc"}),
+        ), patch(
+            "edap.control_room.server.app.build_and_cache_live_comparison",
+            side_effect=compare_side_effect,
+        ):
+            with self._client(broker=broker, command_handler=handler) as client:
+                with client.websocket_connect("/session?client_name=web&access_token=test-token") as websocket:
+                    websocket.receive_json()
+                    websocket.receive_json()
+                    websocket.send_json({
+                        "message_type": "command.dispatch_route_all_in_one",
+                        "message_id": "msg-2",
+                        "payload": {
+                            "from": "Sol",
+                            "to": "Xinca",
+                            "range": 60,
+                            "galaxy_map_settle": 0.5,
+                        },
+                    })
+                    response = self._receive_until_response(websocket, "msg-2")
+        self.assertEqual(response["message_type"], "response.success")
+        self.assertEqual(attempts["n"], 3)
+        phases = response["payload"]["result"]["phases"]
+        compare_phases = [p for p in phases if p["phase"] == "compare"]
+        self.assertEqual([p["status"] for p in compare_phases], ["retryable", "retryable", "ok"])
+
+    def test_returns_error_when_all_compare_attempts_fail(self) -> None:
+        from edap.control_room.server.app import RouteCompareError
+
+        broker = InMemoryObserverSessionBroker()
+        handler = _FakeCommandHandler()
+        with patch(
+            "edap.control_room.server.app.fetch_and_cache_spansh_route",
+            return_value=(None, "route-spansh", {"spansh": {"waypoints": []}, "route_id": "route-spansh"}),
+        ), patch(
+            "edap.control_room.server.app.build_and_cache_live_comparison",
+            side_effect=RouteCompareError(status_code=404, detail="NavRoute.json not found", retryable=True),
+        ):
+            with self._client(broker=broker, command_handler=handler) as client:
+                with client.websocket_connect("/session?client_name=web&access_token=test-token") as websocket:
+                    websocket.receive_json()
+                    websocket.receive_json()
+                    websocket.send_json({
+                        "message_type": "command.dispatch_route_all_in_one",
+                        "message_id": "msg-3",
+                        "payload": {"from": "Sol", "to": "Xinca", "range": 60, "galaxy_map_settle": 0.0},
+                    })
+                    response = self._receive_until_response(websocket, "msg-3")
+        self.assertEqual(response["message_type"], "response.error")
+        self.assertEqual(response["payload"]["error_code"], "route_all_in_one_compare_failed")
+
+    def test_missing_from_returns_invalid_command(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        handler = _FakeCommandHandler()
+        with self._client(broker=broker, command_handler=handler) as client:
+            with client.websocket_connect("/session?client_name=web&access_token=test-token") as websocket:
+                websocket.receive_json()
+                websocket.receive_json()
+                websocket.send_json({
+                    "message_type": "command.dispatch_route_all_in_one",
+                    "message_id": "msg-4",
+                    "payload": {"to": "Xinca", "range": 60, "galaxy_map_settle": 0.0},
+                })
+                response = self._receive_until_response(websocket, "msg-4")
+        self.assertEqual(response["payload"]["error_code"], "invalid_command")
+        self.assertEqual(handler.dispatched_destinations, [])
+
+    def test_no_command_handler_returns_transport_unavailable(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        app = build_observer_server_app(
+            data_provider=_ws_data,
+            command_handler=None,
+            broker=broker,
+            auth=SharedAccessTokenAuth("test-token"),
+            route_compare_navroute_wait_seconds=0.0,
+            route_compare_compare_retry_attempts=1,
+        )
+        with TestClient(app) as client:
+            with client.websocket_connect("/session?client_name=web&access_token=test-token") as websocket:
+                websocket.receive_json()
+                websocket.receive_json()
+                websocket.send_json({
+                    "message_type": "command.dispatch_route_all_in_one",
+                    "message_id": "msg-5",
+                    "payload": {"from": "Sol", "to": "Xinca", "range": 60, "galaxy_map_settle": 0.0},
+                })
+                for _ in range(8):
+                    message = websocket.receive_json()
+                    if message.get("correlation_message_id") == "msg-5":
+                        break
+                else:
+                    self.fail("no response")
+        self.assertEqual(message["payload"]["error_code"], "active_operator_transport_unavailable")
 
 
 if __name__ == "__main__":

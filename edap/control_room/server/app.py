@@ -278,11 +278,6 @@ def build_observer_server_app(
                 {"detail": "from, to, and range are required (or pass fixture=<name>)"},
                 status_code=400,
             )
-        if journal_dir is None:
-            return JSONResponse(
-                {"detail": "server has no journal_dir configured; live comparison unavailable"},
-                status_code=503,
-            )
         try:
             range_ly = float(range_raw)
             efficiency = int(params.get("efficiency", "60"))
@@ -290,8 +285,9 @@ def build_observer_server_app(
         except ValueError as exc:
             return JSONResponse({"detail": f"invalid numeric parameter: {exc}"}, status_code=400)
         try:
-            comparison = await asyncio.to_thread(
-                build_live_comparison,
+            payload = await asyncio.to_thread(
+                build_and_cache_live_comparison,
+                broker=broker,
                 journal_dir=journal_dir,
                 source_system=source_system,
                 destination_system=destination_system,
@@ -299,15 +295,8 @@ def build_observer_server_app(
                 efficiency=efficiency,
                 supercharge_multiplier=supercharge_multiplier,
             )
-        except FileNotFoundError:
-            return JSONResponse({"detail": "NavRoute.json not found; plot a route in game first"}, status_code=404)
-        except Exception as exc:
-            logger.exception("route comparison failed")
-            return JSONResponse({"detail": f"route comparison failed: {exc}"}, status_code=502)
-        _publish_spansh_route_ready(broker, comparison)
-        route_id = _cache_comparison_spansh_route(broker, comparison, range_ly=range_ly)
-        payload = comparison_to_payload(comparison)
-        payload["route_id"] = route_id
+        except RouteCompareError as exc:
+            return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
         return JSONResponse(payload)
 
     async def route_compare_config_endpoint(request: Request) -> JSONResponse:
@@ -341,26 +330,17 @@ def build_observer_server_app(
         except ValueError as exc:
             return JSONResponse({"detail": f"invalid numeric parameter: {exc}"}, status_code=400)
         try:
-            spansh = await asyncio.to_thread(
-                plot_route,
+            _, route_id, payload = await asyncio.to_thread(
+                fetch_and_cache_spansh_route,
+                broker=broker,
                 source_system=source_system,
                 destination_system=destination_system,
                 range_ly=range_ly,
                 efficiency=efficiency,
                 supercharge_multiplier=supercharge_multiplier,
             )
-        except Exception as exc:
-            logger.exception("spansh route fetch failed")
-            return JSONResponse({"detail": f"spansh route fetch failed: {exc}"}, status_code=502)
-        request_key = RouteRequestKey(
-            source_system=spansh.source_system,
-            destination_system=spansh.destination_system,
-            range_ly=range_ly,
-            efficiency=efficiency,
-            supercharge_multiplier=supercharge_multiplier,
-        )
-        route_id = broker.server_state.cache_spansh_route(spansh, request_key=request_key)
-        payload = {"spansh": route_payload(spansh), "route_id": route_id}
+        except RouteCompareError as exc:
+            return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
         return JSONResponse(payload)
 
     async def session(websocket: WebSocket) -> None:
@@ -393,6 +373,9 @@ def build_observer_server_app(
                     command_handler=command_handler,
                     broker=broker,
                     data_provider=data_provider,
+                    journal_dir=journal_dir,
+                    route_compare_navroute_wait_seconds=route_compare_navroute_wait_seconds,
+                    route_compare_compare_retry_attempts=route_compare_compare_retry_attempts,
                 )
             )
             done, pending = await asyncio.wait(
@@ -438,6 +421,95 @@ def build_observer_server_app(
 
     app.add_exception_handler(Exception, _log_unhandled_exception)
     return app
+
+
+class RouteCompareError(Exception):
+    def __init__(self, *, status_code: int, detail: str, retryable: bool) -> None:
+        super().__init__(detail)
+        self.status_code = status_code
+        self.detail = detail
+        self.retryable = retryable
+
+
+def fetch_and_cache_spansh_route(
+    *,
+    broker: InMemoryObserverSessionBroker,
+    source_system: str,
+    destination_system: str,
+    range_ly: float,
+    efficiency: int,
+    supercharge_multiplier: int,
+) -> tuple[Any, str, dict[str, Any]]:
+    try:
+        spansh = plot_route(
+            source_system=source_system,
+            destination_system=destination_system,
+            range_ly=range_ly,
+            efficiency=efficiency,
+            supercharge_multiplier=supercharge_multiplier,
+        )
+    except Exception as exc:
+        logger.exception("spansh route fetch failed")
+        raise RouteCompareError(
+            status_code=502,
+            detail=f"spansh route fetch failed: {exc}",
+            retryable=True,
+        ) from exc
+    request_key = RouteRequestKey(
+        source_system=spansh.source_system,
+        destination_system=spansh.destination_system,
+        range_ly=range_ly,
+        efficiency=efficiency,
+        supercharge_multiplier=supercharge_multiplier,
+    )
+    route_id = broker.server_state.cache_spansh_route(spansh, request_key=request_key)
+    payload = {"spansh": route_payload(spansh), "route_id": route_id}
+    return spansh, route_id, payload
+
+
+def build_and_cache_live_comparison(
+    *,
+    broker: InMemoryObserverSessionBroker,
+    journal_dir: Path | None,
+    source_system: str,
+    destination_system: str,
+    range_ly: float,
+    efficiency: int,
+    supercharge_multiplier: int,
+) -> dict[str, Any]:
+    if journal_dir is None:
+        raise RouteCompareError(
+            status_code=503,
+            detail="server has no journal_dir configured; live comparison unavailable",
+            retryable=False,
+        )
+    try:
+        comparison = build_live_comparison(
+            journal_dir=journal_dir,
+            source_system=source_system,
+            destination_system=destination_system,
+            range_ly=range_ly,
+            efficiency=efficiency,
+            supercharge_multiplier=supercharge_multiplier,
+        )
+    except FileNotFoundError as exc:
+        raise RouteCompareError(
+            status_code=404,
+            detail="NavRoute.json not found; plot a route in game first",
+            retryable=True,
+        ) from exc
+    except Exception as exc:
+        logger.exception("route comparison failed")
+        raise RouteCompareError(
+            status_code=502,
+            detail=f"route comparison failed: {exc}",
+            retryable=False,
+        ) from exc
+    _publish_spansh_route_ready(broker, comparison)
+    route_id = _cache_comparison_spansh_route(broker, comparison, range_ly=range_ly)
+    payload = comparison_to_payload(comparison)
+    payload["route_id"] = route_id
+    return payload
 
 
 def _cache_comparison_spansh_route(
@@ -609,6 +681,177 @@ async def _handle_search_haul_routes_message_async(
     )
 
 
+async def _handle_dispatch_route_all_in_one_async(
+    message: dict[str, object],
+    *,
+    command_handler: ObserverSessionCommandHandler | None,
+    broker: InMemoryObserverSessionBroker,
+    journal_dir: Path | None,
+    navroute_wait_seconds_default: float,
+    compare_retry_attempts_default: int,
+) -> dict[str, object]:
+    message_id_value = message.get("message_id")
+    correlation_message_id = message_id_value if isinstance(message_id_value, str) else None
+    payload_value = message.get("payload", {})
+    payload = payload_value if isinstance(payload_value, dict) else {}
+    if command_handler is None:
+        return _transport_unavailable_error(correlation_message_id)
+
+    source_system = _payload_string(payload, "from")
+    destination_system = _payload_string(payload, "to")
+    if not source_system or not destination_system:
+        return _response_error(
+            "invalid_command",
+            "Route all-in-one requires from and to system names.",
+            retryable=True,
+            correlation_message_id=correlation_message_id,
+        )
+    try:
+        range_ly = float(payload["range"])
+    except (KeyError, TypeError, ValueError):
+        return _response_error(
+            "invalid_command",
+            "Route all-in-one requires numeric range.",
+            retryable=True,
+            correlation_message_id=correlation_message_id,
+        )
+    try:
+        efficiency = int(payload.get("efficiency", 60))
+        supercharge_multiplier = int(payload.get("supercharge_multiplier", 4))
+    except (TypeError, ValueError):
+        return _response_error(
+            "invalid_command",
+            "Route all-in-one efficiency and supercharge_multiplier must be integers.",
+            retryable=True,
+            correlation_message_id=correlation_message_id,
+        )
+    galaxy_map_settle_value = payload.get("galaxy_map_settle")
+    if not isinstance(galaxy_map_settle_value, (int, float)):
+        return _response_error(
+            "invalid_command",
+            "Route all-in-one requires a numeric galaxy_map_settle.",
+            retryable=True,
+            correlation_message_id=correlation_message_id,
+        )
+    galaxy_map_settle = float(galaxy_map_settle_value)
+    station = _payload_string(payload, "station")
+
+    navroute_wait_value = payload.get("navroute_wait_seconds")
+    navroute_wait_seconds = (
+        float(navroute_wait_value)
+        if isinstance(navroute_wait_value, (int, float)) and navroute_wait_value >= 0
+        else navroute_wait_seconds_default
+    )
+    compare_retry_value = payload.get("compare_retry_attempts")
+    compare_retry_attempts = (
+        int(compare_retry_value)
+        if isinstance(compare_retry_value, int) and compare_retry_value >= 1
+        else compare_retry_attempts_default
+    )
+    raw_command_value = payload.get("raw_command")
+    raw_command = raw_command_value if isinstance(raw_command_value, str) else None
+    skip_delay_value = payload.get("skip_delay")
+    skip_delay = bool(skip_delay_value) if isinstance(skip_delay_value, bool) else False
+
+    phases: list[dict[str, Any]] = []
+
+    try:
+        command_handler.dispatch_destination(
+            destination_system,
+            galaxy_map_settle,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+    except Exception as exc:
+        logger.exception("route all-in-one: dispatch_destination failed")
+        return _command_execution_failed_error(exc, correlation_message_id)
+    phases.append({"phase": "dispatch_destination", "status": "ok", "destination_system": destination_system})
+
+    try:
+        _spansh, spansh_route_id, spansh_payload = await asyncio.to_thread(
+            fetch_and_cache_spansh_route,
+            broker=broker,
+            source_system=source_system,
+            destination_system=destination_system,
+            range_ly=range_ly,
+            efficiency=efficiency,
+            supercharge_multiplier=supercharge_multiplier,
+        )
+    except RouteCompareError as exc:
+        phases.append({"phase": "fetch_spansh", "status": "error", "detail": exc.detail})
+        return _response_error(
+            "route_all_in_one_spansh_failed",
+            exc.detail,
+            retryable=exc.retryable,
+            correlation_message_id=correlation_message_id,
+        )
+    phases.append({
+        "phase": "fetch_spansh",
+        "status": "ok",
+        "route_id": spansh_route_id,
+        "waypoint_count": len(spansh_payload["spansh"]["waypoints"]),
+    })
+
+    last_error: RouteCompareError | None = None
+    comparison_payload: dict[str, Any] | None = None
+    for attempt in range(1, compare_retry_attempts + 1):
+        await asyncio.sleep(navroute_wait_seconds)
+        try:
+            comparison_payload = await asyncio.to_thread(
+                build_and_cache_live_comparison,
+                broker=broker,
+                journal_dir=journal_dir,
+                source_system=source_system,
+                destination_system=destination_system,
+                range_ly=range_ly,
+                efficiency=efficiency,
+                supercharge_multiplier=supercharge_multiplier,
+            )
+        except RouteCompareError as exc:
+            last_error = exc
+            phases.append({
+                "phase": "compare",
+                "status": "retryable" if exc.retryable and attempt < compare_retry_attempts else "error",
+                "attempt": attempt,
+                "detail": exc.detail,
+            })
+            if not exc.retryable or attempt >= compare_retry_attempts:
+                return _response_error(
+                    "route_all_in_one_compare_failed",
+                    exc.detail,
+                    retryable=exc.retryable,
+                    correlation_message_id=correlation_message_id,
+                )
+            continue
+        phases.append({"phase": "compare", "status": "ok", "attempt": attempt})
+        break
+
+    if comparison_payload is None:
+        detail = last_error.detail if last_error else "route comparison did not complete"
+        return _response_error(
+            "route_all_in_one_compare_failed",
+            detail,
+            retryable=True,
+            correlation_message_id=correlation_message_id,
+        )
+
+    return protocol_message(
+        "response.success",
+        {
+            "accepted": True,
+            "message_text": "Route all-in-one complete.",
+            "result": {
+                "route_id": comparison_payload.get("route_id"),
+                "comparison": comparison_payload,
+                "phases": phases,
+                "navroute_wait_seconds": navroute_wait_seconds,
+                "compare_retry_attempts": compare_retry_attempts,
+            },
+        },
+        correlation_message_id=correlation_message_id,
+    )
+
+
 def _payload_string(payload: dict[str, Any], key: str) -> str:
     value = payload.get(key)
     if value is None:
@@ -719,6 +962,9 @@ async def _receive_session_messages(
     command_handler: ObserverSessionCommandHandler | None,
     broker: InMemoryObserverSessionBroker,
     data_provider: Callable[[], object],
+    journal_dir: Path | None,
+    route_compare_navroute_wait_seconds: float,
+    route_compare_compare_retry_attempts: int,
 ) -> None:
     while True:
         message = await websocket.receive_json()
@@ -729,6 +975,9 @@ async def _receive_session_messages(
             command_handler=command_handler,
             broker=broker,
             data_provider=data_provider,
+            journal_dir=journal_dir,
+            route_compare_navroute_wait_seconds=route_compare_navroute_wait_seconds,
+            route_compare_compare_retry_attempts=route_compare_compare_retry_attempts,
         )
         if response is None:
             continue
@@ -743,12 +992,24 @@ async def _handle_session_message_async(
     command_handler: ObserverSessionCommandHandler | None,
     broker: InMemoryObserverSessionBroker,
     data_provider: Callable[[], object] | None = None,
+    journal_dir: Path | None = None,
+    route_compare_navroute_wait_seconds: float = 6.0,
+    route_compare_compare_retry_attempts: int = 3,
 ) -> dict[str, object] | None:
     if message.get("message_type") == "command.search_haul_routes":
         return await _handle_search_haul_routes_message_async(
             message,
             client_role=client_role,
             data_provider=data_provider,
+        )
+    if message.get("message_type") == "command.dispatch_route_all_in_one":
+        return await _handle_dispatch_route_all_in_one_async(
+            message,
+            command_handler=command_handler,
+            broker=broker,
+            journal_dir=journal_dir,
+            navroute_wait_seconds_default=route_compare_navroute_wait_seconds,
+            compare_retry_attempts_default=route_compare_compare_retry_attempts,
         )
     return _handle_session_message(
         message,

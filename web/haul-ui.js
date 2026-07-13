@@ -357,6 +357,7 @@ let routes = [];
 
     window.EDCR_HAUL = window.EDCR_HAUL || {};
     window.EDCR_HAUL.sendCommand = sendCommand;
+    window.EDCR_HAUL.galmapSettleTime = galmapSettleTime;
 
     function websocketUrl() {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";

@@ -24,6 +24,7 @@
         "command.dispatch_haul_loop",
         "command.dispatch_travel",
         "command.dispatch_spansh_route",
+        "command.dispatch_route_all_in_one",
         "command.search_haul_routes",
         "command.select_trade_route",
         "command.cancel_active_routine",
@@ -117,6 +118,18 @@
       "then": {
         "properties": {
           "payload": { "$ref": "#/$defs/command_dispatch_spansh_route_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "command.dispatch_route_all_in_one" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/command_dispatch_route_all_in_one_payload" }
         }
       }
     },
@@ -330,6 +343,24 @@
       "required": ["route_id"],
       "properties": {
         "route_id": { "type": "string", "minLength": 1 },
+        "station": { "type": "string" },
+        "skip_delay": { "type": "boolean" },
+        "raw_command": { "type": ["string", "null"] }
+      }
+    },
+    "command_dispatch_route_all_in_one_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to", "range", "galaxy_map_settle"],
+      "properties": {
+        "from": { "type": "string", "minLength": 1 },
+        "to": { "type": "string", "minLength": 1 },
+        "range": { "type": "number" },
+        "efficiency": { "type": "integer" },
+        "supercharge_multiplier": { "type": "integer" },
+        "galaxy_map_settle": { "type": "number" },
+        "navroute_wait_seconds": { "type": "number" },
+        "compare_retry_attempts": { "type": "integer" },
         "station": { "type": "string" },
         "skip_delay": { "type": "boolean" },
         "raw_command": { "type": ["string", "null"] }

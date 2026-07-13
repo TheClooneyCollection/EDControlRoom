@@ -291,8 +291,12 @@
       return Promise.reject(new Error("no ws bridge"));
     }
     setStatus("Setting in-game destination to " + to + "...", false);
+    const galaxyMapSettle = (window.EDCR_HAUL && typeof window.EDCR_HAUL.galmapSettleTime === "function")
+      ? window.EDCR_HAUL.galmapSettleTime()
+      : 0.5;
     return sendCommand("command.dispatch_destination", {
       destination: to,
+      galaxy_map_settle: galaxyMapSettle,
       skip_delay: false,
       raw_command: "web route-compare set destination " + to,
     }).then(function (payload) {
@@ -305,47 +309,51 @@
   }
 
   async function allInOne() {
-    try {
-      await dispatchDestination();
-    } catch (err) {
+    const from = document.getElementById("rc-from").value.trim();
+    const to = document.getElementById("rc-to").value.trim();
+    const range = document.getElementById("rc-range").value.trim();
+    if (!from || !to || !range) {
+      setStatus("From, To, and Range are required.", true);
       return;
     }
-    setStatus("In-game destination set. Fetching Spansh...", false);
-    const spanshPayload = await fetchSpanshOnly();
-    if (!spanshPayload) return;
-    const url = buildLiveUrl();
-    if (!url) return;
+    const eff = document.getElementById("rc-efficiency").value.trim() || "60";
+    const sc = document.getElementById("rc-supercharge").value || "4";
+    const stationField = document.getElementById("rc-station");
+    const station = stationField ? stationField.value.trim() : "";
+    const sendCommand = window.EDCR_HAUL && window.EDCR_HAUL.sendCommand;
+    if (typeof sendCommand !== "function") {
+      setStatus("Websocket bridge is not ready yet; wait for /haul to connect.", true);
+      return;
+    }
+    const galaxyMapSettle = (window.EDCR_HAUL && typeof window.EDCR_HAUL.galmapSettleTime === "function")
+      ? window.EDCR_HAUL.galmapSettleTime()
+      : 0.5;
     const waitSeconds = navrouteWaitSeconds();
     const maxAttempts = compareRetryAttempts();
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      setStatus(
-        "Spansh ready. Waiting " + waitSeconds + "s for NavRoute.json before compare (attempt " + attempt + "/" + maxAttempts + ")...",
-        false,
-      );
-      await new Promise(function (resolve) { setTimeout(resolve, waitSeconds * 1000); });
-      try {
-        const { response, payload, text } = await attemptComparison(url);
-        if (response.ok) {
-          setStatus("", false);
-          renderComparison(payload);
-          return;
-        }
-        const message = (payload && payload.detail) || text || ("HTTP " + response.status);
-        const retryable = response.status === 404;
-        if (retryable && attempt < maxAttempts) {
-          setStatus("NavRoute not ready yet (" + message + "). Retrying...", false);
-          continue;
-        }
-        setStatus("Compare failed after " + attempt + " attempt" + (attempt === 1 ? "" : "s") + ": " + message, true);
-        return;
-      } catch (err) {
-        if (attempt < maxAttempts) {
-          setStatus("Compare error (" + err + "). Retrying...", false);
-          continue;
-        }
-        setStatus("Compare failed after " + attempt + " attempts: " + err, true);
-        return;
+    setStatus("All-in-one dispatched. Server is coordinating set-destination + fetch-spansh + compare...", false);
+    try {
+      const response = await sendCommand("command.dispatch_route_all_in_one", {
+        from,
+        to,
+        range: parseFloat(range),
+        efficiency: parseInt(eff, 10),
+        supercharge_multiplier: parseInt(sc, 10),
+        galaxy_map_settle: galaxyMapSettle,
+        navroute_wait_seconds: waitSeconds,
+        compare_retry_attempts: maxAttempts,
+        station,
+        raw_command: "web route-compare all-in-one " + from + " -> " + to,
+      });
+      const result = (response && response.result) || {};
+      if (result.comparison) {
+        setStatus("", false);
+        renderComparison(result.comparison);
+      } else {
+        setStatus("All-in-one complete but no comparison payload returned.", true);
       }
+    } catch (err) {
+      const message = err && err.message ? err.message : String(err);
+      setStatus("All-in-one failed: " + message, true);
     }
   }
 
