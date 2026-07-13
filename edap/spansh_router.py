@@ -1,28 +1,14 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
 
 import httpx
 
-from edap.routing.types import RouteWaypoint
+from edap.routing.types import Route, RouteWaypoint, SpanshMetadata
 
 
-@dataclass(frozen=True)
-class SpanshRoute:
-    waypoints: tuple[RouteWaypoint, ...]
-    total_ly: float
-    total_jumps: int
-    neutron_count: int
-    galaxy_map_visits: int
-    source_system: str
-    destination_system: str
-    efficiency: int
-    supercharge_multiplier: int
-
-
-def parse_spansh_result(payload: dict) -> SpanshRoute:
-    """Parse a completed Spansh /api/results/<job> response into a SpanshRoute."""
+def parse_spansh_result(payload: dict) -> Route:
+    """Parse a completed Spansh /api/results/<job> response into a Route."""
     if payload.get("state") != "completed":
         raise ValueError(f"payload state is not completed: {payload.get('state')!r}")
     try:
@@ -51,16 +37,19 @@ def parse_spansh_result(payload: dict) -> SpanshRoute:
     neutron_count = sum(1 for hop in system_jumps if hop["neutron_star"])
     galaxy_map_visits = len(system_jumps) - 1
 
-    return SpanshRoute(
+    return Route(
         waypoints=waypoints,
         total_ly=total_ly,
         total_jumps=total_jumps,
         neutron_count=neutron_count,
-        galaxy_map_visits=galaxy_map_visits,
+        source="spansh",
         source_system=result["source_system"],
         destination_system=result["destination_system"],
-        efficiency=int(result["efficiency"]),
-        supercharge_multiplier=int(params["supercharge_multiplier"]),
+        metadata=SpanshMetadata(
+            efficiency=int(result["efficiency"]),
+            supercharge_multiplier=int(params["supercharge_multiplier"]),
+            galaxy_map_visits=galaxy_map_visits,
+        ),
     )
 
 
@@ -75,8 +64,8 @@ def plot_route(
     poll_interval_s: float = 1.0,
     timeout_s: float = 60.0,
     client: httpx.Client | None = None,
-) -> SpanshRoute:
-    """Submit a route to Spansh, poll until completed, and return a SpanshRoute."""
+) -> Route:
+    """Submit a route to Spansh, poll until completed, and return a Route."""
     owned = client is None
     if owned:
         client = httpx.Client()

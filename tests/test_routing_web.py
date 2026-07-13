@@ -4,14 +4,14 @@ import json
 import unittest
 from pathlib import Path
 
-from edap.routing.types import InGameRoute
+from edap.routing.types import Route
 from edap.routing.web import (
     available_fixtures,
     build_live_comparison,
     comparison_to_payload,
     load_fixture_comparison,
 )
-from edap.spansh_router import SpanshRoute, parse_spansh_result
+from edap.spansh_router import parse_spansh_result
 
 FIXTURES = Path(__file__).parent / "fixtures" / "routing"
 
@@ -46,7 +46,11 @@ class FixtureComparisonTests(unittest.TestCase):
         self.assertIsInstance(payload["in_game"]["waypoints"], list)
         self.assertGreater(len(payload["in_game"]["waypoints"]), 0)
         self.assertIsInstance(payload["spansh"]["waypoints"], list)
-        self.assertEqual(payload["spansh"]["supercharge_multiplier"], 6)
+        self.assertEqual(payload["spansh"]["metadata"]["kind"], "spansh")
+        self.assertEqual(payload["spansh"]["metadata"]["supercharge_multiplier"], 6)
+        self.assertEqual(payload["in_game"]["metadata"]["kind"], "in_game")
+        self.assertEqual(payload["in_game"]["source"], "in_game")
+        self.assertEqual(payload["spansh"]["source"], "spansh")
 
 
 class LiveComparisonTests(unittest.TestCase):
@@ -55,13 +59,13 @@ class LiveComparisonTests(unittest.TestCase):
             spansh_payload = json.load(fh)
         stub_spansh = parse_spansh_result(spansh_payload)
 
-        def fake_plot(**kwargs) -> SpanshRoute:
+        def fake_plot(**kwargs) -> Route:
             self.assertEqual(kwargs["source_system"], "HD 232819")
             self.assertEqual(kwargs["destination_system"], "Xinca")
             self.assertEqual(kwargs["supercharge_multiplier"], 6)
             return stub_spansh
 
-        def fake_read(path: Path) -> InGameRoute:
+        def fake_read(path: Path) -> Route:
             self.assertEqual(path.name, "NavRoute.json")
             from edap.routing.navroute import read_navroute
             return read_navroute(FIXTURES / "navroute_hd232819_xinca.json")

@@ -51,13 +51,11 @@ class RouteComparisonTests(unittest.TestCase):
     def test_even_verdict_and_phrase(self) -> None:
         even_spansh = _load_spansh("spansh_hd232819_xinca_overcharge_completed.json")
         # Fabricate an even comparison by mutating in_game to match spansh totals.
-        from edap.routing.types import InGameRoute
-        stubbed = InGameRoute(
-            waypoints=self.in_game.waypoints,
-            total_ly=self.in_game.total_ly,
+        from dataclasses import replace
+        stubbed = replace(
+            self.in_game,
             total_jumps=even_spansh.total_jumps,
             neutron_count=even_spansh.neutron_count,
-            timestamp=self.in_game.timestamp,
         )
         result = compare(stubbed, even_spansh)
         self.assertEqual(result.verdict, "even")
@@ -66,13 +64,10 @@ class RouteComparisonTests(unittest.TestCase):
 
     def test_fewer_neutrons_phrasing(self) -> None:
         # Fabricate a spansh route with fewer neutrons than in-game.
-        from edap.routing.types import InGameRoute
-        stubbed_in_game = InGameRoute(
-            waypoints=self.in_game.waypoints,
-            total_ly=self.in_game.total_ly,
-            total_jumps=self.in_game.total_jumps,
+        from dataclasses import replace
+        stubbed_in_game = replace(
+            self.in_game,
             neutron_count=self.spansh_normal.neutron_count + 3,
-            timestamp=self.in_game.timestamp,
         )
         result = compare(stubbed_in_game, self.spansh_normal)
         self.assertEqual(result.neutron_delta, -3)

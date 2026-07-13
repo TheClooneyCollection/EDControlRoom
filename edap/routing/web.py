@@ -7,8 +7,8 @@ from typing import Callable
 
 from edap.routing.comparison import RouteComparison, compare
 from edap.routing.navroute import read_navroute
-from edap.routing.types import InGameRoute
-from edap.spansh_router import SpanshRoute, parse_spansh_result, plot_route
+from edap.routing.types import InGameMetadata, Route, SpanshMetadata
+from edap.spansh_router import parse_spansh_result, plot_route
 
 _FIXTURES_DIR = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "routing"
 
@@ -37,7 +37,7 @@ def load_fixture_comparison(name: str, *, title: str = "Commander") -> RouteComp
     return compare(in_game, spansh, title=title)
 
 
-def _load_spansh_fixture(path: Path) -> SpanshRoute:
+def _load_spansh_fixture(path: Path) -> Route:
     with path.open() as fh:
         return parse_spansh_result(json.load(fh))
 
@@ -51,8 +51,8 @@ def build_live_comparison(
     efficiency: int = 60,
     supercharge_multiplier: int = 4,
     title: str = "Commander",
-    plot_route_fn: Callable[..., SpanshRoute] = plot_route,
-    read_navroute_fn: Callable[[Path], InGameRoute] = read_navroute,
+    plot_route_fn: Callable[..., Route] = plot_route,
+    read_navroute_fn: Callable[[Path], Route] = read_navroute,
 ) -> RouteComparison:
     in_game = read_navroute_fn(journal_dir / "NavRoute.json")
     spansh = plot_route_fn(
@@ -71,30 +71,35 @@ def comparison_to_payload(comparison: RouteComparison) -> dict:
         "jumps_delta": comparison.jumps_delta,
         "neutron_delta": comparison.neutron_delta,
         "tts_phrase": comparison.tts_phrase,
-        "in_game": _in_game_payload(comparison.in_game),
-        "spansh": _spansh_payload(comparison.spansh),
+        "in_game": _route_payload(comparison.in_game),
+        "spansh": _route_payload(comparison.spansh),
     }
 
 
-def _in_game_payload(route: InGameRoute) -> dict:
+def _route_payload(route: Route) -> dict:
     return {
-        "total_ly": route.total_ly,
-        "total_jumps": route.total_jumps,
-        "neutron_count": route.neutron_count,
-        "timestamp": route.timestamp,
-        "waypoints": [asdict(w) for w in route.waypoints],
-    }
-
-
-def _spansh_payload(route: SpanshRoute) -> dict:
-    return {
-        "total_ly": route.total_ly,
-        "total_jumps": route.total_jumps,
-        "neutron_count": route.neutron_count,
-        "galaxy_map_visits": route.galaxy_map_visits,
+        "source": route.source,
         "source_system": route.source_system,
         "destination_system": route.destination_system,
-        "efficiency": route.efficiency,
-        "supercharge_multiplier": route.supercharge_multiplier,
+        "total_ly": route.total_ly,
+        "total_jumps": route.total_jumps,
+        "neutron_count": route.neutron_count,
+        "metadata": _metadata_payload(route),
         "waypoints": [asdict(w) for w in route.waypoints],
     }
+
+
+def _metadata_payload(route: Route) -> dict | None:
+    metadata = route.metadata
+    if metadata is None:
+        return None
+    if isinstance(metadata, InGameMetadata):
+        return {"kind": "in_game", "timestamp": metadata.timestamp}
+    if isinstance(metadata, SpanshMetadata):
+        return {
+            "kind": "spansh",
+            "efficiency": metadata.efficiency,
+            "supercharge_multiplier": metadata.supercharge_multiplier,
+            "galaxy_map_visits": metadata.galaxy_map_visits,
+        }
+    raise TypeError(f"unknown route metadata type: {type(metadata)!r}")

@@ -51,7 +51,7 @@ class RouteCompareEndpointTests(unittest.TestCase):
             payload = response.json()
             self.assertEqual(payload["verdict"], "spansh_better")
             self.assertLess(payload["jumps_delta"], 0)
-            self.assertEqual(payload["spansh"]["supercharge_multiplier"], 6)
+            self.assertEqual(payload["spansh"]["metadata"]["supercharge_multiplier"], 6)
 
     def test_unknown_fixture_returns_400(self) -> None:
         with self._client() as client:

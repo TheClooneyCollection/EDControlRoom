@@ -2,10 +2,10 @@ import json
 import math
 from pathlib import Path
 
-from edap.routing.types import InGameRoute, RouteWaypoint
+from edap.routing.types import InGameMetadata, Route, RouteWaypoint
 
 
-def parse_navroute_json(text: str) -> InGameRoute:
+def parse_navroute_json(text: str) -> Route:
     data = json.loads(text)
     if "Route" not in data:
         raise ValueError("missing top-level Route key")
@@ -43,14 +43,17 @@ def parse_navroute_json(text: str) -> InGameRoute:
     total_ly = sum(w.ly_from_prev for w in waypoints)
     total_jumps = len(waypoints) - 1
     neutron_count = sum(1 for w in waypoints if w.star_class == "N")
-    return InGameRoute(
+    return Route(
         waypoints=tuple(waypoints),
         total_ly=total_ly,
         total_jumps=total_jumps,
         neutron_count=neutron_count,
-        timestamp=data.get("timestamp", ""),
+        source="in_game",
+        source_system=waypoints[0].system,
+        destination_system=waypoints[-1].system,
+        metadata=InGameMetadata(timestamp=data.get("timestamp", "")),
     )
 
 
-def read_navroute(path: Path) -> InGameRoute:
+def read_navroute(path: Path) -> Route:
     return parse_navroute_json(path.read_text(encoding="utf-8"))

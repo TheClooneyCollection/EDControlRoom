@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from edap.routing.navroute import parse_navroute_json, read_navroute
+from edap.routing.types import InGameMetadata
 
 FIXTURE = Path(__file__).parent / "fixtures" / "routing" / "navroute_hd232819_xinca.json"
 
@@ -21,7 +22,11 @@ class TestParseNavrouteFixture(unittest.TestCase):
         self.assertEqual(self.route.neutron_count, 1)
 
     def test_timestamp(self):
-        self.assertEqual(self.route.timestamp, "2026-07-10T17:00:45Z")
+        assert isinstance(self.route.metadata, InGameMetadata)
+        self.assertEqual(self.route.metadata.timestamp, "2026-07-10T17:00:45Z")
+
+    def test_source_tag(self):
+        self.assertEqual(self.route.source, "in_game")
 
     def test_first_waypoint_ly_zero(self):
         first = self.route.waypoints[0]

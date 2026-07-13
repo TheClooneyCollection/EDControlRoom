@@ -61,8 +61,11 @@
     const sp = payload.spansh;
     document.getElementById("rc-in-game-head").textContent =
       "In-game route  ·  " + ig.total_jumps + " jumps  ·  " + fmt(ig.total_ly, 1) + " LY  ·  neutrons: " + ig.neutron_count;
+    const galmapVisits = sp.metadata && typeof sp.metadata.galaxy_map_visits === "number"
+      ? sp.metadata.galaxy_map_visits
+      : "-";
     document.getElementById("rc-spansh-head").textContent =
-      "Spansh route  ·  " + sp.total_jumps + " jumps  ·  " + fmt(sp.total_ly, 1) + " LY  ·  neutrons: " + sp.neutron_count + "  ·  galmap visits: " + sp.galaxy_map_visits;
+      "Spansh route  ·  " + sp.total_jumps + " jumps  ·  " + fmt(sp.total_ly, 1) + " LY  ·  neutrons: " + sp.neutron_count + "  ·  galmap visits: " + galmapVisits;
 
     renderRows(document.getElementById("rc-in-game-rows"), ig.waypoints, "in-game");
     renderRows(document.getElementById("rc-spansh-rows"), sp.waypoints, "spansh");

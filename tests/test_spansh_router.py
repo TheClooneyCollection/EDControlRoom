@@ -6,7 +6,8 @@ from pathlib import Path
 
 import httpx
 
-from edap.spansh_router import SpanshRoute, parse_spansh_result, plot_route
+from edap.routing.types import Route, SpanshMetadata
+from edap.spansh_router import parse_spansh_result, plot_route
 
 FIXTURES = Path(__file__).parent / "fixtures" / "routing"
 
@@ -27,13 +28,18 @@ class TestParseSpanshResultNormal(unittest.TestCase):
         self.assertEqual(self.route.total_jumps, 32)
 
     def test_galaxy_map_visits(self) -> None:
-        self.assertEqual(self.route.galaxy_map_visits, 7)
+        assert isinstance(self.route.metadata, SpanshMetadata)
+        self.assertEqual(self.route.metadata.galaxy_map_visits, 7)
 
     def test_neutron_count(self) -> None:
         self.assertEqual(self.route.neutron_count, 6)
 
     def test_supercharge_multiplier(self) -> None:
-        self.assertEqual(self.route.supercharge_multiplier, 4)
+        assert isinstance(self.route.metadata, SpanshMetadata)
+        self.assertEqual(self.route.metadata.supercharge_multiplier, 4)
+
+    def test_source_tag(self) -> None:
+        self.assertEqual(self.route.source, "spansh")
 
     def test_source_system(self) -> None:
         self.assertEqual(self.route.source_system, "HD 232819")
@@ -55,10 +61,12 @@ class TestParseSpanshResultOvercharge(unittest.TestCase):
         self.assertEqual(self.route.total_jumps, 23)
 
     def test_galaxy_map_visits(self) -> None:
-        self.assertEqual(self.route.galaxy_map_visits, 6)
+        assert isinstance(self.route.metadata, SpanshMetadata)
+        self.assertEqual(self.route.metadata.galaxy_map_visits, 6)
 
     def test_supercharge_multiplier(self) -> None:
-        self.assertEqual(self.route.supercharge_multiplier, 6)
+        assert isinstance(self.route.metadata, SpanshMetadata)
+        self.assertEqual(self.route.metadata.supercharge_multiplier, 6)
 
 
 class TestParseSpanshResultQueued(unittest.TestCase):
@@ -106,9 +114,11 @@ class TestPlotRouteEndToEnd(unittest.TestCase):
             timeout_s=10.0,
             client=client,
         )
-        self.assertIsInstance(route, SpanshRoute)
+        self.assertIsInstance(route, Route)
+        self.assertEqual(route.source, "spansh")
         self.assertEqual(route.total_jumps, 32)
-        self.assertEqual(route.galaxy_map_visits, 7)
+        assert isinstance(route.metadata, SpanshMetadata)
+        self.assertEqual(route.metadata.galaxy_map_visits, 7)
 
     def test_post_body_fields(self) -> None:
         transport = self._make_transport()

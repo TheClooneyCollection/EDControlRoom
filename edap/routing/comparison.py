@@ -3,16 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from edap.routing.types import InGameRoute
-from edap.spansh_router import SpanshRoute
+from edap.routing.types import Route
 
 Verdict = Literal["spansh_better", "in_game_better", "even"]
 
 
 @dataclass(frozen=True)
 class RouteComparison:
-    in_game: InGameRoute
-    spansh: SpanshRoute
+    in_game: Route
+    spansh: Route
     jumps_delta: int
     neutron_delta: int
     verdict: Verdict
@@ -22,8 +21,8 @@ class RouteComparison:
 
 
 def compare(
-    in_game: InGameRoute,
-    spansh: SpanshRoute,
+    in_game: Route,
+    spansh: Route,
     *,
     title: str = "Commander",
 ) -> RouteComparison:
