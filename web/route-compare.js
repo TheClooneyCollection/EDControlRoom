@@ -137,6 +137,32 @@
     return "/api/route-compare?from=" + from + "&to=" + to + "&range=" + range + "&efficiency=" + eff + "&supercharge_multiplier=" + sc;
   }
 
+  function dispatchSpanshRoute() {
+    if (!state.lastRouteId) {
+      setStatus("Run Compare first to cache a route.", true);
+      return;
+    }
+    const sendCommand = window.EDCR_HAUL && window.EDCR_HAUL.sendCommand;
+    if (typeof sendCommand !== "function") {
+      setStatus("Websocket bridge is not ready yet; wait for /haul to connect.", true);
+      return;
+    }
+    const stationField = document.getElementById("rc-station");
+    const station = stationField ? stationField.value.trim() : "";
+    setStatus("Dispatching Spansh route...", false);
+    sendCommand("command.dispatch_spansh_route", {
+      route_id: state.lastRouteId,
+      station,
+    }).then(function (payload) {
+      const result = (payload && payload.result) || {};
+      const dest = result.destination_system || "destination";
+      const suffix = station ? " then dock at " + station : "";
+      setStatus("Spansh route accepted: heading to " + dest + suffix + ".", false);
+    }).catch(function (err) {
+      setStatus("Dispatch failed: " + (err && err.message ? err.message : err), true);
+    });
+  }
+
   function init() {
     document.getElementById("rc-compare").addEventListener("click", function () {
       const url = buildLiveUrl();
@@ -148,6 +174,8 @@
     document.getElementById("rc-fixture-overcharge").addEventListener("click", function () {
       fetchComparison("/api/route-compare?fixture=hd232819_xinca_overcharge");
     });
+    const switchBtn = document.getElementById("rc-switch");
+    if (switchBtn) switchBtn.addEventListener("click", dispatchSpanshRoute);
   }
 
   if (document.readyState === "loading") {

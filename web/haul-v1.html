@@ -171,12 +171,16 @@
                     <option value="6">Overcharge (6x)</option>
                   </select>
                 </label>
+                <label>
+                  <span class="field-label">Final station (optional)</span>
+                  <input class="field" id="rc-station" value="" autocomplete="off" placeholder="dock here after route">
+                </label>
               </div>
               <div class="btn-row action-row">
                 <button class="btn primary" type="button" id="rc-compare">Compare</button>
                 <button class="btn" type="button" id="rc-fixture-normal">Load Normal fixture</button>
                 <button class="btn" type="button" id="rc-fixture-overcharge">Load Overcharge fixture</button>
-                <button class="btn ghost" type="button" id="rc-switch" disabled title="coming soon">Switch to Spansh</button>
+                <button class="btn ghost" type="button" id="rc-switch" disabled title="Run Compare first">Switch to Spansh</button>
               </div>
             </div>
             <div id="rc-status" class="rc-status"></div>

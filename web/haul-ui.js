@@ -355,6 +355,9 @@ let routes = [];
       });
     }
 
+    window.EDCR_HAUL = window.EDCR_HAUL || {};
+    window.EDCR_HAUL.sendCommand = sendCommand;
+
     function websocketUrl() {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const params = new URLSearchParams({
