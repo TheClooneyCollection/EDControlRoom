@@ -468,7 +468,7 @@ def search_trade_routes(
     *,
     timeout_seconds: float = 20.0,
     profile_dir: Path | None = None,
-    show_browser: bool = False,
+    show_browser: bool = True,
     browser_path: str | None = None,
     query_params: dict[str, str] | None = None,
     debug_hook: DebugHook | None = None,
