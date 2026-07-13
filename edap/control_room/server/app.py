@@ -900,6 +900,12 @@ def _haul_search_query_params(
     station_distance = _payload_string(payload, "max_station_distance_ls")
     if station_distance:
         params["max_station_distance_ls"] = _numberish_string(station_distance) or "any"
+    min_supply = _numberish_string(_payload_string(payload, "min_supply"))
+    if min_supply:
+        params["min_supply"] = min_supply
+    min_demand = _numberish_string(_payload_string(payload, "min_demand"))
+    if min_demand:
+        params["min_demand"] = min_demand
     if order_by:
         params["order_by"] = order_by
     return params

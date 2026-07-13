@@ -251,6 +251,8 @@ def _web_form_defaults(app: ControlRoomApp) -> dict[str, str]:
         "cargoCapacity": search_defaults.get("cargo_capacity", ""),
         "maxRouteDistanceLy": search_defaults.get("max_route_distance_ly", ""),
         "maxStationDistanceLs": search_defaults.get("max_station_distance_ls", ""),
+        "minSupply": search_defaults.get("min_supply", ""),
+        "minDemand": search_defaults.get("min_demand", ""),
         "maxMarketAge": "",
         "requiresLargePad": "true" if min_landing_pad == "large" else "false",
         "allowPlanetary": "true" if use_surface_stations in {"yes", "true", "1"} else "false",

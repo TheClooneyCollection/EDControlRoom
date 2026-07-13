@@ -30,6 +30,8 @@ let routes = [];
       cargoCapacity: "",
       maxRouteDistanceLy: "500",
       maxStationDistanceLs: "any",
+      minSupply: "",
+      minDemand: "",
       metric: "Profit / hour",
       galaxyMapSettle: "2.0",
       dockTimeout: "1200",
@@ -120,6 +122,8 @@ let routes = [];
       setSelectValue("route-distance-preset", "");
       setSelectValue("station-distance", stationDistanceLabel(WEB_DEFAULTS.maxStationDistanceLs));
       setElementValue("capacity", WEB_DEFAULTS.cargoCapacity);
+      setElementValue("min-supply", WEB_DEFAULTS.minSupply);
+      setElementValue("min-demand", WEB_DEFAULTS.minDemand);
       setSelectValue("metric", WEB_DEFAULTS.metric);
     }
 
@@ -146,6 +150,10 @@ let routes = [];
         distanceFromSystem: route.distance_from_system || "-",
         routeDistance: route.route_distance || "-",
         stationDistance: stationDistances.length ? stationDistances.join(" / ") : "-",
+        buyStationSupply: route.from_supply || "-",
+        buyStationDemand: route.from_demand || "-",
+        sellStationSupply: route.to_supply || "-",
+        sellStationDemand: route.to_demand || "-",
         apiRoute: { ...route, index }
       };
     }
@@ -168,6 +176,10 @@ let routes = [];
         route_distance: route.routeDistance !== "-" ? route.routeDistance : null,
         profit_per_trip: route.profitTrip !== "-" ? route.profitTrip : null,
         profit_per_hour: route.profitHour !== "-" ? route.profitHour : null,
+        from_supply: route.buyStationSupply !== "-" ? route.buyStationSupply : null,
+        from_demand: route.buyStationDemand !== "-" ? route.buyStationDemand : null,
+        to_supply: route.sellStationSupply !== "-" ? route.sellStationSupply : null,
+        to_demand: route.sellStationDemand !== "-" ? route.sellStationDemand : null,
         raw_text: route.apiRoute?.raw_text || "",
         url_links: route.apiRoute?.url_links || []
       };
@@ -703,10 +715,12 @@ let routes = [];
           <td>
             <div class="route-main">${escapeHtml(route.buyStation)}</div>
             <div class="route-sub mono">${escapeHtml(route.buySystem)} / ${escapeHtml(route.buyStationDistance)}</div>
+            <div class="route-sub mono">Sup ${escapeHtml(route.buyStationSupply)} / Dem ${escapeHtml(route.buyStationDemand)}</div>
           </td>
           <td>
             <div class="route-main">${escapeHtml(route.sellStation)}</div>
             <div class="route-sub mono">${escapeHtml(route.sellSystem)} / ${escapeHtml(route.sellStationDistance)}</div>
+            <div class="route-sub mono">Sup ${escapeHtml(route.sellStationSupply)} / Dem ${escapeHtml(route.sellStationDemand)}</div>
           </td>
           <td class="num">${escapeHtml(route.distanceFromSystem)}</td>
           <td class="num">${escapeHtml(route.routeDistance)}</td>
@@ -854,6 +868,8 @@ let routes = [];
         cargo_capacity: document.getElementById("capacity").value,
         max_route_distance_ly: document.getElementById("route-distance").value,
         max_station_distance_ls: document.getElementById("station-distance").value,
+        min_supply: document.getElementById("min-supply").value,
+        min_demand: document.getElementById("min-demand").value,
         metric: document.getElementById("metric").value
       };
       sendCommand("command.search_haul_routes", body)

@@ -93,6 +93,10 @@ class TradeRoute:
     profit_per_unit: str | None = None
     profit_per_trip: str | None = None
     profit_per_hour: str | None = None
+    from_supply: str | None = None
+    from_demand: str | None = None
+    to_supply: str | None = None
+    to_demand: str | None = None
     updated: str | None = None
     raw_text: str = ""
     url_links: tuple[str, ...] = ()
@@ -299,6 +303,8 @@ def _row_to_route(row: dict[str, Any]) -> TradeRoute:
             to_system = _clean_endpoint_part(system)
     buy_commodities = _extract_trade_commodity_values(lines, "BUY")
     station_distances = _extract_repeated_field_values(lines, "STATION DISTANCE")
+    supply_values = _extract_repeated_field_values(lines, "SUPPLY")
+    demand_values = _extract_repeated_field_values(lines, "DEMAND")
 
     return TradeRoute(
         index=int(row.get("index", 0) or 0),
@@ -315,6 +321,10 @@ def _row_to_route(row: dict[str, Any]) -> TradeRoute:
         profit_per_unit=fields.get("PROFIT PER UNIT"),
         profit_per_trip=fields.get("PROFIT PER TRIP"),
         profit_per_hour=fields.get("PROFIT PER HOUR"),
+        from_supply=supply_values[0] if supply_values else None,
+        from_demand=demand_values[0] if demand_values else None,
+        to_supply=supply_values[1] if len(supply_values) > 1 else None,
+        to_demand=demand_values[1] if len(demand_values) > 1 else None,
         updated=fields.get("UPDATED"),
         raw_text=str(row.get("text", "")),
         url_links=tuple(str(link) for link in row.get("links", [])),
