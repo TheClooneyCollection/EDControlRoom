@@ -3,7 +3,23 @@
   const WEB_CONFIG = window.EDCR_WEB_CONFIG || {};
   const AUTH_PARAM = WEB_CONFIG.authQueryParameterName || "access_token";
   const TOKEN_STORAGE_KEY = "edcr.haul.accessToken";
-  const state = { lastRouteId: null };
+  const state = { lastRouteId: null, userEditedFrom: false, userEditedRange: false, userEditedSupercharge: false };
+
+  function applyShipStatePrefill(shipState) {
+    if (!shipState) return;
+    const fromField = document.getElementById("rc-from");
+    if (fromField && !state.userEditedFrom && shipState.system) {
+      fromField.value = shipState.system;
+    }
+    const rangeField = document.getElementById("rc-range");
+    if (rangeField && !state.userEditedRange && shipState.max_jump_range_ly) {
+      rangeField.value = String(shipState.max_jump_range_ly);
+    }
+    const scField = document.getElementById("rc-supercharge");
+    if (scField && !state.userEditedSupercharge && (shipState.supercharge_multiplier === 4 || shipState.supercharge_multiplier === 6)) {
+      scField.value = String(shipState.supercharge_multiplier);
+    }
+  }
 
   function currentToken() {
     const input = document.getElementById("access-token");
@@ -96,6 +112,8 @@
     }
 
     document.getElementById("rc-results").classList.remove("hidden");
+    const details = document.getElementById("rc-details");
+    if (details && details.open) details.open = false;
 
     state.lastRouteId = payload.route_id || null;
     const switchBtn = document.getElementById("rc-switch");
@@ -176,6 +194,20 @@
     });
     const switchBtn = document.getElementById("rc-switch");
     if (switchBtn) switchBtn.addEventListener("click", dispatchSpanshRoute);
+
+    const fromField = document.getElementById("rc-from");
+    if (fromField) fromField.addEventListener("input", function () { state.userEditedFrom = true; });
+    const rangeField = document.getElementById("rc-range");
+    if (rangeField) rangeField.addEventListener("input", function () { state.userEditedRange = true; });
+    const scField = document.getElementById("rc-supercharge");
+    if (scField) scField.addEventListener("change", function () { state.userEditedSupercharge = true; });
+
+    if (window.EDCR_HAUL && window.EDCR_HAUL.shipState) {
+      applyShipStatePrefill(window.EDCR_HAUL.shipState);
+    }
+    window.addEventListener("edcr:ship-state", function (event) {
+      applyShipStatePrefill(event.detail);
+    });
   }
 
   if (document.readyState === "loading") {

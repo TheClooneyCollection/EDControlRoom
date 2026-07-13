@@ -798,6 +798,13 @@ let routes = [];
         hydratedCurrentSystem = ship.system;
         document.getElementById("origin").value = hydratedCurrentSystem;
       }
+      window.EDCR_HAUL = window.EDCR_HAUL || {};
+      window.EDCR_HAUL.shipState = {
+        system: ship.system || "",
+        supercharge_multiplier: ship.supercharge_multiplier || null,
+        max_jump_range_ly: ship.max_jump_range_ly || null,
+      };
+      window.dispatchEvent(new CustomEvent("edcr:ship-state", { detail: window.EDCR_HAUL.shipState }));
       if (ship.cargo_capacity) {
         WEB_DEFAULTS.cargoCapacity = String(ship.cargo_capacity);
         document.getElementById("capacity").value = ship.cargo_capacity;

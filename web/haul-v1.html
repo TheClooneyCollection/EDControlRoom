@@ -186,16 +186,19 @@
             <div id="rc-status" class="rc-status"></div>
             <div id="rc-results" class="rc-results hidden">
               <div class="rc-summary" id="rc-summary"></div>
-              <div class="rc-side-by-side">
-                <div class="rc-side">
-                  <div class="rc-side-head" id="rc-in-game-head">In-game route</div>
-                  <table class="route-table"><thead><tr><th>#</th><th>System</th><th>Class</th><th class="num">+LY</th><th class="num">Total</th></tr></thead><tbody id="rc-in-game-rows"></tbody></table>
+              <details id="rc-details" class="rc-details">
+                <summary class="rc-details-toggle">Show route detail</summary>
+                <div class="rc-side-by-side">
+                  <div class="rc-side">
+                    <div class="rc-side-head" id="rc-in-game-head">In-game route</div>
+                    <table class="route-table"><thead><tr><th>#</th><th>System</th><th>Class</th><th class="num">+LY</th><th class="num">Total</th></tr></thead><tbody id="rc-in-game-rows"></tbody></table>
+                  </div>
+                  <div class="rc-side">
+                    <div class="rc-side-head" id="rc-spansh-head">Spansh route</div>
+                    <table class="route-table"><thead><tr><th>#</th><th>System</th><th>N?</th><th class="num">+LY</th><th class="num">Total</th></tr></thead><tbody id="rc-spansh-rows"></tbody></table>
+                  </div>
                 </div>
-                <div class="rc-side">
-                  <div class="rc-side-head" id="rc-spansh-head">Spansh route</div>
-                  <table class="route-table"><thead><tr><th>#</th><th>System</th><th>N?</th><th class="num">+LY</th><th class="num">Total</th></tr></thead><tbody id="rc-spansh-rows"></tbody></table>
-                </div>
-              </div>
+              </details>
             </div>
           </div>
         </section>

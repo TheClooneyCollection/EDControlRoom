@@ -1560,3 +1560,23 @@
     .route-compare-full .field-row {
       flex-wrap: wrap;
     }
+    .rc-details {
+      margin-top: 12px;
+    }
+    .rc-details-toggle {
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 0.9em;
+      padding: 4px 0;
+      user-select: none;
+    }
+    .rc-details-toggle:hover {
+      color: var(--text);
+    }
+    .rc-details[open] .rc-details-toggle::marker,
+    .rc-details .rc-details-toggle::marker {
+      color: var(--text-muted);
+    }
+    .rc-details[open] .rc-details-toggle {
+      margin-bottom: 8px;
+    }
