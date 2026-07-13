@@ -1,18 +1,19 @@
 # Travel Status
 ## Current
-- `/haul` "Route Comparison (beta)" panel is now a full-width section above the layout grid; the endpoint publishes an `AnnouncementEvent(spansh_route_ready)` through the broker so all connected observers speak the phrase via the existing TTS pipeline (browser SpeechSynthesis path removed).
-- `/haul` includes a "Route Comparison (beta)" panel backed by `/api/route-compare` that renders the in-game `NavRoute.json` and a Spansh neutron plot side-by-side. `?fixture=hd232819_xinca_{normal,overcharge}` bypasses live sources for offline dev.
-- Ship state now exposes `fsd_type` (`standard`/`sco`/`overcharge_mkii`) and `supercharge_multiplier` (4 or 6) from Loadout, detected by FSD module Item marker `overchargebooster_mkii`.
-- `travel <system> [/ <station>]` starts server-first assistive travel; station is optional, and system-only travel stops after destination-system arrival instead of docking.
-- TUI haul search results support `t` to save the highlighted route and start `travel` to its first station; the `/haul` web Travel Assist fields autofill from the selected route until manually edited or cleared.
-- Travel can launch from docked state, depart from normal space, continue from supercruise, set a galaxy-map route for other-system targets, and reuse shared station transit/docking behavior when a station is provided.
-- In-system travel reuses the haul-style arrival path: announce the target station, open the left/nav panel when configured, then wait for supercruise drop and request docking.
-- Shared station transit, route retry/unconfirmed-route handling, manual surface handoff, and interdiction abort behavior live in `edap.routines.transit` for travel, two-way haul, and multi-leg haul.
-- The `/haul` web surface includes a compact Travel Assist form that sends structured travel dispatch; a dedicated `/travel` page is not implemented.
+- Neutron travel routine `fly_spansh_route` ships: `/haul` "Switch to Spansh" now dispatches `command.dispatch_spansh_route { route_id, station? }`; server resolves `route_id` via `RouteCache` on `ControlRoomServerState`, per-waypoint we set the next system in the galaxy map and wait for arrival, optional final station hands off to `transit_to_station`. Operator flies each hop; routine never touches nav/flight.
+- Runtime refactor: `RoutineRuntime` (composed, not subclassed) is what travel and spansh routines take; `HaulRuntime`/`HaulTiming` compose it. Builder lives in `edap/control_room/routine_runtime_builder.py`, out of the haul module.
+- `DESTINATION_SET` announcement fires from inside `set_galaxy_map_destination_for_transit` (single source), reworded to `"Opening galaxy map to set destination to {system_name}."` — all callers get the same pre-open heads-up.
+- `InGameRoute`/`SpanshRoute` consolidated into one `Route` with discriminated `metadata`; the `/api/route-compare` JSON nests source-specific fields under `metadata` and returns a `route_id`.
+- `/haul` "Route Comparison (beta)" panel is a full-width section above the layout grid; the endpoint publishes an `AnnouncementEvent(spansh_route_ready)` through the broker so all connected observers speak the phrase via the existing TTS pipeline. Panel now has an optional Final station field for trade-route hand-off.
+- Route Comparison panel backed by `/api/route-compare` renders in-game `NavRoute.json` and Spansh neutron plot side-by-side. `?fixture=hd232819_xinca_{normal,overcharge}` bypasses live sources for offline dev.
+- Ship state exposes `fsd_type` (`standard`/`sco`/`overcharge_mkii`) and `supercharge_multiplier` (4 or 6) from Loadout, detected by FSD module Item marker `overchargebooster_mkii`.
+- `travel <system> [/ <station>]` starts server-first assistive travel; station optional. Supports docked, normal-space, and supercruise start states, plus other-system targets via galaxy-map route.
+- TUI haul search results support `t` to save the highlighted route and start `travel`; the `/haul` web Travel Assist fields autofill from the selected route.
+- Shared station transit, route retry/unconfirmed-route handling, manual surface handoff, and interdiction abort behavior live in `edap.routines.transit` for travel, two-way haul, multi-leg haul, and now spansh route.
 ## Caveats
-- Live validation is still needed for all start states under CrossOver/macOS, especially docked launch into same-system station travel and multi-jump resume.
-- Surface/on-land travel currently inherits manual landing handoff behavior; settlement approach automation is not implemented.
+- Live validation still needed for all start states under CrossOver/macOS, especially docked launch into same-system station travel and multi-jump resume. Neutron routine end-to-end has not been exercised against a live journal yet.
+- Surface/on-land travel inherits manual landing handoff; settlement approach automation is not implemented.
 ## Next
-- Follow-up roadmap for the Spansh/travel integration lives in `docs/plans/0010-spansh-neutron-route-comparison.md` under "Follow-up Roadmap"; treat that as canonical. Top must-do is the neutron travel routine that flies the Spansh waypoint list (enables the disabled "Switch to Spansh" button).
-- Wire the route-compare panel's supercharge default to ship state's `supercharge_multiplier` and prefill From/Range from current system + `Loadout.MaxJumpRange`.
+- Live-validate `fly_spansh_route` under CrossOver/macOS: hop transitions, jet-cone timing per neutron waypoint (operator-side), and final-station handoff via `transit_to_station`.
+- Prefill Route Comparison panel from ship state (`supercharge_multiplier`, current system, `Loadout.MaxJumpRange`) — the other remaining must-do from plan 0010's follow-up roadmap.
 - Live-validate `travel` from docked, same-system supercruise, normal-space, and remote-system starts before expanding the web UI or adding route-search handoff affordances.

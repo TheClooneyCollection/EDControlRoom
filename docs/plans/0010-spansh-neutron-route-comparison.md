@@ -164,9 +164,9 @@ Ordered roughly by how much they unlock. Pick the top item unless the user redir
 
 ### Must-do to fulfill the travel vision
 
-1. **Neutron travel routine.** A routine that consumes the Spansh waypoint list and drives per-waypoint jumps plus jet-cone supercharge handling. Wires up the currently disabled "Switch to Spansh" button on `/haul`. This is the load-bearing gap — until it lands, the panel is advisory only.
+1. ~~**Neutron travel routine.**~~ **Shipped 2026-07-13** — see `docs/plans/0012-neutron-travel-routine.md`. Note the scope adjustment: the routine coordinates only (per-waypoint galaxy-map set + arrival watch + optional station handoff), it does not perform in-game flight or jet-cone maneuvers.
 2. **Ship-state prefill on the panel.** Default supercharge from `ShipState.supercharge_multiplier`, prefill `From` from current system, prefill `Range` from `Loadout.MaxJumpRange`. Plumbing is already there; just wire the form.
-3. **Live validation under CrossOver/macOS.** Confirm the panel + TTS fan-out + (once landed) the neutron routine work with the real game running. Everything above ships fixture-tested; none of it has been exercised against a live journal end-to-end.
+3. **Live validation under CrossOver/macOS.** Confirm the panel + TTS fan-out + neutron routine work with the real game running. Everything ships fixture-tested; none has been exercised against a live journal end-to-end.
 
 ### Nice-to-have
 
