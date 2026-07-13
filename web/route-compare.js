@@ -130,6 +130,8 @@
     if (switchBtn) {
       switchBtn.disabled = !state.lastRouteId;
       switchBtn.title = state.lastRouteId ? "Fly the Spansh route waypoint by waypoint" : "Run Compare first";
+      switchBtn.classList.toggle("ghost", !state.lastRouteId);
+      switchBtn.classList.toggle("primary", !!state.lastRouteId);
     }
   }
 
