@@ -79,6 +79,8 @@ class LoadConfigTests(unittest.TestCase):
             self.assertTrue(config.control_room.check_for_updates)
             self.assertEqual(config.control_room.home_system, "")
             self.assertFalse(config.control_room.clear_session_on_launch)
+            self.assertEqual(config.control_room.route_compare_navroute_wait_seconds, 6.0)
+            self.assertEqual(config.control_room.route_compare_compare_retry_attempts, 3)
             self.assertTrue(config.tts.enabled)
             self.assertEqual(config.tts.title_mode, "commander")
             self.assertEqual(config.tts.title, "commander")

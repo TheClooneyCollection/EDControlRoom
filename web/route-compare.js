@@ -3,7 +3,48 @@
   const WEB_CONFIG = window.EDCR_WEB_CONFIG || {};
   const AUTH_PARAM = WEB_CONFIG.authQueryParameterName || "access_token";
   const TOKEN_STORAGE_KEY = "edcr.haul.accessToken";
-  const state = { lastRouteId: null, userEditedFrom: false, userEditedRange: false, userEditedSupercharge: false };
+  const state = {
+    lastRouteId: null,
+    userEditedFrom: false,
+    userEditedRange: false,
+    userEditedSupercharge: false,
+    navrouteWaitDefault: 6.0,
+    compareRetryDefault: 3,
+  };
+
+  function navrouteWaitSeconds() {
+    const raw = document.getElementById("rc-navroute-wait");
+    const text = raw && raw.value ? raw.value.trim() : "";
+    if (!text) return state.navrouteWaitDefault;
+    const parsed = parseFloat(text);
+    return isFinite(parsed) && parsed >= 0 ? parsed : state.navrouteWaitDefault;
+  }
+
+  function compareRetryAttempts() {
+    const raw = document.getElementById("rc-compare-retries");
+    const text = raw && raw.value ? raw.value.trim() : "";
+    if (!text) return state.compareRetryDefault;
+    const parsed = parseInt(text, 10);
+    return isFinite(parsed) && parsed >= 1 ? parsed : state.compareRetryDefault;
+  }
+
+  async function loadRouteCompareConfig() {
+    try {
+      const response = await fetch(withAuth("/api/route-compare/config"), { method: "GET" });
+      if (!response.ok) return;
+      const payload = await response.json();
+      if (typeof payload.navroute_wait_seconds === "number") {
+        state.navrouteWaitDefault = payload.navroute_wait_seconds;
+        const waitField = document.getElementById("rc-navroute-wait");
+        if (waitField && !waitField.value) waitField.value = String(payload.navroute_wait_seconds);
+      }
+      if (typeof payload.compare_retry_attempts === "number") {
+        state.compareRetryDefault = payload.compare_retry_attempts;
+        const retryField = document.getElementById("rc-compare-retries");
+        if (retryField && !retryField.value) retryField.value = String(payload.compare_retry_attempts);
+      }
+    } catch (err) { /* ignore; keep defaults */ }
+  }
 
   function applyShipStatePrefill(shipState) {
     if (!shipState) return;
@@ -83,6 +124,41 @@
     });
   }
 
+  function updateSwitchButton() {
+    const switchBtn = document.getElementById("rc-switch");
+    if (!switchBtn) return;
+    switchBtn.disabled = !state.lastRouteId;
+    switchBtn.title = state.lastRouteId ? "Fly the Spansh route waypoint by waypoint" : "Run Compare or Fetch Spansh first";
+    switchBtn.classList.toggle("ghost", !state.lastRouteId);
+    switchBtn.classList.toggle("primary", !!state.lastRouteId);
+  }
+
+  function renderSpanshOnly(payload) {
+    const sp = payload.spansh;
+    const galmapVisits = sp.metadata && typeof sp.metadata.galaxy_map_visits === "number"
+      ? sp.metadata.galaxy_map_visits
+      : "-";
+    document.getElementById("rc-in-game-head").textContent = "In-game route  ·  (not fetched)";
+    document.getElementById("rc-in-game-rows").innerHTML = "";
+    document.getElementById("rc-spansh-head").textContent =
+      "Spansh route  ·  " + sp.total_jumps + " jumps  ·  " + fmt(sp.total_ly, 1) + " LY  ·  neutrons: " + sp.neutron_count + "  ·  galmap visits: " + galmapVisits;
+    renderRows(document.getElementById("rc-spansh-rows"), sp.waypoints, "spansh");
+
+    const summary = document.getElementById("rc-summary");
+    summary.textContent = "Spansh route ready · " + sp.total_jumps + " jumps · " + fmt(sp.total_ly, 1) + " LY";
+    summary.className = "rc-summary";
+
+    const verdictEl = document.getElementById("route-compare-verdict");
+    if (verdictEl) verdictEl.textContent = "Spansh only";
+
+    document.getElementById("rc-results").classList.remove("hidden");
+    const details = document.getElementById("rc-details");
+    if (details && details.open) details.open = false;
+
+    state.lastRouteId = payload.route_id || null;
+    updateSwitchButton();
+  }
+
   function renderComparison(payload) {
     const ig = payload.in_game;
     const sp = payload.spansh;
@@ -126,22 +202,21 @@
     if (details && details.open) details.open = false;
 
     state.lastRouteId = payload.route_id || null;
-    const switchBtn = document.getElementById("rc-switch");
-    if (switchBtn) {
-      switchBtn.disabled = !state.lastRouteId;
-      switchBtn.title = state.lastRouteId ? "Fly the Spansh route waypoint by waypoint" : "Run Compare first";
-      switchBtn.classList.toggle("ghost", !state.lastRouteId);
-      switchBtn.classList.toggle("primary", !!state.lastRouteId);
-    }
+    updateSwitchButton();
+  }
+
+  async function attemptComparison(url) {
+    const response = await fetch(withAuth(url), { method: "GET" });
+    const text = await response.text();
+    let payload = null;
+    try { payload = JSON.parse(text); } catch (e) { /* ignore */ }
+    return { response, payload, text };
   }
 
   async function fetchComparison(url) {
     setStatus("Fetching...", false);
     try {
-      const response = await fetch(withAuth(url), { method: "GET" });
-      const text = await response.text();
-      let payload = null;
-      try { payload = JSON.parse(text); } catch (e) { /* ignore */ }
+      const { response, payload, text } = await attemptComparison(url);
       if (!response.ok) {
         const message = (payload && payload.detail) || text || ("HTTP " + response.status);
         setStatus("Error: " + message, true);
@@ -154,17 +229,124 @@
     }
   }
 
-  function buildLiveUrl() {
-    const from = encodeURIComponent(document.getElementById("rc-from").value.trim());
-    const to = encodeURIComponent(document.getElementById("rc-to").value.trim());
-    const range = encodeURIComponent(document.getElementById("rc-range").value.trim());
-    const eff = encodeURIComponent(document.getElementById("rc-efficiency").value.trim() || "60");
-    const sc = encodeURIComponent(document.getElementById("rc-supercharge").value || "4");
+  function buildQuery() {
+    const from = document.getElementById("rc-from").value.trim();
+    const to = document.getElementById("rc-to").value.trim();
+    const range = document.getElementById("rc-range").value.trim();
+    const eff = document.getElementById("rc-efficiency").value.trim() || "60";
+    const sc = document.getElementById("rc-supercharge").value || "4";
     if (!from || !to || !range) {
       setStatus("From, To, and Range are required.", true);
       return null;
     }
-    return "/api/route-compare?from=" + from + "&to=" + to + "&range=" + range + "&efficiency=" + eff + "&supercharge_multiplier=" + sc;
+    return "from=" + encodeURIComponent(from)
+      + "&to=" + encodeURIComponent(to)
+      + "&range=" + encodeURIComponent(range)
+      + "&efficiency=" + encodeURIComponent(eff)
+      + "&supercharge_multiplier=" + encodeURIComponent(sc);
+  }
+
+  function buildLiveUrl() {
+    const q = buildQuery();
+    return q ? "/api/route-compare?" + q : null;
+  }
+
+  function buildSpanshUrl() {
+    const q = buildQuery();
+    return q ? "/api/spansh-route?" + q : null;
+  }
+
+  async function fetchSpanshOnly() {
+    const url = buildSpanshUrl();
+    if (!url) return null;
+    setStatus("Fetching Spansh route...", false);
+    try {
+      const response = await fetch(withAuth(url), { method: "GET" });
+      const text = await response.text();
+      let payload = null;
+      try { payload = JSON.parse(text); } catch (e) { /* ignore */ }
+      if (!response.ok) {
+        const message = (payload && payload.detail) || text || ("HTTP " + response.status);
+        setStatus("Error: " + message, true);
+        return null;
+      }
+      setStatus("", false);
+      renderSpanshOnly(payload);
+      return payload;
+    } catch (err) {
+      setStatus("Error: " + err, true);
+      return null;
+    }
+  }
+
+  function dispatchDestination() {
+    const to = document.getElementById("rc-to").value.trim();
+    if (!to) {
+      setStatus("Enter a To system before setting the in-game route.", true);
+      return Promise.reject(new Error("missing destination"));
+    }
+    const sendCommand = window.EDCR_HAUL && window.EDCR_HAUL.sendCommand;
+    if (typeof sendCommand !== "function") {
+      setStatus("Websocket bridge is not ready yet; wait for /haul to connect.", true);
+      return Promise.reject(new Error("no ws bridge"));
+    }
+    setStatus("Setting in-game destination to " + to + "...", false);
+    return sendCommand("command.dispatch_destination", {
+      destination: to,
+      skip_delay: false,
+      raw_command: "web route-compare set destination " + to,
+    }).then(function (payload) {
+      setStatus("In-game destination set for " + to + ".", false);
+      return payload;
+    }).catch(function (err) {
+      setStatus("Set destination failed: " + (err && err.message ? err.message : err), true);
+      throw err;
+    });
+  }
+
+  async function allInOne() {
+    try {
+      await dispatchDestination();
+    } catch (err) {
+      return;
+    }
+    setStatus("In-game destination set. Fetching Spansh...", false);
+    const spanshPayload = await fetchSpanshOnly();
+    if (!spanshPayload) return;
+    const url = buildLiveUrl();
+    if (!url) return;
+    const waitSeconds = navrouteWaitSeconds();
+    const maxAttempts = compareRetryAttempts();
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      setStatus(
+        "Spansh ready. Waiting " + waitSeconds + "s for NavRoute.json before compare (attempt " + attempt + "/" + maxAttempts + ")...",
+        false,
+      );
+      await new Promise(function (resolve) { setTimeout(resolve, waitSeconds * 1000); });
+      try {
+        const { response, payload, text } = await attemptComparison(url);
+        if (response.ok) {
+          setStatus("", false);
+          renderComparison(payload);
+          return;
+        }
+        const message = (payload && payload.detail) || text || ("HTTP " + response.status);
+        const retryable = response.status === 404;
+        if (retryable && attempt < maxAttempts) {
+          setStatus("NavRoute not ready yet (" + message + "). Retrying...", false);
+          continue;
+        }
+        setStatus("Compare failed after " + attempt + " attempt" + (attempt === 1 ? "" : "s") + ": " + message, true);
+        return;
+      } catch (err) {
+        if (attempt < maxAttempts) {
+          setStatus("Compare error (" + err + "). Retrying...", false);
+          continue;
+        }
+        setStatus("Compare failed after " + attempt + " attempts: " + err, true);
+        return;
+      }
+    }
   }
 
   function dispatchSpanshRoute() {
@@ -198,6 +380,14 @@
       const url = buildLiveUrl();
       if (url) fetchComparison(url);
     });
+    const setDestBtn = document.getElementById("rc-set-destination");
+    if (setDestBtn) setDestBtn.addEventListener("click", function () {
+      dispatchDestination().catch(function () { /* status already set */ });
+    });
+    const fetchSpanshBtn = document.getElementById("rc-fetch-spansh");
+    if (fetchSpanshBtn) fetchSpanshBtn.addEventListener("click", function () { fetchSpanshOnly(); });
+    const allInOneBtn = document.getElementById("rc-all-in-one");
+    if (allInOneBtn) allInOneBtn.addEventListener("click", function () { allInOne(); });
     document.getElementById("rc-fixture-normal").addEventListener("click", function () {
       fetchComparison("/api/route-compare?fixture=hd232819_xinca_normal");
     });
@@ -220,6 +410,7 @@
     window.addEventListener("edcr:ship-state", function (event) {
       applyShipStatePrefill(event.detail);
     });
+    loadRouteCompareConfig();
   }
 
   if (document.readyState === "loading") {

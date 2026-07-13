@@ -7,3 +7,5 @@ status_refresh_seconds = 2.0
 check_for_updates = true
 home_system = ""
 clear_session_on_launch = false
+route_compare_navroute_wait_seconds = 6.0
+route_compare_compare_retry_attempts = 3

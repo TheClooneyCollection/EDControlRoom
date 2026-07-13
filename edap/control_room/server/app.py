@@ -27,7 +27,9 @@ from edap.routing.web import (
     build_live_comparison,
     comparison_to_payload,
     load_fixture_comparison,
+    route_payload,
 )
+from edap.spansh_router import plot_route
 from edap.control_room.protocol import build_announcement_event
 from edap.tts import AnnouncementId
 from edap.haul_search_config import (
@@ -141,6 +143,8 @@ def build_observer_server_app(
     auth: ObserverServerAuth,
     web_default_access_token: str = "",
     journal_dir: Path | None = None,
+    route_compare_navroute_wait_seconds: float = 6.0,
+    route_compare_compare_retry_attempts: int = 3,
 ) -> Starlette:
     def unauthorized_response() -> JSONResponse:
         return JSONResponse(
@@ -306,6 +310,59 @@ def build_observer_server_app(
         payload["route_id"] = route_id
         return JSONResponse(payload)
 
+    async def route_compare_config_endpoint(request: Request) -> JSONResponse:
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        return JSONResponse(
+            {
+                "navroute_wait_seconds": route_compare_navroute_wait_seconds,
+                "compare_retry_attempts": route_compare_compare_retry_attempts,
+            }
+        )
+
+    async def spansh_route_endpoint(request: Request) -> JSONResponse:
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        params = request.query_params
+        source_system = (params.get("from") or "").strip()
+        destination_system = (params.get("to") or "").strip()
+        range_raw = params.get("range")
+        if not source_system or not destination_system or not range_raw:
+            return JSONResponse(
+                {"detail": "from, to, and range are required"},
+                status_code=400,
+            )
+        try:
+            range_ly = float(range_raw)
+            efficiency = int(params.get("efficiency", "60"))
+            supercharge_multiplier = int(params.get("supercharge_multiplier", "4"))
+        except ValueError as exc:
+            return JSONResponse({"detail": f"invalid numeric parameter: {exc}"}, status_code=400)
+        try:
+            spansh = await asyncio.to_thread(
+                plot_route,
+                source_system=source_system,
+                destination_system=destination_system,
+                range_ly=range_ly,
+                efficiency=efficiency,
+                supercharge_multiplier=supercharge_multiplier,
+            )
+        except Exception as exc:
+            logger.exception("spansh route fetch failed")
+            return JSONResponse({"detail": f"spansh route fetch failed: {exc}"}, status_code=502)
+        request_key = RouteRequestKey(
+            source_system=spansh.source_system,
+            destination_system=spansh.destination_system,
+            range_ly=range_ly,
+            efficiency=efficiency,
+            supercharge_multiplier=supercharge_multiplier,
+        )
+        route_id = broker.server_state.cache_spansh_route(spansh, request_key=request_key)
+        payload = {"spansh": route_payload(spansh), "route_id": route_id}
+        return JSONResponse(payload)
+
     async def session(websocket: WebSocket) -> None:
         if not auth.is_websocket_authorized(websocket):
             await websocket.close(code=4401, reason="authentication required")
@@ -362,6 +419,8 @@ def build_observer_server_app(
             Route(HAUL_WEB_URL_PATH, haul_web),
             Route(MULTI_HAUL_WEB_URL_PATH, multi_haul_web),
             Route("/api/route-compare", route_compare),
+            Route("/api/route-compare/config", route_compare_config_endpoint),
+            Route("/api/spansh-route", spansh_route_endpoint),
             Route(HAUL_WEB_ASSET_URL_PATH, haul_web_asset),
             WebSocketRoute("/session", session),
         ]

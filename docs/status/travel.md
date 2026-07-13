@@ -1,5 +1,6 @@
 # Travel Status
 ## Current
+- `/haul` Route Comparison panel exposes four buttons: **Set in-game route** (WS `command.dispatch_destination` with the To system), **Fetch Spansh** (new `/api/spansh-route` endpoint, Spansh-only, caches and returns `route_id`), **Compare** (unchanged), and **All in one** (chains set-destination → fetch-spansh → wait+retry compare). Fetch Spansh renders Spansh-only rows and enables Switch to Spansh without touching NavRoute. All-in-one wait interval and compare-retry attempts are configurable via `[control_room].route_compare_navroute_wait_seconds` / `route_compare_compare_retry_attempts`; the web panel fetches defaults from `/api/route-compare/config` and lets the operator override per session.
 - Neutron travel routine `fly_spansh_route` ships: `/haul` "Switch to Spansh" now dispatches `command.dispatch_spansh_route { route_id, station? }`; server resolves `route_id` via `RouteCache` on `ControlRoomServerState`, per-waypoint we set the next system in the galaxy map and wait for arrival, optional final station hands off to `transit_to_station`. Operator flies each hop; routine never touches nav/flight.
 - Runtime refactor: `RoutineRuntime` (composed, not subclassed) is what travel and spansh routines take; `HaulRuntime`/`HaulTiming` compose it. Builder lives in `edap/control_room/routine_runtime_builder.py`, out of the haul module.
 - `DESTINATION_SET` announcement fires from inside `set_galaxy_map_destination_for_transit` (single source), reworded to `"Opening galaxy map to set destination to {system_name}."` — all callers get the same pre-open heads-up.
@@ -15,5 +16,4 @@
 - Surface/on-land travel inherits manual landing handoff; settlement approach automation is not implemented.
 ## Next
 - Live-validate `fly_spansh_route` under CrossOver/macOS: hop transitions, jet-cone timing per neutron waypoint (operator-side), and final-station handoff via `transit_to_station`.
-- Prefill Route Comparison panel from ship state (`supercharge_multiplier`, current system, `Loadout.MaxJumpRange`) — the other remaining must-do from plan 0010's follow-up roadmap.
 - Live-validate `travel` from docked, same-system supercruise, normal-space, and remote-system starts before expanding the web UI or adding route-search handoff affordances.

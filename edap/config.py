@@ -147,6 +147,8 @@ class ControlRoomConfig:
     check_for_updates: bool = True
     home_system: str = ""
     clear_session_on_launch: bool = False
+    route_compare_navroute_wait_seconds: float = 6.0
+    route_compare_compare_retry_attempts: int = 3
 
 
 @dataclass(frozen=True)
@@ -655,6 +657,10 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `control_room.command_delay_seconds` must be non-negative.")
     if config.control_room.status_refresh_seconds < 0:
         raise ConfigError("Config value `control_room.status_refresh_seconds` must be non-negative.")
+    if config.control_room.route_compare_navroute_wait_seconds < 0:
+        raise ConfigError("Config value `control_room.route_compare_navroute_wait_seconds` must be non-negative.")
+    if config.control_room.route_compare_compare_retry_attempts < 1:
+        raise ConfigError("Config value `control_room.route_compare_compare_retry_attempts` must be at least 1.")
     if config.tts.title_mode not in VALID_TTS_TITLE_MODES:
         supported = ", ".join(sorted(VALID_TTS_TITLE_MODES))
         raise ConfigError(f"Config value `tts.title_mode` must be one of: {supported}.")
@@ -998,6 +1004,16 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
                 control_room,
                 "clear_session_on_launch",
                 _boolean(default_control_room, "clear_session_on_launch", False),
+            ),
+            route_compare_navroute_wait_seconds=_float(
+                control_room,
+                "route_compare_navroute_wait_seconds",
+                _float(default_control_room, "route_compare_navroute_wait_seconds", 6.0),
+            ),
+            route_compare_compare_retry_attempts=_integer(
+                control_room,
+                "route_compare_compare_retry_attempts",
+                _integer(default_control_room, "route_compare_compare_retry_attempts", 3),
             ),
         ),
         tts=TTSConfig(

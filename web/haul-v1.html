@@ -175,12 +175,25 @@
                   <span class="field-label">Final station (optional)</span>
                   <input class="field" id="rc-station" value="" autocomplete="off" placeholder="dock here after route">
                 </label>
+                <label>
+                  <span class="field-label">All-in-one NavRoute wait (s)</span>
+                  <input class="field mono" id="rc-navroute-wait" value="" inputmode="decimal" placeholder="6.0">
+                </label>
+                <label>
+                  <span class="field-label">All-in-one compare retries</span>
+                  <input class="field mono" id="rc-compare-retries" value="" inputmode="numeric" placeholder="3">
+                </label>
               </div>
               <div class="btn-row action-row">
-                <button class="btn primary" type="button" id="rc-compare">Compare</button>
-                <button class="btn" type="button" id="rc-fixture-normal">Load Normal fixture</button>
-                <button class="btn" type="button" id="rc-fixture-overcharge">Load Overcharge fixture</button>
-                <button class="btn ghost" type="button" id="rc-switch" disabled title="Run Compare first">Switch to Spansh</button>
+                <button class="btn" type="button" id="rc-set-destination" title="Set the To system as the in-game galaxy-map destination">Set in-game route</button>
+                <button class="btn" type="button" id="rc-fetch-spansh" title="Query Spansh only (no comparison)">Fetch Spansh</button>
+                <button class="btn" type="button" id="rc-compare" title="Compare local NavRoute.json against Spansh">Compare</button>
+                <button class="btn primary" type="button" id="rc-all-in-one" title="Set in-game route, then fetch Spansh, then compare">All in one</button>
+                <button class="btn ghost" type="button" id="rc-switch" disabled title="Run Compare or Fetch Spansh first">Switch to Spansh</button>
+              </div>
+              <div class="btn-row action-row">
+                <button class="btn ghost" type="button" id="rc-fixture-normal">Load Normal fixture</button>
+                <button class="btn ghost" type="button" id="rc-fixture-overcharge">Load Overcharge fixture</button>
               </div>
             </div>
             <div id="rc-status" class="rc-status"></div>

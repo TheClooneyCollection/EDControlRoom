@@ -71,12 +71,12 @@ def comparison_to_payload(comparison: RouteComparison) -> dict:
         "jumps_delta": comparison.jumps_delta,
         "neutron_delta": comparison.neutron_delta,
         "tts_phrase": comparison.tts_phrase,
-        "in_game": _route_payload(comparison.in_game),
-        "spansh": _route_payload(comparison.spansh),
+        "in_game": route_payload(comparison.in_game),
+        "spansh": route_payload(comparison.spansh),
     }
 
 
-def _route_payload(route: Route) -> dict:
+def route_payload(route: Route) -> dict:
     return {
         "source": route.source,
         "source_system": route.source_system,

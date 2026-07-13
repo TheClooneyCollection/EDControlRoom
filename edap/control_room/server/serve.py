@@ -77,6 +77,8 @@ def serve_observer_mode(
         auth=SharedAccessTokenAuth(access_token),
         web_default_access_token=web_default_access_token,
         journal_dir=journal_dir,
+        route_compare_navroute_wait_seconds=loaded.config.control_room.route_compare_navroute_wait_seconds,
+        route_compare_compare_retry_attempts=loaded.config.control_room.route_compare_compare_retry_attempts,
     )
     logging.basicConfig(
         level=logging.INFO,
