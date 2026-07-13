@@ -482,7 +482,7 @@ class ControlRoomCliTests(unittest.TestCase):
         with patch("edap.control_room.app.socket.socket", return_value=fake_socket), patch(
             "edap.control_room.app.socket.getaddrinfo",
             return_value=[],
-        ):
+        ), patch("edap.control_room.app._iter_ifconfig_ipv4", return_value=[]):
             self.assertEqual(_detect_lan_host(), "192.168.1.42")
         self.assertEqual(fake_socket.address, ("8.8.8.8", 80))
 
@@ -493,9 +493,45 @@ class ControlRoomCliTests(unittest.TestCase):
                 (None, None, None, None, ("127.0.0.1", 0)),
                 (None, None, None, None, ("10.0.0.12", 0)),
             ],
-        ):
+        ), patch("edap.control_room.app._iter_ifconfig_ipv4", return_value=[]):
             socket_factory.return_value.__enter__.return_value.connect.side_effect = OSError("no route")
             self.assertEqual(_detect_lan_host(), "10.0.0.12")
+
+    def test_detect_lan_host_skips_vpn_benchmark_range(self) -> None:
+        # Cloudflare WARP-style: default route hands us 198.19.0.1, but the
+        # real Wi-Fi interface is 192.168.0.107. Prefer the RFC1918 address.
+        class FakeSocket:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb) -> None:
+                pass
+
+            def connect(self, address) -> None:
+                pass
+
+            def getsockname(self):
+                return ("198.19.0.1", 53621)
+
+        with patch("edap.control_room.app.socket.socket", return_value=FakeSocket()), patch(
+            "edap.control_room.app.socket.getaddrinfo",
+            return_value=[],
+        ), patch(
+            "edap.control_room.app._iter_ifconfig_ipv4",
+            return_value=["127.0.0.1", "198.19.0.1", "192.168.0.107"],
+        ):
+            self.assertEqual(_detect_lan_host(), "192.168.0.107")
+
+    def test_detect_lan_host_prefers_rfc1918_over_public(self) -> None:
+        with patch("edap.control_room.app.socket.socket") as socket_factory, patch(
+            "edap.control_room.app.socket.getaddrinfo",
+            return_value=[
+                (None, None, None, None, ("203.0.113.5", 0)),
+                (None, None, None, None, ("192.168.5.10", 0)),
+            ],
+        ), patch("edap.control_room.app._iter_ifconfig_ipv4", return_value=[]):
+            socket_factory.return_value.__enter__.return_value.connect.side_effect = OSError("no route")
+            self.assertEqual(_detect_lan_host(), "192.168.5.10")
 
     def test_serve_lan_passes_detected_host(self) -> None:
         with patch("sys.argv", ["control_room.py", "serve", "--lan", "--token", "1001"]), patch(
@@ -526,6 +562,25 @@ class ControlRoomCliTests(unittest.TestCase):
             access_token="1001",
             web_default_access_token="",
         )
+
+    def test_local_alias_binds_loopback(self) -> None:
+        with patch("sys.argv", ["control_room.py", "local", "--token", "1001"]), patch(
+            "edap.control_room.server.serve.serve_observer_mode"
+        ) as serve:
+            main()
+
+        serve.assert_called_once_with(
+            config_path="config.toml",
+            host="127.0.0.1",
+            port=8765,
+            access_token="1001",
+            web_default_access_token="",
+        )
+
+    def test_local_rejects_explicit_host(self) -> None:
+        argv = ["control_room.py", "local", "--host", "0.0.0.0", "--token", "1001"]
+        with patch("sys.argv", argv), patch("sys.stderr", io.StringIO()), self.assertRaises(SystemExit):
+            main()
 
     def test_serve_uses_default_token_when_token_is_omitted(self) -> None:
         with patch("sys.argv", ["control_room.py", "serve"]), patch(

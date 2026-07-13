@@ -41,9 +41,11 @@ Other:
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import signal
 import socket
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -2268,6 +2270,61 @@ def _is_loopback_ipv4(host: str) -> bool:
     return host.startswith("127.")
 
 
+# Ranges we never want to advertise as a LAN address, even when the OS hands
+# them to us. VPN tunnels (Cloudflare WARP in particular) park local endpoints
+# in 198.18/15, and CGNAT/link-local ranges are unreachable from the LAN too.
+_EXCLUDED_LAN_NETWORKS = (
+    ipaddress.ip_network("127.0.0.0/8"),      # loopback
+    ipaddress.ip_network("169.254.0.0/16"),   # link-local
+    ipaddress.ip_network("100.64.0.0/10"),    # CGNAT (also used by Tailscale)
+    ipaddress.ip_network("198.18.0.0/15"),    # RFC 2544 benchmark; used by WARP
+)
+
+_PRIVATE_LAN_NETWORKS = (
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+)
+
+
+def _classify_lan_candidate(host: str) -> int | None:
+    """Return a sort rank for a candidate LAN address, or None to reject it."""
+    try:
+        addr = ipaddress.ip_address(host)
+    except ValueError:
+        return None
+    if not isinstance(addr, ipaddress.IPv4Address):
+        return None
+    for network in _EXCLUDED_LAN_NETWORKS:
+        if addr in network:
+            return None
+    for network in _PRIVATE_LAN_NETWORKS:
+        if addr in network:
+            return 0
+    return 1
+
+
+def _iter_ifconfig_ipv4() -> list[str]:
+    """Best-effort enumeration of local IPv4 addresses via ifconfig on POSIX."""
+    if sys.platform.startswith("win"):
+        return []
+    try:
+        output = subprocess.check_output(
+            ["ifconfig"], text=True, stderr=subprocess.DEVNULL, timeout=2
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    results: list[str] = []
+    for line in output.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("inet "):
+            continue
+        parts = stripped.split()
+        if len(parts) >= 2:
+            results.append(parts[1])
+    return results
+
+
 def _detect_lan_host() -> str:
     candidates: list[str] = []
     try:
@@ -2283,16 +2340,29 @@ def _detect_lan_host() -> str:
     except OSError:
         pass
 
-    for host in candidates:
-        if host and not _is_loopback_ipv4(host):
-            return host
+    candidates.extend(_iter_ifconfig_ipv4())
+
+    ranked: list[tuple[int, int, str]] = []
+    seen: set[str] = set()
+    for order, host in enumerate(candidates):
+        if not host or host in seen:
+            continue
+        seen.add(host)
+        rank = _classify_lan_candidate(host)
+        if rank is None:
+            continue
+        ranked.append((rank, order, host))
+
+    if ranked:
+        ranked.sort()
+        return ranked[0][2]
 
     raise RuntimeError("could not determine a LAN IPv4 address; use --host explicitly")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="ED AutoPilot Control Room — live TUI")
-    parser.add_argument("mode", nargs="?", choices=["serve", "connect", "lan"])
+    parser.add_argument("mode", nargs="?", choices=["serve", "connect", "lan", "local"])
     parser.add_argument("target", nargs="?", help="server host[:port] for connect mode")
     parser.add_argument("--config", default="config.toml")
     parser.add_argument("--market", metavar="FILTER", help="initial market filter (e.g. --market aluminium)")
@@ -2316,15 +2386,23 @@ def main() -> None:
         parser.error("--lan is only valid with serve")
 
     serve_lan = args.lan or args.mode == "lan"
-    if args.mode in {"serve", "lan"}:
+    serve_local = args.mode == "local"
+    if args.mode in {"serve", "lan", "local"}:
         from edap.control_room.server.serve import serve_observer_mode
 
         if serve_lan and args.host:
             parser.error("LAN serve mode cannot be combined with --host")
+        if serve_local and args.host:
+            parser.error("local serve mode cannot be combined with --host")
         access_token = args.token or DEFAULT_OBSERVER_ACCESS_TOKEN
         web_default_access_token = "" if args.token else DEFAULT_OBSERVER_ACCESS_TOKEN
         try:
-            host = _detect_lan_host() if serve_lan else args.host or "127.0.0.1"
+            if serve_lan:
+                host = _detect_lan_host()
+            elif serve_local:
+                host = "127.0.0.1"
+            else:
+                host = args.host or "127.0.0.1"
         except RuntimeError as exc:
             parser.error(str(exc))
         serve_observer_mode(
