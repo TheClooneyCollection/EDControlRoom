@@ -266,6 +266,7 @@ def set_galaxy_map_destination_for_transit(
     max_attempts: int = 2,
     retry_delay_s: float = 1.0,
 ) -> bool:
+    runtime.announce_fn(AnnouncementId.DESTINATION_SET, system_name=destination_system)
     for attempt in range(1, max_attempts + 1):
         result = set_gal_map_destination(
             runtime.controls,
@@ -338,7 +339,6 @@ def undock_and_route_to_system(
         destination_system=destination_system,
     ):
         runtime.progress_fn(f"Setting galaxy map destination: {destination_system}...")
-        runtime.announce_fn(AnnouncementId.DESTINATION_SET, system_name=destination_system)
         route_confirmed = set_galaxy_map_destination_for_transit(
             runtime=runtime,
             destination_system=destination_system,
@@ -393,7 +393,6 @@ def depart_system_to_route(
         destination_system=destination_system,
     ):
         runtime.progress_fn(f"Setting galaxy map destination: {destination_system}...")
-        runtime.announce_fn(AnnouncementId.DESTINATION_SET, system_name=destination_system)
         route_confirmed = set_galaxy_map_destination_for_transit(
             runtime=runtime,
             destination_system=destination_system,

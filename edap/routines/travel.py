@@ -177,7 +177,6 @@ def _travel_transit(
 
 def _set_route_from_supercruise(runtime: RoutineRuntime, destination_system: str) -> bool:
     runtime.progress_fn(f"Setting galaxy map destination: {destination_system}...")
-    runtime.announce_fn(AnnouncementId.DESTINATION_SET, system_name=destination_system)
     return set_galaxy_map_destination_for_transit(
         runtime=runtime,
         destination_system=destination_system,

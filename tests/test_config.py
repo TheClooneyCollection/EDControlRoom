@@ -82,7 +82,7 @@ class LoadConfigTests(unittest.TestCase):
             self.assertTrue(config.tts.enabled)
             self.assertEqual(config.tts.title_mode, "commander")
             self.assertEqual(config.tts.title, "commander")
-            self.assertEqual(config.tts.phrases["destination_set"], "Setting destination to {system_name}.")
+            self.assertEqual(config.tts.phrases["destination_set"], "Opening galaxy map to set destination to {system_name}.")
             self.assertEqual(
                 config.tts.phrases["auto_docking_engaged"],
                 "Engaging auto docking sequence.",
@@ -359,7 +359,7 @@ station_cleared = "Station cleared, {title}."
                 config.tts.phrases["haul_aborted"],
                 "Haul aborted.",
             )
-            self.assertEqual(config.tts.phrases["destination_set"], "Setting destination to {system_name}.")
+            self.assertEqual(config.tts.phrases["destination_set"], "Opening galaxy map to set destination to {system_name}.")
 
     def test_loads_nested_control_section_overrides(self) -> None:
         with TemporaryDirectory() as temp_dir:
