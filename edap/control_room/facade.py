@@ -16,9 +16,11 @@ from edap.control_room import (
     routines_nav,
     routines_station,
     routines_trade,
+    routines_spansh,
     routines_travel,
     workers as _workers,
 )
+from edap.routing.types import Route
 from edap.control_room_state import CommandHistoryEntry
 from edap.progress_controls import ProgressShipControls
 from edap.inara.trade_routes import TradeRoute
@@ -275,6 +277,22 @@ class ControlRoomFacade:
             system=system,
             station=station,
             on_land=on_land,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+
+    def dispatch_spansh_route(
+        self,
+        *,
+        route: Route,
+        station: str = "",
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        routines_spansh.dispatch_spansh_route(
+            self._app,
+            route=route,
+            station=station,
             skip_delay=skip_delay,
             raw_command=raw_command,
         )

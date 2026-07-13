@@ -13,6 +13,7 @@ from edap.control_room.history import now_iso
 from edap.control_room.routine_stop import RoutineStopMode
 from edap.control_room_state import CommandHistoryEntry
 from edap.inara.trade_routes import TradeRoute
+from edap.routing.types import Route
 from edap.runtime import RuntimeContext
 from edap.state import JournalWatcher
 from edap.tts import NullSpeechBackend, TTSAnnouncer
@@ -236,6 +237,22 @@ class HeadlessControlRoomHost(ControlRoomApp):
             system=system,
             station=station,
             on_land=on_land,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+        self._publish_data_refresh()
+
+    def dispatch_spansh_route(
+        self,
+        *,
+        route: Route,
+        station: str = "",
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self._backend.dispatch_spansh_route(
+            route=route,
+            station=station,
             skip_delay=skip_delay,
             raw_command=raw_command,
         )

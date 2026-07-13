@@ -13,6 +13,7 @@ from edap.control_room.protocol import (
 )
 from edap.control_room.routine_stop import RoutineStopMode
 from edap.inara.trade_routes import TradeRoute
+from edap.routing.types import Route
 
 
 ControlRoomBackendEvent: TypeAlias = ActivityLogAppendedEvent | AnnouncementEvent | DataUpdatedEvent
@@ -56,6 +57,15 @@ class ControlRoomBackend(ControlRoomEventSink, Protocol):
         system: str,
         station: str | None = None,
         on_land: bool = False,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None: ...
+
+    def dispatch_spansh_route(
+        self,
+        *,
+        route: Route,
+        station: str = "",
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None: ...
@@ -244,6 +254,21 @@ class LocalControlRoomBackend(ControlRoomEventSink):
             system=system,
             station=station,
             on_land=on_land,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+
+    def dispatch_spansh_route(
+        self,
+        *,
+        route: Route,
+        station: str = "",
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self._host.dependencies.execution.dispatch_spansh_route(
+            route=route,
+            station=station,
             skip_delay=skip_delay,
             raw_command=raw_command,
         )

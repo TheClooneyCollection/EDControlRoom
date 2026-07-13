@@ -82,6 +82,18 @@ class RouteCompareEndpointTests(unittest.TestCase):
         self.assertIn("neutron_summary", event.message_values)
         self.assertIn("Spansh route came back", event.message_text)
 
+    def test_fixture_returns_route_id_and_caches_route(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        with self._client(broker=broker) as client:
+            response = self._get(client, "/api/route-compare?fixture=hd232819_xinca_overcharge")
+        payload = response.json()
+        route_id = payload.get("route_id")
+        self.assertIsInstance(route_id, str)
+        self.assertTrue(route_id)
+        cached = broker.server_state.get_spansh_route(route_id)
+        self.assertIsNotNone(cached)
+        self.assertEqual(cached.source, "spansh")
+
     def test_auth_required(self) -> None:
         with self._client(token="secret") as client:
             response = client.get("/api/route-compare?fixture=hd232819_xinca_normal")

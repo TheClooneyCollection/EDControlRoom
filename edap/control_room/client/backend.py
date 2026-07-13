@@ -28,6 +28,7 @@ from edap.control_room.protocol import (
 from edap.control_room.routine_stop import RoutineStopMode
 from edap.control_room_state import CommandHistoryEntry
 from edap.inara.trade_routes import TradeRoute
+from edap.routing.types import Route
 from .target import ObserverServerTarget
 
 if TYPE_CHECKING:
@@ -205,6 +206,18 @@ class RemoteObserverBackend(ControlRoomBackend):
                 "skip_delay": skip_delay,
                 "raw_command": raw_command,
             },
+        )
+
+    def dispatch_spansh_route(
+        self,
+        *,
+        route: Route,
+        station: str = "",
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self._emit_local_message(
+            "Spansh route dispatch is not supported from remote observer Python clients yet; use the /haul web panel."
         )
 
     def load_trade_route(
@@ -388,6 +401,21 @@ class RemoteObserverExecution:
     ) -> None:
         self._backend.dispatch_haul_loop(
             params=params,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+
+    def dispatch_spansh_route(
+        self,
+        *,
+        route: Route,
+        station: str = "",
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self._backend.dispatch_spansh_route(
+            route=route,
+            station=station,
             skip_delay=skip_delay,
             raw_command=raw_command,
         )

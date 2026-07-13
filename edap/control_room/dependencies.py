@@ -8,6 +8,7 @@ from edap.control_room.routine_stop import RoutineStopMode
 from edap.control_room_state import CommandHistoryEntry
 from edap.haul_search_config import HaulSearchConfigError, load_haul_search_config
 from edap.inara.trade_routes import TradeRoute, trade_route_search_defaults
+from edap.routing.types import Route
 
 if TYPE_CHECKING:
     from edap.control_room.app import ControlRoomApp
@@ -115,6 +116,15 @@ class ControlRoomExecution(Protocol):
         system: str,
         station: str | None = None,
         on_land: bool = False,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None: ...
+
+    def dispatch_spansh_route(
+        self,
+        *,
+        route: Route,
+        station: str = "",
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None: ...
@@ -304,6 +314,21 @@ class LocalControlRoomExecution:
             system=system,
             station=station,
             on_land=on_land,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+
+    def dispatch_spansh_route(
+        self,
+        *,
+        route: Route,
+        station: str = "",
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self._app._facade.dispatch_spansh_route(
+            route=route,
+            station=station,
             skip_delay=skip_delay,
             raw_command=raw_command,
         )

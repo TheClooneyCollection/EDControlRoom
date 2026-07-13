@@ -23,6 +23,7 @@
         "command.dispatch_destination",
         "command.dispatch_haul_loop",
         "command.dispatch_travel",
+        "command.dispatch_spansh_route",
         "command.search_haul_routes",
         "command.select_trade_route",
         "command.cancel_active_routine",
@@ -104,6 +105,18 @@
       "then": {
         "properties": {
           "payload": { "$ref": "#/$defs/command_dispatch_travel_payload" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": { "const": "command.dispatch_spansh_route" }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "#/$defs/command_dispatch_spansh_route_payload" }
         }
       }
     },
@@ -307,6 +320,17 @@
         "system": { "type": "string", "minLength": 1 },
         "station": { "type": "string", "minLength": 1 },
         "on_land": { "type": "boolean" },
+        "skip_delay": { "type": "boolean" },
+        "raw_command": { "type": ["string", "null"] }
+      }
+    },
+    "command_dispatch_spansh_route_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route_id"],
+      "properties": {
+        "route_id": { "type": "string", "minLength": 1 },
+        "station": { "type": "string" },
         "skip_delay": { "type": "boolean" },
         "raw_command": { "type": ["string", "null"] }
       }

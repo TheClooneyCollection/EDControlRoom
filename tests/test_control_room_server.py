@@ -62,6 +62,8 @@ from edap.control_room.server.host import HeadlessControlRoomHost
 from edap.control_room.server.sink import DataHydrateFanoutSink, ServerActivityLogSink
 from edap.control_room.server.state import ControlRoomServerState
 from edap.inara.trade_routes import TradeRoute, TradeRouteSearchResult
+from edap.routing.route_cache import RouteRequestKey
+from edap.routing.types import Route, RouteWaypoint, SpanshMetadata
 from edap.runtime import ResolvedPath, RuntimeContext
 from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler
 from edap.tts import AnnouncementId
@@ -236,6 +238,7 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
         self.dispatched_destinations: list[tuple[str, float, bool, str | None]] = []
         self.dispatched_hauls: list[tuple[dict[str, str] | None, bool, str | None]] = []
         self.dispatched_travels: list[tuple[str, str, bool, bool, str | None]] = []
+        self.dispatched_spansh_routes: list[tuple[str, str, bool, str | None, int]] = []
         self.loaded_trade_routes: list[tuple[object, str | None]] = []
         self.cancel_modes: list[str] = []
         self.persisted_selected_trade_route = None
@@ -275,6 +278,18 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
         raw_command: str | None = None,
     ) -> None:
         self.dispatched_travels.append((system, station, on_land, skip_delay, raw_command))
+
+    def dispatch_spansh_route(
+        self,
+        *,
+        route,
+        station: str = "",
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        self.dispatched_spansh_routes.append(
+            (route.destination_system, station, skip_delay, raw_command, len(route.waypoints))
+        )
 
     def load_trade_route(self, route, *, raw_command: str | None = None) -> None:
         self.loaded_trade_routes.append((route, raw_command))
@@ -1384,6 +1399,64 @@ class ControlRoomServerTests(unittest.TestCase):
         )
         self.assertEqual(response["message_type"], "response.success")
         self.assertEqual(response["payload"]["result"], {"system": "Sol", "station": ""})
+
+    def test_active_operator_dispatch_spansh_route_resolves_cached_route(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        command_handler = _CommandHandlerRecorder()
+        route = Route(
+            waypoints=(
+                RouteWaypoint(system="Sol", star_class=None, neutron_boost=False, x=0.0, y=0.0, z=0.0, ly_from_prev=0.0, jumps_from_prev=0),
+                RouteWaypoint(system="Xinca", star_class=None, neutron_boost=False, x=0.0, y=0.0, z=0.0, ly_from_prev=0.0, jumps_from_prev=1),
+            ),
+            total_ly=0.0, total_jumps=1, neutron_count=0,
+            source="spansh", source_system="Sol", destination_system="Xinca",
+            metadata=SpanshMetadata(efficiency=60, supercharge_multiplier=6, galaxy_map_visits=1),
+        )
+        route_id = broker.server_state.cache_spansh_route(
+            route,
+            request_key=RouteRequestKey(
+                source_system="Sol", destination_system="Xinca",
+                range_ly=60.0, efficiency=60, supercharge_multiplier=6,
+            ),
+        )
+
+        response = _handle_session_message(
+            {
+                "message_type": "command.dispatch_spansh_route",
+                "message_id": "message-spansh",
+                "payload": {"route_id": route_id, "station": "Abraham Lincoln"},
+            },
+            session_id="observer-spansh",
+            client_role="active_operator",
+            command_handler=command_handler,
+            broker=broker,
+        )
+
+        self.assertEqual(response["message_type"], "response.success")
+        self.assertEqual(
+            command_handler.dispatched_spansh_routes,
+            [("Xinca", "Abraham Lincoln", False, None, 2)],
+        )
+
+    def test_active_operator_dispatch_spansh_route_unknown_id_returns_error(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        command_handler = _CommandHandlerRecorder()
+
+        response = _handle_session_message(
+            {
+                "message_type": "command.dispatch_spansh_route",
+                "message_id": "message-spansh",
+                "payload": {"route_id": "does-not-exist"},
+            },
+            session_id="observer-spansh",
+            client_role="active_operator",
+            command_handler=command_handler,
+            broker=broker,
+        )
+
+        self.assertEqual(response["message_type"], "response.error")
+        self.assertEqual(response["payload"]["error_code"], "invalid_command")
+        self.assertEqual(command_handler.dispatched_spansh_routes, [])
 
     def test_active_operator_cancel_active_routine_calls_handler(self) -> None:
         broker = InMemoryObserverSessionBroker()

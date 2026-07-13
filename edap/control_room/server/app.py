@@ -886,6 +886,74 @@ def _handle_session_message(
             correlation_message_id=correlation_message_id,
         )
 
+    if message_type == "command.dispatch_spansh_route":
+        if command_handler is None:
+            return _transport_unavailable_error(correlation_message_id)
+        route_id_value = payload.get("route_id")
+        if not isinstance(route_id_value, str) or not route_id_value.strip():
+            return protocol_message(
+                "response.error",
+                {
+                    "error_code": "invalid_command",
+                    "error_message": "Spansh dispatch commands must include a route_id string.",
+                    "recommended_action": "Run route compare first, then pass its route_id.",
+                    "retryable": True,
+                },
+                correlation_message_id=correlation_message_id,
+            )
+        route = broker.server_state.get_spansh_route(route_id_value.strip())
+        if route is None:
+            return protocol_message(
+                "response.error",
+                {
+                    "error_code": "invalid_command",
+                    "error_message": "Spansh route no longer cached; run Compare again.",
+                    "recommended_action": "Re-run route compare and dispatch with the new route_id.",
+                    "retryable": True,
+                },
+                correlation_message_id=correlation_message_id,
+            )
+        station_value = payload.get("station", "")
+        if not isinstance(station_value, str):
+            return protocol_message(
+                "response.error",
+                {
+                    "error_code": "invalid_command",
+                    "error_message": "Spansh dispatch station must be a string when present.",
+                    "recommended_action": "Send station as a string or omit it for system-only travel.",
+                    "retryable": True,
+                },
+                correlation_message_id=correlation_message_id,
+            )
+        raw_command_value = payload.get("raw_command")
+        raw_command = raw_command_value if isinstance(raw_command_value, str) else None
+        try:
+            skip_delay_value = payload.get("skip_delay")
+            skip_delay = bool(skip_delay_value) if isinstance(skip_delay_value, bool) else False
+            command_handler.dispatch_spansh_route(
+                route=route,
+                station=station_value.strip(),
+                skip_delay=skip_delay,
+                raw_command=raw_command,
+            )
+        except Exception as exc:
+            logger.exception("dispatch_spansh_route failed")
+            return _command_execution_failed_error(exc, correlation_message_id)
+        return protocol_message(
+            "response.success",
+            {
+                "accepted": True,
+                "message_text": "Spansh route dispatch accepted.",
+                "result": {
+                    "route_id": route_id_value.strip(),
+                    "station": station_value.strip(),
+                    "destination_system": route.destination_system,
+                    "waypoint_count": len(route.waypoints),
+                },
+            },
+            correlation_message_id=correlation_message_id,
+        )
+
     if message_type == "command.dispatch_haul_loop":
         if command_handler is None:
             return _transport_unavailable_error(correlation_message_id)
