@@ -19,6 +19,16 @@
     if (scField && !state.userEditedSupercharge && (shipState.supercharge_multiplier === 4 || shipState.supercharge_multiplier === 6)) {
       scField.value = String(shipState.supercharge_multiplier);
     }
+    const hint = document.getElementById("rc-supercharge-hint");
+    if (hint) {
+      if (shipState.supercharge_multiplier === 6) {
+        hint.textContent = "(detected: Overcharge Mk II 6x)";
+      } else if (shipState.supercharge_multiplier === 4) {
+        hint.textContent = "(detected: Normal 4x)";
+      } else {
+        hint.textContent = "(no Loadout event seen yet)";
+      }
+    }
   }
 
   function currentToken() {
