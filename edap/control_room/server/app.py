@@ -7,6 +7,8 @@ import logging
 from pathlib import Path
 from typing import Any, Callable
 
+import httpx
+
 logger = logging.getLogger(__name__)
 
 from starlette.applications import Starlette
@@ -432,6 +434,27 @@ class RouteCompareError(Exception):
         self.retryable = retryable
 
 
+def _spansh_route_error(exc: httpx.HTTPStatusError) -> RouteCompareError:
+    """Turn a Spansh HTTP error into an actionable web/API error."""
+    response = exc.response
+    upstream_error: str | None = None
+    try:
+        payload = response.json()
+        if isinstance(payload, dict) and isinstance(payload.get("error"), str):
+            upstream_error = payload["error"]
+    except (ValueError, TypeError):
+        pass
+
+    if upstream_error == "Could not find finishing system":
+        detail = "Spansh says could not find target system"
+    elif upstream_error:
+        detail = f"Spansh says: {upstream_error}"
+    else:
+        detail = f"Spansh route request failed: {exc}"
+    status_code = response.status_code if response.status_code < 500 else 502
+    return RouteCompareError(status_code=status_code, detail=detail, retryable=False)
+
+
 def fetch_and_cache_spansh_route(
     *,
     broker: InMemoryObserverSessionBroker,
@@ -449,6 +472,9 @@ def fetch_and_cache_spansh_route(
             efficiency=efficiency,
             supercharge_multiplier=supercharge_multiplier,
         )
+    except httpx.HTTPStatusError as exc:
+        logger.exception("spansh route fetch failed; response=%s", exc.response.text)
+        raise _spansh_route_error(exc) from exc
     except Exception as exc:
         logger.exception("spansh route fetch failed")
         raise RouteCompareError(
@@ -499,6 +525,9 @@ def build_and_cache_live_comparison(
             detail="NavRoute.json not found; plot a route in game first",
             retryable=True,
         ) from exc
+    except httpx.HTTPStatusError as exc:
+        logger.exception("Spansh route comparison failed; response=%s", exc.response.text)
+        raise _spansh_route_error(exc) from exc
     except Exception as exc:
         logger.exception("route comparison failed")
         raise RouteCompareError(

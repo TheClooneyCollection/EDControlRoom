@@ -4,6 +4,8 @@ import unittest
 import warnings
 from unittest.mock import patch
 
+import httpx
+
 from edap.routing.types import Route, RouteWaypoint, SpanshMetadata
 
 warnings.filterwarnings(
@@ -229,6 +231,24 @@ class SpanshRouteEndpointTests(unittest.TestCase):
             with self._client() as client:
                 response = self._get(client, "/api/spansh-route?from=A&to=B&range=60")
         self.assertEqual(response.status_code, 502)
+
+    def test_spansh_missing_target_returns_actionable_400(self) -> None:
+        request = httpx.Request("POST", "https://spansh.co.uk/api/route")
+        response = httpx.Response(
+            400,
+            request=request,
+            json={"error": "Could not find finishing system"},
+        )
+
+        with patch(
+            "edap.control_room.server.app.plot_route",
+            side_effect=httpx.HTTPStatusError("400 Bad Request", request=request, response=response),
+        ):
+            with self._client() as client:
+                result = self._get(client, "/api/spansh-route?from=A&to=B&range=60")
+
+        self.assertEqual(result.status_code, 400)
+        self.assertEqual(result.json()["detail"], "Spansh says could not find target system")
 
     def test_auth_required(self) -> None:
         with self._client(token="secret") as client:

@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `257`
-- Latest generated iteration number: `390`
+- Generated iteration count: `258`
+- Latest generated iteration number: `391`
 
 ## Iteration 134
 
@@ -7202,3 +7202,29 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - No hydrate is currently emitted when a Spansh route finishes or is cancelled; the panel will show `Arrived` once the last waypoint matches ship system but stays populated afterwards. A future step should clear `set_active_spansh_route(None)` on routine completion / operator stop.
 - Live-validate the enhanced panel under CrossOver/macOS on a real Spansh run and verify the waypoint window scrolls correctly across mid-route hops.
+
+## Iteration 391
+
+- When: `2026-07-14 15:14`
+- Area: `control-room`
+- Title: `friendly-spansh-errors`
+- Source: [2026-07-14-15-14_control-room_friendly-spansh-errors.md](iteration-logs/2026-07-14-15-14_control-room_friendly-spansh-errors.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `friendly-spansh-errors`
+- Started: `2026-07-14 15:14`
+
+## Summary
+
+- Translate Spansh route validation responses into actionable web errors while retaining the upstream response body in server logs.
+
+## Changes
+
+- `edap/control_room/server/app.py`: added Spansh HTTP error parsing; missing finishing systems return HTTP 400 with `Spansh says could not find target system`, other upstream API errors retain their message, and 5xx responses remain 502.
+- `tests/test_route_compare_endpoint.py`: added endpoint coverage for the missing-target response.
+
+## Follow-ups
+
+- Keep validating system names before submitting routes; no retry is attempted for Spansh request-validation errors.
