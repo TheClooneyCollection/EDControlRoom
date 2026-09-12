@@ -19,10 +19,7 @@ Live-validated on **macOS** (Elite through CrossOver) and **Windows** (community
 
 ## What You Get
 
-- **Terminal Control Room** (TUI): live ship status, activity log, market panel, and TTS callouts for events like "ship ready to jump".
-- **Web frontend**: browser UI on the same LAN for haul dashboard, Inara-backed haul search, and Spansh route fetch + comparison.
-- **Haul routine**: end-to-end two-way station loop plus finite multi-leg routes.
-- **Journal-driven routines**: `dock`, `undock`, `jump`, `buy`, `sell`, `dest`, `home`.
+A terminal Control Room with TTS callouts, a LAN web frontend for haul dashboard / search / Spansh routing, an end-to-end two-way haul routine (plus multi-leg), and journal-driven `dock`, `undock`, `jump`, `buy`, `sell`, `dest`, `home`.
 
 **Terminal Control Room (TUI)** — ship status, activity log, market, and haul session, with TTS callouts.
 
