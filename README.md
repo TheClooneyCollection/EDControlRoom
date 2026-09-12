@@ -38,6 +38,12 @@ Uvicorn prints the bound URL on startup (e.g. `http://192.168.1.50:8765`). Open 
 
 Both the server and the web page default to token `edcr`, so no `--token` is needed unless you want a different one.
 
+To attach another TUI (same machine or another LAN box) against the running server, in a separate terminal:
+
+```sh
+uv run python3 control_room.py connect <ip>:8765 --token edcr
+```
+
 **Before your first run:** set arrow-key secondaries on `UI_Up / UI_Down / UI_Left / UI_Right` in Elite. See [docs/user/bindings-setup.md](docs/user/bindings-setup.md).
 
 Full walkthrough: [docs/user/getting-started.md](docs/user/getting-started.md).
