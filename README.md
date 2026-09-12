@@ -21,21 +21,29 @@ Live-validated on **macOS** (Elite through CrossOver) and **Windows** (community
 
 A terminal Control Room with TTS callouts, a LAN web frontend for haul dashboard / search / Spansh routing, an end-to-end two-way haul routine (plus multi-leg), and journal-driven `dock`, `undock`, `jump`, `buy`, `sell`, `dest`, `home`.
 
-**Terminal Control Room (TUI)** — ship status, activity log, market, and haul session, with TTS callouts.
+<details>
+<summary><strong>Terminal Control Room (TUI)</strong> — ship status, activity log, market, and haul session, with TTS callouts.</summary>
 
 <img src="docs/assets/tui-control-room.png" alt="Terminal Control Room TUI" width="50%">
+</details>
 
-**Web dashboard** — two-way haul control with live session stats and routine progress.
+<details>
+<summary><strong>Web dashboard</strong> — two-way haul control with live session stats and routine progress.</summary>
 
 <img src="docs/assets/quick-stats.png" alt="Web dashboard with haul session stats" width="50%">
+</details>
 
-**Haul search** — Inara-backed profitable route finder with one-click dispatch.
+<details>
+<summary><strong>Haul search</strong> — Inara-backed profitable route finder with one-click dispatch.</summary>
 
 <img src="docs/assets/haul-search.png" alt="Web haul search with Inara route results" width="50%">
+</details>
 
-**Spansh route** — fetch a Spansh route and compare it side-by-side with the in-game route.
+<details>
+<summary><strong>Spansh route</strong> — fetch a Spansh route and compare it side-by-side with the in-game route.</summary>
 
 <img src="docs/assets/spansh-routes.png" alt="Spansh route fetch and comparison panel" width="50%">
+</details>
 
 ## Quick Start
 
