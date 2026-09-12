@@ -7,6 +7,16 @@ Multiplatform Elite Dangerous command-and-routine tooling. It handles the repeti
 
 Live-validated on **macOS** (Elite through CrossOver) and **Windows** (community-validated by CMDR VRYAE). **Linux** paths exist in the code but are not yet validated.
 
+## Contents
+
+- [What You Get](#what-you-get)
+- [Quick Start](#quick-start)
+- [Documentation](#documentation)
+- [Development](#development)
+- [Repo Layout](#repo-layout)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## What You Get
 
 - **Terminal Control Room** (TUI): live ship status, activity log, market panel, and TTS callouts for events like "ship ready to jump".
