@@ -16,13 +16,13 @@ From the repo root:
 uv run python3 control_room.py lan
 ```
 
-Uvicorn logs the bound URL as it starts, something like:
+`lan` starts a headless server. Uvicorn logs the bound URL as it starts, something like:
 
 ```
 Uvicorn running on http://192.168.1.50:8765
 ```
 
-That address is the web frontend. The Textual TUI stays running in this terminal window and handles TTS callouts.
+That address is the web frontend.
 
 **Token.** With no `--token`, both the server and the built-in web page default to `edcr`, so the browser connects without you typing anything. Pass `--token <your-token>` on both ends if you want a different one.
 
@@ -50,21 +50,17 @@ The route comparison panel fetches a Spansh route between two systems and lays i
 
 Set From / To, jump range, efficiency, supercharge state, and (optionally) a final station. **Fetch Spansh**, **Compare**, or **All in one** to run the full flow, then **Switch to Spansh** to hand the route to the active haul.
 
-## Use the TUI for TTS
+## Attach a TUI for TTS
 
-Keep the terminal window that launched `lan` visible. It runs the TUI and speaks TTS callouts locally, such as the "commander, ship ready to jump" handoff at the end of a haul leg. TTS is client-local; the browser will not speak.
-
-Typical setup: laptop or workstation runs `control_room.py lan` with the terminal on a second monitor for TTS + activity log, iPad or another window drives the browser UI.
-
-### Attach Another TUI
-
-To open a second TUI against the running server (same machine or another LAN box), in a separate terminal run:
+`lan` is headless, so it does not speak TTS on its own. Open a TUI client in a separate terminal to get the "commander, ship ready to jump" callouts and a live activity log:
 
 ```sh
 uv run python3 control_room.py connect <ip>:8765 --token edcr
 ```
 
-Use the IP printed by `lan` on startup, and swap `edcr` for your token if you overrode it. This is useful for a second monitor with TTS on a different machine, or to reattach a TUI after closing the original terminal window.
+Use the IP printed by `lan` on startup, and swap `edcr` for your token if you overrode it. TTS is client-local; the browser will not speak.
+
+Typical setup: one machine runs `control_room.py lan`, a second terminal (same machine or a second monitor / LAN box) runs `connect ...` for TTS + activity log, iPad or another window drives the browser UI.
 
 ## The Five-Second Safety Delay
 
