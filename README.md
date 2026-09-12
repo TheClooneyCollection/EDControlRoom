@@ -66,6 +66,20 @@ uv run python3 -m unittest discover -s tests
 
 `main` is the active rolling-update branch; stable features and releases are marked with semantic version tags like `v1.22.0`. Commits use Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`).
 
+## Contributing
+
+Issues and PRs welcome. Before opening a PR:
+
+- Follow Conventional Commits for commit messages.
+- Run the test suite: `uv run python3 -m unittest discover -s tests`.
+- If your change touches user-visible behavior, update the relevant doc under [docs/user/](docs/user/) or [docs/operators/](docs/operators/).
+
+Bug reports and feature ideas are best filed as GitHub issues with journal / config details when relevant.
+
+## License
+
+MIT. See [LICENSE](LICENSE). This project traces back to the original ED autopilot work by SKai2 and is being maintained and reshaped for the macOS-first Control Room direction.
+
 ## Repo Layout
 
 - `control_room.py`: primary operator surface at the repo root.
