@@ -34,15 +34,15 @@ uv sync
 uv run python3 control_room.py lan
 ```
 
-Uvicorn prints the bound URL on startup (e.g. `http://192.168.1.50:8765`). Open that in a browser to use the web frontend. Keep the terminal window in view for TTS callouts.
+`lan` starts a headless server and prints the bound URL on startup (e.g. `http://192.168.1.50:8765`). Open that URL in a browser to use the web frontend.
 
-Both the server and the web page default to token `edcr`, so no `--token` is needed unless you want a different one.
-
-To attach another TUI (same machine or another LAN box) against the running server, in a separate terminal:
+`lan` does **not** run a TUI or speak TTS. For TTS callouts, attach a TUI client from another terminal (same machine or another LAN box):
 
 ```sh
 uv run python3 control_room.py connect <ip>:8765 --token edcr
 ```
+
+Both the server and the web page default to token `edcr`, so no `--token` override is needed unless you want a different one.
 
 **Before your first run:** set arrow-key secondaries on `UI_Up / UI_Down / UI_Left / UI_Right` in Elite. See [docs/user/bindings-setup.md](docs/user/bindings-setup.md).
 
