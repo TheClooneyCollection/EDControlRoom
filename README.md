@@ -26,19 +26,19 @@ Live-validated on **macOS** (Elite through CrossOver) and **Windows** (community
 
 **Terminal Control Room (TUI)** — ship status, activity log, market, and haul session, with TTS callouts.
 
-![Terminal Control Room TUI](docs/assets/tui-control-room.png)
+<img src="docs/assets/tui-control-room.png" alt="Terminal Control Room TUI" width="50%">
 
 **Web dashboard** — two-way haul control with live session stats and routine progress.
 
-![Web dashboard with haul session stats](docs/assets/quick-stats.png)
+<img src="docs/assets/quick-stats.png" alt="Web dashboard with haul session stats" width="50%">
 
 **Haul search** — Inara-backed profitable route finder with one-click dispatch.
 
-![Web haul search with Inara route results](docs/assets/haul-search.png)
+<img src="docs/assets/haul-search.png" alt="Web haul search with Inara route results" width="50%">
 
 **Spansh route** — fetch a Spansh route and compare it side-by-side with the in-game route.
 
-![Spansh route fetch and comparison panel](docs/assets/spansh-routes.png)
+<img src="docs/assets/spansh-routes.png" alt="Spansh route fetch and comparison panel" width="50%">
 
 ## Quick Start
 
