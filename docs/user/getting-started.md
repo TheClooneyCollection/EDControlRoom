@@ -56,6 +56,16 @@ Keep the terminal window that launched `lan` visible. It runs the TUI and speaks
 
 Typical setup: laptop or workstation runs `control_room.py lan` with the terminal on a second monitor for TTS + activity log, iPad or another window drives the browser UI.
 
+### Attach Another TUI
+
+To open a second TUI against the running server (same machine or another LAN box), in a separate terminal run:
+
+```sh
+uv run python3 control_room.py connect <ip>:8765 --token edcr
+```
+
+Use the IP printed by `lan` on startup, and swap `edcr` for your token if you overrode it. This is useful for a second monitor with TTS on a different machine, or to reattach a TUI after closing the original terminal window.
+
 ## The Five-Second Safety Delay
 
 Ship-affecting commands wait **5 seconds** before pressing any keys, so you have time to click back into Elite. Do that as soon as you fire a command from the browser or TUI.
