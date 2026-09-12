@@ -36,9 +36,10 @@ uv run python3 control_room.py lan
 
 `lan` starts a headless server and prints the bound URL on startup (e.g. `http://192.168.1.50:8765`). Open that URL in a browser to use the web frontend.
 
-`lan` does **not** run a TUI or speak TTS. For TTS callouts, attach a TUI client from another terminal (same machine or another LAN box):
+`lan` does **not** run a TUI or speak TTS. For TTS callouts, attach a TUI client from another terminal (same machine or another LAN box). Paste the URL `lan` printed, or use the shorter `host:port` form:
 
 ```sh
+uv run python3 control_room.py connect http://<ip>:8765/ --token edcr
 uv run python3 control_room.py connect <ip>:8765 --token edcr
 ```
 
