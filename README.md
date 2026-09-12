@@ -69,6 +69,14 @@ uv run python3 -m unittest discover -s tests
 
 `main` is the active rolling-update branch; stable features and releases are marked with semantic version tags like `v1.22.0`. Commits use Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`).
 
+## Repo Layout
+
+- `control_room.py`: primary operator surface at the repo root.
+- `tools/`: supported auxiliary CLIs (`run_routine.py`, `diagnostics.py`, `ship_controls.py`, bindings helpers).
+- `edap/`: active runtime code.
+- `tools/scratch/`: exploratory probes and one-off validation helpers.
+- `archive/legacy-windows/`: historical Windows-era reference code.
+
 ## Contributing
 
 Issues and PRs welcome. Before opening a PR:
@@ -77,16 +85,8 @@ Issues and PRs welcome. Before opening a PR:
 - Run the test suite: `uv run python3 -m unittest discover -s tests`.
 - If your change touches user-visible behavior, update the relevant doc under [docs/user/](docs/user/) or [docs/operators/](docs/operators/).
 
-Bug reports and feature ideas are best filed as GitHub issues with journal / config details when relevant.
+Bug reports and feature ideas are best filed as GitHub issues with journal / config details when relevant. Chat and questions: [Discord](https://discord.gg/73YSUBhfRG).
 
 ## License
 
 MIT. See [LICENSE](LICENSE). This project traces back to the original ED autopilot work by SKai2 and is being maintained and reshaped for the macOS-first Control Room direction.
-
-## Repo Layout
-
-- `control_room.py`: primary operator surface at the repo root.
-- `tools/`: supported auxiliary CLIs (`run_routine.py`, `diagnostics.py`, `ship_controls.py`, bindings helpers).
-- `edap/`: active runtime code.
-- `tools/scratch/`: exploratory probes and one-off validation helpers.
-- `archive/legacy-windows/`: historical Windows-era reference code.
