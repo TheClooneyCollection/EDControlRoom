@@ -21,6 +21,8 @@ Live-validated on **macOS** (Elite through CrossOver) and **Windows** (community
 
 A terminal Control Room with TTS callouts, a LAN web frontend for haul dashboard / search / Spansh routing, an end-to-end two-way haul routine (plus multi-leg), and journal-driven `dock`, `undock`, `jump`, `buy`, `sell`, `dest`, `home`.
 
+_(Expand / click the following sections to see the screenshots.)_
+
 <details>
 <summary><strong>Terminal Control Room (TUI)</strong> — ship status, activity log, market, and haul session, with TTS callouts.</summary>
 
