@@ -52,13 +52,14 @@ Set From / To, jump range, efficiency, supercharge state, and (optionally) a fin
 
 ## Attach a TUI for TTS
 
-`lan` is headless, so it does not speak TTS on its own. Open a TUI client in a separate terminal to get the "commander, ship ready to jump" callouts and a live activity log:
+`lan` is headless, so it does not speak TTS on its own. Open a TUI client in a separate terminal to get the "commander, ship ready to jump" callouts and a live activity log. Paste the URL `lan` printed, or use the shorter `host:port` form:
 
 ```sh
+uv run python3 control_room.py connect http://<ip>:8765/ --token edcr
 uv run python3 control_room.py connect <ip>:8765 --token edcr
 ```
 
-Use the IP printed by `lan` on startup, and swap `edcr` for your token if you overrode it. TTS is client-local; the browser will not speak.
+Swap `edcr` for your token if you overrode it. TTS is client-local; the browser will not speak.
 
 Typical setup: one machine runs `control_room.py lan`, a second terminal (same machine or a second monitor / LAN box) runs `connect ...` for TTS + activity log, iPad or another window drives the browser UI.
 
