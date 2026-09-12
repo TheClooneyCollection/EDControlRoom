@@ -1,141 +1,63 @@
-# Control Room
+# Control Room (Operator Reference)
 
-`control_room.py` is the main live operator surface.
+`control_room.py` is the main live operator surface. For the recommended day-to-day setup (TUI + web frontend on the LAN), see [../user/getting-started.md](../user/getting-started.md). For the haul workflow, see [../user/haul-workflow.md](../user/haul-workflow.md). For the full command list, see [../user/commands-reference.md](../user/commands-reference.md).
 
-Run it with:
+This page is the operator-reference view: run modes, panels, and the specifics of how Control Room behaves in a live session.
+
+## Run Modes
 
 ```sh
-uv run python3 control_room.py
-uv run python3 control_room.py --market aluminium
-uv run python3 control_room.py serve --token 1001
-uv run python3 control_room.py local --token 1001
-uv run python3 control_room.py lan --token 1001
-uv run python3 control_room.py connect 192.168.1.50:8765 --token 1001
+uv run python3 control_room.py                         # embedded local TUI only
+uv run python3 control_room.py --market aluminium      # embedded local, pre-focused market
+uv run python3 control_room.py local                   # server bound to 127.0.0.1
+uv run python3 control_room.py lan                     # server bound to detected LAN IPv4 (recommended)
+uv run python3 control_room.py serve --host 0.0.0.0 --port 8765
+uv run python3 control_room.py connect 192.168.1.50:8765 --token edcr
 ```
 
-If `config.toml` exists in the repo root, EDControlRoom loads it automatically. Create one only when you need explicit overrides beyond the built-in auto-detection.
+`lan` autodetects a non-loopback IPv4, preferring RFC1918 addresses and skipping VPN-owned ranges like `198.18/15` (Cloudflare WARP) and `100.64/10` (CGNAT). Use `--host` for an explicit bind, `0.0.0.0` for all interfaces.
 
-EDControlRoom works by sending keyboard input to Elite Dangerous. After you fire off any command that should affect the ship or UI, switch back to the game window before the delay expires.
+Access token defaults to `edcr` when `--token` is omitted; the built-in web page auto-fills the same default. Override on both ends if you want a different token. The TUI `connect` client requires an explicit `--token`.
 
-![Control Room screenshot](../assets/control-room.png)
+If `config.toml` exists in the repo root, EDControlRoom loads it automatically.
 
-## What It Is
-
-- primary operator surface for current routine work
-- best-supported end-to-end path is `haul`
-- one routine runs at a time
-- can also run as a LAN observer server or remote client; see [control-room-remote.md](control-room-remote.md)
+For multi-client / operator-vs-observer semantics, see [control-room-remote.md](control-room-remote.md).
 
 ## Panels
 
-- `SHIP STATUS`: commander, system, station, flight state, fuel, credits, cargo, `Destination` from `Status.json` (`system/body/name`), and journal `FSD target`
-- `ACTIVITY`: live event log plus routine progress lines
-- `MARKET`: commodity table from `Market.json`, with filtering and lock/unlock controls
+- `SHIP STATUS`: commander, system, station, flight state, fuel, credits, cargo, `Destination` from `Status.json` (`system/body/name`), and journal FSD target.
+- `ACTIVITY`: live event log and routine progress lines. Startup writes version info; if update checks are enabled, so do release notifications.
+- `MARKET`: commodity table from `Market.json` with filter and lock/unlock.
 
-## Main Commands
+## Ship-Affecting Delay
 
-- `dock`
-- `undock`
-- `jump`
-- `buy <item> [N|max]`
-- `sell`
-- `sell <item> [N|max]`
-- `haul [commodity]`
-- `multi_leg_haul <route.json | spansh-url>`
-- `dest <system>`
-- `set_dest <system>`
-- `home`
-- `home set <system>`
+Commands that press keys into Elite wait `5` seconds before the first press so you can focus the game window. `instant`, `instant on`, `instant off` toggle that delay for future commands. Useful when you are remoted in and do not need the pause.
 
-## Haul
+## Haul Behavior
 
-- `haul [commodity]` runs the active two-way haul loop used by `tools/run_routine.py --routine haul_loop`
-- `haul load [path]` loads ignored repo-root `haul.toml` by default, or a custom TOML path if you provide one
-- haul is aimed at commanders who want the station-side repetition handled for them: after a drop near station it requests docking, runs station services, buys or sells cargo, refuels, repairs, routes the next leg, launches, clears mass lock, and primes the FSD
-- haul does not auto-align for the next jump; after station clearance it uses TTS to call the commander by title or name and announce that the ship is ready to jump as the handoff cue
-- haul resumes from current journal and sidecar state rather than assuming a fresh start
-- one default haul setup can be saved and reused across restarts
-- `replay` / `Ctrl-R` is the quickest way to relaunch recent haul commands or rerun a saved pattern without retyping it
+For the workflow story, see [../user/haul-workflow.md](../user/haul-workflow.md). Behavior specifics:
 
-### `haul.toml` Example
-
-If you want one text-editable haul profile instead of walking through the interactive prompt each time, edit ignored repo-root `haul.toml` and run:
-
-```sh
-haul load
-```
-
-Example:
-
-```toml
-[haul]
-galaxy_map_settle = 2.0
-dock_timeout = 1200.0
-
-[haul.station_1]
-buying = "Aluminium"
-name = "Pawelczyk Dock"
-system = "Sol"
-on_land = false
-
-[haul.station_2]
-buying = "Bertrandite"
-name = "Trevithick Dock"
-system = "Achenar"
-on_land = false
-```
-
-Notes:
-
-- `buying` is optional on either side, but at least one station must have a buy cargo configured.
-- `on_land = true` tells haul to hand off after destination-system `SupercruiseExit` so you can finish a surface approach and resume after landing.
-- `haul load some-other-file.toml` works if you want multiple named route files.
+- `haul [commodity]` runs the two-way loop used by `tools/run_routine.py --routine haul_loop`.
+- `haul load [path]` loads repo-root `haul.toml` by default.
+- Resume is journal + sidecar based; no clean-state assumption.
+- One default haul setup persists across restarts.
+- `replay` / `Ctrl-R` relaunches recent haul commands.
+- Interrupt: first `Ctrl-C` / `Ctrl-D` queues a stop at the next station-1 boundary after the return sale; second cancels immediately.
 
 ## Multi-Leg Haul
 
-- `multi_leg_haul <route.json | spansh-url>` (alias `mult`) runs a standalone finite multi-leg haul route
-- the route can come from our normalized JSON schema or directly from a Spansh trade-result payload / URL
-- resume is still state-based: rerun the command and EDControlRoom re-derives the current stop/phase from journal, `Cargo.json`, `Market.json`, and the route definition
-- the public schema intentionally excludes plan or execution state; see `docs/schemas/multi_leg_haul.schema.json` and `templates/multi_leg_haul.example.json`
+`multi_leg_haul <route.json | spansh-url>` (alias `mult`) runs a standalone finite multi-leg route. Route input can come from the normalized JSON at `docs/schemas/multi_leg_haul.schema.json` (see `templates/multi_leg_haul.example.json`) or from a Spansh trade-result URL / payload. Resume state is re-derived from journal, `Cargo.json`, `Market.json`, and the route definition. The public schema intentionally excludes plan / execution state.
 
-Interrupt behavior during `haul` is special:
+## Persistence
 
-- first `Ctrl-C` or `Ctrl-D`: finish the current run and stop at station 1 after the return sale, before the next buy
-- second `Ctrl-C` or `Ctrl-D`: cancel immediately
+- `.control_room_state.json`: cross-session command history and the saved default haul profile.
+- `artifacts/control-room.log`: mirror of consumed journal events.
 
-## Other Commands
+## Related
 
-- `market filter <name>`
-- `market`
-- `market clear`
-- `market lock`
-- `market unlock`
-- `replay`
-- `commands`
-- `help [command]`
-- `q`, `quit`, `exit`
-
-## Home Routing
-
-- `home` reuses the saved `control_room.home_system` value and then runs the normal `dest` flow, including the galaxy-map settle prompt.
-- `dest home` is accepted as a destination alias for the saved home system.
-- `home set <system>` updates that setting in the active config file so the next `home` command is one word.
-- Bare `home set` uses the current ship system when Control Room already knows it from live journal/status state.
-- `haul search home` uses the saved home system as the Inara search center.
-- If Control Room started from the default `config.example.toml` fallback because repo-root `config.toml` did not exist yet, `home set` creates a minimal repo-root `config.toml` instead of editing the shipped example file.
-
-## Keybinds
-
-- `Ctrl-R` opens replay/history from the command bar.
-- `Ctrl-C` stops the app when idle. During `haul`, the first press requests a safe stop at the next station-1 boundary after the return sale, and the second press cancels immediately.
-- `Ctrl-D` behaves the same as `Ctrl-C`.
-
-## Useful Behavior
-
-- Ship-affecting commands wait `5` seconds before starting by default, so you have time to switch back to Elite before EDControlRoom sends any key presses.
-- `instant`, `instant on`, and `instant off` control that default launch delay for future commands. This is mainly useful when you are remotely connected to the shell and do not need the normal safety pause.
-- Startup writes version information into `ACTIVITY`, and when update checks are enabled it also tells you if a newer EDControlRoom release is available.
-- In replay/history, typing applies a simple prefix filter and `Backspace` removes characters from that filter.
-- `sell` with no explicit item falls back to `Cargo.json` if the in-memory cargo manifest is empty.
-- Cross-session command history and one saved default haul profile are persisted in `.control_room_state.json` by default.
-- Consumed journal events are mirrored into `artifacts/control-room.log`, so you can inspect what Control Room saw during a run.
+- [../user/commands-reference.md](../user/commands-reference.md)
+- [bindings-files.md](bindings-files.md)
+- [input-timing.md](input-timing.md)
+- [market-timing.md](market-timing.md)
+- [manual-journal-routine-testing.md](manual-journal-routine-testing.md)
+- [control-room-remote.md](control-room-remote.md)

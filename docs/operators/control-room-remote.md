@@ -1,12 +1,12 @@
-# Control Room Remote Observer Mode
+# Control Room Multi-Client Mode
 
-This document covers the current `serve` / `connect` split for Control Room.
+This document covers the `serve` / `connect` model when **more than one client** connects to the same Control Room server (e.g. TUI on the runtime host plus a browser plus a second TUI on another laptop).
 
-For normal embedded local use, start with [control-room.md](control-room.md).
+For the recommended single-user LAN setup (one `lan` server + one browser + local TUI for TTS), see [../user/getting-started.md](../user/getting-started.md). For the operator reference on run modes, see [control-room.md](control-room.md).
 
 ## Purpose
 
-Use remote observer mode when one machine should own the runtime and one or more other clients should watch or operate it over the LAN.
+Use multi-client mode when one machine owns the runtime and one or more additional clients should watch or take over control over the LAN.
 
 Current model:
 
@@ -20,17 +20,14 @@ Current model:
 
 ## Commands
 
-Start a server on the machine that owns the Elite runtime:
+Server run modes are documented in [control-room.md](control-room.md#run-modes). A quick summary for multi-client setups:
 
 ```sh
-uv run python3 control_room.py serve --token 1001
-uv run python3 control_room.py local --token 1001
-uv run python3 control_room.py lan --port 8765 --token 1001
-uv run python3 control_room.py serve --lan --port 8765 --token 1001
+uv run python3 control_room.py lan --token 1001
 uv run python3 control_room.py serve --host 0.0.0.0 --port 8765 --token 1001
 ```
 
-Use `local` to bind loopback (`127.0.0.1`) explicitly. Use `lan` or `serve --lan` when clients should connect from the same network and you want Control Room to bind to the detected non-loopback IPv4 address, preferring RFC1918 addresses and skipping VPN-owned ranges like `198.18/15` (Cloudflare WARP) and `100.64/10` (CGNAT). Use `--host` for an explicit bind address, including `0.0.0.0` for all interfaces.
+Pass an explicit `--token` when you want to override the default `edcr`. All clients must use the same token.
 
 Connect from a client:
 
