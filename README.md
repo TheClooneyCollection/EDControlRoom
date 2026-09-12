@@ -11,11 +11,21 @@ Live-validated on **macOS** (Elite through CrossOver) and **Windows** (community
 - **Haul routine**: end-to-end two-way station loop plus finite multi-leg routes.
 - **Journal-driven routines**: `dock`, `undock`, `jump`, `buy`, `sell`, `dest`, `home`.
 
-![Web quick stats](docs/assets/quick-stats.png)
+**Terminal Control Room (TUI)** — ship status, activity log, market, and haul session, with TTS callouts.
 
-![Haul search](docs/assets/haul-search.png)
+![Terminal Control Room TUI](docs/assets/tui-control-room.png)
 
-![Spansh route fetch and comparison](docs/assets/spansh-routes.png)
+**Web dashboard** — two-way haul control with live session stats and routine progress.
+
+![Web dashboard with haul session stats](docs/assets/quick-stats.png)
+
+**Haul search** — Inara-backed profitable route finder with one-click dispatch.
+
+![Web haul search with Inara route results](docs/assets/haul-search.png)
+
+**Spansh route** — fetch a Spansh route and compare it side-by-side with the in-game route.
+
+![Spansh route fetch and comparison panel](docs/assets/spansh-routes.png)
 
 ## Quick Start
 
