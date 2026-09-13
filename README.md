@@ -1,5 +1,11 @@
 # EDControlRoom
 
+## ⚠️ This violates the Elite Dangerous Terms of Use
+
+Frontier defines automation as more than one action in game per button press, and does not permit it. ([source](https://forums.frontier.co.uk/threads/does-anyone-has-experience-using-tools-called-fleet-carrier-macros.604481/))
+
+This tool is well past that line. **Do not run it on an account you'd mind losing.** No warranty, no assurance of account safety.
+
 [![Tests](https://github.com/TheClooneyCollection/EDControlRoom/actions/workflows/tests.yml/badge.svg)](https://github.com/TheClooneyCollection/EDControlRoom/actions/workflows/tests.yml)
 [![Discord](https://img.shields.io/badge/Discord-join%20chat-5865F2?logo=discord&logoColor=white)](https://discord.gg/73YSUBhfRG)
 
