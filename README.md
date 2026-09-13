@@ -26,6 +26,10 @@ The flagship is the **two-way haul routine**. When your ship drops near a statio
 
 That makes it a direct fit for high-volume A↔B cargo work like community goal loops or long chill hauls, where the station-to-station cycle is the part worth automating and human attention is better spent on flying.
 
+**See it in action:** [live stream demo — co-pilot handling a station cycle](https://www.youtube.com/live/oXjmC3rIlgI?si=Xm0vPb8FNKOG8xWb&t=7538)
+
+[![EDControlRoom co-pilot demo](https://img.youtube.com/vi/oXjmC3rIlgI/hqdefault.jpg)](https://www.youtube.com/live/oXjmC3rIlgI?si=Xm0vPb8FNKOG8xWb&t=7538)
+
 ## What You Get
 
 A terminal Control Room with TTS callouts, a LAN web frontend for haul dashboard / search / Spansh routing, and journal-driven `dock`, `undock`, `jump`, `buy`, `sell`, `dest`, `home`.
