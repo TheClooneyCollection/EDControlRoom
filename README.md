@@ -26,9 +26,9 @@ The flagship is the **two-way haul routine**. When your ship drops near a statio
 
 That makes it a direct fit for high-volume A↔B cargo work like community goal loops or long chill hauls, where the station-to-station cycle is the part worth automating and human attention is better spent on flying.
 
-**See it in action:** [live stream demo — co-pilot handling a station cycle](https://www.youtube.com/live/oXjmC3rIlgI?si=Xm0vPb8FNKOG8xWb&t=7538)
+**See it in action:** [live stream demo — co-pilot handling a station cycle](https://www.youtube.com/live/YKbz7xtc22Q?t=6014s)
 
-[![EDControlRoom co-pilot demo](https://img.youtube.com/vi/oXjmC3rIlgI/hqdefault.jpg)](https://www.youtube.com/live/oXjmC3rIlgI?si=Xm0vPb8FNKOG8xWb&t=7538)
+[![EDControlRoom co-pilot demo](https://img.youtube.com/vi/YKbz7xtc22Q/hqdefault.jpg)](https://www.youtube.com/live/YKbz7xtc22Q?t=6014s)
 
 ## What You Get
 
