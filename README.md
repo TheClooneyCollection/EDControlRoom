@@ -75,10 +75,10 @@ _(Expand / click the following sections to see the screenshots.)_
 <details>
 <summary><strong>Spansh route</strong> — fetch a Spansh route and compare it side-by-side with the in-game route.</summary>
 
-- Inputs: from / to system, jump range (LY, unladen), efficiency, supercharge mode, optional final station, all-in-one navroute wait, and compare retries.
+- Inputs: from / to system, jump range (LY, unladen), efficiency, supercharge mode, optional final station, all-in-one navroute wait, and compare retries. From, jump range, and supercharge mode auto-fill from live ship state (current system + Loadout event); wait / retries auto-fill from server config.
 - **Fetch Spansh** to pull a route, **Set in-game route** to plot it in Elite via the galaxy map, **Compare** to diff Spansh vs the plotted route jump-by-jump, or **All in one** to run the full flow.
-- **Switch to Spansh** hands the fetched route to the active haul so the dashboard's Active route panel drives jumps remaining / LY remaining / boosts.
-- Route detail table shows system, neutron flag, +LY per jump, and cumulative total for both routes side by side.
+- **Switch to Spansh** starts the standalone Spansh route runner: it flies the fetched route waypoint by waypoint, and every time you arrive at a waypoint it automatically sets the galaxy map to the next one.
+- Route detail table shows system, neutron flag, +LY per jump, and cumulative total for both routes side by side. Dashboard's Active route panel tracks jumps remaining / LY remaining / boosts while the runner is active.
 
 <img src="docs/assets/spansh-routes.png" alt="Spansh route fetch and comparison panel" width="50%">
 </details>
