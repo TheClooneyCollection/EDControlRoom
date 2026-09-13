@@ -11,7 +11,7 @@ This tool is well past that line. **Do not run it on an account you'd mind losin
 
 Multiplatform Elite Dangerous command-and-routine tooling. It handles the repetitive station-side loop of trading and hauling so the commander can stay focused on the parts that still benefit from human attention. It is **not** a hands-off flight bot.
 
-Live-validated on **macOS** (Elite through CrossOver) and **Windows** (community-validated by CMDR VRYAE). **Linux** paths exist in the code but are not yet validated.
+Live-validated on **macOS** (Elite through CrossOver) and **Windows** (community-validated). **Linux** paths exist in the code but are not yet validated.
 
 ## Contents
 

@@ -13,7 +13,7 @@ EDControlRoom needs Python 3.12 and, on macOS/Linux, the `uv` package manager.
 ## Platform Status
 
 - **macOS**: fully supported and actively used. Elite runs through CrossOver.
-- **Windows**: fully supported and live-validated by community member CMDR VRYAE.
+- **Windows**: fully supported and community-validated.
 - **Linux**: runtime paths exist but are not live-validated. Expect small adjustments (paths, input backend) before it works end to end. See the note at the bottom of this page.
 
 ## macOS
