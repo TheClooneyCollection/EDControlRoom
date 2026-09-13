@@ -30,6 +30,8 @@ That address is the web frontend.
 
 On any device on the same LAN, open the URL from the startup log in a browser (or `http://localhost:8765` from the same machine). This is the main operator surface.
 
+> **Recommended:** open the web frontend on a **secondary device** (second laptop, tablet, phone) rather than the machine running Elite. EDControlRoom drives Elite by sending key input to the game window, so **Elite must be the foreground application** while a routine runs. Alt-tabbing to a browser on the same machine steals focus and breaks the routine. A tablet or second monitor / device sidesteps that entirely.
+
 ![Web quick stats](../assets/quick-stats.png)
 
 Top of the page is the two-way haul dashboard: home / current system, destination, cargo, session profit, and the five stages of the active haul routine (Buy, Undock, Depart, Transit, Sell). Header controls let you pause / resume / stop the routine and toggle the pre-command safety delay (**Instant off**).
