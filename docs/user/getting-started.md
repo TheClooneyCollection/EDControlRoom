@@ -71,7 +71,7 @@ If you are already remote and do not need the pause, type `instant` in the TUI c
 
 ## First Haul
 
-1. In Elite, drop near a station you want to buy from.
+1. In Elite, dock at a station you want to buy from.
 2. In the browser, either search routes (haul search panel) or type `haul <commodity>` in the TUI command bar.
 3. Switch to Elite. The routine handles docking, station services, buy, undock, depart, transit, and sell.
 4. When the ship is clear and the drive is primed for the next jump, TTS calls out that the ship is ready. Take over for alignment and jump.
