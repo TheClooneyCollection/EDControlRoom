@@ -28,7 +28,7 @@ That makes it a direct fit for high-volume A↔B cargo work like community goal 
 
 **See it in action:** [live stream demo — co-pilot handling a station cycle](https://www.youtube.com/live/YKbz7xtc22Q?t=6014s)
 
-[![Hauling in VR with EDControlRoom's help](docs/assets/haul-vr.png)](https://www.youtube.com/live/YKbz7xtc22Q?t=6014s)
+<a href="https://www.youtube.com/live/YKbz7xtc22Q?t=6014s"><img src="docs/assets/haul-vr.png" alt="Hauling in VR with EDControlRoom's help — click to watch on YouTube" width="50%"></a>
 
 ## What You Get
 
