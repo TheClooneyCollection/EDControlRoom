@@ -18,15 +18,17 @@
 
 `haul` can be started from anywhere in the loop — whether you're docked, in supercruise near a station, mid-transit between systems, or just launched. It reads the journal, `Cargo.json`, and `Market.json` to figure out which phase you're in and picks up from there. Starting from the TUI or the web frontend behaves the same way.
 
-At each phase, `haul` walks the ship through:
+The phases in a full station-side cycle are:
 
-1. request docking
-2. work through station services
-3. buy or sell cargo
-4. refuel and repair
-5. set the route for the next leg
-6. leave the station
-7. clear mass lock and prime the FSD
+- request docking
+- work through station services
+- buy or sell cargo
+- refuel and repair
+- set the route for the next leg
+- leave the station
+- clear mass lock and prime the FSD
+
+`haul` decides which phase is next from your live state and jumps in there — you do not have to start at "request docking."
 
 There is no auto-align. When the ship is clear and the drive is primed, TTS calls the commander by title or name and says the ship is ready to jump. That is your cue to take over alignment and the next jump.
 
