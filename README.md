@@ -9,6 +9,7 @@ Live-validated on **macOS** (Elite through CrossOver) and **Windows** (community
 
 ## Contents
 
+- [The Idea](#the-idea)
 - [What You Get](#what-you-get)
 - [Quick Start](#quick-start)
 - [Documentation](#documentation)
@@ -17,9 +18,17 @@ Live-validated on **macOS** (Elite through CrossOver) and **Windows** (community
 - [Contributing](#contributing)
 - [License](#license)
 
+## The Idea
+
+A co-pilot, not an autopilot. You stay focused on flying; EDControlRoom takes over anything that lives behind a game menu.
+
+The flagship is the **two-way haul routine**. When your ship drops near a station, it handles the boring bits end to end: request docking, work through station services, sell, refuel and repair, buy the return cargo, set the next-leg route, undock, clear mass lock, and prime the FSD. When the drive is primed it uses TTS to call the commander by title or name and announce the ship is ready to jump — that is your cue to take over for alignment and the next jump.
+
+That makes it a direct fit for high-volume A↔B cargo work like community goal loops or long chill hauls, where the station-to-station cycle is the part worth automating and human attention is better spent on flying.
+
 ## What You Get
 
-A terminal Control Room with TTS callouts, a LAN web frontend for haul dashboard / search / Spansh routing, an end-to-end two-way haul routine (plus multi-leg), and journal-driven `dock`, `undock`, `jump`, `buy`, `sell`, `dest`, `home`.
+A terminal Control Room with TTS callouts, a LAN web frontend for haul dashboard / search / Spansh routing, and journal-driven `dock`, `undock`, `jump`, `buy`, `sell`, `dest`, `home`.
 
 _(Expand / click the following sections to see the screenshots.)_
 
