@@ -26,11 +26,23 @@ _(Expand / click the following sections to see the screenshots.)_
 <details>
 <summary><strong>Terminal Control Room (TUI)</strong> — ship status, activity log, market, and haul session, with TTS callouts.</summary>
 
+- Live panels: SHIP STATUS (commander, system, station, fuel, cargo, FSD target), ACTIVITY log, and MARKET table from `Market.json`.
+- Full command bar for `dock`, `undock`, `jump`, `buy`, `sell`, `dest`, `home`, `travel`, `market ...`.
+- Start haul work from the command bar: `haul [commodity]`, `haul start`, `haul load`, `haul search [system]`, `haul search url <inara-url>`, `haul route <n>`, `multi_leg_haul <route>`.
+- `pause` / `resume` an active two-way haul; `stop` and `new_session` control the persisted session timer / profit.
+- `Ctrl-R` reopens replay / command history; `Ctrl-C` interrupts (haul-aware safe stop first, cancel on second).
+- Speaks TTS callouts locally, e.g. "commander, ship ready to jump" at the end of a leg.
+
 <img src="docs/assets/tui-control-room.png" alt="Terminal Control Room TUI" width="50%">
 </details>
 
 <details>
 <summary><strong>Web dashboard</strong> — two-way haul control with live session stats and routine progress.</summary>
+
+- Quick stats strip: home system, current system, destination, cargo, routine, completed runs, session profit.
+- Active routine board with the five haul stages (Buy, Undock, Depart, Transit, Sell) plus elapsed, current / accumulated credits, and cargo moved.
+- Active route panel: jumps remaining, LY remaining, boosts remaining for the dispatched Spansh route.
+- Header controls: **Pause**, **Resume**, **Stop after run**, **Stop now**, **Save** the current haul as the default, **Reconnect**, and **Instant off** for the 5-second safety delay.
 
 <img src="docs/assets/quick-stats.png" alt="Web dashboard with haul session stats" width="50%">
 </details>
@@ -38,11 +50,22 @@ _(Expand / click the following sections to see the screenshots.)_
 <details>
 <summary><strong>Haul search</strong> — Inara-backed profitable route finder with one-click dispatch.</summary>
 
+- Filter by origin (and optional destination), max route distance with presets, station distance, cargo capacity, profit metric, and min supply / demand.
+- Results sort by profit / hour or profit / trip and show cargo, both stations, distance, and route LY.
+- **Start route** hands the selected pair to the two-way haul routine; **Set destination** just routes there; **Travel assist** flies to an arbitrary system + station without hauling.
+- Same search is reachable from the TUI via `haul search [system]` and `haul search url <inara-url>`; `haul route <n>` picks a numbered result.
+- Note: v1 excludes surface / land settlements — station and carrier routes only.
+
 <img src="docs/assets/haul-search.png" alt="Web haul search with Inara route results" width="50%">
 </details>
 
 <details>
 <summary><strong>Spansh route</strong> — fetch a Spansh route and compare it side-by-side with the in-game route.</summary>
+
+- Inputs: from / to system, jump range (LY, unladen), efficiency, supercharge mode, optional final station, all-in-one navroute wait, and compare retries.
+- **Fetch Spansh** to pull a route, **Set in-game route** to plot it in Elite via the galaxy map, **Compare** to diff Spansh vs the plotted route jump-by-jump, or **All in one** to run the full flow.
+- **Switch to Spansh** hands the fetched route to the active haul so the dashboard's Active route panel drives jumps remaining / LY remaining / boosts.
+- Route detail table shows system, neutron flag, +LY per jump, and cumulative total for both routes side by side.
 
 <img src="docs/assets/spansh-routes.png" alt="Spansh route fetch and comparison panel" width="50%">
 </details>
