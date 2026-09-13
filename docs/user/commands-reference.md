@@ -2,6 +2,17 @@
 
 Every command you can type in the TUI or web command bar. For the haul flow specifically, see [haul-workflow.md](haul-workflow.md).
 
+## Contents
+
+- [Movement and Routing](#movement-and-routing)
+- [Cargo](#cargo)
+- [Haul](#haul)
+- [Market](#market)
+- [Session](#session)
+- [Key Bindings in the TUI](#key-bindings-in-the-tui)
+- [Panels](#panels)
+- [Files EDControlRoom Writes](#files-edcontrolroom-writes)
+
 ## Movement and Routing
 
 - `dock`

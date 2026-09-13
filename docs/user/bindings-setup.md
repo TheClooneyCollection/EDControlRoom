@@ -2,6 +2,11 @@
 
 EDControlRoom drives Elite by looking up your live `.binds` file and pressing whatever keys those actions are bound to. Two things need to be true before your first run.
 
+## Contents
+
+- [1. Arrow-Key Secondaries on the Menu Cursor (Required)](#1-arrow-key-secondaries-on-the-menu-cursor-required)
+- [2. A Complete `.binds` File](#2-a-complete-binds-file)
+
 ## 1. Arrow-Key Secondaries on the Menu Cursor (Required)
 
 Elite's galaxy map and menu navigation must have **arrow-key secondary bindings** on these four actions:

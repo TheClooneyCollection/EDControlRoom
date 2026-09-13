@@ -2,6 +2,18 @@
 
 `haul` is the strongest end-to-end routine and the clearest example of what EDControlRoom is for. It handles the boring station-side loop so you can stay focused on the parts that still benefit from a human pilot.
 
+## Contents
+
+- [What Haul Does](#what-haul-does)
+- [The Simple Path](#the-simple-path)
+- [Reusable Setup: `haul.toml`](#reusable-setup-haultoml)
+- [Saved Default](#saved-default)
+- [Home Routing](#home-routing)
+- [Resume Semantics](#resume-semantics)
+- [Multi-Leg Haul](#multi-leg-haul)
+- [Interrupt Behavior](#interrupt-behavior)
+- [Related](#related)
+
 ## What Haul Does
 
 `haul` can be started from anywhere in the loop — whether you're docked, in supercruise near a station, mid-transit between systems, or just launched. It reads the journal, `Cargo.json`, and `Market.json` to figure out which phase you're in and picks up from there. Starting from the TUI or the web frontend behaves the same way.
