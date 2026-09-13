@@ -48,7 +48,7 @@ The route comparison panel fetches a Spansh route between two systems and lays i
 
 ![Spansh route fetch and comparison](../assets/spansh-routes.png)
 
-Set From / To, jump range, efficiency, supercharge state, and (optionally) a final station. **Fetch Spansh**, **Compare**, or **All in one** to run the full flow, then **Switch to Spansh** to hand the route to the active haul.
+From, jump range, and supercharge mode auto-fill from live ship state (current system + Loadout event). Set To, adjust efficiency and any other fields, and optionally a final station. **Fetch Spansh**, **Compare**, or **All in one** to run the full flow, then **Switch to Spansh** to start the Spansh route runner — it flies the route waypoint by waypoint and auto-sets the galaxy map for the next waypoint every time you arrive.
 
 ## Attach a TUI for TTS
 
