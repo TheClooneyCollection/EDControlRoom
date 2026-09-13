@@ -2,6 +2,16 @@
 
 Quick checks for when input, journal detection, or bindings look wrong.
 
+## Contents
+
+- [Nothing Happens When I Fire a Command](#nothing-happens-when-i-fire-a-command)
+- [Galaxy Map / `dest` Navigates Incorrectly](#galaxy-map--dest-navigates-incorrectly)
+- [Tail the Journal Live](#tail-the-journal-live)
+- [Confirm Key Injection Works End To End](#confirm-key-injection-works-end-to-end)
+- [Journal or Bindings Not Auto-Detected](#journal-or-bindings-not-auto-detected)
+- [`.binds` Backup, Restore, and Presets](#binds-backup-restore-and-presets)
+- [Deeper Diagnostics](#deeper-diagnostics)
+
 ## Nothing Happens When I Fire a Command
 
 EDControlRoom sends key input to whatever window is focused. If Elite is not focused when the safety delay expires, the key presses go nowhere (or into your terminal).

@@ -2,6 +2,17 @@
 
 This is the recommended way to run EDControlRoom day to day: one process serves the runtime, you keep the terminal TUI open for TTS callouts, and you drive it from your browser.
 
+## Contents
+
+- [Before You Start](#before-you-start)
+- [Start Control Room in LAN Mode](#start-control-room-in-lan-mode)
+- [Open the Web Frontend](#open-the-web-frontend)
+- [Attach a TUI for TTS](#attach-a-tui-for-tts)
+- [The Five-Second Safety Delay](#the-five-second-safety-delay)
+- [First Haul](#first-haul)
+- [Stopping](#stopping)
+- [Where To Go Next](#where-to-go-next)
+
 ## Before You Start
 
 - Finished [install.md](install.md).
