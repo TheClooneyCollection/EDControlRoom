@@ -7,7 +7,7 @@ from typing import Callable
 
 from edap.cargo_manifest import read_cargo_inventory as read_cargo_inventory_with_retry
 from edap.config import MarketBuyHoldSegmentConfig
-from edap.routines._base import SupportsPollEvents, SupportsRoutineControls
+from edap.routines._base import RoutineResult, SupportsPollEvents, SupportsRoutineControls
 from edap.routines.callbacks import AnnouncementCallback, ProgressCallback
 from edap.routines.runtime import RoutineRuntime, RoutineTiming, RoutineTravelSettings
 
@@ -166,3 +166,14 @@ def sellable_cargo(inventory: list[dict]) -> list[dict]:
         and item.get("Stolen", 0) == 0
         and "MissionID" not in item
     ]
+
+
+def buy_shortfall(result: RoutineResult) -> int | None:
+    """Return a confirmed buy's missing quantity; unknown quantities never trigger retries."""
+    if result.dispatch.status != "ok":
+        return None
+    expected = (result.details or {}).get("expected_count")
+    bought = (result.trigger_event or {}).get("Count")
+    if any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in (expected, bought)):
+        return None
+    return max(0, expected - bought)

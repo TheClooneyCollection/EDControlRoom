@@ -845,10 +845,12 @@ def _market_trade_attempt(
     pending_events = watcher.poll()
 
     # Set quantity
+    expected_count: int | None = None
     if side == "buy":
         if amount == "MAX":
             hold_s = max_hold_s
             buy_limit, buy_limit_reason = _read_buy_quantity_limit(market_path.parent, item)
+            expected_count = buy_limit
             if buy_limit is not None:
                 hold_s, hold_detail = _buy_hold_duration_for_quantity(
                     buy_limit,
@@ -870,6 +872,7 @@ def _market_trade_attempt(
                 return RoutineResult(action="UI_Right", dispatch=qty_dispatch, details={"phase": "set_quantity"})
         else:
             qty = int(amount)
+            expected_count = qty
             progress_fn(f"  UI_Right x{qty} (set quantity to {qty})")
             qty_dispatch = None
             for _ in range(qty):
@@ -1030,5 +1033,8 @@ def _market_trade_attempt(
         action=event_type,
         dispatch=trade_dispatch,
         trigger_event=trade_event,
-        details={"target": target, "amount": str(amount), "side": side},
+        details={
+            "target": target, "amount": str(amount), "side": side,
+            **({"expected_count": expected_count} if expected_count is not None else {}),
+        },
     )

@@ -2325,7 +2325,13 @@ on_land = true
         self.assertEqual(self.app._haul_stats.expected_profit_per_trip, 250_000)
 
         self.app._handle_haul_event(
-            {"event": "MarketBuy", "TotalCost": 100_000, "Count": 128},
+            {"event": "MarketBuy", "TotalCost": 75_000, "Count": 96},
+            station_before="Pawelczyk Dock",
+        )
+        self.assertEqual(self.app._haul_stats.current_run_profit, -75_000)
+        self.assertEqual(self.app._haul_stats.cargo_moved_t, 96)
+        self.app._handle_haul_event(
+            {"event": "MarketBuy", "TotalCost": 25_000, "Count": 32},
             station_before="Pawelczyk Dock",
         )
         self.assertEqual(self.app._haul_stats.current_run_profit, -100_000)

@@ -244,6 +244,82 @@ def _test_haul_runtime(
 
 
 class TwoWayHaulLoopTests(unittest.TestCase):
+    def test_buy_top_ups_are_bounded_and_require_known_quantities(self) -> None:
+        def bought(expected, count, status="ok"):
+            return RoutineResult(
+                action="MarketBuy", dispatch=ActionDispatchResult(action="MarketBuy", status=status),
+                trigger_event={"Type": _CARGO_1, **({"Count": count} if count is not None else {})},
+                details={"expected_count": expected} if expected is not None else {},
+            )
+
+        cases = (
+            ("full", [bought(64, 64)], False),
+            ("one top-up", [bought(64, 40), bought(24, 24)], False),
+            ("bounded", [bought(64, 40), bought(24, 10), bought(14, 5)], True),
+            ("unknown count", [bought(64, None)], False),
+            ("non-integer count", [bought(64, "40")], False),
+            ("boolean count", [bought(64, True)], False),
+            ("unknown limit", [bought(None, 40)], False),
+            ("top-up failure", [bought(64, 40), bought(24, None, "error")], False),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_cargo(journal_dir, [])
+            for name, results, warning in cases:
+                with self.subTest(name=name):
+                    progress = []
+                    amounts = []
+                    pending = iter(results)
+                    ctx = _HaulCtx(
+                        runtime=_test_haul_runtime(journal_dir, FakeShipControls(), FakeWatcher([]), progress_fn=progress.append),
+                        station_1=_station_1_leg(), station_2=_station_2_leg(),
+                    )
+
+                    def buy(controls, watcher, *, amount, **kwargs):
+                        amounts.append(amount)
+                        return next(pending)
+
+                    with patch("edap.routines.haul_two_way.market_buy", buy):
+                        result, phase = _run_market_buy(ctx, leg=ctx.station_1, next_phase=Phase.UNDOCK_STATION_1)
+                    self.assertIs(result, results[-1])
+                    self.assertEqual(phase, Phase.UNDOCK_STATION_1)
+                    self.assertEqual(amounts, ["MAX"] * len(results))
+                    self.assertEqual(any("Warning:" in line for line in progress), warning)
+                    if len(results) > 1:
+                        self.assertTrue(any("topping up 24 (top-up 1/2)" in line for line in progress))
+
+    def test_wrong_commodity_during_top_up_is_sold_before_retrying(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_cargo(journal_dir, [])
+            calls = []
+            ctx = _HaulCtx(
+                runtime=_test_haul_runtime(journal_dir, FakeShipControls(), FakeWatcher([])),
+                station_1=_station_1_leg(), station_2=_station_2_leg(),
+            )
+            responses = iter((
+                RoutineResult(action="MarketBuy", dispatch=ActionDispatchResult(action="MarketBuy", status="ok"),
+                              trigger_event={"Type": _CARGO_1, "Count": 40}, details={"expected_count": 64}),
+                RoutineResult(action="MarketBuy", dispatch=ActionDispatchResult(action="MarketBuy", status="error"),
+                              trigger_event={"Type": "Gold", "Count": 24}, details={"phase": "wrong_item", "wrong_commodity": "Gold"}),
+                RoutineResult(action="MarketBuy", dispatch=ActionDispatchResult(action="MarketBuy", status="ok"),
+                              trigger_event={"Type": _CARGO_1, "Count": 24}, details={"expected_count": 24}),
+            ))
+
+            def buy(controls, watcher, **kwargs):
+                calls.append(("buy", kwargs["target"]))
+                return next(responses)
+
+            def sell(controls, watcher, **kwargs):
+                calls.append(("sell", kwargs["target"]))
+                return RoutineResult(action="MarketSell", dispatch=ActionDispatchResult(action="MarketSell", status="ok"))
+
+            with patch("edap.routines.haul_two_way.market_buy", buy), patch("edap.routines.haul_two_way.market_sell", sell):
+                result, phase = _run_market_buy(ctx, leg=ctx.station_1, next_phase=Phase.UNDOCK_STATION_1)
+            self.assertEqual(result.dispatch.status, "ok")
+            self.assertEqual(calls, [("buy", _CARGO_1), ("buy", _CARGO_1), ("sell", "Gold"), ("buy", _CARGO_1)])
+
+
     def test_normal_space_near_buy_station_returns_for_empty_or_partial_load(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             journal_dir = Path(tmp)

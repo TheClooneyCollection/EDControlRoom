@@ -9,6 +9,7 @@ from edap.multi_leg_haul import CargoTransfer, MultiLegHaulDefinition, RouteStop
 from edap.routines._base import RoutineResult
 from edap.routines.haul_support import (
     HaulRuntime,
+    buy_shortfall,
     read_cargo_json,
     sellable_cargo,
 )
@@ -154,26 +155,38 @@ def _run_buy(ctx: _Ctx, stop: RouteStop) -> RoutineResult:
         if remaining <= 0:
             runtime.progress_fn(f"{cargo.commodity} already loaded for departure from {stop.label} - skipping buy.")
             continue
-        runtime.progress_fn(f"Buying {remaining}t {cargo.commodity} at {stop.label}...")
-        runtime.announce_fn(AnnouncementId.BUYING_CARGO, commodity_name=cargo.commodity)
-        result = market_buy(
-            runtime.controls,
-            runtime.watcher,
-            market_path=runtime.market_path,
-            target=cargo.commodity,
-            amount=str(remaining),
-            step_delay_s=runtime.timing.step_delay_s,
-            max_hold_s=runtime.timing.max_hold_s,
-            buy_hold_segments=runtime.market.buy_hold_segments,
-            trade_timeout_s=runtime.timing.trade_timeout_s,
-            time_fn=runtime.time_fn,
-            sleeper=runtime.sleeper,
-            progress_fn=runtime.progress_fn,
-            announce_fn=runtime.announce_fn,
-            critical_level_multiplier=runtime.market.critical_level_multiplier,
-        )
-        if result.dispatch.status != "ok":
-            return result
+        for top_up in range(3):
+            runtime.progress_fn(f"Buying {remaining}t {cargo.commodity} at {stop.label}...")
+            runtime.announce_fn(AnnouncementId.BUYING_CARGO, commodity_name=cargo.commodity)
+            result = market_buy(
+                runtime.controls,
+                runtime.watcher,
+                market_path=runtime.market_path,
+                target=cargo.commodity,
+                amount=str(remaining),
+                step_delay_s=runtime.timing.step_delay_s,
+                max_hold_s=runtime.timing.max_hold_s,
+                buy_hold_segments=runtime.market.buy_hold_segments,
+                trade_timeout_s=runtime.timing.trade_timeout_s,
+                time_fn=runtime.time_fn,
+                sleeper=runtime.sleeper,
+                progress_fn=runtime.progress_fn,
+                announce_fn=runtime.announce_fn,
+                critical_level_multiplier=runtime.market.critical_level_multiplier,
+            )
+            if result.dispatch.status != "ok":
+                return result
+            shortfall = buy_shortfall(result)
+            if not shortfall:
+                break
+            if top_up == 2:
+                runtime.progress_fn(f"Warning: buy at {stop.label} still short by {shortfall}t after 2 top-ups; continuing with current load.")
+                break
+            runtime.progress_fn(
+                f"Short buy at {stop.label}: bought {result.trigger_event['Count']} of "
+                f"{result.details['expected_count']}; topping up {shortfall} (top-up {top_up + 1}/2)"
+            )
+            remaining = shortfall
     return RoutineResult(action="market_buy", dispatch=ActionDispatchResult(action="market_buy", status="ok"))
 
 

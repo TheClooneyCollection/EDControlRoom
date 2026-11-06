@@ -1119,6 +1119,7 @@ class RoutinesTests(unittest.TestCase):
             )
 
         self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(result.details["expected_count"], 1)
         self.assertIn(
             "Station supply for aluminium looks normal at 1000 units (critical below 640).",
             progress,
@@ -1187,6 +1188,7 @@ class RoutinesTests(unittest.TestCase):
             )
 
         self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(result.details["expected_count"], 460)
         hold_calls = [call for call in controls.calls if call["action"] == "UI_Right" and call["hold_s"]]
         self.assertEqual(len(hold_calls), 1)
         self.assertAlmostEqual(float(hold_calls[0]["hold_s"]), 6.30, places=2)
@@ -1258,6 +1260,7 @@ class RoutinesTests(unittest.TestCase):
             )
 
         self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(result.details["expected_count"], 120)
         hold_calls = [call for call in controls.calls if call["action"] == "UI_Right" and call["hold_s"]]
         self.assertEqual(len(hold_calls), 1)
         self.assertAlmostEqual(float(hold_calls[0]["hold_s"]), 5.0)

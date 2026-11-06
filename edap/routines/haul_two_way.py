@@ -11,6 +11,7 @@ from edap.routines._base import RoutineResult
 from edap.routines.callbacks import ProgressCallback
 from edap.routines.haul_support import (
     HaulRuntime,
+    buy_shortfall,
     read_cargo_json,
     read_last_cargo_capacity,
     sellable_cargo,
@@ -453,6 +454,7 @@ def _run_market_buy(
         runtime.progress_fn(f"Error: {reason}")
         runtime.announce_fn(AnnouncementId.HAUL_CARGO_STATE_STALE, cargo_count=stale_cargo_count)
         return _error_routine_result(reason), next_phase
+    top_ups = 0
     while True:
         runtime.progress_fn(f"Buying {leg.buy_commodity} at {leg.label} (MAX)...")
         runtime.announce_fn(AnnouncementId.BUYING_CARGO, commodity_name=leg.buy_commodity)
@@ -476,6 +478,17 @@ def _run_market_buy(
         if not wrong_commodity:
             if result.dispatch.status != "ok":
                 return result, next_phase
+            shortfall = buy_shortfall(result)
+            if shortfall:
+                if top_ups >= 2:
+                    runtime.progress_fn(f"Warning: buy at {leg.label} still short by {shortfall}t after 2 top-ups; continuing with current load.")
+                else:
+                    top_ups += 1
+                    runtime.progress_fn(
+                        f"Short buy at {leg.label}: bought {result.trigger_event['Count']} of "
+                        f"{result.details['expected_count']}; topping up {shortfall} (top-up {top_ups}/2)"
+                    )
+                    continue
             return result, next_phase
 
         ctx.wrong_buy_count += 1

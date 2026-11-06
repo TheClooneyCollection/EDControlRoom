@@ -229,6 +229,46 @@ class MultiLegHaulDefinitionTests(unittest.TestCase):
 
 
 class MultiLegHaulRoutineTests(unittest.TestCase):
+    def test_numeric_buy_tops_up_only_the_remainder_with_a_two_retry_limit(self) -> None:
+        for counts, expected_amounts, warning in (
+            ([460], [460], False),
+            ([400, 60], [460, 60], False),
+            ([400, 30, 10], [460, 60, 30], True),
+            ([None], [460], False),
+            ([400, "error"], [460, 60], False),
+        ):
+            with self.subTest(counts=counts), tempfile.TemporaryDirectory() as tmp:
+                amounts = []
+                progress = []
+                pending = iter(counts)
+                ok = RoutineResult(action="test", dispatch=ActionDispatchResult(action="test", status="ok"))
+
+                def buy(controls, watcher, *, target, amount, **kwargs):
+                    if target == "Water Purifiers":
+                        amounts.append(int(amount))
+                        count = next(pending)
+                    else:
+                        count = int(amount)
+                    return RoutineResult(
+                        action="MarketBuy", dispatch=ActionDispatchResult(action="MarketBuy", status="error" if count == "error" else "ok"),
+                        trigger_event={"Count": count}, details={"expected_count": int(amount)},
+                    )
+
+                with (
+                    patch("edap.routines.haul_multi_leg.market_buy", buy),
+                    patch("edap.routines.haul_multi_leg._read_cargo_json", lambda _: []),
+                    patch("edap.routines.haul_multi_leg.transit_to_station", return_value=ok),
+                    patch("edap.routines.haul_multi_leg.undock_and_route_to_system", return_value=ok),
+                ):
+                    result = multi_leg_haul(
+                        FakeShipControls(), FakeWatcher([]), definition=_definition(), journal_dir=Path(tmp),
+                        progress_fn=progress.append,
+                    )
+                self.assertEqual(result.dispatch.status, "error" if "error" in counts else "ok")
+                self.assertEqual(amounts, expected_amounts)
+                self.assertEqual(any("Warning:" in line for line in progress), warning)
+
+
     def test_transit_announces_next_station_before_opening_nav_panel(self) -> None:
         controls = FakeShipControls()
         sleep_calls: list[float] = []
