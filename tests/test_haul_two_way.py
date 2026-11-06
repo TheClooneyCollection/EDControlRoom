@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 import tempfile
 import unittest
@@ -26,6 +27,9 @@ from edap.routines.haul_two_way import (
     haul_loop_two_way as _haul_loop_two_way,
 )
 from edap.routines._base import ActionDispatchResult, RoutineResult
+from edap.routines.transit import (
+    TransitResumeState, detect_transit_resume_state, manual_landing_result, transit_to_station,
+)
 from edap.tts import AnnouncementId
 from tests.fakes import FakeShipControls, FakeWatcher
 
@@ -240,6 +244,177 @@ def _test_haul_runtime(
 
 
 class TwoWayHaulLoopTests(unittest.TestCase):
+    def test_normal_space_near_buy_station_returns_for_empty_or_partial_load(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            for leg, expected in ((_station_1_leg(), Phase.TRANSIT_TO_STATION_1), (_station_2_leg(), Phase.TRANSIT_TO_STATION_2)):
+                events = (
+                    {"event": "Undocked", "StationName": leg.station.lower()},
+                    {"event": "SupercruiseExit", "BodyType": "Station", "Body": leg.station},
+                    {"event": "DockingRequested", "StationName": leg.station},
+                    {"event": "DockingGranted", "StationName": leg.station},
+                )
+                for event in events:
+                    for count in (0, 32):
+                        with self.subTest(station=leg.index, event=event["event"], count=count):
+                            _write_journal(journal_dir,
+                                {"event": "Location", "StarSystem": leg.system, "Docked": False, "CargoCapacity": 64},
+                                event, {"event": "Music", "MusicTrack": "Exploration"},
+                            )
+                            _write_cargo(journal_dir, [{"Name": leg.buy_commodity, "Count": count}])
+                            self.assertEqual(_detect_start_phase(
+                                journal_dir, station_1=_station_1_leg(), station_2=_station_2_leg(), progress_fn=noop_progress,
+                            ), expected)
+
+    def test_normal_space_with_full_load_or_no_buy_commodity_still_departs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            for index in (1, 2):
+                for full in (False, True):
+                    legs = [_station_1_leg(), _station_2_leg()]
+                    leg = legs[index - 1]
+                    if not full:
+                        legs[index - 1] = replace(leg, buy_commodity="")
+                    _write_journal(journal_dir, {"event": "Location", "Docked": False, "StarSystem": leg.system, "CargoCapacity": 64})
+                    _write_cargo(journal_dir, [{"Name": leg.buy_commodity, "Count": 64}] if full else [])
+                    with self.subTest(station=index, full=full):
+                        self.assertEqual(_detect_start_phase(
+                            journal_dir, station_1=legs[0], station_2=legs[1], progress_fn=noop_progress,
+                        ), Phase.DEPART_STATION_1_SYSTEM if index == 1 else Phase.DEPART_STATION_2_SYSTEM)
+
+    def test_normal_space_away_from_buy_station_rejects_empty_or_partial_departure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            for leg in (_station_1_leg(), _station_2_leg()):
+                for count in (0, 32):
+                    for event in (
+                        {"event": "Undocked", "StationName": "Other station"},
+                        {"event": "SupercruiseExit", "BodyType": "Station", "Body": "Other station"},
+                        {"event": "SupercruiseExit", "BodyType": "Planet", "Body": leg.station},
+                        {"event": "DockingRequested", "StationName": "Other station"},
+                        {"event": "Location", "Docked": False, "StarSystem": leg.system},
+                    ):
+                        with self.subTest(station=leg.index, count=count, event=event):
+                            _write_journal(journal_dir,
+                                {"event": "Location", "Docked": False, "StarSystem": leg.system, "CargoCapacity": 64},
+                                {"event": "Undocked", "StationName": leg.station}, event,
+                            )
+                            _write_cargo(journal_dir, [{"Name": leg.buy_commodity, "Count": count}])
+                            result = _detect_start_phase(journal_dir,
+                                station_1=_station_1_leg(), station_2=_station_2_leg(), progress_fn=noop_progress,
+                            )
+                            self.assertIsInstance(result, RoutineResult)
+                            self.assertEqual(result.dispatch.status, "error")
+                            self.assertIn(f"not near {leg.station}", result.dispatch.reason)
+                            self.assertIn("Enter supercruise, then resume haul.", result.dispatch.reason)
+
+    def test_haul_returns_start_detection_error_without_running_controls(self) -> None:
+        controls = FakeShipControls()
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_journal(journal_dir, {"event": "Location", "Docked": False, "StarSystem": _SYSTEM_1})
+            _write_cargo(journal_dir, [])
+            result = _haul_loop_two_way(
+                _test_haul_runtime(journal_dir, controls, FakeWatcher([])),
+                route=TwoWayHaulRoute(_station_1_leg(), _station_2_leg()), iterations=1,
+            )
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertIn("Enter supercruise", result.dispatch.reason)
+        self.assertEqual(controls.calls, [])
+
+    def test_initial_station_1_transit_does_not_consume_a_cycle(self) -> None:
+        visits = []
+        phases = []
+        progress = []
+        inventory = [{"Name": _CARGO_2, "Count": 64}]
+        ok = RoutineResult(action="test", dispatch=ActionDispatchResult(action="test", status="ok"))
+
+        def transit(runtime, *, destination, **kwargs):
+            visits.append(("dock", destination.station))
+            return ok
+
+        def sell(controls, watcher, *, target, **kwargs):
+            visits.append(("sell", target))
+            inventory.clear()
+            return ok
+
+        def buy(controls, watcher, *, target, **kwargs):
+            visits.append(("buy", target))
+            inventory.append({"Name": target, "Count": 64})
+            return ok
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("edap.routines.haul_two_way.transit_to_station", transit),
+            patch("edap.routines.haul_two_way.undock_and_route_to_system", return_value=ok),
+            patch("edap.routines.haul_two_way.market_sell", sell),
+            patch("edap.routines.haul_two_way.market_buy", buy),
+            patch("edap.routines.haul_two_way._read_cargo_json", lambda _: list(inventory)),
+        ):
+            result = _haul_loop_two_way(
+                _test_haul_runtime(Path(tmp), FakeShipControls(), FakeWatcher([]), progress_fn=progress.append),
+                route=TwoWayHaulRoute(_station_1_leg(), _station_2_leg()), iterations=1,
+                start_phase=Phase.TRANSIT_TO_STATION_1, phase_updated_fn=phases.append,
+            )
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(visits, [
+            ("dock", _STATION_1), ("sell", _CARGO_2), ("buy", _CARGO_1),
+            ("dock", _STATION_2), ("sell", _CARGO_1), ("buy", _CARGO_2), ("dock", _STATION_1),
+        ])
+        self.assertEqual(phases[0:2], [Phase.TRANSIT_TO_STATION_1, Phase.AT_STATION_1_SELL])
+        self.assertEqual(phases[-1], Phase.TRANSIT_TO_STATION_1)
+        self.assertEqual(sum("Iteration 1 complete" in line for line in progress), 1)
+
+    def test_initial_positioning_propagates_error_and_manual_landing(self) -> None:
+        for result in (
+            RoutineResult(action="dock", dispatch=ActionDispatchResult(action="dock", status="error", reason="denied")),
+            manual_landing_result(_station_1_leg()),
+        ):
+            phases = []
+            progress = []
+            with tempfile.TemporaryDirectory() as tmp, patch("edap.routines.haul_two_way.transit_to_station", return_value=result):
+                observed = _haul_loop_two_way(
+                    _test_haul_runtime(Path(tmp), FakeShipControls(), FakeWatcher([]), progress_fn=progress.append),
+                    route=TwoWayHaulRoute(_station_1_leg(), _station_2_leg()), iterations=1,
+                    start_phase=Phase.TRANSIT_TO_STATION_1, phase_updated_fn=phases.append,
+                )
+            self.assertIs(observed, result)
+            self.assertEqual(phases, [Phase.TRANSIT_TO_STATION_1])
+            self.assertFalse(any("iteration 1" in line for line in progress))
+
+    def test_undocked_transit_only_resumes_at_destination_station(self) -> None:
+        destination = _station_1_leg()
+        for station, expected in ((_STATION_1.lower(), TransitResumeState.POST_DROP_NEAR_STATION), (_STATION_2, TransitResumeState.NONE)):
+            self.assertEqual(detect_transit_resume_state([
+                {"event": "DockingRequested", "StationName": _STATION_1},
+                {"event": "Undocked", "StationName": station},
+            ], destination), expected)
+        self.assertEqual(detect_transit_resume_state([
+            {"event": "Undocked", "StationName": _STATION_1},
+            {"event": "SupercruiseEntry", "StarSystem": _SYSTEM_1},
+        ], destination), TransitResumeState.ARRIVED_IN_DESTINATION_SYSTEM)
+
+    def test_transit_after_undocking_destination_requests_dock_without_drop_wait(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_journal(journal_dir, {"event": "Undocked", "StationName": _STATION_1})
+            dock_requests = []
+            ok = RoutineResult(action="dock", dispatch=ActionDispatchResult(action="dock", status="ok"))
+
+            def dock(controls, watcher, **kwargs):
+                dock_requests.append(kwargs)
+                return ok
+
+            with patch("edap.routines.transit.dock", dock):
+                result = transit_to_station(
+                    _test_haul_runtime(journal_dir, FakeShipControls(), FakeWatcher([])),
+                    destination=_station_1_leg(), destination_label="station 1", routine_name="haul",
+                )
+            self.assertIs(result, ok)
+            self.assertEqual(len(dock_requests), 1)
+            self.assertFalse(dock_requests[0]["wait_for_supercruise_exit"])
+
+
     def test_detect_start_phase_docked_at_station_1_with_full_station_1_cargo_undocks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             journal_dir = Path(tmp)

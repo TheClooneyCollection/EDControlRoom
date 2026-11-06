@@ -170,7 +170,12 @@ def detect_transit_resume_state(events: list[dict], destination: TransitDestinat
             )
 
         if evt_name == "Undocked":
-            return TransitResumeState.NONE
+            station_name = str(event.get("StationName", "")).lower()
+            return (
+                TransitResumeState.POST_DROP_NEAR_STATION
+                if destination_station and station_name == destination_station
+                else TransitResumeState.NONE
+            )
 
     return TransitResumeState.NONE
 

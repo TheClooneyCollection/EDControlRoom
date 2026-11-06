@@ -20,6 +20,7 @@ from edap.routines.transit import (
     depart_system_to_route,
     is_manual_landing_result,
     read_market_station,
+    read_latest_journal_events,
     transit_to_station,
     undock_and_route_to_system,
     wait_for_arrival_or_approach_event,
@@ -189,6 +190,30 @@ class _HaulCtx:
     wrong_buy_count: int = 0
 
 
+def _near_station_in_normal_space(journal_dir: Path, station: StationLeg) -> bool:
+    for event in reversed(read_latest_journal_events(journal_dir)):
+        name = event.get("event")
+        if name in {"Undocked", "DockingRequested", "DockingGranted"}:
+            return str(event.get("StationName", "")).casefold() == station.station.casefold()
+        if name == "SupercruiseExit":
+            return (
+                str(event.get("BodyType", "")).casefold() == "station"
+                and str(event.get("Body", "")).casefold() == station.station.casefold()
+            )
+        if name in {"SupercruiseEntry", "FSDJump", "StartJump", "Location", "Docked"}:
+            return False
+    return False
+
+
+def _return_to_buy_station(journal_dir: Path, station: StationLeg, phase: Phase) -> Phase | RoutineResult:
+    if _near_station_in_normal_space(journal_dir, station):
+        return phase
+    return _error_routine_result(
+        f"In normal space in {station.system} but not near {station.station}. "
+        "Enter supercruise, then resume haul."
+    )
+
+
 def _detect_start_phase(
     journal_dir: Path,
     *,
@@ -281,10 +306,10 @@ def _detect_start_phase(
     if current_system_lower and station_1_system_lower and current_system_lower == station_1_system_lower:
         if has_station_2_cargo:
             return Phase.TRANSIT_TO_STATION_1
-        if has_full_station_1_cargo and ship_status == "normal_space":
-            return Phase.DEPART_STATION_1_SYSTEM
         if ship_status == "normal_space":
-            return Phase.DEPART_STATION_1_SYSTEM
+            if has_full_station_1_cargo or not station_1.buy_commodity:
+                return Phase.DEPART_STATION_1_SYSTEM
+            return _return_to_buy_station(journal_dir, station_1, Phase.TRANSIT_TO_STATION_1)
         if not has_station_1_cargo and station_1.buy_commodity:
             return Phase.TRANSIT_TO_STATION_1
         return Phase.TRANSIT_TO_STATION_2
@@ -292,10 +317,10 @@ def _detect_start_phase(
     if current_system_lower and station_2_system_lower and current_system_lower == station_2_system_lower:
         if has_station_1_cargo:
             return Phase.TRANSIT_TO_STATION_2
-        if has_full_station_2_cargo and ship_status == "normal_space":
-            return Phase.DEPART_STATION_2_SYSTEM
         if ship_status == "normal_space":
-            return Phase.DEPART_STATION_2_SYSTEM
+            if has_full_station_2_cargo or not station_2.buy_commodity:
+                return Phase.DEPART_STATION_2_SYSTEM
+            return _return_to_buy_station(journal_dir, station_2, Phase.TRANSIT_TO_STATION_2)
         if not has_station_2_cargo and station_2.buy_commodity:
             return Phase.TRANSIT_TO_STATION_2
         return Phase.TRANSIT_TO_STATION_1
@@ -764,10 +789,20 @@ def haul_loop_two_way(
         station_2=ctx.station_2,
         progress_fn=runtime.progress_fn,
     )
+    if isinstance(resolved_start_phase, RoutineResult):
+        return resolved_start_phase
     if resolved_start_phase != Phase.AT_STATION_1_SELL:
         runtime.progress_fn(f"Resuming from phase: {resolved_start_phase.name}")
 
     last_result: RoutineResult | None = None
+    if resolved_start_phase == Phase.TRANSIT_TO_STATION_1:
+        if phase_updated_fn is not None:
+            phase_updated_fn(resolved_start_phase)
+        last_result, resolved_start_phase = _PHASE_RUNNERS[resolved_start_phase](ctx)
+        if last_result is not None:
+            if _is_manual_landing_result(last_result) or last_result.dispatch.status != "ok":
+                return last_result
+
     iteration = 0
     first_cycle = True
     while iterations == 0 or iteration < iterations:
