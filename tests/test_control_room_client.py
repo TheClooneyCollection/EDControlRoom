@@ -196,6 +196,7 @@ def _make_observer_context() -> RuntimeContext:
                 mass_lock_boost_delay_seconds=5.0,
                 market_nav_delay_seconds=0.1,
                 market_trade_max_attempts=3,
+                market_buy_top_up_max_attempts=3,
                 market_buy_max_hold_seconds=10.0,
                 market_buy_hold_segments=(
                     MarketBuyHoldSegmentConfig(start=0, function="flat", hold_seconds=1.0),

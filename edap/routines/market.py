@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from math import log1p
+from math import isfinite, log1p
 from pathlib import Path
 from time import monotonic, sleep
 from typing import Callable
@@ -19,6 +19,7 @@ from edap.routines._base import (
     _wait_for_event_with_pending,
 )
 from edap.routines.callbacks import AnnouncementCallback, ProgressCallback
+from edap.status import read_status
 from edap.tts import AnnouncementId
 
 
@@ -314,6 +315,36 @@ def _find_market_item(items: list[dict], target: str, side: str) -> dict | None:
     return None
 
 
+def read_buy_affordability(journal_dir: Path, item: dict) -> tuple[int, int | float] | None:
+    """Read a usable balance and unit price, or leave affordability unknown."""
+    try:
+        status = read_status(journal_dir)
+    except (OSError, ValueError, TypeError, AttributeError, IndexError):
+        return None
+    balance = status.balance if status is not None else None
+    price = item.get("BuyPrice")
+    if isinstance(balance, bool) or not isinstance(balance, int) or balance < 0:
+        return None
+    if isinstance(price, bool) or not isinstance(price, (int, float)) or not isfinite(price) or price <= 0:
+        return None
+    return balance, price
+
+
+def unaffordable_top_up(market_path: Path, target: str) -> tuple[int, int | float] | None:
+    try:
+        data = json.loads(market_path.read_text(encoding="utf-8"))
+        items = data.get("Items", [])
+        item = next((item for item in items if isinstance(item, dict) and cargo_item_matches_commodity(item, target)), None)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+    if item is None:
+        return None
+    affordability = read_buy_affordability(market_path.parent, item)
+    if affordability is not None and affordability[0] < affordability[1]:
+        return affordability
+    return None
+
+
 def _read_buy_quantity_limit(
     journal_dir: Path,
     item: dict,
@@ -324,13 +355,24 @@ def _read_buy_quantity_limit(
     if stock_units is not None:
         stock_units = max(0, stock_units)
 
-    if available_space is not None and stock_units is not None:
-        return min(available_space, stock_units), f"from min({available_space}t free, {stock_units}t supply)"
+    limits: list[int] = []
+    reasons: list[str] = []
     if available_space is not None:
-        return available_space, f"from {available_space}t free"
+        limits.append(available_space)
+        reasons.append(f"{available_space}t free")
     if stock_units is not None:
-        return stock_units, f"from {stock_units}t supply"
-    return None, "cargo space and station supply unavailable"
+        limits.append(stock_units)
+        reasons.append(f"{stock_units}t supply")
+    affordability = read_buy_affordability(journal_dir, item)
+    if affordability is not None:
+        balance, price = affordability
+        affordable = int(balance // price)
+        limits.append(affordable)
+        reasons.append(f"{affordable} affordable")
+    if not limits:
+        return None, "cargo space and station supply unavailable"
+    reason = reasons[0] if len(reasons) == 1 else f"min({', '.join(reasons)})"
+    return min(limits), f"from {reason}"
 
 
 def _report_market_level(
@@ -851,6 +893,15 @@ def _market_trade_attempt(
             hold_s = max_hold_s
             buy_limit, buy_limit_reason = _read_buy_quantity_limit(market_path.parent, item)
             expected_count = buy_limit
+            if buy_limit == 0:
+                progress_fn(f"Warning: no units available to buy ({buy_limit_reason}); continuing with current load.")
+                back_dispatch = _market_back_out_to_station_menu(
+                    controls, step_delay_s=step_delay_s, sleeper=sleeper, progress_fn=progress_fn,
+                )
+                return RoutineResult(
+                    action=event_type, dispatch=back_dispatch,
+                    details={"target": target, "amount": str(amount), "side": side, "expected_count": 0},
+                )
             if buy_limit is not None:
                 hold_s, hold_detail = _buy_hold_duration_for_quantity(
                     buy_limit,

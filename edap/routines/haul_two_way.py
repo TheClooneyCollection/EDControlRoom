@@ -16,7 +16,7 @@ from edap.routines.haul_support import (
     read_last_cargo_capacity,
     sellable_cargo,
 )
-from edap.routines.market import market_buy, market_sell
+from edap.routines.market import market_buy, market_sell, unaffordable_top_up
 from edap.routines.transit import (
     depart_system_to_route,
     is_manual_landing_result,
@@ -455,6 +455,7 @@ def _run_market_buy(
         runtime.announce_fn(AnnouncementId.HAUL_CARGO_STATE_STALE, cargo_count=stale_cargo_count)
         return _error_routine_result(reason), next_phase
     top_ups = 0
+    max_top_ups = runtime.market.buy_top_up_max_attempts
     while True:
         runtime.progress_fn(f"Buying {leg.buy_commodity} at {leg.label} (MAX)...")
         runtime.announce_fn(AnnouncementId.BUYING_CARGO, commodity_name=leg.buy_commodity)
@@ -480,13 +481,18 @@ def _run_market_buy(
                 return result, next_phase
             shortfall = buy_shortfall(result)
             if shortfall:
-                if top_ups >= 2:
-                    runtime.progress_fn(f"Warning: buy at {leg.label} still short by {shortfall}t after 2 top-ups; continuing with current load.")
+                if top_ups >= max_top_ups:
+                    runtime.progress_fn(f"Warning: buy at {leg.label} still short by {shortfall}t after {max_top_ups} top-ups; continuing with current load.")
                 else:
+                    unaffordable = unaffordable_top_up(runtime.market_path, leg.buy_commodity)
+                    if unaffordable is not None:
+                        balance, price = unaffordable
+                        runtime.progress_fn(f"Warning: cannot afford top-up at {leg.label} (balance {balance}, price {price}); continuing with current load.")
+                        return result, next_phase
                     top_ups += 1
                     runtime.progress_fn(
                         f"Short buy at {leg.label}: bought {result.trigger_event['Count']} of "
-                        f"{result.details['expected_count']}; topping up {shortfall} (top-up {top_ups}/2)"
+                        f"{result.details['expected_count']}; topping up {shortfall} (top-up {top_ups}/{max_top_ups})"
                     )
                     continue
             return result, next_phase

@@ -14,6 +14,19 @@ def _write_config(path: Path, content: str) -> None:
 
 
 class LoadConfigTests(unittest.TestCase):
+    def test_buy_top_up_limit_accepts_zero_and_flat_aliases_and_rejects_negative(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            for key in ("market_buy_top_up_max_attempts", '"market.buy_top_up_max_attempts"'):
+                for value in (0, 4, -1):
+                    with self.subTest(key=key, value=value):
+                        _write_config(path, f"[controls]\n{key} = {value}\n")
+                        if value < 0:
+                            with self.assertRaisesRegex(ConfigError, "market_buy_top_up_max_attempts"):
+                                load_config(path)
+                        else:
+                            self.assertEqual(load_config(path).controls.market_buy_top_up_max_attempts, value)
+
     def test_loads_valid_config_with_defaults(self) -> None:
         with TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -37,6 +50,7 @@ class LoadConfigTests(unittest.TestCase):
             self.assertIsNone(config.paths.journal_dir)
             self.assertIsNone(config.paths.bindings_file)
             self.assertEqual(config.controls.start_hotkey, "home")
+            self.assertEqual(config.controls.market_buy_top_up_max_attempts, 3)
             self.assertEqual(config.controls.stop_hotkey, "end")
             self.assertEqual(config.controls.minimum_action_hold_seconds, 0.1)
             self.assertEqual(config.controls.continuous_action_hold_seconds, 0.2)
@@ -382,6 +396,7 @@ continuous_action_seconds = 0.25
 [controls.market]
 nav_delay_seconds = 0.2
 trade_max_attempts = 5
+buy_top_up_max_attempts = 7
 
 [controls.haul.two_way]
 auto_hyperspace_engage = false
@@ -400,6 +415,7 @@ nav_panel_open_delay_seconds = 4.0
             self.assertEqual(config.controls.continuous_action_hold_seconds, 0.25)
             self.assertEqual(config.controls.market_nav_delay_seconds, 0.2)
             self.assertEqual(config.controls.market_trade_max_attempts, 5)
+            self.assertEqual(config.controls.market_buy_top_up_max_attempts, 7)
             self.assertEqual(config.controls.market_buy_max_hold_seconds, 20.0)
             self.assertEqual(config.controls.market_buy_hold_segments[0].function, "flat")
             self.assertEqual(config.controls.market_sell_quantity_restore_taps, 5)

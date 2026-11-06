@@ -84,6 +84,7 @@ def _make_config(journal_dir: Path, *, activity_log_max_lines: int = 2000) -> Ap
             mass_lock_boost_delay_seconds=5.0,
             market_nav_delay_seconds=0.1,
             market_trade_max_attempts=3,
+            market_buy_top_up_max_attempts=3,
             market_buy_max_hold_seconds=10.0,
             market_buy_hold_segments=(
                 MarketBuyHoldSegmentConfig(start=0, function="flat", hold_seconds=1.0),
@@ -1660,6 +1661,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.assertEqual(runtime.timing.undock_timeout_s, 30.0)
         self.assertEqual(runtime.timing.undock_no_track_timeout_s, 600.0)
         self.assertEqual(runtime.timing.max_hold_s, 10.0)
+        self.assertEqual(runtime.market.buy_top_up_max_attempts, 3)
         self.assertEqual(len(runtime.market.buy_hold_segments), 3)
         self.assertEqual(runtime.market.buy_hold_segments[0].function, "flat")
         self.assertEqual(runtime.market.sell_quantity_restore_taps, 5)

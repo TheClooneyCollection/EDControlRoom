@@ -13,7 +13,7 @@ from edap.routines.haul_support import (
     read_cargo_json,
     sellable_cargo,
 )
-from edap.routines.market import market_buy, market_sell
+from edap.routines.market import market_buy, market_sell, unaffordable_top_up
 from edap.routines.transit import (
     depart_system_to_route,
     is_manual_landing_result,
@@ -155,7 +155,8 @@ def _run_buy(ctx: _Ctx, stop: RouteStop) -> RoutineResult:
         if remaining <= 0:
             runtime.progress_fn(f"{cargo.commodity} already loaded for departure from {stop.label} - skipping buy.")
             continue
-        for top_up in range(3):
+        max_top_ups = runtime.market.buy_top_up_max_attempts
+        for top_up in range(max_top_ups + 1):
             runtime.progress_fn(f"Buying {remaining}t {cargo.commodity} at {stop.label}...")
             runtime.announce_fn(AnnouncementId.BUYING_CARGO, commodity_name=cargo.commodity)
             result = market_buy(
@@ -179,12 +180,17 @@ def _run_buy(ctx: _Ctx, stop: RouteStop) -> RoutineResult:
             shortfall = buy_shortfall(result)
             if not shortfall:
                 break
-            if top_up == 2:
-                runtime.progress_fn(f"Warning: buy at {stop.label} still short by {shortfall}t after 2 top-ups; continuing with current load.")
+            if top_up == max_top_ups:
+                runtime.progress_fn(f"Warning: buy at {stop.label} still short by {shortfall}t after {max_top_ups} top-ups; continuing with current load.")
+                break
+            unaffordable = unaffordable_top_up(runtime.market_path, cargo.commodity)
+            if unaffordable is not None:
+                balance, price = unaffordable
+                runtime.progress_fn(f"Warning: cannot afford top-up at {stop.label} (balance {balance}, price {price}); continuing with current load.")
                 break
             runtime.progress_fn(
                 f"Short buy at {stop.label}: bought {result.trigger_event['Count']} of "
-                f"{result.details['expected_count']}; topping up {shortfall} (top-up {top_up + 1}/2)"
+                f"{result.details['expected_count']}; topping up {shortfall} (top-up {top_up + 1}/{max_top_ups})"
             )
             remaining = shortfall
     return RoutineResult(action="market_buy", dispatch=ActionDispatchResult(action="market_buy", status="ok"))

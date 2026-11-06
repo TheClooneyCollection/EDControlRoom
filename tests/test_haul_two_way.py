@@ -82,6 +82,7 @@ def haul_loop_two_way(*args, **kwargs):
             ),
         ),
         market=HaulMarketSettings(
+            buy_top_up_max_attempts=_DEFAULTS.market_buy_top_up_max_attempts,
             buy_hold_segments=kwargs.pop("market_buy_hold_segments", _DEFAULTS.market_buy_hold_segments),
             sell_quantity_restore_taps=kwargs.pop(
                 "market_sell_quantity_restore_taps",
@@ -226,6 +227,7 @@ def _test_haul_runtime(
             nav_panel_open_delay_s=0.0,
         ),
         market=HaulMarketSettings(
+            buy_top_up_max_attempts=_DEFAULTS.market_buy_top_up_max_attempts,
             buy_hold_segments=_DEFAULTS.market_buy_hold_segments,
             sell_quantity_restore_taps=_DEFAULTS.market_sell_quantity_restore_taps,
             sell_quantity_restore_tap_delay_s=_DEFAULTS.market_sell_quantity_restore_tap_delay_seconds,
@@ -255,7 +257,9 @@ class TwoWayHaulLoopTests(unittest.TestCase):
         cases = (
             ("full", [bought(64, 64)], False),
             ("one top-up", [bought(64, 40), bought(24, 24)], False),
-            ("bounded", [bought(64, 40), bought(24, 10), bought(14, 5)], True),
+            ("bounded", [bought(64, 40), bought(24, 10), bought(14, 5), bought(9, 1)], True),
+            ("disabled", [bought(64, 40)], True),
+            ("custom limit", [bought(64, 40), bought(24, 10)], True),
             ("unknown count", [bought(64, None)], False),
             ("non-integer count", [bought(64, "40")], False),
             ("boolean count", [bought(64, True)], False),
@@ -275,6 +279,9 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                         station_1=_station_1_leg(), station_2=_station_2_leg(),
                     )
 
+                    limit = 0 if name == "disabled" else 1 if name == "custom limit" else 3
+                    ctx.runtime.market = replace(ctx.runtime.market, buy_top_up_max_attempts=limit)
+
                     def buy(controls, watcher, *, amount, **kwargs):
                         amounts.append(amount)
                         return next(pending)
@@ -286,7 +293,35 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                     self.assertEqual(amounts, ["MAX"] * len(results))
                     self.assertEqual(any("Warning:" in line for line in progress), warning)
                     if len(results) > 1:
-                        self.assertTrue(any("topping up 24 (top-up 1/2)" in line for line in progress))
+                        self.assertTrue(any(f"topping up 24 (top-up 1/{limit})" in line for line in progress))
+
+    def test_top_up_checks_current_balance_and_tolerates_unknown_status(self) -> None:
+        for status_text, expected_buys in (('{"Balance": 9}', 1), ('{"Balance": 10}', 2), ('{"Balance": null}', 2), ('{', 2), ('[]', 2), ('', 2)):
+            with self.subTest(status=status_text), tempfile.TemporaryDirectory() as tmp:
+                journal_dir = Path(tmp)
+                _write_cargo(journal_dir, [])
+                _write_market(journal_dir, _STATION_1, [{"Name": "aluminium", "BuyPrice": 10}])
+                progress = []
+                buys = []
+                ctx = _HaulCtx(
+                    runtime=_test_haul_runtime(journal_dir, FakeShipControls(), FakeWatcher([]), progress_fn=progress.append),
+                    station_1=_station_1_leg(), station_2=_station_2_leg(),
+                )
+
+                def buy(controls, watcher, **kwargs):
+                    buys.append(kwargs["amount"])
+                    (journal_dir / "Status.json").write_text(status_text, encoding="utf-8")
+                    return RoutineResult(
+                        action="MarketBuy", dispatch=ActionDispatchResult(action="MarketBuy", status="ok"),
+                        trigger_event={"Count": 40 if len(buys) == 1 else 24},
+                        details={"expected_count": 64 if len(buys) == 1 else 24},
+                    )
+
+                with patch("edap.routines.haul_two_way.market_buy", buy):
+                    result, _ = _run_market_buy(ctx, leg=ctx.station_1, next_phase=Phase.UNDOCK_STATION_1)
+                self.assertEqual(result.dispatch.status, "ok")
+                self.assertEqual(len(buys), expected_buys)
+                self.assertEqual(any("cannot afford top-up" in line for line in progress), expected_buys == 1)
 
     def test_wrong_commodity_during_top_up_is_sold_before_retrying(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

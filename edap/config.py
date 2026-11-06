@@ -78,6 +78,7 @@ class ControlsConfig:
     mass_lock_boost_delay_seconds: float
     market_nav_delay_seconds: float
     market_trade_max_attempts: int
+    market_buy_top_up_max_attempts: int
     market_buy_max_hold_seconds: float
     market_buy_hold_segments: tuple[MarketBuyHoldSegmentConfig, ...]
     market_sell_quantity_restore_taps: int
@@ -91,6 +92,7 @@ class ControlsConfig:
 
 @dataclass(frozen=True)
 class HaulRoutineDefaults:
+    market_buy_top_up_max_attempts: int
     market_buy_hold_segments: tuple[MarketBuyHoldSegmentConfig, ...]
     market_sell_quantity_restore_taps: int
     market_sell_quantity_restore_tap_delay_seconds: float
@@ -325,6 +327,7 @@ def default_haul_routine_defaults() -> HaulRoutineDefaults:
     controls_flat = _flatten_table(controls)
     controls_market = _optional_table(controls, "market")
     return HaulRoutineDefaults(
+        market_buy_top_up_max_attempts=_integer(controls_flat, "market.buy_top_up_max_attempts", 3),
         market_buy_hold_segments=_market_buy_hold_segments(controls_market, "buy_hold_segments"),
         market_sell_quantity_restore_taps=_integer(controls_flat, "market.sell_quantity_restore_taps", 0),
         market_sell_quantity_restore_tap_delay_seconds=_float(
@@ -573,6 +576,8 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `controls.market_nav_delay_seconds` must be non-negative.")
     if config.controls.market_trade_max_attempts < 1:
         raise ConfigError("Config value `controls.market_trade_max_attempts` must be at least 1.")
+    if config.controls.market_buy_top_up_max_attempts < 0:
+        raise ConfigError("Config value `controls.market_buy_top_up_max_attempts` must be non-negative.")
     if config.controls.market_buy_max_hold_seconds <= 0:
         raise ConfigError("Config value `controls.market_buy_max_hold_seconds` must be greater than 0.")
     if not config.controls.market_buy_hold_segments:
@@ -894,6 +899,12 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
                 "market_trade_max_attempts",
                 _integer(default_controls_flat, "market_trade_max_attempts", 0),
                 aliases=("market.trade_max_attempts",),
+            ),
+            market_buy_top_up_max_attempts=_integer(
+                controls_flat,
+                "market_buy_top_up_max_attempts",
+                _integer(default_controls_flat, "market.buy_top_up_max_attempts", 3),
+                aliases=("market.buy_top_up_max_attempts",),
             ),
             market_buy_max_hold_seconds=_float(
                 controls_flat,

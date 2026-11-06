@@ -95,6 +95,7 @@ def _build_haul_runtime(
         routine=routine,
         market_path=app._journal_dir / "Market.json",
         market=HaulMarketSettings(
+            buy_top_up_max_attempts=cfg.market_buy_top_up_max_attempts,
             buy_hold_segments=cfg.market_buy_hold_segments,
             sell_quantity_restore_taps=cfg.market_sell_quantity_restore_taps,
             sell_quantity_restore_tap_delay_s=cfg.market_sell_quantity_restore_tap_delay_seconds,

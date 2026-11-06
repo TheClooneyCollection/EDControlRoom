@@ -1125,6 +1125,58 @@ class RoutinesTests(unittest.TestCase):
             progress,
         )
 
+    def test_max_buy_caps_expected_quantity_by_balance_and_skips_zero_limit(self) -> None:
+        from edap.routines.haul_support import buy_shortfall
+
+        for balance, expected in ((450, 45), (9, 0)):
+            with self.subTest(balance=balance), tempfile.TemporaryDirectory() as tmp:
+                journal_dir = Path(tmp)
+                (journal_dir / "Journal.240101000000.01.log").write_text(
+                    json.dumps({"event": "Location", "Docked": True, "StationName": "Pawelczyk Dock", "CargoCapacity": 64}) + "\n", encoding="utf-8")
+                (journal_dir / "Cargo.json").write_text('{"Inventory": []}', encoding="utf-8")
+                (journal_dir / "Status.json").write_text(json.dumps({"Balance": balance}), encoding="utf-8")
+                market_path = journal_dir / "Market.json"
+                market_path.write_text(json.dumps({"StationName": "Pawelczyk Dock", "Items": [
+                    {"Name": "aluminium", "Category": "Metals", "Stock": 1000, "BuyPrice": 10},
+                ]}), encoding="utf-8")
+                controls = FakeShipControls()
+                watcher = FakeWatcher([[{"event": "MarketBuy", "Type": "aluminium", "Count": expected}]] if expected else [])
+                ticks = iter(range(1000))
+                progress = []
+                result = market_buy(controls, watcher, market_path=market_path, target="aluminium", amount="MAX",
+                                    step_delay_s=0.0, nav_delay_s=0.0, time_fn=lambda: next(ticks),
+                                    sleeper=lambda _: None, progress_fn=progress.append)
+                self.assertEqual(result.dispatch.status, "ok")
+                self.assertEqual(result.details["expected_count"], expected)
+                self.assertFalse(buy_shortfall(result))
+                self.assertTrue(any(f"{expected} affordable" in line for line in progress))
+                if not expected:
+                    self.assertFalse(any(call["action"] == "UI_Right" and call["hold_s"] for call in controls.calls))
+
+    def test_quantity_limit_treats_unusable_balance_or_price_as_unknown(self) -> None:
+        from edap.routines.market import _read_buy_quantity_limit
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            for text, price, expected in (
+                ('{"Balance": 45}', 10, 4),
+                ('{"Balance": 45}', 0, 100),
+                ('{"Balance": 45}', None, 100),
+                ('{"Balance": null}', 10, 100),
+                ('{"Balance": "45"}', 10, 100),
+                ('{"Balance": -1}', 10, 100),
+                ('{', 10, 100),
+                ('[]', 10, 100),
+                ('', 10, 100),
+            ):
+                with self.subTest(text=text, price=price):
+                    (journal_dir / "Status.json").write_text(text, encoding="utf-8")
+                    limit, _ = _read_buy_quantity_limit(journal_dir, {"Stock": 100, "BuyPrice": price})
+                    self.assertEqual(limit, expected)
+            (journal_dir / "Status.json").unlink()
+            limit, _ = _read_buy_quantity_limit(journal_dir, {"Stock": 100, "BuyPrice": 10})
+            self.assertEqual(limit, 100)
+
     def test_market_buy_max_scales_hold_time_from_available_cargo_space(self) -> None:
         controls = FakeShipControls()
         watcher = FakeWatcher(

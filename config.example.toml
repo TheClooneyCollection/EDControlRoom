@@ -24,6 +24,7 @@
 [controls.market]
 # nav_delay_seconds = 0.1
 # buy_max_hold_seconds = 20.0
+# buy_top_up_max_attempts = 3 # 0 disables automatic haul top-ups
 
 [timing]
 # enabled = true
