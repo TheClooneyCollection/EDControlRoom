@@ -243,6 +243,7 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
             with self.subTest(counts=counts), tempfile.TemporaryDirectory() as tmp:
                 amounts = []
                 progress = []
+                announcements = []
                 pending = iter(counts)
                 ok = RoutineResult(action="test", dispatch=ActionDispatchResult(action="test", status="ok"))
 
@@ -265,12 +266,15 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
                 ):
                     result = multi_leg_haul(
                         FakeShipControls(), FakeWatcher([]), definition=_definition(), journal_dir=Path(tmp),
-                        progress_fn=progress.append, buy_top_up_max_attempts=limit,
+                        announce_fn=lambda message_id, **values: announcements.append((message_id, values)), progress_fn=progress.append, buy_top_up_max_attempts=limit,
                     )
                 self.assertEqual(result.dispatch.status, "error" if "error" in counts else "ok")
                 self.assertEqual(amounts, expected_amounts)
                 self.assertEqual(any("Warning:" in line for line in progress), warning)
 
+
+                self.assertEqual([item for item in announcements if item[0] == AnnouncementId.HAUL_BUY_STILL_SHORT],
+                                 [(AnnouncementId.HAUL_BUY_STILL_SHORT, {"station_name": "Pawelczyk Dock"})] if warning else [])
 
     def test_numeric_top_up_skips_when_balance_cannot_buy_one_unit(self) -> None:
         for status_text, expected_amounts in (('{"Balance": 9}', [460]), ('{', [460, 60]), ('{}', [460, 60])):
@@ -279,6 +283,7 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
                 (journal_dir / "Market.json").write_text('{"Items": [{"Name": "Water Purifiers", "BuyPrice": 10}]}', encoding="utf-8")
                 amounts = []
                 progress = []
+                announcements = []
                 ok = RoutineResult(action="test", dispatch=ActionDispatchResult(action="test", status="ok"))
 
                 def buy(controls, watcher, *, target, amount, **kwargs):
@@ -298,10 +303,13 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
                     patch("edap.routines.haul_multi_leg.undock_and_route_to_system", return_value=ok),
                 ):
                     result = multi_leg_haul(FakeShipControls(), FakeWatcher([]), definition=_definition(),
-                                           journal_dir=journal_dir, progress_fn=progress.append)
+                                           journal_dir=journal_dir, announce_fn=lambda message_id, **values: announcements.append((message_id, values)), progress_fn=progress.append)
                 self.assertEqual(result.dispatch.status, "ok")
                 self.assertEqual(amounts, expected_amounts)
                 self.assertEqual(any("cannot afford top-up" in line for line in progress), len(expected_amounts) == 1)
+
+                self.assertEqual([item for item in announcements if item[0] == AnnouncementId.HAUL_TOP_UP_UNAFFORDABLE],
+                                 [(AnnouncementId.HAUL_TOP_UP_UNAFFORDABLE, {"commodity_name": "Water Purifiers", "station_name": "Pawelczyk Dock"})] if len(expected_amounts) == 1 else [])
 
     def test_transit_announces_next_station_before_opening_nav_panel(self) -> None:
         controls = FakeShipControls()

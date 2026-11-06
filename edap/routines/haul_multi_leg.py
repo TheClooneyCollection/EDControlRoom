@@ -182,11 +182,16 @@ def _run_buy(ctx: _Ctx, stop: RouteStop) -> RoutineResult:
                 break
             if top_up == max_top_ups:
                 runtime.progress_fn(f"Warning: buy at {stop.label} still short by {shortfall}t after {max_top_ups} top-ups; continuing with current load.")
+                runtime.announce_fn(AnnouncementId.HAUL_BUY_STILL_SHORT, station_name=stop.endpoint.station)
                 break
             unaffordable = unaffordable_top_up(runtime.market_path, cargo.commodity)
             if unaffordable is not None:
                 balance, price = unaffordable
                 runtime.progress_fn(f"Warning: cannot afford top-up at {stop.label} (balance {balance}, price {price}); continuing with current load.")
+                runtime.announce_fn(
+                    AnnouncementId.HAUL_TOP_UP_UNAFFORDABLE,
+                    commodity_name=cargo.commodity, station_name=stop.endpoint.station,
+                )
                 break
             runtime.progress_fn(
                 f"Short buy at {stop.label}: bought {result.trigger_event['Count']} of "

@@ -1137,21 +1137,25 @@ class RoutinesTests(unittest.TestCase):
                 (journal_dir / "Status.json").write_text(json.dumps({"Balance": balance}), encoding="utf-8")
                 market_path = journal_dir / "Market.json"
                 market_path.write_text(json.dumps({"StationName": "Pawelczyk Dock", "Items": [
-                    {"Name": "aluminium", "Category": "Metals", "Stock": 1000, "BuyPrice": 10},
+                    {"Name": "aluminium", "Name_Localised": "Aluminium", "Category": "Metals", "Stock": 1000, "BuyPrice": 10},
                 ]}), encoding="utf-8")
                 controls = FakeShipControls()
                 watcher = FakeWatcher([[{"event": "MarketBuy", "Type": "aluminium", "Count": expected}]] if expected else [])
                 ticks = iter(range(1000))
                 progress = []
+                announcements = []
                 result = market_buy(controls, watcher, market_path=market_path, target="aluminium", amount="MAX",
                                     step_delay_s=0.0, nav_delay_s=0.0, time_fn=lambda: next(ticks),
-                                    sleeper=lambda _: None, progress_fn=progress.append)
+                                    sleeper=lambda _: None, announce_fn=lambda message_id, **values: announcements.append((message_id, values)), progress_fn=progress.append)
                 self.assertEqual(result.dispatch.status, "ok")
                 self.assertEqual(result.details["expected_count"], expected)
                 self.assertFalse(buy_shortfall(result))
                 self.assertTrue(any(f"{expected} affordable" in line for line in progress))
                 if not expected:
                     self.assertFalse(any(call["action"] == "UI_Right" and call["hold_s"] for call in controls.calls))
+
+                self.assertEqual([item for item in announcements if item[0] == AnnouncementId.MARKET_BUY_NONE_AVAILABLE],
+                                 [(AnnouncementId.MARKET_BUY_NONE_AVAILABLE, {"commodity_name": "Aluminium"})] if not expected else [])
 
     def test_quantity_limit_treats_unusable_balance_or_price_as_unknown(self) -> None:
         from edap.routines.market import _read_buy_quantity_limit

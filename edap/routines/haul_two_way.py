@@ -483,11 +483,16 @@ def _run_market_buy(
             if shortfall:
                 if top_ups >= max_top_ups:
                     runtime.progress_fn(f"Warning: buy at {leg.label} still short by {shortfall}t after {max_top_ups} top-ups; continuing with current load.")
+                    runtime.announce_fn(AnnouncementId.HAUL_BUY_STILL_SHORT, station_name=leg.station)
                 else:
                     unaffordable = unaffordable_top_up(runtime.market_path, leg.buy_commodity)
                     if unaffordable is not None:
                         balance, price = unaffordable
                         runtime.progress_fn(f"Warning: cannot afford top-up at {leg.label} (balance {balance}, price {price}); continuing with current load.")
+                        runtime.announce_fn(
+                            AnnouncementId.HAUL_TOP_UP_UNAFFORDABLE,
+                            commodity_name=leg.buy_commodity, station_name=leg.station,
+                        )
                         return result, next_phase
                     top_ups += 1
                     runtime.progress_fn(

@@ -895,6 +895,10 @@ def _market_trade_attempt(
             expected_count = buy_limit
             if buy_limit == 0:
                 progress_fn(f"Warning: no units available to buy ({buy_limit_reason}); continuing with current load.")
+                announce_fn(
+                    AnnouncementId.MARKET_BUY_NONE_AVAILABLE,
+                    commodity_name=_market_localised(item, "Name"),
+                )
                 back_dispatch = _market_back_out_to_station_menu(
                     controls, step_delay_s=step_delay_s, sleeper=sleeper, progress_fn=progress_fn,
                 )

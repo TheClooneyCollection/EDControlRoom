@@ -272,10 +272,11 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             for name, results, warning in cases:
                 with self.subTest(name=name):
                     progress = []
+                    announcements = []
                     amounts = []
                     pending = iter(results)
                     ctx = _HaulCtx(
-                        runtime=_test_haul_runtime(journal_dir, FakeShipControls(), FakeWatcher([]), progress_fn=progress.append),
+                        runtime=_test_haul_runtime(journal_dir, FakeShipControls(), FakeWatcher([]), announce_fn=lambda message_id, **values: announcements.append((message_id, values)), progress_fn=progress.append),
                         station_1=_station_1_leg(), station_2=_station_2_leg(),
                     )
 
@@ -295,6 +296,9 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                     if len(results) > 1:
                         self.assertTrue(any(f"topping up 24 (top-up 1/{limit})" in line for line in progress))
 
+                    self.assertEqual([item for item in announcements if item[0] == AnnouncementId.HAUL_BUY_STILL_SHORT],
+                                     [(AnnouncementId.HAUL_BUY_STILL_SHORT, {"station_name": _STATION_1})] if warning else [])
+
     def test_top_up_checks_current_balance_and_tolerates_unknown_status(self) -> None:
         for status_text, expected_buys in (('{"Balance": 9}', 1), ('{"Balance": 10}', 2), ('{"Balance": null}', 2), ('{', 2), ('[]', 2), ('', 2)):
             with self.subTest(status=status_text), tempfile.TemporaryDirectory() as tmp:
@@ -302,9 +306,10 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 _write_cargo(journal_dir, [])
                 _write_market(journal_dir, _STATION_1, [{"Name": "aluminium", "BuyPrice": 10}])
                 progress = []
+                announcements = []
                 buys = []
                 ctx = _HaulCtx(
-                    runtime=_test_haul_runtime(journal_dir, FakeShipControls(), FakeWatcher([]), progress_fn=progress.append),
+                    runtime=_test_haul_runtime(journal_dir, FakeShipControls(), FakeWatcher([]), announce_fn=lambda message_id, **values: announcements.append((message_id, values)), progress_fn=progress.append),
                     station_1=_station_1_leg(), station_2=_station_2_leg(),
                 )
 
@@ -322,6 +327,9 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 self.assertEqual(result.dispatch.status, "ok")
                 self.assertEqual(len(buys), expected_buys)
                 self.assertEqual(any("cannot afford top-up" in line for line in progress), expected_buys == 1)
+
+                self.assertEqual([item for item in announcements if item[0] == AnnouncementId.HAUL_TOP_UP_UNAFFORDABLE],
+                                 [(AnnouncementId.HAUL_TOP_UP_UNAFFORDABLE, {"commodity_name": _CARGO_1, "station_name": _STATION_1})] if expected_buys == 1 else [])
 
     def test_wrong_commodity_during_top_up_is_sold_before_retrying(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -123,6 +123,12 @@ class LoadConfigTests(unittest.TestCase):
                 "Selling cargo before continuing haul.",
             )
             self.assertEqual(config.tts.phrases["selling_all_cargo"], "Selling all cargo.")
+            self.assertEqual(config.tts.phrases["market_buy_none_available"],
+                             "{title}, no {commodity_name} available to buy. Continuing with current load.")
+            self.assertEqual(config.tts.phrases["haul_top_up_unaffordable"],
+                             "{title}, cannot afford more {commodity_name} at {station_name}. Continuing with partial load.")
+            self.assertEqual(config.tts.phrases["haul_buy_still_short"],
+                             "{title}, buy short at {station_name}. Continuing with partial load.")
             self.assertEqual(
                 config.tts.phrases["haul_pause_requested"],
                 "Roger {title}, we will pause hauling at the next station.",

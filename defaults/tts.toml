@@ -40,3 +40,7 @@ market_level_low = "Station {market_side} for {commodity_name} is low at {units}
 spansh_route_ready = "{title}, Spansh route came back and it {jump_summary}, {neutron_summary}, would you like to review?"
 spansh_neutron_waypoint_set = "Neutron boost ahead: {system_name}."
 spansh_route_complete = "Spansh route complete, arrived at {system_name}."
+
+market_buy_none_available = "{title}, no {commodity_name} available to buy. Continuing with current load."
+haul_top_up_unaffordable = "{title}, cannot afford more {commodity_name} at {station_name}. Continuing with partial load."
+haul_buy_still_short = "{title}, buy short at {station_name}. Continuing with partial load."
