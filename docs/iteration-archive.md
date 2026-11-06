@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `262`
-- Latest generated iteration number: `395`
+- Generated iteration count: `263`
+- Latest generated iteration number: `396`
 
 ## Iteration 134
 
@@ -7349,3 +7349,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - `Status.json` freshness is not checked. A valid but outdated balance is trusted.
 - A zero limit caused by station stock `0` now warns and continues instead of timing out. In two-way haul, the ship could then fly a leg empty. Revisit if that shows up live.
+
+## Iteration 396
+
+- When: `2026-11-06 21:13`
+- Area: `haul`
+- Title: `buy-warning-tts`
+- Source: [2026-11-06-21-13_____haul_____buy-warning-tts.md](iteration-logs/2026-11-06-21-13_____haul_____buy-warning-tts.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `buy-warning-tts`
+- Started: `2026-11-06 21:13`
+
+## Summary
+
+- The user asked for spoken TTS for three buy warnings: no units available, cannot afford a top-up, and still short after the top-up limit. They use the existing `AnnouncementId` plus `defaults/tts.toml` path; the progress text is unchanged.
+
+## Changes
+
+- `market_buy_none_available` (market-level, also used by the `buy` command): "{title}, no {commodity_name} available to buy. Continuing with current load."
+- `haul_top_up_unaffordable` (two-way and multi-leg): "{title}, cannot afford more {commodity_name} at {station_name}. Continuing with partial load."
+- `haul_buy_still_short` (two-way and multi-leg): "{title}, buy short at {station_name}. Continuing with partial load."
+- The per-top-up "Short buy ... topping up" line is not spoken, because each top-up already announces `buying_cargo`.
+
+## Follow-ups
+
+- Listen to the phrases live after the `lan` server restart.
