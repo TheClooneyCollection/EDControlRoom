@@ -101,6 +101,10 @@ class WineHelperClient:
         self._lock = RLock()
         self.target = InputTargetState(platform='macos', mode='wine_helper', process_name=config.process_name)
 
+    @property
+    def connected(self) -> bool:
+        return not self._closed and self._stream is not None
+
     def _exchange(self, op: str, **fields: object) -> dict:
         if self._stream is None:
             raise OSError('helper connection is closed')

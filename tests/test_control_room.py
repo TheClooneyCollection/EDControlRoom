@@ -3096,13 +3096,30 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertFalse(self.app._saved_state.instant_mode)
         self.assertIn("Instant mode off", "\n".join(self.app.logged))
 
+    def test_startup_starts_configured_wine_helper_and_logs_failure_without_fallback(self) -> None:
+        controller = _InputControllerStub()
+        controller._target = InputTargetState(platform="macos", mode="wine_helper", process_name="EliteDangerous64.exe")
+        self.app = _HarnessApp(_make_context(Path(self.tmpdir.name), input_controller=controller))
+        self.app._log_startup_modes()
+        self.assertEqual(controller.current_target().helper_version, "0.1.0")
+
+        failing = _InputControllerStub()
+        failing._target = InputTargetState(platform="macos", mode="wine_helper", process_name="EliteDangerous64.exe")
+        def refuse() -> InputTargetState:
+            raise RuntimeError("wine helper not reachable on 127.0.0.1:47811")
+        failing.set_wine_helper_target = refuse
+        self.app = _HarnessApp(_make_context(Path(self.tmpdir.name), input_controller=failing))
+        self.app._log_startup_modes()
+        self.assertEqual(failing.current_target().mode, "wine_helper")
+        self.assertIn("Wine helper startup failed: wine helper not reachable", "\n".join(self.app.logged))
+
     def test_set_input_switches_helper_foreground_and_pid_and_reports_status(self) -> None:
         controller = _InputControllerStub()
         self.app = _HarnessApp(_make_context(Path(self.tmpdir.name), input_controller=controller))
         self.app._dispatch_command("set_input wine_helper")
         self.assertEqual(controller.current_target().mode, "wine_helper")
         self.assertEqual(self._last_history().command, "set_input")
-        self.assertIn("fg EliteDangerous64.exe, alive True, held []", self.app._describe_input_target())
+        self.assertEqual(self.app._describe_input_target(), "wine helper (EliteDangerous64.exe hwnd 0x2A, helper 0.1.0)")
         self.app._dispatch_command("set_input foreground")
         self.assertEqual(controller.current_target().mode, "foreground")
         self.app._dispatch_command("set_input pid 99")

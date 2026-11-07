@@ -70,6 +70,9 @@ class InputController(ABC):
     ) -> InputTargetState:
         raise RuntimeError("This input backend does not support automatic target detection.")
 
+    def select_wine_helper_mode(self) -> InputTargetState:
+        raise RuntimeError("This input backend does not support wine_helper targeting.")
+
     def set_wine_helper_target(self) -> InputTargetState:
         raise RuntimeError("This input backend does not support wine_helper targeting.")
 

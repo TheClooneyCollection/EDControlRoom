@@ -1053,6 +1053,12 @@ class ControlRoomApp(App[None]):
         state = "on" if self._instant_mode else "off"
         self._log(f"[dim]Instant mode {state} — control with: instant[/]")
         if self._ctx.input_controller is not None:
+            if (self._ctx.input_controller.current_target().mode == "wine_helper"
+                    and not self._backend.exit_detaches_remote_session()):
+                try:
+                    self._set_wine_helper_input_target()
+                except (RuntimeError, ValueError, OSError) as exc:
+                    self._log(f"[red]Wine helper startup failed: {escape(str(exc))} (input stays on wine_helper; fix and run set_input wine_helper)[/]")
             self._log(
                 f"[dim]Input target {escape(self._describe_input_target())} "
                 "— control with: set_input | set_pid | set_hwnd[/]"
@@ -1062,15 +1068,8 @@ class ControlRoomApp(App[None]):
         controller = self._ctx.input_controller
         if controller is None:
             return "unavailable"
-        target = controller.current_target()
-        summary = target.summary()
-        if target.mode == "wine_helper":
-            try:
-                status = controller.input_status()["wine_helper"]
-                summary += f"; fg {status.get('fg', '?')}, alive {status.get('target_alive', False)}, held {status.get('held', [])}"
-            except (RuntimeError, OSError) as exc:
-                summary += f"; error: {exc}"
-        return summary
+        # Called for every snapshot, so it must not round-trip to the wine helper.
+        return controller.current_target().summary()
 
     def _set_wine_helper_input_target(self) -> str:
         return self._require_input_controller().set_wine_helper_target().summary()

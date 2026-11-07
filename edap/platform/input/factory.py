@@ -16,7 +16,8 @@ def build_input_controller(platform_name: str, *, input_config: InputConfig, tim
 
         controller = MacOSInputController(timing_sampler=timing_sampler, wine_helper=build_wine_helper(input_config.wine_helper))
         if input_config.target == "wine_helper":
-            controller.set_wine_helper_target()
+            # Diagnostics and remote clients build controllers too; only the local host starts the helper.
+            controller.select_wine_helper_mode()
         elif input_config.target == "pid":
             controller.auto_target()
         return controller

@@ -145,7 +145,7 @@ class WineHelperConfig:
     launch: str = "managed"
     startup_timeout_s: float = 10.0
     request_timeout_s: float = 1.0
-    max_hold_s: float = 10.0
+    max_hold_s: float = 30.0
     token_file: Path = Path(".wine_input_helper.token")
 
 
@@ -645,6 +645,11 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `controls.market_buy_top_up_max_attempts` must be non-negative.")
     if config.controls.market_buy_max_hold_seconds <= 0:
         raise ConfigError("Config value `controls.market_buy_max_hold_seconds` must be greater than 0.")
+    if config.input.wine_helper.max_hold_s <= config.controls.market_buy_max_hold_seconds:
+        # The helper watchdog would otherwise cut long market buy holds short.
+        raise ConfigError(
+            "Config value `input.wine_helper.max_hold_s` must be greater than `controls.market.buy_max_hold_seconds`."
+        )
     if not config.controls.market_buy_hold_segments:
         raise ConfigError("Config section `controls.market.buy_hold_segments` must contain at least one segment.")
     if config.controls.market_buy_hold_segments[0].start != 0:

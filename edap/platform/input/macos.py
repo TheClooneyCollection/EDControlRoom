@@ -357,19 +357,24 @@ class MacOSInputController(InputController):
         )
         return self._target
 
+    def select_wine_helper_mode(self) -> InputTargetState:
+        """Route input to the helper without connecting; dispatch fails until set_wine_helper_target succeeds."""
+        self._target = self._wine_helper.target
+        return self._target
+
     def set_wine_helper_target(self) -> InputTargetState:
         target = self._wine_helper.start()
         self._target = target
         return target
 
     def _leave_helper(self) -> None:
-        if self._target.mode == "wine_helper":
+        if self._target.mode == "wine_helper" and self._wine_helper.connected:
             self._wine_helper.release_all()
 
     def input_status(self) -> dict[str, object]:
         result = super().input_status()
         if self._target.mode == "wine_helper":
-            result["wine_helper"] = self._wine_helper.status()
+            result["wine_helper"] = self._wine_helper.status() if self._wine_helper.connected else {"connected": False}
             config = self._wine_helper.config
             result["wine_helper_config"] = {
                 "bottle": config.bottle, "wine_path": config.wine_path,

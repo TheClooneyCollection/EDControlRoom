@@ -182,6 +182,12 @@ def main() -> int:
         if runtime.input_controller is None:
             sys.stderr.write(f"Unsupported input platform: {loaded.config.runtime.platform}\n")
             return 2
+        if loaded.config.input.target == "wine_helper":
+            try:
+                runtime.input_controller.set_wine_helper_target()
+            except (RuntimeError, ValueError, OSError) as exc:
+                sys.stderr.write(f"Input startup failed: {exc}\n")
+                return 2
 
         if runtime.binding_lookup is None:
             sys.stderr.write(

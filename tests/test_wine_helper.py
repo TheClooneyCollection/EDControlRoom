@@ -210,6 +210,25 @@ class HelperProtocolTests(unittest.TestCase):
             controller.tap_key('m')
         self.assertEqual(controller.current_target().mode, 'wine_helper')
 
+    def test_selected_mode_does_not_connect_and_refuses_input_without_hid(self):
+        controller = MacOSInputController(wine_helper=helper_client(CONFIG), poster=unexpected, pid_poster=unexpected,
+                                          timing_sampler=no_jitter_timing_sampler(), sleeper=unexpected)
+        controller.select_wine_helper_mode()
+        self.assertEqual(controller.current_target().summary(),
+                         'wine helper (EliteDangerous64.exe hwnd unresolved, helper disconnected)')
+        self.assertEqual(controller.input_status()['wine_helper'], {'connected': False})
+        with self.assertRaisesRegex(RuntimeError, 'client is closed'):
+            controller.tap_key('m', 'left_control')
+        controller.set_foreground_target()
+        self.assertEqual(controller.current_target().mode, 'foreground')
+
+    def test_factory_selects_configured_helper_without_launching_it(self):
+        from edap.platform.input.factory import build_input_controller
+        controller = build_input_controller('macos', input_config=InputConfig(target='wine_helper', wine_helper=CONFIG),
+                                            timing_sampler=no_jitter_timing_sampler())
+        self.assertEqual(controller.current_target().mode, 'wine_helper')
+        self.assertFalse(controller._wine_helper.connected)
+
     def test_closed_client_cannot_reconnect_until_explicitly_selected(self):
         server, replacement = Server(), Server()
         client = connected(server, connect=Connections(server, replacement))
@@ -266,7 +285,7 @@ class HelperLifecycleTests(unittest.TestCase):
                                sleeper=waits.append, clock=lambda: 0)
         client.start()
         self.assertEqual(launches, [[CONFIG.wine_path, '--bottle', 'Test', CONFIG.helper_path,
-                                    '--port', '47811', '--token', TOKEN, '--log', r'C:\edap\helper.log', '--max-hold-s', '10.0']])
+                                    '--port', '47811', '--token', TOKEN, '--log', r'C:\edap\helper.log', '--max-hold-s', '30.0']])
         self.assertEqual(waits, [.05])
         client.close()
         self.assertEqual(server.requests[-2:], [{'op': 'release_all'}, {'op': 'bye'}])
@@ -323,6 +342,13 @@ class HelperConfigTests(unittest.TestCase):
             config = load_config(path)
             self.assertEqual(config.input.wine_helper.helper_path, r'C:\edap\custom.exe')
             self.assertEqual(config.input.wine_helper.token_file, Path('private.token'))
+
+    def test_watchdog_must_outlast_longest_market_buy_hold(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'config.toml'
+            path.write_text("[input.wine_helper]\nmax_hold_s = 20.0\n", encoding='utf-8')
+            with self.assertRaisesRegex(ConfigError, 'max_hold_s` must be greater than `controls.market.buy_max_hold_seconds'):
+                load_config(path)
 
     def test_shared_table_covers_normalized_aliases_and_extended_distinction(self):
         for token in KEY_ALIASES:
