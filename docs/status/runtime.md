@@ -15,6 +15,6 @@
 - The legacy CV-driven align loop is still not ported into the active runtime.
 ## Next
 - Live-tune the default timing distribution against real CrossOver sessions now that input delay/hold/typing jitter is centralized and operator-configurable.
-- Design a production `wine-helper` input backend: a resident helper in the bottle, IPC from the Python macOS backend, and Win32 foreground re-asserted before each burst. A proposal is pending; the AHK test files stay in `drive_c/ahk/` for now.
+- Design a production `wine-helper` input backend: a resident helper in the bottle, IPC from the Python macOS backend, and Win32 foreground re-asserted before each burst. Accepted 2026-11-07: C helper built locally with mingw, `set_input wine_helper`, managed auto-launch, foreground stays default, no silent fallback (`docs/research/0007-wine-side-background-input.md`, `docs/design/0003-wine-helper-input-backend.md`). Implementation is in progress; the AHK test files stay in `drive_c/ahk/`.
 - Live-validate the new targeted-input path on both CrossOver/macOS and native Windows, then decide whether Windows needs a stronger background-input fallback than hwnd message posting.
 - Continue the portability follow-up work: CV capture/performance measurement, journal latency measurement, diagnostics/dashboard work, and broader Windows validation.
