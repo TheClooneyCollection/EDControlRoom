@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import asdict, replace
+from datetime import datetime
 import json
 import logging
 from pathlib import Path
@@ -18,6 +19,9 @@ from starlette.responses import HTMLResponse, JSONResponse, Response
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
+from edap.haul_history import load_runs, parse_window, summarize
+from edap.journal_trade_ledger import journal_trade_ledger
+from edap.platform.local_time import SystemLocalTimezone
 from edap.control_room.server.auth import ObserverServerAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
 from edap.control_room.server.commands import ObserverSessionCommandHandler, trade_route_from_payload
@@ -145,6 +149,7 @@ def build_observer_server_app(
     auth: ObserverServerAuth,
     web_default_access_token: str = "",
     journal_dir: Path | None = None,
+    haul_runs_file: Path | None = None,
     route_compare_navroute_wait_seconds: float = 6.0,
     route_compare_compare_retry_attempts: int = 3,
 ) -> Starlette:
@@ -313,6 +318,32 @@ def build_observer_server_app(
             }
         )
 
+    async def haul_stats_endpoint(request: Request) -> JSONResponse:
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        window = request.query_params.get("window", "today")
+        try:
+            since, until, label = parse_window(window, datetime.now(SystemLocalTimezone()))
+        except ValueError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=400)
+
+        def read_statistics() -> dict[str, Any]:
+            rows, skipped = load_runs(haul_runs_file) if haul_runs_file is not None else ([], 0)
+            runs = summarize(rows, since, until, skipped_lines=skipped)
+            ledger = journal_trade_ledger(journal_dir, since, until) if journal_dir is not None else None
+            return {
+                "window": window, "label": label,
+                "since": since.isoformat() if since is not None else None, "until": until.isoformat(),
+                "runs": asdict(runs),
+                "journal": asdict(ledger) if ledger is not None and ledger.available else None,
+            }
+
+        try:
+            return JSONResponse(await asyncio.to_thread(read_statistics))
+        except (OSError, ValueError) as exc:
+            return JSONResponse({"detail": f"Cannot read haul statistics: {exc}"}, status_code=503)
+
     async def spansh_route_endpoint(request: Request) -> JSONResponse:
         auth_failure = require_http_auth(request)
         if auth_failure is not None:
@@ -407,6 +438,7 @@ def build_observer_server_app(
             Route("/api/route-compare", route_compare),
             Route("/api/route-compare/config", route_compare_config_endpoint),
             Route("/api/spansh-route", spansh_route_endpoint),
+            Route("/api/haul-stats", haul_stats_endpoint),
             Route(HAUL_WEB_ASSET_URL_PATH, haul_web_asset),
             WebSocketRoute("/session", session),
         ]

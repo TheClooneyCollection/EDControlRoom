@@ -15,6 +15,8 @@ from edap.control_room.view_models import (
     status_panel_view_model,
     trade_route_picker_view_model,
 )
+from edap.haul_history import RunTotals
+from edap.control_room.rendering import haul_panel_markup
 from edap.inara.trade_routes import TradeRoute
 
 
@@ -29,10 +31,19 @@ class ControlRoomViewModelsTests(unittest.TestCase):
     def test_haul_panel_view_model_carries_balance_context(self) -> None:
         stats = HaulStats(station_1="Galileo", station_1_buying="Gold")
 
-        view_model = haul_panel_view_model(stats, current_balance=123_456)
+        view_model = haul_panel_view_model(stats, current_balance=123_456, today_totals=None)
 
         self.assertIs(view_model.stats, stats)
         self.assertEqual(view_model.current_balance, 123_456)
+
+    def test_today_line_uses_cached_totals_in_active_and_idle_panels(self) -> None:
+        totals = RunTotals(count=3, cost=50, revenue=150, profit=100)
+        for buying in ("", "gold"):
+            model = haul_panel_view_model(HaulStats(station_1_buying=buying),
+                                          current_balance=None, today_totals=totals)
+            rendered = haul_panel_markup(model, now_fn=lambda: 0.0)
+            self.assertIn("Today +100 CR (3 runs)", rendered)
+            self.assertIs(model.today_totals, totals)
 
     def test_market_panel_view_model_carries_local_presentation_state(self) -> None:
         market = MarketData(station="Galileo", system="Sol")

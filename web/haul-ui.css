@@ -1619,3 +1619,22 @@
     .rc-details[open] .rc-details-toggle {
       margin-bottom: 8px;
     }
+
+/* History stays readable on narrow screens; only the tables scroll. */
+.history-panel { grid-column: 1 / -1; min-width: 0; }
+.history-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.history-tabs .btn[aria-pressed="true"] { color: var(--amber); border-color: var(--amber); background: var(--amber-dim); }
+.history-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.history-metrics .metric-value { overflow-wrap: anywhere; }
+.history-panel h3 { font-size: 12px; color: var(--text-2); margin: 16px 0 6px; }
+.history-table-scroll { max-width: 100%; overflow-x: auto; }
+.history-table { width: 100%; min-width: 460px; border-collapse: collapse; }
+.history-table th, .history-table td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); }
+.history-table th { color: var(--text-2); font-weight: 500; }
+.history-table td { font-family: var(--mono); }
+.history-journal, #history-status { overflow-wrap: anywhere; }
+.history-journal { color: var(--text-2); }
+@media (max-width: 600px) {
+  .history-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .history-panel .panel-head { flex-wrap: wrap; gap: 6px; }
+}

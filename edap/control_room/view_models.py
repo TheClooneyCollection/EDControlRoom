@@ -9,6 +9,7 @@ from edap.control_room.models import (
     TradeRoutePickerState,
     TradeRoutesData,
 )
+from edap.haul_history import RunTotals
 from edap.inara.trade_routes import TradeRoute
 
 
@@ -21,6 +22,7 @@ class StatusPanelViewModel:
 class HaulPanelViewModel:
     stats: HaulStats
     current_balance: int | None
+    today_totals: RunTotals | None
 
 
 @dataclass(frozen=True)
@@ -48,8 +50,9 @@ def haul_panel_view_model(
     stats: HaulStats,
     *,
     current_balance: int | None,
+    today_totals: RunTotals | None,
 ) -> HaulPanelViewModel:
-    return HaulPanelViewModel(stats=stats, current_balance=current_balance)
+    return HaulPanelViewModel(stats=stats, current_balance=current_balance, today_totals=today_totals)
 
 
 def market_panel_view_model(

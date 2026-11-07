@@ -12,7 +12,8 @@ let routes = [];
     const SERVER_DEFAULT_ACCESS_TOKEN = WEB_CONFIG.defaultAccessToken || "";
     const queryParams = new URLSearchParams(window.location.search);
     const queryAccessToken = queryParams.get(AUTH_QUERY_PARAMETER_NAME) || queryParams.get("access_token") || "";
-    const cachedAccessToken = window.localStorage.getItem(TOKEN_STORAGE_KEY) || "";
+    let cachedAccessToken = "";
+    try { cachedAccessToken = window.localStorage.getItem(TOKEN_STORAGE_KEY) || ""; } catch (_) {}
     let accessToken = queryAccessToken || cachedAccessToken || SERVER_DEFAULT_ACCESS_TOKEN;
     let socket = null;
     let clientRole = "observer";
@@ -37,6 +38,79 @@ let routes = [];
       dockTimeout: "1200",
       ...(WEB_CONFIG.webDefaults || {})
     };
+
+    const HISTORY_WINDOW_KEY = "edcr.haul.historyWindow";
+    const HISTORY_WINDOWS = ["today", "48h", "week", "month", "all"];
+    let historyWindow = "today";
+    try {
+      const saved = window.localStorage.getItem(HISTORY_WINDOW_KEY);
+      if (HISTORY_WINDOWS.includes(saved)) historyWindow = saved;
+    } catch (_) {}
+    let historyCompletedRuns = null;
+    let historyRequest = 0;
+
+    function historyMoney(value) {
+      return value == null ? "n/a" : formatCredits(Math.round(Number(value)));
+    }
+
+    function historyTable(headers, rows) {
+      return `<div class="history-table-scroll"><table class="history-table"><thead><tr>${
+        headers.map((name) => `<th scope="col">${name}</th>`).join("")
+      }</tr></thead><tbody>${rows.length ? rows.join("") :
+        `<tr><td colspan="${headers.length}">No records in this window.</td></tr>`}</tbody></table></div>`;
+    }
+
+    function renderHaulHistory(payload) {
+      const runs = payload.runs;
+      const completed = runs.completed;
+      const metrics = [
+        ["Completed runs", completed.count], ["Completed profit", historyMoney(completed.profit)],
+        ["Profit / hour", historyMoney(completed.profit_per_hour)], ["Time", formatDuration(completed.duration_s)],
+        ["Mean", historyMoney(completed.mean_profit)], ["Best", historyMoney(completed.best_profit)]
+      ].map(([name, value]) => `<div class="metric"><div class="metric-label">${name}</div><div class="metric-value mono">${value}</div></div>`).join("");
+      const expected = completed.expected_count ? `<p>Expected vs actual (${completed.expected_count} completed): ${
+        historyMoney(completed.expected_profit)} / ${historyMoney(completed.expected_actual_profit)}; delta ${historyMoney(completed.profit_delta)}</p>` : "";
+      const routes = (runs.routes || []).map((route) => `<tr><td>${escapeHtml(route.station_1)} ↔ ${escapeHtml(route.station_2)}</td><td>${route.completed.count} / ${route.aborted.count}</td><td>${historyMoney(route.all_in.profit)}</td><td>${historyMoney(route.all_in.cost)}</td><td>${historyMoney(route.all_in.revenue)}</td></tr>`);
+      const commodities = (runs.commodities || []).map((item) => `<tr><td>${escapeHtml(item.commodity)}</td><td>${item.all_in.tons_bought} / ${item.all_in.tons_sold} t</td><td>${historyMoney(item.all_in.cost)}</td><td>${historyMoney(item.all_in.revenue)}</td></tr>`);
+      const journal = payload.journal;
+      const coverage = journal && journal.coverage;
+      const journalLine = journal ? `Trade profit ${historyMoney(journal.profit)}; balance change ${historyMoney(journal.net_balance_change)}. Coverage: ${coverage.files} files, ${escapeHtml(coverage.first_event_at || "unknown")} to ${escapeHtml(coverage.last_event_at || "unknown")}${coverage.window_start_before_oldest_journal ? "; window predates oldest journal" : ""}; ${coverage.skipped_lines} skipped / ${coverage.unreadable_files} unreadable.` : "Journal data unavailable on this server.";
+      document.getElementById("history-content").innerHTML = `
+        <div class="history-metrics">${metrics}</div>
+        <p>Aborted: ${runs.aborted.count} runs; realized profit ${historyMoney(runs.aborted.profit)}</p>
+        <p><strong>All-in:</strong> ${historyMoney(runs.all_in.profit)}; revenue ${historyMoney(runs.all_in.revenue)}; cost ${historyMoney(runs.all_in.cost)}</p>
+        ${expected}<h3>Routes</h3>${historyTable(["Route", "Completed / Aborted", "Profit", "Cost", "Revenue"], routes)}
+        <h3>Commodities</h3>${historyTable(["Commodity", "Bought / Sold", "Cost", "Revenue"], commodities)}
+        <p class="history-journal"><strong>All trading (journal):</strong> ${journalLine}</p>`;
+    }
+
+    async function refreshHaulHistory() {
+      const request = ++historyRequest;
+      const status = document.getElementById("history-status");
+      status.textContent = "Loading";
+      document.querySelectorAll("[data-history-window]").forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.historyWindow === historyWindow));
+      });
+      const url = new URL("/api/haul-stats", window.location.origin);
+      url.searchParams.set("window", historyWindow);
+      if (accessToken) url.searchParams.set(AUTH_QUERY_PARAMETER_NAME, accessToken);
+      try {
+        const response = await fetch(url, { method: "GET" });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
+        if (request !== historyRequest) return;
+        renderHaulHistory(payload);
+        status.textContent = runsHistoryStatus(payload.runs.skipped_lines);
+      } catch (error) {
+        if (request !== historyRequest) return;
+        status.textContent = `History unavailable: ${error.message}`;
+        document.getElementById("history-content").textContent = "History could not be loaded. Select a window to retry.";
+      }
+    }
+
+    function runsHistoryStatus(skipped) {
+      return skipped ? `Updated; ${skipped} invalid lines skipped` : "Updated";
+    }
 
     function routeByIndex(index) {
       return routes.find((route) => route.index === index) || routes[0] || null;
@@ -391,6 +465,7 @@ let routes = [];
     }
 
     function connectWebsocket({ automatic = false, manual = false } = {}) {
+      refreshHaulHistory();
       if (!accessToken) {
         clearReconnectTimer({ resetBackoff: true });
         setConnectionBanner("danger", "Access token required", "Enter the shared access token to connect.");
@@ -795,6 +870,10 @@ let routes = [];
     function applyHydratePayload(payload) {
       const ship = payload.ship || {};
       const haulSession = payload.haul_session || {};
+      if (historyCompletedRuns !== haulSession.completed_runs) {
+        historyCompletedRuns = haulSession.completed_runs;
+        refreshHaulHistory();
+      }
       const routine = payload.routine || {};
       const activity = payload.activity_log || {};
       const serverStatus = payload.server_status || {};
@@ -1164,6 +1243,14 @@ let routes = [];
       }
     });
 
+    document.querySelectorAll("[data-history-window]").forEach((button) => {
+      button.addEventListener("click", () => {
+        historyWindow = button.dataset.historyWindow;
+        try { window.localStorage.setItem(HISTORY_WINDOW_KEY, historyWindow); } catch (_) {}
+        refreshHaulHistory();
+      });
+    });
+    refreshHaulHistory();
     applyWebConfigLabels();
     applySearchDefaults();
     applyHaulDefaults();

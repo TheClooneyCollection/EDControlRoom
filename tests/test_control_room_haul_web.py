@@ -24,6 +24,18 @@ def _multi_haul_web_source() -> str:
 
 
 class ControlRoomHaulWebTests(unittest.TestCase):
+    def test_history_panel_exposes_windows_tables_auth_and_refresh_hooks(self) -> None:
+        source = _haul_web_source()
+        for window in ("today", "48h", "week", "month", "all"):
+            self.assertIn(f'data-history-window="{window}"', source)
+        for hook in ('id="history-title"', 'id="history-content"', '/api/haul-stats',
+                     'AUTH_QUERY_PARAMETER_NAME, accessToken', 'historyCompletedRuns !== haulSession.completed_runs',
+                     'window.localStorage.setItem(HISTORY_WINDOW_KEY', 'request !== historyRequest',
+                     'All trading (journal)', 'history-table-scroll', '@media (max-width: 600px)'):
+            self.assertIn(hook, source)
+        self.assertIn('escapeHtml(route.station_1)', source)
+        self.assertIn('escapeHtml(item.commodity)', source)
+
     def test_two_way_phase_projection_compacts_phase_and_station_for_web(self) -> None:
         self.assertEqual(_project_two_way_phase(Phase.AT_STATION_1_SELL), ("sell", 1))
         self.assertEqual(_project_two_way_phase(Phase.AT_STATION_1_BUY), ("buy", 1))

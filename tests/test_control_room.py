@@ -1190,6 +1190,7 @@ class ControlRoomCommandTests(unittest.TestCase):
 
         markup = control_room_rendering.haul_stats_markup(
             stats,
+            today_totals=None,
             current_balance=1_234_567_890,
             now_fn=lambda: 400.0,
         )
@@ -4373,6 +4374,15 @@ class HaulRunHistoryTests(unittest.TestCase):
         self.assertTrue(row["app_version"])
         self.app._stop_haul_stats()
         self.assertEqual(len(self.rows()), 1)
+
+    def test_appended_run_invalidates_today_cache(self) -> None:
+        from datetime import datetime, timezone
+        now = datetime(2026, 11, 7, 13, tzinfo=timezone.utc)
+        cache = self.app._haul_history_cache
+        self.assertEqual(cache.current(self.path, now=now).count, 0)
+        self.complete()
+        self.assertEqual(cache.current(self.path, now=now).profit, 100)
+        self.assertEqual(cache.current(self.path, now=now).count, 1)
 
     def test_stop_partial_run_keeps_money_phase_and_warning_ids(self) -> None:
         self.event("MarketBuy", "Alpha", 0, Type="gold", Count=4, TotalCost=40)

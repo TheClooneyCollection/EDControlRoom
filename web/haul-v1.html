@@ -140,6 +140,23 @@
           </div>
         </section>
 
+        <section class="panel history-panel" aria-labelledby="history-title">
+          <div class="panel-head">
+            <div class="panel-title" id="history-title">History</div>
+            <div class="panel-action" id="history-status" role="status">Loading</div>
+          </div>
+          <div class="panel-body">
+            <div class="history-tabs" aria-label="History window">
+              <button class="btn" type="button" data-history-window="today" aria-pressed="true">Today</button>
+              <button class="btn" type="button" data-history-window="48h" aria-pressed="false">48h</button>
+              <button class="btn" type="button" data-history-window="week" aria-pressed="false">Week</button>
+              <button class="btn" type="button" data-history-window="month" aria-pressed="false">Month</button>
+              <button class="btn" type="button" data-history-window="all" aria-pressed="false">All</button>
+            </div>
+            <div id="history-content" aria-live="polite">Loading recorded haul history...</div>
+          </div>
+        </section>
+
         <section class="panel route-compare-full" aria-labelledby="active-spansh-title" id="active-spansh-panel">
           <div class="panel-head">
             <div class="panel-title" id="active-spansh-title">Active route</div>

@@ -42,6 +42,7 @@ Other:
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import ipaddress
 import json
 import signal
@@ -63,6 +64,8 @@ from textual.events import MouseScrollDown, MouseScrollUp
 from textual.widgets import Footer, Header, Input, OptionList, RichLog, Static, Tab, Tabs
 
 from edap.haul_history import WARNING_IDS
+from edap.haul_stats_cache import TodayHaulCache
+from edap.platform.local_time import SystemLocalTimezone
 from edap.config import AppConfig
 from edap.control_room.backend import ControlRoomBackend, LocalControlRoomBackend
 from edap.control_room.dependencies import (
@@ -445,6 +448,7 @@ class ControlRoomApp(App[None]):
         self._market = MarketData()
         self._presented_market = MarketData()
         self._haul_stats = HaulStats()
+        self._haul_history_cache = TodayHaulCache()
         self._trade_routes = TradeRoutesData()
         self._market_filter = market_filter
         self._market_mtime: float | None = None
@@ -1411,6 +1415,9 @@ class ControlRoomApp(App[None]):
         return _view_models.haul_panel_view_model(
             data.haul_session,
             current_balance=data.ship.credits,
+            today_totals=(None if self._backend.exit_detaches_remote_session() else
+                          self._haul_history_cache.current(self._config.control_room.haul_runs_file,
+                                                           now=datetime.now(SystemLocalTimezone()))),
         )
 
     def _market_panel_view_model(self) -> _view_models.MarketPanelViewModel:

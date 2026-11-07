@@ -17,7 +17,7 @@ from edap.control_room.view_models import (
     market_panel_view_model,
     status_panel_view_model,
 )
-from edap.haul_history import HaulSummary
+from edap.haul_history import HaulSummary, RunTotals
 from edap.journal_trade_ledger import JournalTradeLedger
 from edap.routines.market import _is_sell_market_item
 
@@ -191,6 +191,9 @@ def haul_panel_markup(
 ) -> str:
     stats = view_model.stats
     current_balance = view_model.current_balance
+    today = view_model.today_totals
+    today_line = (f"Today {'+' if today.profit >= 0 else ''}{fmt_cr(today.profit)} ({today.count} runs)"
+                  if today is not None else "[dim]Today unavailable[/]")
     if not stats.station_1_buying:
         session_elapsed = (
             now_fn() - stats.session_started_at
@@ -212,6 +215,7 @@ def haul_panel_markup(
             ])
         if current_balance is not None:
             lines.extend(["", f"[dim]Balance[/]  [green]{fmt_cr(current_balance)}[/]"])
+        lines.append(today_line)
         return "\n".join(lines)
 
     rows: list[str] = []
@@ -278,6 +282,7 @@ def haul_panel_markup(
             delta_text = f"[yellow]-{fmt_cr(abs(delta))}[/]"
         row("Vs route", delta_text)
     row("Last time", escape(fmt_duration(stats.last_run_elapsed_s)))
+    rows.append(today_line)
     return "\n".join(rows)
 
 
@@ -285,10 +290,11 @@ def haul_stats_markup(
     stats: HaulStats,
     *,
     current_balance: int | None,
+    today_totals: RunTotals | None,
     now_fn: Callable[[], float],
 ) -> str:
     return haul_panel_markup(
-        haul_panel_view_model(stats, current_balance=current_balance),
+        haul_panel_view_model(stats, current_balance=current_balance, today_totals=today_totals),
         now_fn=now_fn,
     )
 

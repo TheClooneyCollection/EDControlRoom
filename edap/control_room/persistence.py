@@ -14,12 +14,14 @@ from edap.control_room_state import (
     save_control_room_state,
 )
 
+from edap.haul_stats_cache import TodayHaulCache
 from edap.haul_history import append_run, close_run, snapshot_duration, utc_timestamp
 
 
 class PersistenceHost(Protocol):
     _config: AppConfig
     _haul_stats: HaulStats
+    _haul_history_cache: TodayHaulCache
     _instant_mode: bool
     _saved_state: ControlRoomState
     _state_path: Path
@@ -43,6 +45,7 @@ def load_saved_state(app: PersistenceHost) -> None:
     app._history = [entry.raw for entry in app._saved_state.history if entry.raw]
     app._history_pos = len(app._history)
     app._instant_mode = app._saved_state.instant_mode
+    app._haul_history_cache.invalidate()
     _restore_persisted_session(app)
     app._haul_stats.current_run = app._saved_state.haul_current_run
     app._haul_stats.pending_runs = app._saved_state.haul_pending_runs
@@ -65,6 +68,7 @@ def save_saved_state(app: PersistenceHost) -> None:
             row = app._haul_stats.pending_runs[0]
             if not append_run(app._config.control_room.haul_runs_file, row, app._log):
                 break
+            app._haul_history_cache.invalidate()
             app._haul_stats.pending_runs.pop(0)
             _capture_persisted_session(app)
             save_control_room_state(app._state_path, app._saved_state)

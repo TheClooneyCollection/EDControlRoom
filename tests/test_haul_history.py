@@ -170,3 +170,18 @@ class HaulStatsCliTests(unittest.TestCase):
                 code = main(["--file", directory, "--journal-dir", directory], now=NOW)
             self.assertEqual(code, 2)
             self.assertTrue(error.getvalue())
+
+
+class TodayHaulCacheTests(unittest.TestCase):
+    def test_cache_reads_only_on_start_invalidation_or_local_date_change(self):
+        from edap.haul_stats_cache import TodayHaulCache
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "history.jsonl"
+            cache = TodayHaulCache()
+            self.assertEqual(cache.current(path, now=NOW).count, 0)
+            path.write_text(json.dumps(run_row()) + "\n", encoding="utf-8")
+            # A changed file is not reread on every rendering pass.
+            self.assertEqual(cache.current(path, now=NOW).count, 0)
+            cache.invalidate()
+            self.assertEqual(cache.current(path, now=NOW).profit, 200)
+            self.assertEqual(cache.current(path, now=NOW + timedelta(days=1)).count, 0)

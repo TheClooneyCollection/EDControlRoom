@@ -532,6 +532,57 @@ class ControlRoomServerTests(unittest.TestCase):
             self.assertEqual(response.headers.get("access-control-allow-origin"), "*")
             self.assertEqual(response.json(), CONTROL_ROOM_MESSAGE_SCHEMA)
 
+    def test_haul_stats_api_auth_default_window_and_invalid_window(self) -> None:
+        from datetime import datetime
+        app = build_observer_server_app(data_provider=_base_data_read_model, command_handler=None,
+                                        broker=InMemoryObserverSessionBroker(), auth=SharedAccessTokenAuth("secret-token"))
+        with TestClient(app) as client:
+            self.assertEqual(client.get("/api/haul-stats").status_code, 401)
+            response = client.get("/api/haul-stats", headers={"Authorization": "Bearer secret-token"})
+            self.assertEqual(response.status_code, 200)
+            payload = response.json()
+            self.assertEqual(set(payload), {"window", "label", "since", "until", "runs", "journal"})
+            self.assertEqual(payload["window"], "today")
+            self.assertEqual(payload["label"], "today")
+            self.assertEqual(datetime.fromisoformat(payload["since"]).hour, 0)
+            self.assertIsNone(payload["journal"])
+            self.assertEqual(payload["runs"]["all_in"]["count"], 0)
+            bad = client.get("/api/haul-stats?window=invalid&access_token=secret-token")
+            self.assertEqual(bad.status_code, 400)
+            self.assertIn("Usage: stats", bad.json()["detail"])
+
+    def test_haul_stats_api_reads_configured_files_and_optional_journal(self) -> None:
+        import json
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "runs.jsonl"
+            path.write_text(json.dumps(dict(schema=1, kind="two_way", status="completed",
+                started_at="2020-01-01T00:00:00Z", ended_at="2020-01-01T01:00:00Z",
+                route={"station_1": "Alpha", "station_2": "Beta"}, cost=10, revenue=50,
+                expected_profit=30, duration_s=3600, legs=[])) + "\n")
+            (root / "Journal.2020-01-01T000000.01.log").write_text(json.dumps(dict(
+                event="MarketSell", timestamp="2020-01-01T01:00:00Z", Type="gold", Count=1,
+                TotalSale=50, AvgPricePaid=10)) + "\n")
+            app = build_observer_server_app(data_provider=_base_data_read_model, command_handler=None,
+                broker=InMemoryObserverSessionBroker(), auth=SharedAccessTokenAuth("secret-token"),
+                haul_runs_file=path, journal_dir=root)
+            with TestClient(app) as client:
+                response = client.get("/api/haul-stats?window=all&access_token=secret-token")
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                self.assertIsNone(payload["since"])
+                self.assertEqual(payload["runs"]["completed"]["profit"], 40)
+                self.assertEqual(payload["journal"]["sell_margin"], 40)
+                self.assertEqual(payload["journal"]["coverage"]["files"], 1)
+            unavailable = build_observer_server_app(data_provider=_base_data_read_model, command_handler=None,
+                broker=InMemoryObserverSessionBroker(), auth=SharedAccessTokenAuth("secret-token"),
+                haul_runs_file=path, journal_dir=root / "missing")
+            with TestClient(unavailable) as client:
+                payload = client.get("/api/haul-stats?window=all&access_token=secret-token").json()
+                self.assertEqual(payload["runs"]["completed"]["profit"], 40)
+                self.assertIsNone(payload["journal"])
+
+
     def test_browser_probe_endpoint_is_public_html(self) -> None:
         broker = InMemoryObserverSessionBroker()
         app = build_observer_server_app(
@@ -579,6 +630,8 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertIn("Set destination", response.text)
         self.assertIn("Start route", response.text)
         self.assertIn('id="token-dialog"', response.text)
+        self.assertIn('id="history-title"', response.text)
+        self.assertIn('data-history-window="week"', response.text)
         self.assertIn('src="/assets/haul-ui.js"', response.text)
         self.assertIn('href="/assets/haul-ui.css"', response.text)
         self.assertNotIn("window.prompt", response.text)
