@@ -114,6 +114,7 @@ Full walkthrough: [docs/user/getting-started.md](docs/user/getting-started.md).
 ## Documentation
 
 - [docs/user/](docs/user/): install, bindings, getting started, haul workflow, commands, troubleshooting.
+- [docs/user/background-input.md](docs/user/background-input.md): macOS background input through a helper in the CrossOver bottle. Coding agents can run the setup with the repo's `edcr-background-input` skill (`.agents/skills/`, linked from `.claude/skills/`).
 - [docs/operators/](docs/operators/): operator references (control room, remote / multi-client, bindings files, input and market timing).
 - [docs/diagnostics/](docs/diagnostics/): CLI and bindings reference for diagnostics.
 - [docs/status/README.md](docs/status/README.md): maintained project status entrypoint.
