@@ -12,7 +12,7 @@ from edap.binding_lookup import KEY_ALIASES, normalize_internal_key_name
 from edap.config import ConfigError, InputConfig, WineHelperConfig, load_config, validate_wine_helper
 from edap.platform.input.macos import MacOSInputController
 from edap.platform.input.scancodes import resolve_scancode
-from edap.platform.input.wine_helper import BurstAborted, FocusFailed, HelperError, build_wine_helper, check_crossover_match, load_or_create_token
+from edap.platform.input.wine_helper import BurstAborted, FocusFailed, HelperError, build_wine_helper, check_crossover_match, load_or_create_token, wine_executable
 from edap.timing import no_jitter_timing_sampler
 from tests.fixtures.wine_helper import helper_client, unexpected
 
@@ -383,6 +383,13 @@ class HelperLifecycleTests(unittest.TestCase):
         client = helper_client(CONFIG, connect=Connections(ConnectionRefusedError()), read_token=lambda path: TOKEN)
         with self.assertRaisesRegex(RuntimeError, 'wine helper not reachable on 127.0.0.1:47811'):
             client.start()
+
+    def test_wine_path_keeps_posix_separators_on_every_host(self):
+        with mock.patch.dict('os.environ', {'HOME': '/Users/player'}):
+            self.assertEqual(
+                wine_executable('~/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine'),
+                '/Users/player/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine',
+            )
 
     def test_running_other_crossover_app_is_refused_before_launch(self):
         table = ' 123 /Applications/CrossOver Preview.app/Contents/SharedSupport/CrossOver/bin/winewrapper.exe --bottle Test C:\\game\\EliteDangerous64.exe'

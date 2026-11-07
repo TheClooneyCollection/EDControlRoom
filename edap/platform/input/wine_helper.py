@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import BinaryIO, Protocol
 import json
 import os
+import posixpath
 import re
 import secrets
 import socket
@@ -74,8 +75,13 @@ def load_or_create_token(path: Path) -> str:
     return token
 
 
+def wine_executable(wine_path: str) -> str:
+    # wine_path is a macOS CrossOver path, so keep POSIX semantics on any host.
+    return str(PurePosixPath(posixpath.expanduser(wine_path)))
+
+
 def check_crossover_match(wine_path: str, bottle: str, process_table: str) -> None:
-    configured = str(Path(wine_path).expanduser()).split('.app/', 1)[0] + '.app'
+    configured = wine_executable(wine_path).split('.app/', 1)[0] + '.app'
     for line in process_table.splitlines():
         if 'winewrapper.exe' not in line.lower():
             continue
@@ -194,7 +200,7 @@ class WineHelperClient:
                 return self.target
             check_crossover_match(self.config.wine_path, self.config.bottle, self._process_table())
             self._process = self._popen([
-                str(Path(self.config.wine_path).expanduser()), '--bottle', self.config.bottle,
+                wine_executable(self.config.wine_path), '--bottle', self.config.bottle,
                 self.config.helper_path, '--port', str(self.config.port), '--token', self._token,
                 '--log', r'C:\edap\helper.log', '--max-hold-s', str(self.config.max_hold_s),
             ])
