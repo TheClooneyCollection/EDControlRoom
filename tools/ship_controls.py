@@ -5,7 +5,12 @@ import json
 import math
 import sys
 from dataclasses import dataclass, replace
+from pathlib import Path
 from time import sleep
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from edap.config import ConfigError, DEFAULT_CONFIG_PATH
 from edap.runtime import build_runtime_context, load_config_with_fallback

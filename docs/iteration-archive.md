@@ -7600,4 +7600,4 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
   - whether `wine --bottle Test` runs the console helper headless;
   - the stuck-key, watchdog and kill paths;
   - the real `ps` shape for CrossOver mismatch detection.
-- Existing docs run `uv run python3 tools/ship_controls.py` directly, which fails with `ModuleNotFoundError: edap`. `python3 -m tools.ship_controls` works. Affected: `docs/user/troubleshooting.md`, `docs/operators/manual-journal-routine-testing.md`.
+- Fixed in a follow-up: `tools/ship_controls.py` now adds the repo root to `sys.path` like the other tools, so both `uv run python3 tools/ship_controls.py` and `-m tools.ship_controls` work.
