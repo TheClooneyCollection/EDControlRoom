@@ -15,6 +15,10 @@
 #define TEXT_MAX 512
 #define FOCUS_ATTEMPTS 3
 #define FOCUS_RETRY_MS 30
+#define IDLE_WAIT_MS 1000
+#define WATCHDOG_RETRY_MS 20
+#define BUSY_WAKES_PER_S 1000
+#define BUSY_BACKOFF_MS 10
 static CRITICAL_SECTION input_lock;
 static ULONGLONG held[2][128];
 static volatile LONG stopping;
@@ -55,6 +59,20 @@ static int release_keys(char *list, size_t cap, int expired_only) {
     return ok;
 }
 static void cleanup_input(void) { release_keys(NULL, 0, 0); }
+/* Milliseconds until the nearest held key reaches max_hold_ms, capped at IDLE_WAIT_MS. */
+static DWORD next_wait_ms(void) {
+    ULONGLONG now=GetTickCount64(), wait=IDLE_WAIT_MS;
+    EnterCriticalSection(&input_lock);
+    for (int e=0;e<2;e++) for (int s=1;s<128;s++) {
+        if (!held[e][s]) continue;
+        ULONGLONG due=held[e][s]+max_hold_ms;
+        ULONGLONG left=due>now ? due-now : 0;
+        if (left<wait) wait=left;
+    }
+    LeaveCriticalSection(&input_lock);
+    /* Expired keys were just released; one still due is a failed release, retried at the old tick. */
+    return (DWORD)(wait ? wait : WATCHDOG_RETRY_MS);
+}
 static BOOL WINAPI console_stop(DWORD event) {
     (void)event;
     InterlockedExchange(&stopping, 1);
@@ -298,43 +316,64 @@ int main(int argc, char **argv) {
     if (!window) return 1;
     WSADATA ws; if (WSAStartup(MAKEWORD(2,2),&ws)) return 1;
     SOCKET server=socket(AF_INET,SOCK_STREAM,IPPROTO_TCP), client=INVALID_SOCKET;
+    HANDLE events[2]={WSACreateEvent(),WSACreateEvent()};
     if (server==INVALID_SOCKET) goto done;
     BOOL exclusive=TRUE;
     if (setsockopt(server,SOL_SOCKET,SO_EXCLUSIVEADDRUSE,(const char *)&exclusive,sizeof(exclusive))) goto done;
     struct sockaddr_in addr={0}; addr.sin_family=AF_INET; addr.sin_port=htons((u_short)port); addr.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
     if (bind(server,(struct sockaddr *)&addr,sizeof(addr)) || listen(server,1)) goto done;
-    u_long nonblock=1; if (ioctlsocket(server,FIONBIO,&nonblock)) goto done;
+    /* Event-driven wait: sockets signal events, the window queue wakes the wait, and the
+     * timeout is the nearest watchdog deadline, so an idle helper wakes about once a second. */
+    if (events[0]==WSA_INVALID_EVENT || events[1]==WSA_INVALID_EVENT) goto done;
+    if (WSAEventSelect(server,events[0],FD_ACCEPT)) goto done; /* Also makes it nonblocking. */
     char line[LINE_MAX_BYTES], out[LINE_MAX_BYTES]; size_t used=0; int authenticated=0, discard=0;
+    ULONGLONG window_start=GetTickCount64(); unsigned wakes=0; int busy_logged=0;
     log_event("listening"); result=0;
     while (!InterlockedCompareExchange(&stopping,0,0)) {
         MSG msg; while (PeekMessage(&msg,NULL,0,0,PM_REMOVE)) { TranslateMessage(&msg); DispatchMessage(&msg); }
         if (InterlockedCompareExchange(&stopping,0,0)) break;
         release_keys(NULL,0,1);
         if (target && !target_alive()) cleanup_input();
-        fd_set reads; FD_ZERO(&reads); FD_SET(server,&reads); if (client!=INVALID_SOCKET) FD_SET(client,&reads);
-        struct timeval wait={0,20000};
-        if (select(0,&reads,NULL,NULL,&wait)==SOCKET_ERROR) { result=1; break; }
-        if (FD_ISSET(server,&reads)) {
+        DWORD wait=next_wait_ms(), count=client!=INVALID_SOCKET ? 2 : 1;
+        DWORD woke=MsgWaitForMultipleObjects(count,events,FALSE,wait,QS_ALLINPUT);
+        if (woke==WAIT_FAILED) { result=1; break; }
+        /* Should a wake source ever stay signalled, cap the loop instead of burning a core. */
+        ULONGLONG now=GetTickCount64();
+        if (now-window_start>=1000) { window_start=now; wakes=0; }
+        if (++wakes>BUSY_WAKES_PER_S) {
+            if (!busy_logged) {
+                char note[96]; snprintf(note,sizeof(note),"busy_wakes woke=%lu wait=%lu",(unsigned long)woke,(unsigned long)wait);
+                log_event(note); busy_logged=1;
+            }
+            Sleep(BUSY_BACKOFF_MS);
+        }
+        WSANETWORKEVENTS ne;
+        if (!WSAEnumNetworkEvents(server,events[0],&ne) && (ne.lNetworkEvents & FD_ACCEPT)) {
             SOCKET next=accept(server,NULL,NULL);
             if (next!=INVALID_SOCKET) {
-                if (client!=INVALID_SOCKET || ioctlsocket(next,FIONBIO,&nonblock)) closesocket(next);
+                if (client!=INVALID_SOCKET || WSAEventSelect(next,events[1],FD_READ|FD_CLOSE)) closesocket(next);
                 else { client=next; authenticated=0; used=0; discard=0; }
             }
         }
-        if (client==INVALID_SOCKET || !FD_ISSET(client,&reads)) continue;
-        char chunk[1024]; int n=recv(client,chunk,sizeof(chunk),0), close_client=0;
-        if (n<=0) close_client=1;
-        for (int i=0;i<n && !close_client;i++) {
-            if (chunk[i]=='\n') {
-                int quit=0;
-                if (discard) error_reply(out,"bad_request");
-                else { line[used]=0; quit=dispatch(line,&authenticated,out); }
-                used=0; discard=0;
-                if (!send_reply(client,out)) close_client=1;
-                if (quit) { InterlockedExchange(&stopping,1); close_client=1; }
-            } else if (!discard) {
-                if (!chunk[i] || used>=sizeof(line)-1) { discard=1; used=0; }
-                else line[used++]=chunk[i];
+        if (client==INVALID_SOCKET) continue;
+        if (WSAEnumNetworkEvents(client,events[1],&ne) || !(ne.lNetworkEvents & (FD_READ|FD_CLOSE))) continue;
+        int close_client=0;
+        while (!close_client) {
+            char chunk[1024]; int n=recv(client,chunk,sizeof(chunk),0);
+            if (n<0 && WSAGetLastError()==WSAEWOULDBLOCK) break;
+            if (n<=0) { close_client=1; break; }
+            for (int i=0;i<n && !close_client;i++) {
+                if (chunk[i]=='\n') {
+                    int quit=0;
+                    if (discard) error_reply(out,"bad_request");
+                    else { line[used]=0; quit=dispatch(line,&authenticated,out); }
+                    used=0; discard=0;
+                    if (!send_reply(client,out)) close_client=1;
+                    if (quit) { InterlockedExchange(&stopping,1); close_client=1; }
+                } else if (!discard) {
+                    if (!chunk[i] || used>=sizeof(line)-1) { discard=1; used=0; }
+                    else line[used++]=chunk[i];
+                }
             }
         }
         if (close_client) { cleanup_input(); closesocket(client); client=INVALID_SOCKET; log_event("disconnected"); }
@@ -343,6 +382,7 @@ done:
     cleanup_input();
     if (client!=INVALID_SOCKET) closesocket(client);
     if (server!=INVALID_SOCKET) closesocket(server);
+    for (int i=0;i<2;i++) if (events[i]!=WSA_INVALID_EVENT) WSACloseEvent(events[i]);
     WSACleanup(); DestroyWindow(window);
     if (log_file) fclose(log_file);
     return result;
