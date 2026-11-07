@@ -10,11 +10,11 @@
 - Journal tailing, bindings lookup, runtime construction, and shared platform seams are in place across supported targets.
 ## Caveats
 - Linux remains unvalidated.
-- CrossOver/Elite still needs foreground HID event posting in live testing; pid-targeted `CGEventPostToPid` and flash-focus both failed as background-control paths.
-- Windows background targeting currently uses `PostMessageW` against a resolved top-level window, so native support exists in code but still needs live validation against Elite's real input path.
+- CrossOver/Elite background input works from a Wine-side injector (2026-11-07, AutoHotkey v2 in the Test bottle, macOS front app ghostty): `WinActivate` then `SendEvent` or `SendInput` reached Elite (journal `Music` GalaxyMap/Starport) with no macOS focus theft. `ControlSend` (window messages) had no effect, and pid-targeted `CGEventPostToPid` and flash-focus failed earlier. The production backend does not exist yet, so live control still needs the macOS foreground. Use the journal `Music` event to verify, since `Status.json` `GuiFocus` lagged.
+- Windows background targeting currently uses `PostMessageW` against a resolved top-level window. The CrossOver `ControlSend` result suggests Elite ignores window messages, so this path is likely ineffective until it is validated live.
 - The legacy CV-driven align loop is still not ported into the active runtime.
 ## Next
 - Live-tune the default timing distribution against real CrossOver sessions now that input delay/hold/typing jitter is centralized and operator-configurable.
-- Investigate an alternate macOS/CrossOver background-input route before relying on pid-targeted Quartz posting.
+- Design a production `wine-helper` input backend: a resident helper in the bottle, IPC from the Python macOS backend, and Win32 foreground re-asserted before each burst. A proposal is pending; the AHK test files stay in `drive_c/ahk/` for now.
 - Live-validate the new targeted-input path on both CrossOver/macOS and native Windows, then decide whether Windows needs a stronger background-input fallback than hwnd message posting.
 - Continue the portability follow-up work: CV capture/performance measurement, journal latency measurement, diagnostics/dashboard work, and broader Windows validation.
