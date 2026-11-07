@@ -503,7 +503,7 @@ def haul_history_summary_lines(summary: HaulSummary, label: str) -> list[str]:
     mean = fmt_cr(round(completed.mean_profit)) if completed.mean_profit is not None else "n/a"
     best = fmt_cr(completed.best_profit) if completed.best_profit is not None else "n/a"
     lines = [
-        f"[bold]Haul stats — {escape(label)}[/]",
+        f"[bold]Haul stats: {escape(label)}[/]",
         f"Completed: {completed.count} runs | profit {fmt_cr(completed.profit)} | "
         f"revenue {fmt_cr(completed.revenue)} | cost {fmt_cr(completed.cost)}",
         f"Completed time: {fmt_duration(completed.duration_s)} | {rate} | mean {mean} | best {best}",
