@@ -7,6 +7,10 @@ description: Set up, verify, troubleshoot or turn off EDControlRoom background i
 
 You are setting up the wine helper for a player. [docs/user/background-input.md](../../../docs/user/background-input.md) is the source of truth for commands, config keys, error messages and fixes: read it before step 1 and follow it. This skill adds the order, the checks, and where to stop for the player's consent.
 
+Background input is a **beta** feature. Before step 1, tell the player two limits from the doc's "How it works and its limits" section:
+- keep the mouse away from the game window while a routine runs, especially during station menu steps (market buy/sell, docking and station menus), because Elite still gets Mac mouse moves in the background and the menu hover desyncs the routine;
+- switching Mac apps can delay a key by about 1-4s, and occasionally stops a routine with `focus_failed` (no keys sent).
+
 Work from the EDControlRoom checkout root. Every step ends on its **done** condition. Report each one to the player before moving on.
 
 ## Consent gates
@@ -55,9 +59,10 @@ Everything else (reading `ps`, reading files, building into `build/`, editing th
 7. **Hand over.** Tell the player:
    - Control Room now starts the helper automatically (`uv run python3 control_room.py lan` as usual);
    - `set_input foreground` switches back for a session, and the doc's "Switching back to foreground" section turns it off permanently;
-   - the doc's path, for later problems.
+   - the doc's path, for later problems;
+   - the beta mouse limit again: hands off the mouse over the game window during routines.
 
-   **Done:** the player has those three points.
+   **Done:** the player has those four points.
 
 ## Turning it off
 

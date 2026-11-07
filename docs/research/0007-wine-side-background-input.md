@@ -42,7 +42,25 @@ Conclusions:
 - Activating the window inside Wine, followed by synthesized raw input from inside the bottle, is enough, and it does not steal macOS focus.
 - `Status.json` `GuiFocus` is not a reliable check: it never showed 6 while the map was open and only rewrote after the close. Use the journal `Music` event to verify.
 
-## Decisions
+### 2026-11-07 mouse experiment
+
+Problem: menu routines desync because the Mac mouse moving over the Elite window moves Elite's menu hover, even with CrossOver in the macOS background (the helper keeps Elite the Win32 foreground). Moving Elite to another macOS Space does not help.
+
+Test: a standalone exe in the bottle installed a `WH_MOUSE_LL` hook, counted raw input (`RIDEV_INPUTSINK`) and cursor moves, and kept Elite the Win32 foreground. CrossOver was in the macOS background in both rounds.
+
+| Round | Result |
+|---|---|
+| Observe only | A fresh process took the foreground (explorer -> Elite at 403ms), and Elite kept it for all 20s. `ll_moves=943`, `raw_input=943`, `cursor_moves=490`. The menu hover followed the mouse. |
+| Hook swallows everything | The hook swallowed `ll_moves=901`, but `raw_input=901` was still delivered and `cursor_moves=171`. The menu hover still moved. |
+
+Conclusions:
+- Under Wine a `WH_MOUSE_LL` hook cannot block Elite's mouse: wineserver delivers raw input independently of the LL hook, and the Win32 cursor follows the real Mac cursor. So a helper mouse lock, and a Python lock tied to the macOS front app, are dropped.
+- Also ruled out: another macOS Space, minimizing Elite (not possible), parking the window out of the way, and injecting a fake mouse (`SetCursorPos` would warp the player's real cursor).
+- Shipped as beta with a documented "keep the mouse off the game window" limit.
+- Not done, possible next steps:
+  - Detect Mac mouse movement during menu steps: wait for the mouse to be idle before a menu step, and on movement, back out to a known state and redo the step.
+  - Pre-warmed standby focus child: an experiment exe and runbook exist, but it was not run. It would show whether a child started earlier keeps foreground rights, which would take the about 0.7-4s Wine startup off the focus path.
+
 
 1. **`set_input wine_helper`** is the operator command. It selects a third macOS input target mode beside `foreground` and `pid`. Dispatch, bindings lookup and timing stay unchanged.
 2. **Managed auto-launch.** When the `wine_helper` input mode is configured, Control Room starts the helper in the bottle at startup and stops it on quit.

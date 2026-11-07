@@ -2,7 +2,7 @@
 
 Run routines while another Mac app is in front. By default EDControlRoom types into whichever macOS app is frontmost, so Elite has to stay in front for the whole routine. The **wine helper** is a small Windows program that runs inside your CrossOver bottle and sends keys to Elite from there, so you can keep using other Mac apps.
 
-> Status: verified live on 2026-11-07 (CrossOver Preview, Elite docked). `foreground` stays the default until you switch.
+> **Beta.** It works and runs real routines, but it is not polished yet. Verified live on 2026-11-07 (CrossOver Preview). `foreground` stays the default until you switch. Read the limits below before relying on it, especially the mouse one.
 
 Want your coding agent (Claude Code, Codex, ...) to set this up for you? Ask it to "set up background input". The repo ships the `edcr-background-input` skill, which walks it through the steps below.
 
@@ -28,6 +28,8 @@ How it works:
 - **Never falls back.** If the helper is unreachable, input stops with an error instead of typing into whatever Mac app is in front.
 
 Limits:
+- **Keep the mouse away from the game window while a routine runs.** Elite still receives your Mac mouse movement while CrossOver is in the background. Moving the pointer over or around the game window moves the menu hover, which desyncs the routine. This matters most during station menu steps: buying and selling in the market, and docking or station menus. Nothing inside Wine can block it, and another macOS Space doesn't help.
+- **Switching Mac apps can delay a key by about 1-4s.** Each app switch takes the focus away from Elite inside Wine, and the helper has to take it back first. Occasionally that fails: the routine stops with `wine helper couldn't focus Elite inside the CrossOver bottle (focus_failed); no keys were sent.` Nothing was typed; restart the routine.
 - **macOS + CrossOver only.** There is no native Windows or Linux version; native Windows needs real focus anyway.
 - **Alt is not supported.** Bindings that use Alt are refused, because a synthesized Alt would trigger Windows menu behaviour.
 - **Typing in the game window mixes input.** If you bring CrossOver to the front and type, your keys mix with the routine's, just as in foreground mode.
