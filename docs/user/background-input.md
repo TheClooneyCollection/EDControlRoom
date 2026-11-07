@@ -97,7 +97,7 @@ Other keys, with their defaults (see `defaults/input.toml`):
 | `port` | `47811` | Loopback port for the helper |
 | `launch` | `"managed"` | `managed`: Control Room starts and stops the helper. `manual`: you start it yourself and Control Room only connects. |
 | `startup_timeout_s` | `10.0` | How long to wait for a freshly launched helper |
-| `request_timeout_s` | `1.0` | Timeout for each request to the helper |
+| `request_timeout_s` | `3.0` | Timeout for each request to the helper. Keep it above 2s: a `focus` can take up to about 1.7s when it falls back to a child process |
 | `max_hold_s` | `30.0` | Safety watchdog: the helper releases any key held longer than this. It must be greater than `controls.market.buy_max_hold_seconds`. |
 | `token_file` | `".wine_input_helper.token"` | Private token, created on first use (owner-only, git-ignored) |
 

@@ -130,6 +130,25 @@ class HelperProtocolTests(unittest.TestCase):
         self.assertEqual(waits, [0.1])
         self.assertFalse(server.closed)
 
+    def test_slow_focus_reconnects_and_retries_instead_of_aborting_the_burst(self):
+        # The helper's child-process focus fallback can outlast request_timeout_s.
+        first, second = Server(), Server()
+        waits = []
+        client = connected(first, connect=Connections(first, second), sleeper=waits.append)
+        first.replies = [TimeoutError('timed out')]
+        client.tap_key('m', None, 0)
+        self.assertTrue(first.closed)
+        self.assertEqual([r['op'] for r in second.requests], ['hello', 'target', 'release_all', 'focus', 'key', 'key'])
+        self.assertEqual(waits, [0.1])
+
+    def test_slow_key_ack_still_aborts_the_burst(self):
+        first, second = Server(), Server()
+        client = connected(first, connect=Connections(first, second))
+        first.replies = [None, TimeoutError('timed out')]
+        with self.assertRaisesRegex(BurstAborted, 'not replayed'):
+            client.tap_key('m', None, 0)
+        self.assertFalse(any(r['op'] == 'key' for r in second.requests))
+
     def test_persistent_focus_failure_sends_no_keys_and_keeps_the_connection(self):
         server = Server()
         waits = []

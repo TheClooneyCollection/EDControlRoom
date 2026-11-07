@@ -15,7 +15,7 @@
 #define TEXT_MAX 512
 #define FOCUS_ATTEMPTS 3
 #define FOCUS_RETRY_MS 30
-#define CHILD_FOCUS_TIMEOUT_MS 700
+#define CHILD_FOCUS_TIMEOUT_MS 1500
 #define CHILD_FOCUS_NOT_RUN 100
 #define CHILD_FOCUS_TIMED_OUT 101
 #define IDLE_WAIT_MS 1000
@@ -225,7 +225,8 @@ static int focus_target(const char **step) {
     if (focus_in_process(step)) return 1;
     DWORD err=GetLastError(), child=focus_in_child();
     *step="child_focus";
-    if (child==0 && GetForegroundWindow()==target) return 1;
+    /* A child killed at the deadline may still have focused Elite, so judge by the result. */
+    if (GetForegroundWindow()==target) return 1;
     char name[TEXT_MAX], line[TEXT_MAX+96]; DWORD pid;
     if (!process_for(GetForegroundWindow(),name,sizeof(name),&pid)) strcpy(name,"?");
     snprintf(line,sizeof(line),"focus_failed fg=%s err=%lu child=%lu",name,(unsigned long)err,(unsigned long)child);

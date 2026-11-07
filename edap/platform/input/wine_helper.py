@@ -222,11 +222,10 @@ class WineHelperClient:
         try:
             return self._exchange(op, **fields)
         except OSError as exc:
-            self._disconnect()
-            try:
-                self._open()  # Exactly once; handshake releases all keys before reporting failure.
-            except (OSError, RuntimeError) as recovery:
-                raise BurstAborted(f'{self._unreachable()} Interrupted input burst aborted; reconnect failed: {recovery}') from exc
+            self._reconnect(exc)
+            if op == 'focus' and isinstance(exc, TimeoutError):
+                # A slow focus sent no keys; the reconnect drops its late reply, so retry it as a refusal.
+                raise FocusFailed(FOCUS_FAILED_MESSAGE) from exc
             raise BurstAborted('wine helper transport failed; reconnected and released all keys; interrupted input burst aborted (not replayed).') from exc
         except FocusFailed:
             raise  # A refused focus or key-down sent nothing, so the connection stays usable.
@@ -234,6 +233,13 @@ class WineHelperClient:
             # Invalid replies can leave the result of a key-down unknown. Disconnect releases it.
             self._disconnect()
             raise
+
+    def _reconnect(self, exc: OSError) -> None:
+        self._disconnect()
+        try:
+            self._open()  # Exactly once; handshake releases all keys before reporting failure.
+        except (OSError, RuntimeError) as recovery:
+            raise BurstAborted(f'{self._unreachable()} Interrupted input burst aborted; reconnect failed: {recovery}') from exc
 
     @staticmethod
     def _keys(key: str, modifier: str | None) -> list[tuple[int, bool]]:
