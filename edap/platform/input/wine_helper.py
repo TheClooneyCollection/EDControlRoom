@@ -360,5 +360,10 @@ def build_wine_helper(config: WineHelperConfig) -> WineHelperClient:
     def process_table() -> str:
         return subprocess.run(['ps', '-axo', 'pid=,command='], check=True, capture_output=True, text=True).stdout
 
+    def launch(argv: list[str]) -> HelperProcess:
+        # A terminal Ctrl-C must not reach the helper: under CrossOver a SIGINT leaves it spinning
+        # at 100% CPU and unable to exit, so it runs in its own session with no terminal input.
+        return subprocess.Popen(argv, stdin=subprocess.DEVNULL, start_new_session=True)
+
     return WineHelperClient(config, connect=connect, sleeper=sleep, clock=monotonic,
-                            popen=subprocess.Popen, process_table=process_table, read_token=load_or_create_token)
+                            popen=launch, process_table=process_table, read_token=load_or_create_token)

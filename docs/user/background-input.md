@@ -162,6 +162,10 @@ In Control Room this shows as `Input to Elite failed: ...`.
 **`wine helper transport failed; reconnected and released all keys; interrupted input burst aborted (not replayed).`**
 The connection dropped mid-burst. The helper reconnected and released every key, but the interrupted action was not repeated. Re-run the step.
 
+**`edap_input_helper.exe` uses about 100% CPU after Control Room quits.**
+- **Cause:** a helper started by an older Control Room shared its terminal, so pressing Ctrl-C to quit sent it a SIGINT too. Under CrossOver that leaves it spinning and unable to exit, even on `bye`. Control Room now starts the helper in its own session.
+- **Fix:** `pkill -KILL -f edap_input_helper.exe`, then tap any key that may be held (for example LeftCtrl) once in Elite.
+
 **Stuck keys.** The helper releases all held keys when Control Room disconnects or quits, when Elite closes, when the helper exits normally, and when any key is held past `max_hold_s`. If the helper is force-killed, it cannot clean up. Tap the stuck key once in Elite, or run `set_input wine_helper`, which releases everything when it connects.
 
 **Check the helper log.** The helper writes `C:\edap\helper.log` inside the bottle (`<bottle>/drive_c/edap/helper.log`). It records connections and which focus step worked.

@@ -6,12 +6,13 @@ from pathlib import Path
 import tempfile
 import unittest
 import subprocess
+from unittest import mock
 
 from edap.binding_lookup import KEY_ALIASES, normalize_internal_key_name
 from edap.config import ConfigError, InputConfig, WineHelperConfig, load_config, validate_wine_helper
 from edap.platform.input.macos import MacOSInputController
 from edap.platform.input.scancodes import resolve_scancode
-from edap.platform.input.wine_helper import BurstAborted, FocusFailed, HelperError, check_crossover_match, load_or_create_token
+from edap.platform.input.wine_helper import BurstAborted, FocusFailed, HelperError, build_wine_helper, check_crossover_match, load_or_create_token
 from edap.timing import no_jitter_timing_sampler
 from tests.fixtures.wine_helper import helper_client, unexpected
 
@@ -326,6 +327,12 @@ class HelperLifecycleTests(unittest.TestCase):
         client.close()
         self.assertEqual(server.requests[-2:], [{'op': 'release_all'}, {'op': 'bye'}])
         self.assertEqual(process.actions, ['wait', 'terminate', 'wait'])
+
+    def test_managed_helper_launches_outside_the_terminal_so_ctrl_c_cannot_reach_it(self):
+        client = build_wine_helper(replace(CONFIG, launch='managed'))
+        with mock.patch('edap.platform.input.wine_helper.subprocess.Popen') as popen:
+            client._popen(['wine'])
+        popen.assert_called_once_with(['wine'], stdin=subprocess.DEVNULL, start_new_session=True)
 
     def test_managed_restart_reuses_authenticated_helper_without_process_lookup_or_launch(self):
         server = Server()
