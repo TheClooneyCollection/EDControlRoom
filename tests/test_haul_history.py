@@ -138,7 +138,7 @@ class HaulStatsCliTests(unittest.TestCase):
             path.write_text(json.dumps(run_row()) + '\n{"torn":', encoding="utf-8")
             output = io.StringIO()
             with redirect_stdout(output):
-                code = main(["since", "2026-11-01", "--json", "--file", str(path)], now=NOW)
+                code = main(["since", "2026-11-01", "--json", "--file", str(path), "--journal-dir", directory], now=NOW)
         payload = json.loads(output.getvalue())
         self.assertEqual(code, 0)
         self.assertEqual(payload["completed"]["profit"], 200)
@@ -148,7 +148,7 @@ class HaulStatsCliTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             output, error = io.StringIO(), io.StringIO()
             with redirect_stdout(output):
-                code = main(["--json", "--file", str(Path(directory) / "absent")], now=NOW)
+                code = main(["--json", "--file", str(Path(directory) / "absent"), "--journal-dir", directory], now=NOW)
             self.assertEqual(code, 0)
             self.assertEqual(json.loads(output.getvalue())["all_in"]["count"], 0)
             with redirect_stderr(error):
@@ -162,11 +162,11 @@ class HaulStatsCliTests(unittest.TestCase):
             path.write_text(json.dumps(run_row()) + "\n", encoding="utf-8")
             output, error = io.StringIO(), io.StringIO()
             with redirect_stdout(output):
-                code = main(["all", "--file", str(path)], now=NOW)
+                code = main(["all", "--file", str(path), "--journal-dir", directory], now=NOW)
             self.assertEqual(code, 0)
             self.assertIn("Completed: 1 runs", output.getvalue())
             self.assertIn("profit 200 CR", output.getvalue())
             with redirect_stderr(error):
-                code = main(["--file", directory], now=NOW)
+                code = main(["--file", directory, "--journal-dir", directory], now=NOW)
             self.assertEqual(code, 2)
             self.assertTrue(error.getvalue())

@@ -112,7 +112,7 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
         name="stats",
         usage="stats [today | 48h | week | month | all | since YYYY-MM-DD]",
         summary="Summarize persisted haul runs in a local-time window (default today).",
-        detail="Shows completed and aborted runs separately, all-in money, route and commodity breakdowns. Profit/hour and expected-vs-actual use completed runs only. Clear does not remove this history.",
+        detail="Shows completed and aborted runs separately, all-in money, route and commodity breakdowns. Profit/hour and expected-vs-actual use completed runs only. Also shows all trading from the journal, including manual trades, with observed balance changes and coverage. Clear does not remove this history.",
     ),
     CommandHelp(
         name="new_session",

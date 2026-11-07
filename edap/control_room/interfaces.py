@@ -13,6 +13,7 @@ from edap.tts import AnnouncementId
 
 
 class CommandHost(Protocol):
+    _journal_dir: Path | None
     _ctx: Any
     _config: AppConfig
     _config_path: Path

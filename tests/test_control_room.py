@@ -4517,6 +4517,22 @@ class HaulStatsCommandTests(unittest.TestCase):
         self.app._dispatch_command("stats all")
         self.assertIn("no haul runs recorded yet", "\n".join(self.app.logged))
 
+    def test_stats_includes_journal_trades_when_no_runs_were_recorded(self):
+        from datetime import datetime, timezone
+        from edap.control_room.commands import cmd_stats
+        path = Path(self.directory.name) / "Journal.2026-11-01T100000.01.log"
+        path.write_text(json.dumps({"event": "MarketSell", "timestamp": "2026-11-01T10:00:00Z",
+                                   "Type": "gold", "Count": 2, "TotalSale": 50, "AvgPricePaid": 10}) + "\n")
+        cmd_stats(self.app, "all", now=datetime(2026, 11, 2, tzinfo=timezone.utc))
+        output = "\n".join(self.app.logged)
+        self.assertIn("no haul runs recorded yet", output)
+        self.assertIn("All trading (journal)", output)
+        self.assertIn("sell margin 30 CR", output)
+        self.app._journal_dir = None
+        self.app.logged.clear()
+        cmd_stats(self.app, "all", now=datetime(2026, 11, 2, tzinfo=timezone.utc))
+        self.assertIn("[dim]All trading (journal): unavailable", "\n".join(self.app.logged))
+
     def test_usage_and_help_are_available(self):
         self.app._dispatch_command("stats yesterday")
         self.assertTrue(any("[yellow]Usage: stats" in line for line in self.app.logged))

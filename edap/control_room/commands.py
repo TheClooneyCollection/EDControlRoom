@@ -12,7 +12,8 @@ from edap.control_room.help import CONTROL_ROOM_COMMAND_INDEX, CONTROL_ROOM_COMM
 from edap.control_room.history import now_iso
 from edap.control_room.interfaces import CommandHost
 from edap.control_room_state import CommandHistoryEntry
-from edap.control_room.rendering import haul_history_summary_lines
+from edap.control_room.rendering import haul_history_summary_lines, journal_ledger_lines
+from edap.journal_trade_ledger import journal_trade_ledger
 from edap.haul_history import load_runs, parse_window, summarize
 from edap.platform.local_time import SystemLocalTimezone
 from edap.platform.input.base import DEFAULT_AUTO_TARGET_PROCESS_NAME
@@ -355,6 +356,9 @@ def cmd_stats(app: CommandHost, window: str, *, now: datetime) -> None:
         app._log("[dim]no haul runs recorded yet[/]")
         if skipped:
             app._log(f"[yellow]Skipped {skipped} invalid haul history lines.[/]")
-        return
-    for line in haul_history_summary_lines(summary, label):
+    else:
+        for line in haul_history_summary_lines(summary, label):
+            app._log(line)
+    ledger = journal_trade_ledger(app._journal_dir, since, until)
+    for line in journal_ledger_lines(ledger):
         app._log(line)

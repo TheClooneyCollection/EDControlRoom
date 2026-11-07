@@ -18,6 +18,7 @@ from edap.control_room.view_models import (
     status_panel_view_model,
 )
 from edap.haul_history import HaulSummary
+from edap.journal_trade_ledger import JournalTradeLedger
 from edap.routines.market import _is_sell_market_item
 
 
@@ -529,4 +530,31 @@ def haul_history_summary_lines(summary: HaulSummary, label: str) -> list[str]:
                      f"cost {fmt_cr(trade.cost)} | revenue {fmt_cr(trade.revenue)}")
     if summary.skipped_lines:
         lines.append(f"[yellow]Skipped {summary.skipped_lines} invalid haul history lines.[/]")
+    return lines
+
+
+def journal_ledger_lines(ledger: JournalTradeLedger) -> list[str]:
+    if not ledger.available:
+        return [f"[dim]All trading (journal): unavailable ({escape(ledger.reason or 'no journal directory')}).[/]"]
+    margin = fmt_cr(ledger.sell_margin) if ledger.sell_margin is not None else "unknown purchase basis"
+    change = fmt_cr(ledger.net_balance_change) if ledger.net_balance_change is not None else "unknown"
+    lines = [
+        "[bold]All trading (journal)[/]",
+        f"{ledger.buys} buys / {ledger.sells} sells | cost {fmt_cr(ledger.cost)} | "
+        f"revenue {fmt_cr(ledger.revenue)} | trade profit {fmt_cr(ledger.profit)} | sell margin {margin}",
+        f"Net balance change (observed snapshots): {change}",
+    ]
+    top = sorted(ledger.commodities, key=lambda item: (
+        item.sell_margin is None, -(item.sell_margin or 0), item.commodity
+    ))[:5]
+    if top:
+        lines.append("Top commodities by sell margin: " + "; ".join(
+            f"{escape(item.commodity)} {fmt_cr(item.sell_margin) if item.sell_margin is not None else 'unknown'}"
+            for item in top
+        ))
+    coverage = ledger.coverage
+    warning = " | window starts before oldest journal" if coverage.window_start_before_oldest_journal else ""
+    lines.append(f"[dim]Coverage: {coverage.files} files | {coverage.first_event_at or 'unknown'} to "
+                 f"{coverage.last_event_at or 'unknown'} | {coverage.skipped_lines} skipped lines | "
+                 f"{coverage.unreadable_files} unreadable files{warning}[/]")
     return lines
