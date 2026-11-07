@@ -3,14 +3,20 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from typing import Callable
 
+from edap.binding_conflicts import read_galaxy_map_binding_conflicts
 from edap.binding_lookup import load_binding_lookup
 from edap.bindings import AUTOPILOT_OPTIONAL_BINDINGS, AUTOPILOT_REQUIRED_BINDINGS, REQUIRED_BINDINGS
-from edap.config import ConfigError, DEFAULT_CONFIG_PATH
-from edap.runtime import build_runtime_context, load_config_with_fallback
+from edap.config import AppConfig, ConfigError, DEFAULT_CONFIG_PATH
+from edap.runtime import RuntimeContext, build_runtime_context, load_config_with_fallback
 
 
-def main() -> int:
+def main(
+    argv: list[str] | None = None,
+    *,
+    runtime_builder: Callable[[AppConfig], RuntimeContext] = build_runtime_context,
+) -> int:
     parser = argparse.ArgumentParser(description="Check whether required Elite bindings are available")
     parser.add_argument(
         "--config",
@@ -27,7 +33,7 @@ def main() -> int:
         action="store_true",
         help="Show supported and optional bindings in plain-text output",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     try:
         loaded = load_config_with_fallback(args.config)
@@ -42,7 +48,7 @@ def main() -> int:
         sys.stderr.write(f"Invalid config: {exc}\n")
         return 2
 
-    runtime = build_runtime_context(loaded.config)
+    runtime = runtime_builder(loaded.config)
     bindings_file = runtime.bindings.effective_path
     bindings_source = runtime.bindings.cli_source_status()
     if bindings_file is None:
@@ -88,6 +94,7 @@ def main() -> int:
     }
 
     payload = {
+        "warnings": read_galaxy_map_binding_conflicts(bindings_file, lookup),
         "config_path": loaded.config_path,
         "used_example_config_fallback": loaded.used_example_config_fallback,
         "bindings_file": str(bindings_file),
@@ -131,6 +138,9 @@ def _print_summary(payload: dict[str, object], *, verbose: bool) -> None:
             sys.stdout.write(f"- {action}: {reason}\n")
     else:
         sys.stdout.write("All required autopilot bindings are present.\n")
+
+    for warning in payload["warnings"]:
+        sys.stdout.write(f"Bindings warning: {warning}\n")
 
     if verbose:
         if optional_supported or optional_issues:

@@ -113,6 +113,7 @@ def read_bindings(bindings_file: Path, keys_to_obtain: list[str] | None = None) 
 
         if secondary is not None and secondary.attrib.get("Device", "").strip() == "Keyboard":
             key = normalize_binding_token(secondary.attrib.get("Key"))
+            modifier = None
             if len(secondary) > 0:
                 modifier = normalize_binding_token(secondary[0].attrib.get("Key"))
 

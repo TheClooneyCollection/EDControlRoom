@@ -148,6 +148,7 @@ from edap.control_room_state import (
     CommandHistoryEntry,
     ControlRoomState,
 )
+from edap.binding_conflicts import read_galaxy_map_binding_conflicts
 from edap.binding_names import format_binding_action_hint
 from edap.runtime import RuntimeContext, build_runtime_context, load_config_with_fallback
 from edap.ship_controls import DEFAULT_SHIP_CONTROL_ACTIONS, ShipControls
@@ -1016,6 +1017,10 @@ class ControlRoomApp(App[None]):
 
         if self._ctx.binding_lookup is None:
             return
+
+        if bindings_path:
+            for warning in read_galaxy_map_binding_conflicts(Path(bindings_path), self._ctx.binding_lookup):
+                self._log(f"[yellow]Bindings warning — {escape(warning)}[/]")
 
         issues = {
             action: result

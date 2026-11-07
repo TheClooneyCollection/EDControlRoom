@@ -24,6 +24,8 @@ Elite's galaxy map and menu navigation must have **arrow-key secondary bindings*
 
 Without these secondaries, `dest`, `home`, and the galaxy-map portion of `haul` will misnavigate the menus.
 
+Control Room startup and `uv run python3 -m tools.check_bindings` now warn when a resolved menu direction key (including its modifier) also controls a galaxy-map camera button. These warnings suggest an arrow-key binding; they do not block routines, change key selection, or turn an otherwise OK bindings check into a failure (`--json` includes them in `warnings`).
+
 ## 2. A Complete `.binds` File
 
 EDControlRoom needs to find your active bindings file so it can look up action keys. Auto-detection covers standard installs (macOS CrossOver, Windows Frontier launcher, Steam / Proton). If it does not find yours, set `paths.bindings_file` explicitly in a repo-root `config.toml`.

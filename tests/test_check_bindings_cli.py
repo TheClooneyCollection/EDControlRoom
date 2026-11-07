@@ -56,7 +56,7 @@ class CheckBindingsCliTests(unittest.TestCase):
             "sys.stderr", new_callable=io.StringIO
         ):
             with patch("sys.argv", ["tools/check_bindings.py", "--json"]):
-                exit_code = check_bindings.main()
+                exit_code = check_bindings.main(runtime_builder=check_bindings.build_runtime_context)
 
         self.assertEqual(exit_code, 1)
         payload = json.loads(stdout.getvalue())
@@ -111,7 +111,7 @@ class CheckBindingsCliTests(unittest.TestCase):
             "sys.stderr", new_callable=io.StringIO
         ):
             with patch("sys.argv", ["tools/check_bindings.py"]):
-                exit_code = check_bindings.main()
+                exit_code = check_bindings.main(runtime_builder=check_bindings.build_runtime_context)
 
         self.assertEqual(exit_code, 1)
         self.assertIn("Bindings check: MISSING (1/2 required)", stdout.getvalue())
@@ -146,7 +146,7 @@ class CheckBindingsCliTests(unittest.TestCase):
             "sys.stderr", new_callable=io.StringIO
         ) as stderr:
             with patch("sys.argv", ["tools/check_bindings.py"]):
-                exit_code = check_bindings.main()
+                exit_code = check_bindings.main(runtime_builder=check_bindings.build_runtime_context)
 
         self.assertEqual(exit_code, 2)
         self.assertIn("Could not resolve bindings file.", stderr.getvalue())
