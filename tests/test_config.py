@@ -86,6 +86,7 @@ class LoadConfigTests(unittest.TestCase):
             self.assertEqual(config.timing.hold.min_seconds, 0.02)
             self.assertEqual(config.timing.typing.max_factor, 1.75)
             self.assertEqual(config.control_room.state_file, Path(".control_room_state.json"))
+            self.assertEqual(config.control_room.haul_runs_file, Path(".control_room_haul_runs.jsonl"))
             self.assertEqual(config.control_room.history_limit, 20)
             self.assertEqual(config.control_room.activity_log_max_lines, 2000)
             self.assertEqual(config.control_room.command_delay_seconds, 5.0)
@@ -222,12 +223,14 @@ dest_usage = "Usage: dest <system or station name>"
 
 [control_room]
 home_system = "Achenar"
+haul_runs_file = 'custom-runs.jsonl'
 """.strip(),
             )
 
             config = load_config(config_path)
 
             self.assertEqual(config.control_room.home_system, "Achenar")
+            self.assertEqual(config.control_room.haul_runs_file, Path("custom-runs.jsonl"))
 
     def test_loads_timing_override(self) -> None:
         with TemporaryDirectory() as temp_dir:

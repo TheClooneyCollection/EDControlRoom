@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -20,6 +21,8 @@ class CommandHistoryEntry:
 
 @dataclass
 class ControlRoomState:
+    haul_current_run: dict[str, Any] | None = None
+    haul_pending_runs: list[dict[str, Any]] = field(default_factory=list)
     default_haul: dict[str, str] = field(default_factory=dict)
     history: list[CommandHistoryEntry] = field(default_factory=list)
     instant_mode: bool = False
@@ -133,6 +136,8 @@ def load_control_room_state(path: Path) -> ControlRoomState:
     running_trade_route = _trade_route_from_payload(raw.get("running_trade_route"))
 
     return ControlRoomState(
+        haul_current_run=raw.get("haul_current_run"),
+        haul_pending_runs=raw.get("haul_pending_runs", []),
         default_haul={str(key): str(value) for key, value in default_haul.items()},
         history=history,
         instant_mode=instant_mode,
@@ -158,6 +163,8 @@ def load_control_room_state(path: Path) -> ControlRoomState:
 def save_control_room_state(path: Path, state: ControlRoomState) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
+        "haul_current_run": state.haul_current_run,
+        "haul_pending_runs": state.haul_pending_runs,
         "default_haul": state.default_haul,
         "instant_mode": state.instant_mode,
         "session_profit": state.session_profit,
@@ -186,6 +193,8 @@ def save_control_room_state(path: Path, state: ControlRoomState) -> None:
     with NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
         json.dump(payload, handle, indent=2, sort_keys=True)
         handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
         temp_path = Path(handle.name)
 
     temp_path.replace(path)

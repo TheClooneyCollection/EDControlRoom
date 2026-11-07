@@ -724,6 +724,9 @@ class ControlRoomApp(App[None]):
         self._runtime_state.haul_paused = value
 
     def _set_haul_phase(self, phase: str | None, station_index: int | None) -> None:
+        if self._haul_stats.current_run is not None:
+            self._haul_stats.current_run["phase"] = phase
+            self._save_saved_state()
         self._runtime_state.haul_phase = phase
         self._runtime_state.haul_phase_station_index = station_index
         self._publish_protocol_data_refresh()
@@ -1472,6 +1475,12 @@ class ControlRoomApp(App[None]):
         _haul_tracking.handle_haul_event(self, ev, station_before=station_before)
 
     def _announce_tts(self, message_id: AnnouncementId, /, **values: object) -> None:
+        from edap.haul_history import WARNING_IDS
+
+        run = self._haul_stats.current_run
+        if run is not None and message_id.value in WARNING_IDS:
+            run["warnings"].append(message_id.value)
+            self._save_saved_state()
         render_announcement = getattr(self._tts, "render_announcement", None)
         rendered = (
             render_announcement(message_id, **values)

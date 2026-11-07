@@ -1,4 +1,5 @@
 [control_room]
+haul_runs_file = ".control_room_haul_runs.jsonl"
 state_file = ".control_room_state.json"
 history_limit = 20
 activity_log_max_lines = 2000

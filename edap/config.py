@@ -142,6 +142,7 @@ class RuntimeConfig:
 @dataclass(frozen=True)
 class ControlRoomConfig:
     state_file: Path
+    haul_runs_file: Path
     history_limit: int
     activity_log_max_lines: int
     command_delay_seconds: float
@@ -986,6 +987,9 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             typing=_timing_channel(timing_typing, default_timing_typing),
         ),
         control_room=ControlRoomConfig(
+            haul_runs_file=Path(
+                _string(control_room, "haul_runs_file", _string(default_control_room, "haul_runs_file", ""))
+            ).expanduser(),
             state_file=Path(
                 _string(control_room, "state_file", _string(default_control_room, "state_file", ""))
             ).expanduser(),

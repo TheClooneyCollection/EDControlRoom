@@ -114,6 +114,7 @@ def _make_config(journal_dir: Path, *, activity_log_max_lines: int = 2000) -> Ap
         timing=_make_timing_config(),
         control_room=ControlRoomConfig(
             state_file=journal_dir / ".control_room_state.json",
+            haul_runs_file=journal_dir / ".control_room_haul_runs.jsonl",
             history_limit=20,
             activity_log_max_lines=activity_log_max_lines,
             command_delay_seconds=0.0,
@@ -2145,6 +2146,7 @@ on_land = true
             timing=self.app._config.timing,
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
+                haul_runs_file=self.app._config.control_room.haul_runs_file,
                 history_limit=2,
                 activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=self.app._config.control_room.command_delay_seconds,
@@ -3355,6 +3357,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             timing=self.app._config.timing,
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
+                haul_runs_file=self.app._config.control_room.haul_runs_file,
                 history_limit=self.app._config.control_room.history_limit,
                 activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=self.app._config.control_room.command_delay_seconds,
@@ -3630,6 +3633,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             timing=self.app._config.timing,
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
+                haul_runs_file=self.app._config.control_room.haul_runs_file,
                 history_limit=self.app._config.control_room.history_limit,
                 activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
@@ -3666,6 +3670,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             timing=self.app._config.timing,
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
+                haul_runs_file=self.app._config.control_room.haul_runs_file,
                 history_limit=self.app._config.control_room.history_limit,
                 activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
@@ -3703,6 +3708,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             timing=self.app._config.timing,
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
+                haul_runs_file=self.app._config.control_room.haul_runs_file,
                 history_limit=self.app._config.control_room.history_limit,
                 activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
@@ -3738,6 +3744,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             timing=self.app._config.timing,
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
+                haul_runs_file=self.app._config.control_room.haul_runs_file,
                 history_limit=self.app._config.control_room.history_limit,
                 activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
@@ -3775,6 +3782,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             timing=self.app._config.timing,
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
+                haul_runs_file=self.app._config.control_room.haul_runs_file,
                 history_limit=self.app._config.control_room.history_limit,
                 activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
@@ -3814,6 +3822,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             timing=self.app._config.timing,
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
+                haul_runs_file=self.app._config.control_room.haul_runs_file,
                 history_limit=self.app._config.control_room.history_limit,
                 activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
@@ -3869,6 +3878,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             timing=self.app._config.timing,
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
+                haul_runs_file=self.app._config.control_room.haul_runs_file,
                 history_limit=self.app._config.control_room.history_limit,
                 activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
@@ -3893,6 +3903,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             timing=self.app._config.timing,
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
+                haul_runs_file=self.app._config.control_room.haul_runs_file,
                 history_limit=self.app._config.control_room.history_limit,
                 activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
@@ -4296,6 +4307,162 @@ class ControlRoomPromptStateTests(unittest.TestCase):
         self.assertEqual(prompt_state.dest_prompt_destination, "Sol")
         self.assertEqual(prompt_state.dest_prompt_settle_default, 2.0)
         self.assertEqual(prompt_state.dest_prompt_raw_command, "dest Sol")
+
+
+class HaulRunHistoryTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.app = _HarnessApp(_make_context(Path(self.tmpdir.name)))
+        self.app._tts = _FakeTTS()
+        self.app._ship.status = "in_station"
+        self.app._ship.station = "Alpha"
+        self.app._ship.system = "Sol"
+        self.app._time_fn = lambda: 100.0
+        self.path = self.app._config.control_room.haul_runs_file
+        self.start()
+
+    def start(self) -> None:
+        self.app._start_haul_stats(station_1_buying="Gold", station_2_buying="Silver",
+                                    station_1="Alpha", station_2="Beta",
+                                    expected_profit_per_trip_text="100")
+
+    def event(self, name: str, station: str, second: int, **fields) -> None:
+        self.app._time_fn = lambda: 100.0 + second
+        self.app._handle_haul_event(
+            {"event": name, "timestamp": f"2026-11-07T12:00:{second:02d}Z", **fields},
+            station_before=station,
+        )
+
+    def rows(self):
+        from edap.haul_history import load_runs
+        rows, skipped = load_runs(self.path)
+        self.assertEqual(skipped, 0)
+        return rows
+
+    def complete(self) -> None:
+        self.event("MarketBuy", "Alpha", 0, Type="gold", Count=4, TotalCost=40)
+        self.event("MarketBuy", "Alpha", 1, Type="gold", Count=1, TotalCost=10)
+        self.event("Undocked", "Alpha", 2)
+        self.event("MarketSell", "Beta", 10, Type="gold", Count=5, TotalSale=100)
+        self.event("MarketBuy", "Beta", 11, Type="silver", Count=5, TotalCost=20)
+        self.event("Undocked", "Beta", 12)
+        self.event("Docked", "Alpha", 20, StationName="Alpha")
+        self.event("MarketSell", "Alpha", 21, Type="silver", Count=5, TotalSale=70)
+
+    def test_completed_run_retains_all_trades_and_top_ups(self) -> None:
+        self.complete()
+        row, = self.rows()
+        self.assertEqual(row["status"], "completed")
+        self.assertEqual((row["cost"], row["revenue"], row["profit"]), (70, 170, 100))
+        self.assertEqual((row["expected_profit"], row["profit_delta"]), (100, 0))
+        self.assertEqual(row["top_ups"], 1)
+        self.assertEqual(row["duration_s"], 18)
+        self.assertEqual(row["route"]["system_1"], "Sol")
+        self.assertEqual(row["legs"][0]["market_buy_events"], 2)
+        self.assertEqual(row["legs"][0]["buys"][0], {"commodity": "gold", "tons": 4, "cost": 40})
+        self.assertEqual(len(row["events"]), 8)
+        self.assertTrue(row["app_version"])
+        self.app._stop_haul_stats()
+        self.assertEqual(len(self.rows()), 1)
+
+    def test_stop_partial_run_keeps_money_phase_and_warning_ids(self) -> None:
+        self.event("MarketBuy", "Alpha", 0, Type="gold", Count=4, TotalCost=40)
+        self.app._set_haul_phase("at_station_1_buy", 1)
+        for message in (AnnouncementId.HAUL_BUY_STILL_SHORT, AnnouncementId.HAUL_TOP_UP_UNAFFORDABLE,
+                        AnnouncementId.MARKET_BUY_NONE_AVAILABLE):
+            self.app._announce_tts(message, commodity_name="Gold", station_name="Alpha")
+        self.app._stop_haul_stats()
+        row, = self.rows()
+        self.assertEqual(row["status"], "aborted")
+        self.assertEqual(row["profit"], -40)
+        self.assertEqual(row["reason"], "stats stopped")
+        self.assertEqual(row["phase"], "at_station_1_buy")
+        self.assertEqual(row["warnings"], ["haul_buy_still_short", "haul_top_up_unaffordable", "market_buy_none_available"])
+
+    def test_restart_flushes_saved_partial_run(self) -> None:
+        from edap.control_room.persistence import load_saved_state
+        self.event("Undocked", "Alpha", 0)
+        self.event("MarketSell", "Beta", 10, Type="gold", Count=2, TotalSale=50)
+        restarted = _HarnessApp(_make_context(Path(self.tmpdir.name)))
+        load_saved_state(restarted)
+        row, = self.rows()
+        self.assertEqual(row["status"], "aborted")
+        self.assertEqual(row["revenue"], 50)
+        self.assertEqual(row["duration_s"], 10)
+        self.assertIn("restart", row["reason"])
+        load_saved_state(restarted)
+        self.assertEqual(len(self.rows()), 1)
+
+    def test_clear_keeps_history_and_flushes_even_trade_free_departure(self) -> None:
+        from edap.control_room.persistence import clear_session_stats
+        self.complete()
+        self.event("Undocked", "Alpha", 25)
+        clear_session_stats(self.app)
+        rows = self.rows()
+        self.assertEqual([row["status"] for row in rows], ["completed", "aborted"])
+        self.assertEqual(rows[1]["profit"], 0)
+        self.assertIn("cleared", rows[1]["reason"])
+
+    def test_new_haul_flushes_stale_run_and_initial_sale_is_not_lost(self) -> None:
+        self.event("MarketSell", "Alpha", 0, Type="silver", Count=2, TotalSale=50)
+        self.start()
+        row, = self.rows()
+        self.assertEqual(row["revenue"], 50)
+        self.assertIn("new haul", row["reason"])
+
+    def test_failed_append_survives_clear_and_restart(self) -> None:
+        from edap.control_room.persistence import clear_session_stats, load_saved_state
+        from edap.control_room_state import load_control_room_state
+        self.event("MarketBuy", "Alpha", 0, Type="gold", Count=1, TotalCost=10)
+        self.path.mkdir()  # Real filesystem failure, not a simulated successful write.
+        self.app._stop_haul_stats()
+        clear_session_stats(self.app)
+        saved = load_control_room_state(self.app._state_path)
+        self.assertEqual(saved.haul_pending_runs[0]["cost"], 10)
+        self.assertTrue(any("failed to append haul history" in text for text in self.app.logged))
+        self.path.rmdir()
+        restarted = _HarnessApp(_make_context(Path(self.tmpdir.name)))
+        load_saved_state(restarted)
+        row, = self.rows()
+        self.assertEqual(row["cost"], 10)
+        self.assertEqual(load_control_room_state(self.app._state_path).haul_pending_runs, [])
+
+    def test_reader_skips_torn_invalid_lines_and_deduplicates_retries(self) -> None:
+        import json
+        from edap.haul_history import append_run, load_runs
+        self.complete()
+        row, = self.rows()
+        with self.path.open("ab") as handle:
+            handle.write(b'[]\n{"schema":')
+        self.assertTrue(append_run(self.path, row, self.app._log))
+        rows, skipped = load_runs(self.path)
+        self.assertEqual(rows, [row])
+        self.assertEqual(skipped, 2)
+        row = dict(row, ended_at="2026-11-07T12:01:00+00:00")
+        self.assertTrue(append_run(self.path, row, self.app._log))
+        self.assertEqual(len(load_runs(self.path)[0]), 2)
+
+    def test_paused_time_is_excluded_from_persisted_partial_duration(self) -> None:
+        self.event("Undocked", "Alpha", 0)
+        self.app._time_fn = lambda: 110.0
+        self.app._pause_haul_stats()
+        self.app._time_fn = lambda: 140.0
+        self.app._resume_haul_stats()
+        self.event("MarketBuy", "Beta", 50, Type="silver", Count=1, TotalCost=5)
+        self.app._stop_haul_stats()
+        row, = self.rows()
+        self.assertEqual(row["duration_s"], 20)
+
+    def test_unplanned_station_trade_is_preserved_with_unknown_expectation(self) -> None:
+        self.app._haul_stats.expected_profit_per_trip = None
+        self.event("MarketBuy", "Other station", 0, Type="gold", Count=1, TotalCost=10)
+        self.app._stop_haul_stats()
+        row, = self.rows()
+        self.assertEqual(row["legs"][0]["station"], "Other station")
+        self.assertEqual(row["cost"], 10)
+        self.assertIsNone(row["expected_profit"])
+        self.assertIsNone(row["profit_delta"])
 
 
 if __name__ == "__main__":

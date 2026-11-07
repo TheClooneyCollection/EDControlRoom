@@ -226,6 +226,7 @@ def _make_observer_context() -> RuntimeContext:
             timing=_make_timing_config(),
             control_room=ControlRoomConfig(
                 state_file=Path("/tmp/control-room-state.json"),
+                haul_runs_file=Path("/tmp/control-room-runs.jsonl"),
                 history_limit=20,
                 activity_log_max_lines=2000,
                 command_delay_seconds=0.0,

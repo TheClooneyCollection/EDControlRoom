@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol
+from typing import Callable, Protocol
 
 from rich.markup import escape
 
@@ -14,6 +14,8 @@ from edap.control_room_state import (
     save_control_room_state,
 )
 
+from edap.haul_history import append_run, close_run, snapshot_duration, utc_timestamp
+
 
 class PersistenceHost(Protocol):
     _config: AppConfig
@@ -24,7 +26,7 @@ class PersistenceHost(Protocol):
     _history: list[str]
     _history_pos: int
     _history_draft: str
-    _time_fn: object
+    _time_fn: Callable[[], float]
 
     def _log(self, msg: str) -> None: ...
 
@@ -42,6 +44,11 @@ def load_saved_state(app: PersistenceHost) -> None:
     app._history_pos = len(app._history)
     app._instant_mode = app._saved_state.instant_mode
     _restore_persisted_session(app)
+    app._haul_stats.current_run = app._saved_state.haul_current_run
+    app._haul_stats.pending_runs = app._saved_state.haul_pending_runs
+    close_run(app._haul_stats, "aborted", "restart with stale in-progress run", None, app._time_fn())
+    if app._haul_stats.pending_runs:
+        save_saved_state(app)
     if app._config.control_room.clear_session_on_launch:
         clear_session_stats(app)
         app._log("[dim]Cleared persisted haul session on launch.[/]")
@@ -51,7 +58,16 @@ def save_saved_state(app: PersistenceHost) -> None:
     app._saved_state.instant_mode = app._instant_mode
     _capture_persisted_session(app)
     try:
+        # Persist the outbox before appending. A crash before acknowledgement may
+        # replay a row; load_runs deduplicates it instead of risking data loss.
         save_control_room_state(app._state_path, app._saved_state)
+        while app._haul_stats.pending_runs:
+            row = app._haul_stats.pending_runs[0]
+            if not append_run(app._config.control_room.haul_runs_file, row, app._log):
+                break
+            app._haul_stats.pending_runs.pop(0)
+            _capture_persisted_session(app)
+            save_control_room_state(app._state_path, app._saved_state)
     except Exception as exc:
         app._log(
             f"[yellow]Failed to save control-room state "
@@ -80,6 +96,7 @@ def record_history_entry(app: PersistenceHost, entry: CommandHistoryEntry) -> No
 
 
 def clear_session_stats(app: PersistenceHost) -> None:
+    close_run(app._haul_stats, "aborted", "stats cleared / new session", utc_timestamp(None), app._time_fn())
     stats = app._haul_stats
     now_fn = app._time_fn
     now = now_fn() if callable(now_fn) else 0.0
@@ -146,6 +163,9 @@ def _capture_persisted_session(app: PersistenceHost) -> None:
     session_elapsed = stats.session_elapsed_s
     if stats.session_started_at is not None:
         session_elapsed = max(0.0, now - stats.session_started_at)
+    snapshot_duration(stats, now)
+    saved.haul_current_run = stats.current_run
+    saved.haul_pending_runs = stats.pending_runs
     saved.session_profit = stats.accumulated_profit + stats.current_run_profit
     saved.session_elapsed_seconds = session_elapsed
     saved.session_active = stats.session_active

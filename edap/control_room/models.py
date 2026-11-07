@@ -41,6 +41,8 @@ class MarketData:
 
 @dataclass
 class HaulStats:
+    current_run: dict[str, Any] | None = None
+    pending_runs: list[dict[str, Any]] = field(default_factory=list)
     station_1_buying: str = ""
     station_2_buying: str = ""
     station_1: str = ""

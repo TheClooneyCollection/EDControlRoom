@@ -3,7 +3,9 @@ from __future__ import annotations
 import re
 from typing import Any, Callable, Protocol
 
-from edap.control_room.models import HaulStats, ShipState
+from edap.control_room.models import HaulStats, RuntimeUIState, ShipState
+from edap.control_room_state import ControlRoomState
+from edap.haul_history import close_run, record_event, utc_timestamp
 from edap.tts import AnnouncementId, format_credits_short
 
 _CREDIT_AMOUNT_RE = re.compile(
@@ -16,6 +18,8 @@ _CREDIT_AMOUNT_RE = re.compile(
 class HaulTrackingHost(Protocol):
     _haul_stats: HaulStats
     _ship: ShipState
+    _runtime_state: RuntimeUIState
+    _saved_state: ControlRoomState
     _time_fn: Callable[[], float]
 
     def _log(self, msg: str) -> None: ...
@@ -39,10 +43,12 @@ def start_haul_stats(
         and app._ship.station
         and app._ship.station.lower() == station_1.lower()
     )
+    close_run(app._haul_stats, "aborted", "new haul started over stale run", utc_timestamp(None), app._time_fn())
     previous = app._haul_stats
     started_at = app._time_fn()
     expected_profit_per_trip = parse_credit_amount(expected_profit_per_trip_text)
     app._haul_stats = HaulStats(
+        pending_runs=previous.pending_runs,
         station_1_buying=station_1_buying,
         station_2_buying=station_2_buying,
         station_1=station_1,
@@ -69,7 +75,8 @@ def start_haul_stats(
 
 
 def stop_haul_stats(app: HaulTrackingHost) -> None:
-    if not app._haul_stats.station_1_buying:
+    close_run(app._haul_stats, "aborted", "stats stopped", utc_timestamp(None), app._time_fn())
+    if not (app._haul_stats.station_1 or app._haul_stats.station_1_buying):
         return
     if app._haul_stats.completed_runs > 0:
         app._announce_tts(
@@ -122,6 +129,7 @@ def finalize_completed_haul_run(app: HaulTrackingHost) -> None:
         elapsed = app._time_fn() - stats.current_run_started_at
     if elapsed is None:
         return
+    close_run(stats, "completed", "", None, app._time_fn())
     stats.completed_runs += 1
     stats.last_run_elapsed_s = elapsed
     stats.last_run_profit = stats.current_run_profit
@@ -205,17 +213,26 @@ def handle_haul_event(
     station_before: str | None,
 ) -> None:
     stats = app._haul_stats
-    if not stats.active or not stats.station_1_buying or not stats.station_1:
+    if not stats.active or not stats.station_1:
         return
 
     event = ev.get("event", "")
-    current_station = station_before or app._ship.station
+    current_station = ev.get("StationName") or station_before or app._ship.station
     at_station_1 = bool(current_station and current_station.lower() == stats.station_1.lower())
     at_station_2 = bool(
         stats.station_2
         and current_station
         and current_station.lower() == stats.station_2.lower()
     )
+
+    if at_station_1 or at_station_2 or event in {"MarketBuy", "MarketSell"}:
+        record_event(stats, ev, current_station or "", ev.get("StarSystem") or app._ship.system or "")
+        if stats.current_run is not None:
+            stats.current_run["phase"] = app._runtime_state.haul_phase
+            for index in (1, 2):
+                key = f"system_{index}"
+                if not stats.current_run["route"][key]:
+                    stats.current_run["route"][key] = app._saved_state.default_haul.get(f"station_{index}_system") or None
 
     if event == "Undocked" and at_station_1:
         if stats.current_run_started_at is None:

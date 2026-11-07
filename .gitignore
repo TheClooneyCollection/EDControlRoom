@@ -18,3 +18,5 @@ haul_search.toml
 !defaults/haul.toml
 !defaults/haul_search.toml
 .control_room_state.json
+
+.control_room_haul_runs.jsonl
