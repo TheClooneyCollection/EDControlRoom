@@ -2,20 +2,36 @@ from __future__ import annotations
 
 from .base import InputController
 from edap.timing import TimingSampler
+from edap.config import InputConfig
 
 
-def build_input_controller(platform_name: str, *, timing_sampler: TimingSampler) -> InputController | None:
+def build_input_controller(platform_name: str, *, input_config: InputConfig, timing_sampler: TimingSampler) -> InputController | None:
     normalized = platform_name.lower()
+    if input_config.target == "wine_helper" and normalized != "macos":
+        raise RuntimeError("wine_helper input is only supported on macOS.")
     if normalized == "macos":
         from .macos import MacOSInputController
 
-        return MacOSInputController(timing_sampler=timing_sampler)
+        from .wine_helper import build_wine_helper
+
+        controller = MacOSInputController(timing_sampler=timing_sampler, wine_helper=build_wine_helper(input_config.wine_helper))
+        if input_config.target == "wine_helper":
+            controller.set_wine_helper_target()
+        elif input_config.target == "pid":
+            controller.auto_target()
+        return controller
     if normalized == "linux":
         from .linux import LinuxInputController
 
-        return LinuxInputController(timing_sampler=timing_sampler)
+        controller = LinuxInputController(timing_sampler=timing_sampler)
+        if input_config.target == "pid":
+            controller.auto_target()
+        return controller
     if normalized == "windows":
         from .windows import WindowsInputController
 
-        return WindowsInputController(timing_sampler=timing_sampler)
+        controller = WindowsInputController(timing_sampler=timing_sampler)
+        if input_config.target == "pid":
+            controller.auto_target()
+        return controller
     return None

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.fixtures.wine_helper import helper_client
+
 import unittest
 
 from edap.actions import ActionDispatchResult, ActionDispatcher
@@ -97,6 +99,7 @@ class ActionDispatcherTests(unittest.TestCase):
     def test_macos_input_accepts_left_right_modifier_aliases(self) -> None:
         events: list[tuple] = []
         input_controller = MacOSInputController(
+            wine_helper=helper_client(),
             poster=lambda keycode, down, flags, unicode_char: events.append(
                 ("down" if down else "up", flags)
             ),

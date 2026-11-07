@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.fixtures.wine_helper import helper_client
+
 import unittest
 from unittest.mock import patch
 
@@ -31,6 +33,7 @@ def _build() -> tuple[MacOSInputController, FakeBackend]:
     backend = FakeBackend()
     return (
         MacOSInputController(
+            wine_helper=helper_client(),
             poster=backend.post,
             pid_poster=backend.post_to_pid,
             pid_finder=lambda process_name: 4242 if process_name == "EliteDangerous64.exe" else None,
@@ -78,6 +81,7 @@ class MacOSInputControllerTests(unittest.TestCase):
             )
         )
         controller = MacOSInputController(
+            wine_helper=helper_client(),
             poster=backend.post,
             pid_poster=backend.post_to_pid,
             pid_finder=lambda _process_name: None,

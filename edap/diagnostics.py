@@ -23,78 +23,87 @@ class DiagnosticsOptions:
 
 def run_diagnostics(config: AppConfig, options: DiagnosticsOptions) -> dict[str, object]:
     runtime = build_runtime_context(config, include_screen_capture=options.capture_screen)
-    effective_journal_dir = runtime.journal.effective_path
-    effective_bindings_file = runtime.bindings.effective_path
+    try:
+        effective_journal_dir = runtime.journal.effective_path
+        effective_bindings_file = runtime.bindings.effective_path
 
-    result: dict[str, object] = {
-        "platform": config.runtime.platform,
-        "debug": config.runtime.debug,
-        "controls": {
-            "start_hotkey": config.controls.start_hotkey,
-            "stop_hotkey": config.controls.stop_hotkey,
-            "scanner_mode": config.controls.scanner_mode,
-            "minimum_action_hold_seconds": config.controls.minimum_action_hold_seconds,
-            "continuous_action_hold_seconds": config.controls.continuous_action_hold_seconds,
-        },
-        "paths": {
-            "journal": {
-                "configured": runtime.journal.configured,
-                "auto_detected": runtime.journal.auto_detected,
-                "effective": runtime.journal.effective,
+        result: dict[str, object] = {
+            "platform": config.runtime.platform,
+            "debug": config.runtime.debug,
+            "controls": {
+                "start_hotkey": config.controls.start_hotkey,
+                "stop_hotkey": config.controls.stop_hotkey,
+                "scanner_mode": config.controls.scanner_mode,
+                "minimum_action_hold_seconds": config.controls.minimum_action_hold_seconds,
+                "continuous_action_hold_seconds": config.controls.continuous_action_hold_seconds,
             },
-            "bindings": {
-                "configured": runtime.bindings.configured,
-                "auto_detected": runtime.bindings.auto_detected,
-                "effective": runtime.bindings.effective,
+            "paths": {
+                "journal": {
+                    "configured": runtime.journal.configured,
+                    "auto_detected": runtime.journal.auto_detected,
+                    "effective": runtime.journal.effective,
+                },
+                "bindings": {
+                    "configured": runtime.bindings.configured,
+                    "auto_detected": runtime.bindings.auto_detected,
+                    "effective": runtime.bindings.effective,
+                },
+                "legacy_summary": {
+                    "journal": legacy_path_summary(runtime.journal),
+                    "bindings": legacy_path_summary(runtime.bindings),
+                },
             },
-            "legacy_summary": {
-                "journal": legacy_path_summary(runtime.journal),
-                "bindings": legacy_path_summary(runtime.bindings),
-            },
-        },
-        "options": asdict(options),
-        "capture_layout": build_capture_layout(config.screen).to_dict(),
-    }
-
-    if effective_journal_dir and effective_journal_dir.exists():
-        latest_log = get_latest_journal_log(effective_journal_dir)
-        result["latest_log"] = str(latest_log) if latest_log else None
-        if latest_log:
-            ship_state = read_ship_state(latest_log)
-            result["ship_state"] = ship_state.to_dict()
-
-    if effective_bindings_file and effective_bindings_file.exists():
-        try:
-            bindings, missing = read_bindings(effective_bindings_file)
-        except Exception as exc:
-            result["bindings_result"] = {
-                "status": "error",
-                "path": str(effective_bindings_file),
-                "error": str(exc),
-            }
-        else:
-            result["bindings_result"] = {
-                "status": "ok",
-                "path": str(effective_bindings_file),
-                "resolved_count": len(bindings),
-                "missing_count": len(missing),
-            }
-            result["bindings"] = {name: binding.to_dict() for name, binding in sorted(bindings.items())}
-            result["missing_bindings"] = missing
-    else:
-        result["bindings_result"] = {
-            "status": "not_available",
-            "path": str(effective_bindings_file) if effective_bindings_file else None,
-            "reason": runtime.bindings.effective["reason"],
+            "options": asdict(options),
+            "capture_layout": build_capture_layout(config.screen).to_dict(),
         }
 
-    if options.capture_screen:
-        result["screen_capture"] = run_screen_capture_diagnostic(config, runtime)
+        if effective_journal_dir and effective_journal_dir.exists():
+            latest_log = get_latest_journal_log(effective_journal_dir)
+            result["latest_log"] = str(latest_log) if latest_log else None
+            if latest_log:
+                ship_state = read_ship_state(latest_log)
+                result["ship_state"] = ship_state.to_dict()
 
-    if options.send_test_key:
-        result["input_test"] = run_input_diagnostic(config, options, runtime)
+        if effective_bindings_file and effective_bindings_file.exists():
+            try:
+                bindings, missing = read_bindings(effective_bindings_file)
+            except Exception as exc:
+                result["bindings_result"] = {
+                    "status": "error",
+                    "path": str(effective_bindings_file),
+                    "error": str(exc),
+                }
+            else:
+                result["bindings_result"] = {
+                    "status": "ok",
+                    "path": str(effective_bindings_file),
+                    "resolved_count": len(bindings),
+                    "missing_count": len(missing),
+                }
+                result["bindings"] = {name: binding.to_dict() for name, binding in sorted(bindings.items())}
+                result["missing_bindings"] = missing
+        else:
+            result["bindings_result"] = {
+                "status": "not_available",
+                "path": str(effective_bindings_file) if effective_bindings_file else None,
+                "reason": runtime.bindings.effective["reason"],
+            }
 
-    return result
+        if options.capture_screen:
+            result["screen_capture"] = run_screen_capture_diagnostic(config, runtime)
+
+        if options.send_test_key:
+            result["input_test"] = run_input_diagnostic(config, options, runtime)
+
+        if runtime.input_controller is not None:
+            try:
+                result["input_status"] = runtime.input_controller.input_status()
+            except (RuntimeError, OSError) as exc:
+                result["input_status"] = {"status": "error", "error": str(exc)}
+        return result
+    finally:
+        if runtime.input_controller is not None:
+            runtime.input_controller.close()
 
 
 def run_screen_capture_diagnostic(config: AppConfig, runtime: RuntimeContext | None = None) -> dict[str, object]:

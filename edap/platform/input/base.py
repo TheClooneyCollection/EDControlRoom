@@ -14,8 +14,12 @@ class InputTargetState:
     pid: int | None = None
     hwnd: int | None = None
     process_name: str | None = None
+    helper_version: str | None = None
 
     def summary(self) -> str:
+        if self.mode == "wine_helper":
+            hwnd = f"0x{self.hwnd:X}" if self.hwnd is not None else "unresolved"
+            return f"wine helper ({self.process_name} hwnd {hwnd}, helper {self.helper_version or 'disconnected'})"
         if self.mode == "pid" and self.pid is not None:
             label = f"pid {self.pid}"
             if self.process_name:
@@ -65,3 +69,12 @@ class InputController(ABC):
         prefer: str = "pid",
     ) -> InputTargetState:
         raise RuntimeError("This input backend does not support automatic target detection.")
+
+    def set_wine_helper_target(self) -> InputTargetState:
+        raise RuntimeError("This input backend does not support wine_helper targeting.")
+
+    def input_status(self) -> dict[str, object]:
+        return {"target": self.current_target().summary()}
+
+    def close(self) -> None:
+        """Release backend resources; native stateless backends own none."""

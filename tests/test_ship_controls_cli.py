@@ -12,6 +12,11 @@ from edap.runtime import LoadedConfig
 from edap.timing import TimingSampler
 
 
+class _InputController:
+    def close(self):
+        pass
+
+
 class _FakeControls:
     def __init__(self, expected_result: dict[str, object]) -> None:
         self.expected_result = expected_result
@@ -79,7 +84,7 @@ class ShipControlsCliTests(unittest.TestCase):
                         "cli_source_status": staticmethod(lambda: "auto_detected"),
                     },
                 )(),
-                "input_controller": object(),
+                "input_controller": _InputController(),
                 "binding_lookup": object(),
                 "timing_sampler": TimingSampler(loaded.config.timing),
             },
@@ -126,7 +131,7 @@ class ShipControlsCliTests(unittest.TestCase):
                         "cli_source_status": staticmethod(lambda: "auto_detected"),
                     },
                 )(),
-                "input_controller": object(),
+                "input_controller": _InputController(),
                 "binding_lookup": object(),
                 "timing_sampler": TimingSampler(loaded.config.timing),
             },
@@ -171,7 +176,7 @@ class ShipControlsCliTests(unittest.TestCase):
                         "cli_source_status": staticmethod(lambda: "auto_detected"),
                     },
                 )(),
-                "input_controller": object(),
+                "input_controller": _InputController(),
                 "binding_lookup": object(),
                 "timing_sampler": TimingSampler(loaded.config.timing),
             },
@@ -236,7 +241,7 @@ class ShipControlsCliTests(unittest.TestCase):
                         "cli_source_status": staticmethod(lambda: "auto_detected"),
                     },
                 )(),
-                "input_controller": object(),
+                "input_controller": _InputController(),
                 "binding_lookup": object(),
                 "timing_sampler": TimingSampler(loaded.config.timing),
             },

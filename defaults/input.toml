@@ -1,0 +1,14 @@
+[input]
+target = "foreground"
+
+[input.wine_helper]
+wine_path = ""
+bottle = ""
+helper_path = 'C:\edap\edap_input_helper.exe'
+process_name = "EliteDangerous64.exe"
+port = 47811
+launch = "managed"
+startup_timeout_s = 10.0
+request_timeout_s = 1.0
+max_hold_s = 10.0
+token_file = ".wine_input_helper.token"

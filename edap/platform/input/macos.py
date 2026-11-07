@@ -7,6 +7,7 @@ from subprocess import run
 from time import sleep as _default_sleep
 
 from edap.timing import TimingSampler
+from .wine_helper import WineHelperClient
 
 try:
     from Quartz import (
@@ -257,8 +258,10 @@ class MacOSInputController(InputController):
         pid_finder: PidFinderFn | None = None,
         sleeper: SleeperFn | None = None,
         timing_sampler: TimingSampler,
+        wine_helper: WineHelperClient,
     ) -> None:
-        self._poster = poster if poster is not None else _make_default_poster()
+        self._poster = poster
+        self._wine_helper = wine_helper
         self._pid_poster = pid_poster
         self._pid_finder = pid_finder if pid_finder is not None else _find_pid_by_process_name
         self._sleeper = sleeper if sleeper is not None else _default_sleep
@@ -266,14 +269,23 @@ class MacOSInputController(InputController):
         self._target = InputTargetState(platform="macos", mode="foreground")
 
     def press_key(self, key: str, modifier: str | None = None) -> None:
+        if self._target.mode == "wine_helper":
+            self._wine_helper.press_key(key, modifier)
+            return
         keycode, flags, unicode_char = self._resolve(key, modifier)
         self._dispatch_event(keycode, True, flags, unicode_char)
 
     def release_key(self, key: str, modifier: str | None = None) -> None:
+        if self._target.mode == "wine_helper":
+            self._wine_helper.release_key(key, modifier)
+            return
         keycode, flags, unicode_char = self._resolve(key, modifier)
         self._dispatch_event(keycode, False, flags, unicode_char)
 
     def tap_key(self, key: str, modifier: str | None = None, hold_s: float = 0.0) -> None:
+        if self._target.mode == "wine_helper":
+            self._wine_helper.tap_key(key, modifier, self._timing_sampler.sample_hold(hold_s) if hold_s > 0 else 0.0)
+            return
         keycode, flags, unicode_char = self._resolve(key, modifier)
         mod_keycode = MODIFIER_KEYCODES.get(modifier.lower()) if modifier else None
         if mod_keycode is not None:
@@ -314,12 +326,14 @@ class MacOSInputController(InputController):
         return self._target
 
     def set_foreground_target(self) -> InputTargetState:
+        self._leave_helper()
         self._target = InputTargetState(platform="macos", mode="foreground")
         return self._target
 
     def set_pid_target(self, pid: int) -> InputTargetState:
         if pid <= 0:
             raise ValueError("pid must be a positive integer")
+        self._leave_helper()
         self._target = InputTargetState(platform="macos", mode="pid", pid=pid)
         return self._target
 
@@ -334,6 +348,7 @@ class MacOSInputController(InputController):
         pid = self._pid_finder(process_name)
         if pid is None:
             raise RuntimeError(f"No process matched {process_name!r}.")
+        self._leave_helper()
         self._target = InputTargetState(
             platform="macos",
             mode="pid",
@@ -341,6 +356,29 @@ class MacOSInputController(InputController):
             process_name=process_name,
         )
         return self._target
+
+    def set_wine_helper_target(self) -> InputTargetState:
+        target = self._wine_helper.start()
+        self._target = target
+        return target
+
+    def _leave_helper(self) -> None:
+        if self._target.mode == "wine_helper":
+            self._wine_helper.release_all()
+
+    def input_status(self) -> dict[str, object]:
+        result = super().input_status()
+        if self._target.mode == "wine_helper":
+            result["wine_helper"] = self._wine_helper.status()
+            config = self._wine_helper.config
+            result["wine_helper_config"] = {
+                "bottle": config.bottle, "wine_path": config.wine_path,
+                "process_name": config.process_name, "port": config.port, "launch": config.launch,
+            }
+        return result
+
+    def close(self) -> None:
+        self._wine_helper.close()
 
     def _dispatch_event(self, keycode: int, down: bool, flags: int, unicode_char: str | None) -> None:
         target = self._target
@@ -353,6 +391,10 @@ class MacOSInputController(InputController):
                 self._pid_poster = pid_poster
             pid_poster(target.pid, keycode, down, flags, unicode_char)
             return
+        if target.mode != "foreground":
+            raise RuntimeError(f"Unsupported macOS input target: {target.mode}")
+        if self._poster is None:
+            self._poster = _make_default_poster()
         self._poster(keycode, down, flags, unicode_char)
 
     def _resolve(self, key: str, modifier: str | None) -> tuple[int, int, str | None]:

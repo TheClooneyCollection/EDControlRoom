@@ -119,6 +119,9 @@ def dispatch(app: CommandHost, raw: str, *, skip_delay_override: bool | None = N
             CommandHistoryEntry(raw=raw, command="stop", timestamp=now_iso())
         )
         cmd_stop_session(app)
+    elif verb == "set_input":
+        app._record_history_entry(CommandHistoryEntry(raw=raw, command="set_input", params={"value": raw_rest}, timestamp=now_iso()))
+        cmd_set_input(app, raw_rest)
     elif verb == "set_pid":
         app._record_history_entry(
             CommandHistoryEntry(raw=raw, command="set_pid", params={"value": raw_rest}, timestamp=now_iso())
@@ -257,6 +260,24 @@ def cmd_instant(app: CommandHost, rest: str) -> None:
         app._log(f"[dim]Instant mode off — command launch delay restored to {delay_s:.1f}s.[/]")
     app._saved_state.instant_mode = app._instant_mode
     app._save_saved_state()
+
+
+def cmd_set_input(app: CommandHost, rest: str) -> None:
+    mode, _, value = rest.strip().partition(" ")
+    try:
+        if mode == "wine_helper" and not value:
+            summary = app._set_wine_helper_input_target()
+        elif mode == "foreground" and not value:
+            summary = app._set_foreground_input_target()
+        elif mode == "pid":
+            cmd_set_pid(app, value)
+            return
+        else:
+            raise ValueError("Usage: set_input wine_helper|foreground|pid [pid|process-name]")
+    except (RuntimeError, ValueError, OSError) as exc:
+        app._log(f"[red]{escape(str(exc))}[/]")
+        return
+    app._log(f"[dim]Input target: {escape(summary)}[/]")
 
 
 def cmd_set_pid(app: CommandHost, rest: str) -> None:

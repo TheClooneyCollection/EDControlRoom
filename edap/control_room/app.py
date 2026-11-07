@@ -167,7 +167,7 @@ _STARTUP_BINDING_WARNING_IGNORED_ACTIONS = frozenset({
     "YawRightButton",
 })
 
-_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul start | haul load | haul search [system] | haul search url <url> | haul route <n> | travel <system> [/ <station>] | pause | resume | multi_leg_haul <route> | dest <system> | home | set_pid | set_hwnd | market ... | instant | stats [window] | new_session | stop | reload | q"
+_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul start | haul load | haul search [system] | haul search url <url> | haul route <n> | travel <system> [/ <station>] | pause | resume | multi_leg_haul <route> | dest <system> | home | set_input | set_pid | set_hwnd | market ... | instant | stats [window] | new_session | stop | reload | q"
 _ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS = 10.0
 _JOURNAL_ARTIFACT_LOG_PATH = Path("artifacts/control-room.log")
 _DEBUG_ARTIFACT_LOG_PATH = Path("artifacts/control-room-debug.log")
@@ -1055,14 +1055,25 @@ class ControlRoomApp(App[None]):
         if self._ctx.input_controller is not None:
             self._log(
                 f"[dim]Input target {escape(self._describe_input_target())} "
-                "— control with: set_pid | set_hwnd[/]"
+                "— control with: set_input | set_pid | set_hwnd[/]"
             )
 
     def _describe_input_target(self) -> str:
         controller = self._ctx.input_controller
         if controller is None:
             return "unavailable"
-        return controller.current_target().summary()
+        target = controller.current_target()
+        summary = target.summary()
+        if target.mode == "wine_helper":
+            try:
+                status = controller.input_status()["wine_helper"]
+                summary += f"; fg {status.get('fg', '?')}, alive {status.get('target_alive', False)}, held {status.get('held', [])}"
+            except (RuntimeError, OSError) as exc:
+                summary += f"; error: {exc}"
+        return summary
+
+    def _set_wine_helper_input_target(self) -> str:
+        return self._require_input_controller().set_wine_helper_target().summary()
 
     def _set_foreground_input_target(self) -> str:
         controller = self._require_input_controller()
@@ -2009,6 +2020,11 @@ class ControlRoomApp(App[None]):
             self._journal_artifact_log_handle = None
             self._journal_artifact_log_pending_writes = 0
         self._tts.close()
+        if self._ctx.input_controller is not None:
+            try:
+                self._ctx.input_controller.close()
+            except (RuntimeError, OSError) as exc:
+                self._log(f"[red]Input shutdown failed: {escape(str(exc))}[/]")
         self.workers.cancel_group(self, "watchers")
         self.workers.cancel_group(self, "routines")
         self.exit()

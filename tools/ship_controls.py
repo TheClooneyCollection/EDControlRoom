@@ -4,7 +4,7 @@ import argparse
 import json
 import math
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from time import sleep
 
 from edap.config import ConfigError, DEFAULT_CONFIG_PATH
@@ -134,6 +134,7 @@ def main() -> int:
         default=0.0,
         help="Delay before sending the action so you can focus the game window",
     )
+    parser.add_argument("--input-target", choices=("foreground", "pid", "wine_helper"), help="Override configured input target for this manual test")
     args = parser.parse_args()
 
     try:
@@ -161,88 +162,99 @@ def main() -> int:
         sys.stderr.write(f"Invalid sequence: {exc}\n")
         return 2
 
-    runtime = build_runtime_context(loaded.config, actions=[step.action for step in sequence_steps])
-    bindings_file = runtime.bindings.effective_path
-    bindings_source = runtime.bindings.cli_source_status()
-    if bindings_file is None:
-        sys.stderr.write(
-            "Could not resolve bindings file. "
-            f"Source status: {bindings_source}. Configure `paths.bindings_file` or ensure CrossOver auto-detection works.\n"
+    if args.input_target:
+        loaded = replace(loaded, config=replace(loaded.config, input=replace(loaded.config.input, target=args.input_target)))
+    try:
+        runtime = build_runtime_context(loaded.config, actions=[step.action for step in sequence_steps])
+    except (RuntimeError, ValueError, OSError) as exc:
+        sys.stderr.write(f"Input startup failed: {exc}\n")
+        return 2
+    try:
+        bindings_file = runtime.bindings.effective_path
+        bindings_source = runtime.bindings.cli_source_status()
+        if bindings_file is None:
+            sys.stderr.write(
+                "Could not resolve bindings file. "
+                f"Source status: {bindings_source}. Configure `paths.bindings_file` or ensure CrossOver auto-detection works.\n"
+            )
+            return 2
+
+        if runtime.input_controller is None:
+            sys.stderr.write(f"Unsupported input platform: {loaded.config.runtime.platform}\n")
+            return 2
+
+        if runtime.binding_lookup is None:
+            sys.stderr.write(
+                "Could not load binding lookup from resolved bindings file. "
+                f"Source status: {bindings_source}.\n"
+            )
+            return 2
+
+        controls = ShipControls.from_binding_lookup(
+            runtime.binding_lookup,
+            runtime.input_controller,
+            minimum_action_hold_s=loaded.config.controls.minimum_action_hold_seconds,
+            continuous_action_hold_s=loaded.config.controls.continuous_action_hold_seconds,
+            sleeper=runtime.timing_sampler.make_sleep_sleeper(),
         )
-        return 2
+        if args.delay_seconds > 0:
+            _sleep_with_countdown(sequence_steps[0].action, args.delay_seconds)
 
-    if runtime.input_controller is None:
-        sys.stderr.write(f"Unsupported input platform: {loaded.config.runtime.platform}\n")
-        return 2
+        results: list[dict[str, object]] = []
+        exit_code = 0
+        for index, step in enumerate(sequence_steps, start=1):
+            if step.delay_s is not None and step.delay_s > 0:
+                _sleep_with_countdown(step.action, step.delay_s)
+            try:
+                plan = controls.plan_action(
+                    step.action,
+                    repeat=step.repeat if step.repeat is not None else args.repeat,
+                    hold_s=step.hold_s if step.hold_s is not None else args.hold_seconds,
+                    total_s=step.total_s if step.total_s is not None else args.total_seconds,
+                )
+            except ValueError as exc:
+                sys.stderr.write(f"Invalid control request at step {index} ({step.action}): {exc}\n")
+                return 2
 
-    if runtime.binding_lookup is None:
-        sys.stderr.write(
-            "Could not load binding lookup from resolved bindings file. "
-            f"Source status: {bindings_source}.\n"
-        )
-        return 2
-
-    controls = ShipControls.from_binding_lookup(
-        runtime.binding_lookup,
-        runtime.input_controller,
-        minimum_action_hold_s=loaded.config.controls.minimum_action_hold_seconds,
-        continuous_action_hold_s=loaded.config.controls.continuous_action_hold_seconds,
-        sleeper=runtime.timing_sampler.make_sleep_sleeper(),
-    )
-    if args.delay_seconds > 0:
-        _sleep_with_countdown(sequence_steps[0].action, args.delay_seconds)
-
-    results: list[dict[str, object]] = []
-    exit_code = 0
-    for index, step in enumerate(sequence_steps, start=1):
-        if step.delay_s is not None and step.delay_s > 0:
-            _sleep_with_countdown(step.action, step.delay_s)
-        try:
-            plan = controls.plan_action(
+            _progress(f"Step {index}/{len(sequence_steps)}")
+            _report_repeat_plan(plan.action, plan.repeat, plan.hold_s, total_s=plan.total_s)
+            result = controls.dispatch_action(
                 step.action,
                 repeat=step.repeat if step.repeat is not None else args.repeat,
                 hold_s=step.hold_s if step.hold_s is not None else args.hold_seconds,
                 total_s=step.total_s if step.total_s is not None else args.total_seconds,
             )
-        except ValueError as exc:
-            sys.stderr.write(f"Invalid control request at step {index} ({step.action}): {exc}\n")
-            return 2
+            results.append(
+                {
+                    "action": plan.action,
+                    "repeat": plan.repeat,
+                    "hold_s": plan.hold_s,
+                    "total_s": plan.total_s,
+                    "delay_s": step.delay_s,
+                    "result": result.to_dict(),
+                }
+            )
+            if result.status != "ok":
+                exit_code = 1
 
-        _progress(f"Step {index}/{len(sequence_steps)}")
-        _report_repeat_plan(plan.action, plan.repeat, plan.hold_s, total_s=plan.total_s)
-        result = controls.dispatch_action(
-            step.action,
-            repeat=step.repeat if step.repeat is not None else args.repeat,
-            hold_s=step.hold_s if step.hold_s is not None else args.hold_seconds,
-            total_s=step.total_s if step.total_s is not None else args.total_seconds,
-        )
-        results.append(
-            {
-                "action": plan.action,
-                "repeat": plan.repeat,
-                "hold_s": plan.hold_s,
-                "total_s": plan.total_s,
-                "delay_s": step.delay_s,
-                "result": result.to_dict(),
-            }
-        )
-        if result.status != "ok":
-            exit_code = 1
+        payload = {
+            "config_path": loaded.config_path,
+            "used_example_config_fallback": loaded.used_example_config_fallback,
+            "bindings_file": str(bindings_file),
+            "bindings_source": bindings_source,
+            "sequence": resolved_sequence is not None,
+            "preset": args.preset,
+            "results": results,
+        }
+        if len(results) == 1:
+            payload["result"] = results[0]["result"]
+        json.dump(payload, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+        return exit_code
+    finally:
+        if runtime.input_controller is not None:
+            runtime.input_controller.close()
 
-    payload = {
-        "config_path": loaded.config_path,
-        "used_example_config_fallback": loaded.used_example_config_fallback,
-        "bindings_file": str(bindings_file),
-        "bindings_source": bindings_source,
-        "sequence": resolved_sequence is not None,
-        "preset": args.preset,
-        "results": results,
-    }
-    if len(results) == 1:
-        payload["result"] = results[0]["result"]
-    json.dump(payload, sys.stdout, indent=2)
-    sys.stdout.write("\n")
-    return exit_code
 
 
 if __name__ == "__main__":

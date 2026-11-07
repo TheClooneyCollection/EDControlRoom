@@ -166,6 +166,16 @@ class _InputControllerStub:
     def __init__(self) -> None:
         self._target = InputTargetState(platform="macos", mode="foreground")
 
+    def close(self) -> None:
+        pass
+
+    def set_wine_helper_target(self) -> InputTargetState:
+        self._target = InputTargetState(platform="macos", mode="wine_helper", hwnd=42, pid=42, process_name="EliteDangerous64.exe", helper_version="0.1.0")
+        return self._target
+
+    def input_status(self) -> dict:
+        return {"wine_helper": {"fg": "EliteDangerous64.exe", "held": [], "target_alive": True}}
+
     def current_target(self) -> InputTargetState:
         return self._target
 
@@ -3086,6 +3096,23 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertFalse(self.app._saved_state.instant_mode)
         self.assertIn("Instant mode off", "\n".join(self.app.logged))
 
+    def test_set_input_switches_helper_foreground_and_pid_and_reports_status(self) -> None:
+        controller = _InputControllerStub()
+        self.app = _HarnessApp(_make_context(Path(self.tmpdir.name), input_controller=controller))
+        self.app._dispatch_command("set_input wine_helper")
+        self.assertEqual(controller.current_target().mode, "wine_helper")
+        self.assertEqual(self._last_history().command, "set_input")
+        self.assertIn("fg EliteDangerous64.exe, alive True, held []", self.app._describe_input_target())
+        self.app._dispatch_command("set_input foreground")
+        self.assertEqual(controller.current_target().mode, "foreground")
+        self.app._dispatch_command("set_input pid 99")
+        self.assertEqual(controller.current_target().pid, 99)
+        self.app._dispatch_command("set_input pid")
+        self.assertEqual(controller.current_target().pid, 4242)
+        self.app._dispatch_command("set_input unknown")
+        self.assertIn("Usage: set_input", "\n".join(self.app.logged))
+        self.assertEqual(controller.current_target().pid, 4242)
+
     def test_set_pid_auto_targets_default_process_name(self) -> None:
         self.app = _HarnessApp(_make_context(Path(self.tmpdir.name), input_controller=_InputControllerStub()))
 
@@ -3276,7 +3303,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
 
         self.app._log_startup_modes()
 
-        self.assertIn("Input target foreground window — control with: set_pid | set_hwnd", "\n".join(self.app.logged))
+        self.assertIn("Input target foreground window — control with: set_input | set_pid | set_hwnd", "\n".join(self.app.logged))
     def test_announce_startup_greeting_emits_tts_announcement(self) -> None:
         self.app._tts = _FakeTTS()
 

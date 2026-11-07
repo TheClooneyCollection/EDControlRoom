@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from functools import lru_cache
 import json
+import math
 from pathlib import Path
 import sys
 import tomllib
@@ -18,6 +19,7 @@ from edap.timing import (
 DEFAULT_CONFIG_PATH = Path("config.toml")
 EXAMPLE_CONFIG_PATH = Path("config.example.toml")
 DEFAULT_PATHS_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "paths.toml"
+DEFAULT_INPUT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "input.toml"
 DEFAULT_RUNTIME_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "runtime.toml"
 DEFAULT_CONTROLS_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "controls.toml"
 DEFAULT_SCREEN_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "screen.toml"
@@ -134,6 +136,61 @@ class CaptureConfig:
 
 
 @dataclass(frozen=True)
+class WineHelperConfig:
+    wine_path: str = ""
+    bottle: str = ""
+    helper_path: str = r"C:\edap\edap_input_helper.exe"
+    process_name: str = "EliteDangerous64.exe"
+    port: int = 47811
+    launch: str = "managed"
+    startup_timeout_s: float = 10.0
+    request_timeout_s: float = 1.0
+    max_hold_s: float = 10.0
+    token_file: Path = Path(".wine_input_helper.token")
+
+
+@dataclass(frozen=True)
+class InputConfig:
+    target: str = "foreground"
+    wine_helper: WineHelperConfig = field(default_factory=WineHelperConfig)
+
+
+def validate_wine_helper(config: WineHelperConfig, *, selected: bool) -> None:
+    if config.launch not in {"managed", "manual"}:
+        raise ConfigError("Config value `input.wine_helper.launch` must be managed or manual.")
+    if isinstance(config.port, bool) or not 1 <= config.port <= 65535:
+        raise ConfigError("Config value `input.wine_helper.port` must be between 1 and 65535.")
+    for key in ("startup_timeout_s", "request_timeout_s", "max_hold_s"):
+        value = getattr(config, key)
+        if not math.isfinite(value) or value <= 0:
+            raise ConfigError(f"Config value `input.wine_helper.{key}` must be finite and positive.")
+    for key in ("helper_path", "process_name") + (("wine_path", "bottle") if selected else ()):
+        if not getattr(config, key).strip():
+            raise ConfigError(f"Config value `input.wine_helper.{key}` must be set.")
+
+
+def _input_config(raw: dict[str, object]) -> InputConfig:
+    source = _optional_table(raw, "input")
+    helper = _optional_table(source, "wine_helper")
+    default = WineHelperConfig()
+    config = InputConfig(
+        target=_string(source, "target", "foreground"),
+        wine_helper=WineHelperConfig(
+            **{key: _string(helper, key, getattr(default, key)) for key in
+               ("wine_path", "bottle", "helper_path", "process_name", "launch")},
+            **{key: _float(helper, key, getattr(default, key)) for key in
+               ("startup_timeout_s", "request_timeout_s", "max_hold_s")},
+            port=_integer(helper, "port", default.port),
+            token_file=Path(_string(helper, "token_file", str(default.token_file))).expanduser(),
+        ),
+    )
+    if config.target not in {"foreground", "pid", "wine_helper"}:
+        raise ConfigError("Config value `input.target` must be foreground, pid or wine_helper.")
+    validate_wine_helper(config.wine_helper, selected=config.target == "wine_helper")
+    return config
+
+
+@dataclass(frozen=True)
 class RuntimeConfig:
     platform: str
     debug: bool
@@ -189,6 +246,7 @@ class AppConfig:
     runtime: RuntimeConfig
     timing: "TimingConfig"
     control_room: ControlRoomConfig
+    input: InputConfig = field(default_factory=InputConfig)
     tts: TTSConfig = field(default_factory=TTSConfig)
     messages: MessagesConfig = field(default_factory=default_messages_config)
     error_messages: ErrorMessagesConfig = field(default_factory=default_error_messages_config)
@@ -212,6 +270,11 @@ def _load_default_toml_section(path: Path, section: str, label: str) -> dict[str
 @lru_cache(maxsize=1)
 def _load_default_paths_table() -> dict[str, object]:
     return _load_default_toml_section(DEFAULT_PATHS_CONFIG_PATH, "paths", "paths")
+
+
+@lru_cache(maxsize=1)
+def _load_default_input_table() -> dict[str, object]:
+    return _load_default_toml_section(DEFAULT_INPUT_CONFIG_PATH, "input", "input")
 
 
 @lru_cache(maxsize=1)
@@ -311,6 +374,7 @@ def _default_app_config_table() -> dict[str, object]:
     return {
         "paths": _load_default_paths_table(),
         "runtime": _load_default_runtime_table(),
+        "input": _load_default_input_table(),
         "controls": _load_default_controls_table(),
         "screen": _load_default_screen_table(),
         "control_room": _load_default_control_room_table(),
@@ -827,6 +891,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
         )
 
     config = AppConfig(
+        input=_input_config(raw),
         paths=PathsConfig(
             journal_dir=_optional_path(paths.get("journal_dir")),
             bindings_file=_optional_path(paths.get("bindings_file")),

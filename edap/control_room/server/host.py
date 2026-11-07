@@ -175,6 +175,8 @@ class HeadlessControlRoomHost(ControlRoomApp):
         if self._watcher_thread is not None:
             self._watcher_thread.join(timeout=1.0)
         self._tts.close()
+        if self._ctx.input_controller is not None:
+            self._ctx.input_controller.close()
 
     def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None:
         resolved = raw_input
