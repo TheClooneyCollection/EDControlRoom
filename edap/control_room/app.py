@@ -61,6 +61,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.events import MouseScrollDown, MouseScrollUp
 from textual.widgets import Footer, Header, Input, OptionList, RichLog, Static, Tab, Tabs
 
+from edap.haul_history import WARNING_IDS
 from edap.config import AppConfig
 from edap.control_room.backend import ControlRoomBackend, LocalControlRoomBackend
 from edap.control_room.dependencies import (
@@ -1475,8 +1476,6 @@ class ControlRoomApp(App[None]):
         _haul_tracking.handle_haul_event(self, ev, station_before=station_before)
 
     def _announce_tts(self, message_id: AnnouncementId, /, **values: object) -> None:
-        from edap.haul_history import WARNING_IDS
-
         run = self._haul_stats.current_run
         if run is not None and message_id.value in WARNING_IDS:
             run["warnings"].append(message_id.value)

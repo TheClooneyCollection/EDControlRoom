@@ -2369,6 +2369,11 @@ on_land = true
         self.app._handle_haul_event({"event": "MarketSell", "TotalSale": 400_000}, station_before="Pawelczyk Dock")
         self.assertEqual(self.app._haul_stats.completed_runs, 1)
         self.assertEqual(self.app._haul_stats.last_run_profit, 300_000)
+        from edap.haul_history import load_runs
+        rows, skipped = load_runs(self.app._config.control_room.haul_runs_file)
+        self.assertEqual(skipped, 0)
+        self.assertEqual((rows[-1]["cost"], rows[-1]["revenue"]), (350_000, 650_000))
+        self.assertEqual(rows[-1]["profit"], self.app._haul_stats.last_run_profit)
         self.assertEqual(self.app._haul_stats.last_run_profit_delta, 50_000)
         self.assertEqual(self.app._haul_stats.accumulated_profit, 300_000)
         self.assertEqual(self.app._haul_stats.last_run_elapsed_s, 200.0)
@@ -4340,15 +4345,18 @@ class HaulRunHistoryTests(unittest.TestCase):
         self.assertEqual(skipped, 0)
         return rows
 
-    def complete(self) -> None:
-        self.event("MarketBuy", "Alpha", 0, Type="gold", Count=4, TotalCost=40)
-        self.event("MarketBuy", "Alpha", 1, Type="gold", Count=1, TotalCost=10)
-        self.event("Undocked", "Alpha", 2)
-        self.event("MarketSell", "Beta", 10, Type="gold", Count=5, TotalSale=100)
-        self.event("MarketBuy", "Beta", 11, Type="silver", Count=5, TotalCost=20)
-        self.event("Undocked", "Beta", 12)
-        self.event("Docked", "Alpha", 20, StationName="Alpha")
-        self.event("MarketSell", "Alpha", 21, Type="silver", Count=5, TotalSale=70)
+    def complete(self, offset: int = 0) -> None:
+        self.event("MarketBuy", "Alpha", offset + 0, Type="gold", Count=4, TotalCost=40)
+        self.event("MarketBuy", "Alpha", offset + 1, Type="gold", Count=1, TotalCost=10)
+        self.event("Undocked", "Alpha", offset + 2)
+        self.event("MarketSell", "Beta", offset + 10, Type="gold", Count=5, TotalSale=100)
+        self.event("MarketBuy", "Beta", offset + 11, Type="silver", Count=5, TotalCost=20)
+        self.event("Undocked", "Beta", offset + 12)
+        self.event("Docked", "Alpha", offset + 20, StationName="Alpha")
+        self.event("MarketSell", "Alpha", offset + 21, Type="silver", Count=5, TotalSale=70)
+        row = self.rows()[-1]
+        self.assertEqual((row["cost"], row["revenue"]), (70, 170))
+        self.assertEqual(row["profit"], self.app._haul_stats.last_run_profit)
 
     def test_completed_run_retains_all_trades_and_top_ups(self) -> None:
         self.complete()
@@ -4409,7 +4417,7 @@ class HaulRunHistoryTests(unittest.TestCase):
         self.start()
         row, = self.rows()
         self.assertEqual(row["revenue"], 50)
-        self.assertIn("new haul", row["reason"])
+        self.assertIn("not a clean run", row["reason"])
 
     def test_failed_append_survives_clear_and_restart(self) -> None:
         from edap.control_room.persistence import clear_session_stats, load_saved_state
@@ -4463,6 +4471,35 @@ class HaulRunHistoryTests(unittest.TestCase):
         self.assertEqual(row["cost"], 10)
         self.assertIsNone(row["expected_profit"])
         self.assertIsNone(row["profit_delta"])
+
+
+    def test_resumed_remainder_is_aborted_before_clean_run(self) -> None:
+        self.app._ship.station = "Beta"
+        self.start()
+        self.event("MarketSell", "Beta", 0, Type="gold", Count=2, TotalSale=50)
+        self.event("MarketBuy", "Beta", 1, Type="silver", Count=2, TotalCost=20)
+        self.event("Docked", "Alpha", 2, StationName="Alpha")
+        self.event("MarketSell", "Alpha", 3, Type="silver", Count=2, TotalSale=40)
+        self.complete(offset=10)
+        aborted, completed = self.rows()
+        self.assertEqual(aborted["status"], "aborted")
+        self.assertIn("not a clean run", aborted["reason"])
+        self.assertEqual((aborted["cost"], aborted["revenue"], aborted["profit"]), (20, 90, 70))
+        self.assertEqual(completed["status"], "completed")
+        self.assertEqual(completed["profit"], self.app._haul_stats.last_run_profit)
+
+    def test_resumed_remainder_without_sale_is_aborted_before_station_one_buy(self) -> None:
+        self.app._ship.station = "Beta"
+        self.start()
+        self.event("MarketSell", "Beta", 0, Type="gold", Count=2, TotalSale=50)
+        self.event("Docked", "Alpha", 1, StationName="Alpha")
+        self.complete(offset=10)
+        aborted, completed = self.rows()
+        self.assertEqual(aborted["status"], "aborted")
+        self.assertEqual(aborted["revenue"], 50)
+        self.assertEqual(completed["status"], "completed")
+        self.assertEqual(completed["legs"][0]["market_buy_events"], 2)
+        self.assertEqual(completed["profit"], self.app._haul_stats.last_run_profit)
 
 
 if __name__ == "__main__":

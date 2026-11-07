@@ -92,6 +92,10 @@ def record_event(stats: HaulStats, event: dict[str, Any], station: str, system: 
             "expected_profit": stats.expected_profit_per_trip, "profit_delta": None,
             "top_ups": 0, "warnings": [], "app_version": get_current_version(),
             "phase": None,
+            "partial_start": not (stats.clean_run_active or (
+                station.casefold() == stats.station_1.casefold()
+                and (name == "Undocked" or (name == "MarketBuy" and stats.waiting_for_station_1_departure))
+            )),
         }
     row = stats.current_run
     row["ended_at"] = utc_timestamp(event.get("timestamp"))

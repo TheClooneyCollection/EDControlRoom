@@ -225,6 +225,11 @@ def handle_haul_event(
         and current_station.lower() == stats.station_2.lower()
     )
 
+    if (at_station_1 and stats.current_run is not None
+            and stats.current_run.get("partial_start")
+            and (event == "Undocked" or (event == "MarketBuy" and stats.waiting_for_station_1_departure))):
+        close_run(stats, "aborted", "resumed mid-run, not a clean run", None, app._time_fn())
+
     if at_station_1 or at_station_2 or event in {"MarketBuy", "MarketSell"}:
         record_event(stats, ev, current_station or "", ev.get("StarSystem") or app._ship.system or "")
         if stats.current_run is not None:
@@ -270,6 +275,7 @@ def handle_haul_event(
             if stats.docked_back_at_station_1:
                 finalize_completed_haul_run(app)
         elif at_station_1:
+            close_run(stats, "aborted", "resumed mid-run, not a clean run", None, app._time_fn())
             app._log(
                 "[dim]Ignoring station 1 sale for haul stats "
                 "(discarding profit from prior run).[/]"
