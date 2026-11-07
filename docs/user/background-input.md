@@ -153,7 +153,7 @@ The bottle is running under a different CrossOver app than `wine_path` points at
 **`wine helper couldn't focus Elite inside the CrossOver bottle (focus_failed); no keys were sent.`**
 In Control Room this shows as `Input to Elite failed: ...`.
 - **Cause:** the helper couldn't make Elite the focused window inside Wine, even after retrying, so no keys were sent.
-- **Fix:** retry. If it keeps failing, run `set_input wine_helper` to restart the helper, or `set_input foreground` and keep Elite in front. The helper log line `focus_failed fg=<process> err=<code>` shows which window held focus; include it when reporting the problem.
+- **Fix:** retry. If it keeps failing, run `set_input wine_helper` to reconnect, restart Control Room to restart the helper, or run `set_input foreground` and keep Elite in front. The helper log line `focus_failed fg=<process> err=<code>` shows which window held focus; include it when reporting the problem.
 
 **`wine helper refuses Alt scan code 0x38`**
 - **Cause:** a binding the routine needs uses Alt.
@@ -162,6 +162,6 @@ In Control Room this shows as `Input to Elite failed: ...`.
 **`wine helper transport failed; reconnected and released all keys; interrupted input burst aborted (not replayed).`**
 The connection dropped mid-burst. The helper reconnected and released every key, but the interrupted action was not repeated. Re-run the step.
 
-**Stuck keys.** The helper releases all held keys when Control Room disconnects or quits, when Elite closes, when the helper exits normally, and when any key is held past `max_hold_s`. If the helper is force-killed, it cannot clean up. Tap the stuck key once in Elite, or restart the helper with `set_input wine_helper`, which releases everything on connect.
+**Stuck keys.** The helper releases all held keys when Control Room disconnects or quits, when Elite closes, when the helper exits normally, and when any key is held past `max_hold_s`. If the helper is force-killed, it cannot clean up. Tap the stuck key once in Elite, or run `set_input wine_helper`, which releases everything when it connects.
 
 **Check the helper log.** The helper writes `C:\edap\helper.log` inside the bottle (`<bottle>/drive_c/edap/helper.log`). It records connections and which focus step worked.

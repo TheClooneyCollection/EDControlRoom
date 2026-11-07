@@ -10,7 +10,7 @@
 - Journal tailing, bindings lookup, runtime construction, and shared platform seams are in place across supported targets.
 ## Caveats
 - Linux remains unvalidated.
-- CrossOver/Elite background input works through the `wine_helper` input mode (C helper in the bottle, `set_input wine_helper`, managed launch). Verified live 2026-11-07 on the Test bottle (CrossOver Preview, ghostty in front): the galaxy map opened and closed with no macOS focus theft, no Alt side effects, and the console helper ran headless. `foreground` stays the default config. Verify with the journal `Music` event, not `Status.json` `GuiFocus`. A press sent while the galaxy map is loading is dropped, so verification sequences need a gap of about 8s.
+- CrossOver/Elite background input works through the `wine_helper` input mode (C helper in the bottle, `set_input wine_helper`, managed launch). Verified live 2026-11-07 on the Test bottle (CrossOver Preview, ghostty in front): the galaxy map opened and closed with no macOS focus theft, no Alt side effects, and the console helper ran headless. `foreground` stays the default config. Verify with the journal `Music` event, not `Status.json` `GuiFocus`. A press sent while the galaxy map is loading is dropped, so verification sequences need a gap of about 8s. A long-lived server helper lost focus after Mac app switches (`focus_failed`); fixed on `fix/wine-helper-focus` (escalating focus retry), awaiting live retest.
 - Windows background targeting currently uses `PostMessageW` against a resolved top-level window. The CrossOver `ControlSend` result suggests Elite ignores window messages, so this path is likely ineffective until it is validated live.
 - The legacy CV-driven align loop is still not ported into the active runtime.
 ## Next
