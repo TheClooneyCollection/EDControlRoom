@@ -104,7 +104,7 @@ class ShipStatus:
     destination_name: str | None
 
 
-def read_status(journal_dir: Path) -> ShipStatus | None:
+def read_status(journal_dir: Path, *, require_flags: bool = False) -> ShipStatus | None:
     path = journal_dir / "Status.json"
     if not path.exists():
         return None
@@ -114,6 +114,8 @@ def read_status(journal_dir: Path) -> ShipStatus | None:
         return None
 
     data = loads(text)
+    if require_flags and (not isinstance(data, dict) or type(data.get("Flags")) is not int):
+        return None
     raw_flags = data.get("Flags", 0)
     pips = data.get("Pips")
     fuel = data.get("Fuel") or {}

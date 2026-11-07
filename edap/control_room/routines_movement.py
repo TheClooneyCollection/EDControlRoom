@@ -1,6 +1,7 @@
 """Movement routine launchers (jump, escape mass lock, boost)."""
 from __future__ import annotations
 
+from edap.status import read_status
 from edap.control_room.interfaces import RoutineHost
 from edap.routines import RoutineResult, escape_mass_lock, jump
 
@@ -19,6 +20,9 @@ def cmd_jump(app: RoutineHost, *, skip_delay: bool = False) -> None:
         fn=lambda: jump(
             controls,
             watcher,
+            read_status_fn=lambda: read_status(app._journal_dir, require_flags=True),
+            sleeper=app._make_sleeper(),
+            hardpoints_retract_timeout_s=app._config.controls.hardpoints_retract_timeout_seconds,
             time_fn=time_fn,
             progress_fn=progress,
         ),

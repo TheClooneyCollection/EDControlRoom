@@ -16,6 +16,9 @@ class SupportsSetSpeedZero(Protocol):
 
 
 class SupportsJumpControls(SupportsSetSpeedZero, Protocol):
+    def deploy_hardpoint_toggle(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the DeployHardpointToggle action."""
+
     def hyper_super_combination(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         """Dispatch the HyperSuperCombination action."""
 

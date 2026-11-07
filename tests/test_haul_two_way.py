@@ -45,6 +45,8 @@ _DEFAULTS = default_haul_routine_defaults()
 def haul_loop_two_way(*args, **kwargs):
     controls, watcher = args
     journal_dir = kwargs.pop("journal_dir")
+    if not (journal_dir / "Status.json").exists():
+        (journal_dir / "Status.json").write_text('{"Flags": 0}', encoding="utf-8")
     station_1_buying = kwargs.pop("station_1_buying")
     station_2_buying = kwargs.pop("station_2_buying")
     runtime = build_haul_runtime(

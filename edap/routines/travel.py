@@ -7,6 +7,7 @@ from edap.routines._base import RoutineResult
 from edap.routines.runtime import RoutineRuntime
 from edap.routines.transit import (
     depart_system_to_route,
+    guard_hardpoints,
     is_manual_landing_result,
     read_ship_position,
     set_galaxy_map_destination_for_transit,
@@ -90,6 +91,9 @@ def travel_to_station(runtime: RoutineRuntime, *, destination: TravelDestination
         ):
             route_confirmed = _set_route_from_supercruise(runtime, destination.system)
             if route_confirmed:
+                failure = guard_hardpoints(runtime)
+                if failure is not None:
+                    return failure
                 runtime.progress_fn("Route confirmed from supercruise - engaging hyperspace...")
                 runtime.announce_fn(AnnouncementId.STATION_CLEARED)
                 runtime.controls.hyper_super_combination()

@@ -33,6 +33,8 @@ def _runtime(
     progress: list[str] | None = None,
     announcements: list[tuple[AnnouncementId, dict[str, object]]] | None = None,
 ) -> HaulRuntime:
+    if not (journal_dir / "Status.json").exists():
+        (journal_dir / "Status.json").write_text('{"Flags": 0}', encoding="utf-8")
     return build_haul_runtime(
         controls=controls or FakeShipControls(),
         watcher=watcher or FakeWatcher([]),

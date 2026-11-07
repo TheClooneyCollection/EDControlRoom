@@ -56,6 +56,10 @@ class ProgressShipControls:
         self._log("RollRightButton", repeat)
         return self._controls.roll_right(repeat=repeat, hold_s=hold_s)
 
+    def deploy_hardpoint_toggle(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        self._log("DeployHardpointToggle", repeat)
+        return self._controls.deploy_hardpoint_toggle(repeat=repeat, hold_s=hold_s)
+
     def hyper_super_combination(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
         self._log("HyperSuperCombination", repeat)
         return self._controls.hyper_super_combination(repeat=repeat, hold_s=hold_s)

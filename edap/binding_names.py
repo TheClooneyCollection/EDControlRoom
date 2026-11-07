@@ -11,6 +11,7 @@ class BindingActionInfo:
 
 
 _ACTION_INFO: dict[str, BindingActionInfo] = {
+    "DeployHardpointToggle": BindingActionInfo("DeployHardpointToggle", "Deploy Hardpoints", "Ship Controls > Weapons"),
     "SetSpeedZero": BindingActionInfo("SetSpeedZero", "Set Speed to 0%", "Ship Controls > Flight Throttle"),
     "SetSpeed100": BindingActionInfo("SetSpeed100", "Set Speed to 100%", "Ship Controls > Flight Throttle"),
     "HyperSuperCombination": BindingActionInfo(

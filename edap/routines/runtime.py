@@ -23,6 +23,7 @@ class RoutineTiming:
     deny_retry_delay_s: float
     mass_lock_boost_delay_s: float
     nav_panel_open_delay_s: float
+    hardpoints_retract_timeout_s: float = 5.0
 
 
 @dataclass(frozen=True)

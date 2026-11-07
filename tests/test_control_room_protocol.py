@@ -43,6 +43,7 @@ def _make_config(journal_dir: Path) -> AppConfig:
     return AppConfig(
         paths=PathsConfig(journal_dir=journal_dir, bindings_file=None),
         controls=ControlsConfig(
+            hardpoints_retract_timeout_seconds=5.0,
             start_hotkey="home",
             stop_hotkey="end",
             scanner_mode="off",

@@ -76,6 +76,8 @@ def _runtime(
     progress=None,
     announcements=None,
 ) -> RoutineRuntime:
+    if not (journal_dir / "Status.json").exists():
+        (journal_dir / "Status.json").write_text('{"Flags": 0}', encoding="utf-8")
     return RoutineRuntime(
         controls=controls,
         watcher=watcher,

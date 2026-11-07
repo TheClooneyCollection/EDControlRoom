@@ -12,7 +12,9 @@ from edap.routines.callbacks import AnnouncementCallback, ProgressCallback
 from edap.routines.docking import _undock_until_undocked, _wait_for_clear_of_station, dock, station_refuel_menu
 from edap.routines.escape import escape_mass_lock
 from edap.routines.galaxy_map import set_gal_map_destination
+from edap.routines.hardpoints import retract_hardpoints_before_jump
 from edap.state import get_latest_journal_log, read_ship_state
+from edap.status import read_status
 from edap.tts import AnnouncementId
 
 
@@ -35,6 +37,7 @@ class TransitTiming(Protocol):
     deny_retry_delay_s: float
     mass_lock_boost_delay_s: float
     nav_panel_open_delay_s: float
+    hardpoints_retract_timeout_s: float
 
 
 class TransitTravelSettings(Protocol):
@@ -255,9 +258,21 @@ def should_set_galaxy_map_destination(*, current_system: str, destination_system
     return True
 
 
-def engage_hyperspace_after_escape(runtime: TransitRuntime, *, progress_message: str) -> None:
+def guard_hardpoints(runtime: TransitRuntime) -> RoutineResult | None:
+    return retract_hardpoints_before_jump(
+        read_status_fn=lambda: read_status(runtime.journal_dir, require_flags=True),
+        toggle_fn=runtime.controls.deploy_hardpoint_toggle,
+        timeout_s=runtime.timing.hardpoints_retract_timeout_s,
+        time_fn=runtime.time_fn, sleeper=runtime.sleeper, progress_fn=runtime.progress_fn,
+    )
+
+
+def engage_hyperspace_after_escape(runtime: TransitRuntime, *, progress_message: str) -> RoutineResult | None:
     if not runtime.travel.auto_hyperspace_engage:
         return
+    failure = guard_hardpoints(runtime)
+    if failure is not None:
+        return failure
     runtime.progress_fn(progress_message)
     runtime.announce_fn(AnnouncementId.STATION_CLEARED)
     runtime.controls.hyper_super_combination()
@@ -374,10 +389,13 @@ def undock_and_route_to_system(
         progress_fn=runtime.progress_fn,
     )
     if route_confirmed:
-        engage_hyperspace_after_escape(
+        failure = engage_hyperspace_after_escape(
             runtime,
             progress_message="Mass lock cleared - engaging hyperspace via HyperSuperCombination...",
         )
+        if failure is not None:
+            runtime.announce_fn(AnnouncementId.HAUL_ABORTED)
+            return failure
     else:
         runtime.progress_fn("Skipping automatic FSD engage because the galaxy-map route is unconfirmed.")
     return clear_result if clear_result.dispatch.status == "ok" else result
@@ -412,10 +430,13 @@ def depart_system_to_route(
         progress_fn=runtime.progress_fn,
     )
     if route_confirmed:
-        engage_hyperspace_after_escape(
+        failure = engage_hyperspace_after_escape(
             runtime,
             progress_message="Mass lock cleared - engaging hyperspace via HyperSuperCombination...",
         )
+        if failure is not None:
+            runtime.announce_fn(AnnouncementId.HAUL_ABORTED)
+            return failure
     else:
         runtime.progress_fn("Skipping automatic FSD engage because the galaxy-map route is unconfirmed.")
     return RoutineResult(action="depart_system", dispatch=ActionDispatchResult(action="depart_system", status="ok"))

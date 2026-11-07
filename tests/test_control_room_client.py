@@ -182,6 +182,7 @@ def _make_observer_context() -> RuntimeContext:
         config=AppConfig(
             paths=PathsConfig(journal_dir=None, bindings_file=None),
             controls=ControlsConfig(
+            hardpoints_retract_timeout_seconds=5.0,
                 start_hotkey="home",
                 stop_hotkey="end",
                 scanner_mode="off",

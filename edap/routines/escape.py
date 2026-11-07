@@ -35,7 +35,10 @@ def escape_mass_lock(
     last_boost: ActionDispatchResult | None = None
 
     while True:
-        status = read_status(journal_dir)
+        try:
+            status = read_status(journal_dir)
+        except (OSError, ValueError, TypeError, KeyError, AttributeError, IndexError):
+            status = None
         if status is None or not status.flags.fsd_mass_locked:
             break
         progress_fn("FSD mass locked -- boosting away...")

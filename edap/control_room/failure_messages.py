@@ -26,6 +26,9 @@ def describe_routine_failure(
 ) -> tuple[str, str | None]:
     reason = (result.dispatch.reason or result.dispatch.status or "unknown error").strip()
 
+    if result.action == "RetractHardpoints":
+        return reason, "Retract hardpoints manually, check DeployHardpointToggle in Ship Controls > Weapons and Status.json, then retry the routine."
+
     station_message = _describe_station_mismatch(reason, config)
     if station_message is not None:
         return station_message

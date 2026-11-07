@@ -78,6 +78,7 @@ class ControlsConfig:
     undock_timeout_seconds: float
     undock_no_track_timeout_seconds: float
     mass_lock_boost_delay_seconds: float
+    hardpoints_retract_timeout_seconds: float
     market_nav_delay_seconds: float
     market_trade_max_attempts: int
     market_buy_top_up_max_attempts: int
@@ -635,6 +636,8 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `controls.undock_timeout_seconds` must be non-negative.")
     if config.controls.undock_no_track_timeout_seconds < 0:
         raise ConfigError("Config value `controls.undock_no_track_timeout_seconds` must be non-negative.")
+    if not math.isfinite(config.controls.hardpoints_retract_timeout_seconds) or config.controls.hardpoints_retract_timeout_seconds <= 0:
+        raise ConfigError("Config value `controls.hardpoints.retract_timeout_seconds` must be positive and finite.")
     if config.controls.mass_lock_boost_delay_seconds < 0:
         raise ConfigError("Config value `controls.mass_lock_boost_delay_seconds` must be non-negative.")
     if config.controls.market_nav_delay_seconds < 0:
@@ -958,6 +961,11 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
                 "mass_lock_boost_delay_seconds",
                 _float(default_controls_flat, "mass_lock_boost_delay_seconds", 0.0),
                 aliases=("mass_lock.boost_delay_seconds",),
+            ),
+            hardpoints_retract_timeout_seconds=_float(
+                controls_flat, "hardpoints_retract_timeout_seconds",
+                _float(default_controls_flat, "hardpoints.retract_timeout_seconds", 5.0),
+                aliases=("hardpoints.retract_timeout_seconds",),
             ),
             market_nav_delay_seconds=_float(
                 controls_flat,

@@ -13,12 +13,17 @@ from edap.routines._base import (
     _wait_for_event,
 )
 from edap.routines.callbacks import ProgressCallback
+from edap.routines.hardpoints import retract_hardpoints_before_jump
+from edap.status import ShipStatus
 
 
 def jump(
     controls: SupportsJumpControls,
     watcher: SupportsPollEvents,
     *,
+    read_status_fn: Callable[[], ShipStatus | None],
+    sleeper: Callable[[float], None],
+    hardpoints_retract_timeout_s: float = 5.0,
     max_retries: int = 3,
     jump_hold_s: float = 1.0,
     start_timeout_s: float = 20.0,
@@ -39,6 +44,13 @@ def jump(
     last_trigger_event: dict[str, object] | None = None
 
     for attempt in range(1, max_retries + 1):
+        failure = retract_hardpoints_before_jump(
+            read_status_fn=read_status_fn, toggle_fn=controls.deploy_hardpoint_toggle,
+            timeout_s=hardpoints_retract_timeout_s, time_fn=time_fn,
+            sleeper=sleeper, progress_fn=progress_fn,
+        )
+        if failure is not None:
+            return failure
         progress_fn(f"Dispatching jump (attempt {attempt}/{max_retries})...")
         dispatch = controls.hyper_super_combination(hold_s=jump_hold_s)
         last_dispatch = dispatch

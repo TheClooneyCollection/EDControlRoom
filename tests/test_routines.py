@@ -35,6 +35,9 @@ def auto_zero_throttle_on_arrival(*args, **kwargs):
 
 def jump(*args, **kwargs):
     kwargs.setdefault("progress_fn", noop_progress)
+    from types import SimpleNamespace
+    kwargs.setdefault("read_status_fn", lambda: SimpleNamespace(flags=SimpleNamespace(hardpoints_deployed=False)))
+    kwargs.setdefault("sleeper", lambda _: None)
     return _jump(*args, **kwargs)
 
 

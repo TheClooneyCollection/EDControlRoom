@@ -228,7 +228,7 @@ class RunRoutineCliTests(unittest.TestCase):
                 exit_code = run_routine.main()
 
         self.assertEqual(exit_code, 0)
-        build_runtime_context_mock.assert_called_once_with(loaded.config, actions=["SetSpeedZero", "HyperSuperCombination"])
+        build_runtime_context_mock.assert_called_once_with(loaded.config, actions=["SetSpeedZero", "HyperSuperCombination", "DeployHardpointToggle"])
         jump_mock.assert_called_once()
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["routine"], "jump")

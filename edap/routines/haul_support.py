@@ -43,6 +43,8 @@ class HaulTiming:
     @property
     def mass_lock_boost_delay_s(self) -> float: return self.routine.mass_lock_boost_delay_s
     @property
+    def hardpoints_retract_timeout_s(self) -> float: return self.routine.hardpoints_retract_timeout_s
+    @property
     def nav_panel_open_delay_s(self) -> float: return self.routine.nav_panel_open_delay_s
 
 
@@ -93,7 +95,7 @@ _HAUL_TIMING_EXTRA_FIELDS = ("max_hold_s", "trade_timeout_s", "post_sell_settle_
 
 def build_haul_timing(**kwargs: float) -> HaulTiming:
     """Construct HaulTiming from a flat mapping of every timing field."""
-    routine_kwargs = {name: kwargs[name] for name in _ROUTINE_TIMING_FIELDS}
+    routine_kwargs = {name: kwargs[name] for name in _ROUTINE_TIMING_FIELDS if name in kwargs}
     extra_kwargs = {name: kwargs[name] for name in _HAUL_TIMING_EXTRA_FIELDS}
     return HaulTiming(routine=RoutineTiming(**routine_kwargs), **extra_kwargs)
 

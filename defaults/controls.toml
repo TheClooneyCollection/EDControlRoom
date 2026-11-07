@@ -30,6 +30,9 @@ timeout_seconds = 30.0
 no_track_timeout_seconds = 600.0
 in_space_timeout_seconds = 180.0
 
+[controls.hardpoints]
+retract_timeout_seconds = 5.0
+
 [controls.mass_lock]
 boost_delay_seconds = 5.0
 

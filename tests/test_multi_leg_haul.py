@@ -49,6 +49,8 @@ def multi_leg_haul(*args, **kwargs):
     controls, watcher = args
     definition = kwargs.pop("definition")
     journal_dir = kwargs.pop("journal_dir")
+    if not (journal_dir / "Status.json").exists():
+        (journal_dir / "Status.json").write_text('{"Flags": 0}', encoding="utf-8")
     runtime = build_haul_runtime(
         controls=controls,
         watcher=watcher,

@@ -15,6 +15,7 @@ DEFAULT_SHIP_CONTROL_ACTIONS = [
     "SetSpeedZero",
     "SetSpeed100",
     "HyperSuperCombination",
+    "DeployHardpointToggle",
     "UseBoostJuice",
     "FocusLeftPanel",
     "UI_Back",
@@ -219,6 +220,9 @@ class ShipControls:
 
     def boost(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
         return self.dispatch_action("UseBoostJuice", repeat=repeat, hold_s=hold_s)
+
+    def deploy_hardpoint_toggle(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        return self.dispatch_action("DeployHardpointToggle", repeat=repeat, hold_s=hold_s)
 
     def hyper_super_combination(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
         return self.dispatch_action("HyperSuperCombination", repeat=repeat, hold_s=hold_s)

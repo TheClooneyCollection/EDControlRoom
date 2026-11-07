@@ -29,6 +29,9 @@ class FakeShipControls:
         self.calls.append({"action": "SetSpeed100", "repeat": repeat, "hold_s": hold_s})
         return self._set_speed_zero_result
 
+    def deploy_hardpoint_toggle(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        return self._dispatch("DeployHardpointToggle", repeat, hold_s)
+
     def hyper_super_combination(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         self.calls.append({"action": "HyperSuperCombination", "repeat": repeat, "hold_s": hold_s})
         return self._jump_result

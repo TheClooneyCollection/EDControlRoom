@@ -35,6 +35,7 @@ def build_routine_runtime(
         watcher=watcher,
         journal_dir=app._journal_dir,
         timing=RoutineTiming(
+            hardpoints_retract_timeout_s=cfg.hardpoints_retract_timeout_seconds,
             step_delay_s=cfg.step_delay_seconds,
             dock_timeout_s=dock_timeout_s,
             request_timeout_s=request_timeout_s,

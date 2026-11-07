@@ -15,6 +15,7 @@ from edap.routines.haul_support import HaulMarketSettings, HaulRuntime, HaulTimi
 from edap.routines.haul_two_way import StationLeg, TwoWayHaulRoute
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.ship_controls import ShipControls
+from edap.status import read_status
 from edap.state import JournalWatcher
 from edap.timing import TimingSampler
 
@@ -439,7 +440,7 @@ def main() -> int:
 
     routine_actions = ["SetSpeedZero"]
     if args.routine == ROUTINE_JUMP:
-        routine_actions = ["SetSpeedZero", "HyperSuperCombination"]
+        routine_actions = ["SetSpeedZero", "HyperSuperCombination", "DeployHardpointToggle"]
     elif args.routine == ROUTINE_DOCK:
         routine_actions = [
             "SetSpeedZero",
@@ -630,6 +631,9 @@ def main() -> int:
             result = jump(
                 logging_controls,
                 watcher,
+                read_status_fn=lambda: read_status(journal_dir, require_flags=True),
+                sleeper=logging_sleeper,
+                hardpoints_retract_timeout_s=loaded.config.controls.hardpoints_retract_timeout_seconds,
                 max_retries=args.max_retries,
                 jump_hold_s=args.hold_seconds if args.hold_seconds > 0 else 1.0,
                 start_timeout_s=args.start_timeout_seconds,
