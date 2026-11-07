@@ -11,6 +11,8 @@
 
 ## Changes
 
+- **CPU spin root cause (reproduced):** two helpers at ~100% CPU, both PPID 1, stdio on the user's terminal `ttys021`, both in its process group, last log line `disconnected`, port 47811 no longer listening. `sample` showed the main thread inside `_sigtramp` and a busy Rosetta exception-server thread. Sending SIGINT to a probe helper reproduced it at once (104%) for both the old polling loop and the new event loop; it still answers requests, but after `bye` it never exits. `SetConsoleCtrlHandler(NULL,TRUE)` did not help. A plain orphan (parent gone, no signal) stays at 0-1.2% and exits on `bye`. So quitting Control Room with Ctrl-C in its terminal hit the helper too, and the next Control Room could start a second helper because the stuck one had closed its socket.
+- Managed launch now uses `subprocess.Popen(argv, stdin=DEVNULL, start_new_session=True)`, so terminal signals never reach the helper. SIGKILL stops a spinning helper cleanly.
 - `edap_input_helper.c` main loop waits on events instead of polling: `WSAEventSelect` on the listen and client sockets plus `MsgWaitForMultipleObjects`, with the timeout from the nearest held-key deadline (1s idle cap, 20ms retry after a failed release). A busy guard logs `busy_wakes` once and backs off 10ms per extra wake above 1000 wakes/s.
 - Focus falls back to a short-lived child of the helper exe (`--focus-hwnd <decimal hwnd>`, 700ms timeout) when the in-process steps fail. The step is `child_focus`; failures log `focus_failed fg=<process> err=<code> child=<code>` (`0` focused, `1` refused, `100` didn't start, `101` timed out). Child mode verified from macOS: real hwnd exited 0 in 0.7s, a bogus hwnd exited 1.
 - Design doc, background-input troubleshooting and runtime status updated.
