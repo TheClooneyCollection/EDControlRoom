@@ -3188,7 +3188,8 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertEqual(self.app._haul_stats.total_run_elapsed_s, 900.0)
         self.assertEqual(self.app._haul_stats.last_run_profit, 400_000)
         self.assertEqual(self.app._haul_stats.last_run_elapsed_s, 240.0)
-        self.assertEqual(self.app._haul_stats.session_started_at, 140.0)
+        self.assertIsNone(self.app._haul_stats.session_started_at)
+        self.assertEqual(self.app._haul_stats.session_elapsed_s, 360.0)
 
     def test_load_saved_state_clears_persisted_session_when_configured(self) -> None:
         self.app._haul_stats.session_started_at = 50.0
@@ -3210,7 +3211,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertEqual(self.app._haul_stats.accumulated_profit, 0)
         self.assertEqual(self.app._haul_stats.completed_runs, 0)
         self.assertIsNone(self.app._haul_stats.last_run_profit)
-        self.assertEqual(self.app._haul_stats.session_started_at, 300.0)
+        self.assertIsNone(self.app._haul_stats.session_started_at)
         self.assertIn("Cleared persisted haul session on launch.", "\n".join(self.app.logged))
 
     def test_log_startup_modes_reports_instant_mode_state(self) -> None:
@@ -3260,7 +3261,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.app._dispatch_command("clear")
 
         self.assertEqual(self.app._haul_stats.accumulated_profit, 0)
-        self.assertEqual(self.app._haul_stats.session_started_at, 300.0)
+        self.assertIsNone(self.app._haul_stats.session_started_at)
         entry = self._last_history()
         self.assertEqual(entry.command, "new_session")
 
@@ -3280,6 +3281,114 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertIn("Stopped the persisted haul session.", "\n".join(self.app.logged))
         entry = self._last_history()
         self.assertEqual(entry.command, "stop")
+
+    def _start_timer_test_haul(self, now: float) -> None:
+        self.app._time_fn = lambda: now
+        self.app._start_haul_stats(
+            station_1_buying="Gold", station_2_buying="Silver",
+            station_1="Alpha", station_2="Beta",
+        )
+
+    def _assert_timer_views(self, session: float, elapsed: float | None) -> None:
+        from edap.control_room.dependencies import LocalControlRoomDataSource
+        from edap.control_room.rendering import fmt_duration, haul_stats_markup
+        remote = LocalControlRoomDataSource(self.app).current().haul_session
+        self.assertEqual(remote.session_elapsed_s, session)
+        self.assertEqual(remote.current_run_elapsed_s, elapsed)
+        for stats in (self.app._haul_stats, remote):
+            markup = haul_stats_markup(stats, current_balance=None, today_totals=None, now_fn=self.app._time_fn)
+            self.assertIn(f"[dim]{'Session':<12}[/]  {fmt_duration(session) if session else '—'}", markup)
+            self.assertIn(f"[dim]{'Elapsed':<12}[/]  {fmt_duration(elapsed)}", markup)
+
+    def test_routine_cleanup_freezes_local_and_remote_timers_until_next_start(self) -> None:
+        self._start_timer_test_haul(100.0)
+        self.app._active_routine_name = "haul"
+        self.app._time_fn = lambda: 160.0
+        self.app._clear_routine()
+        self._assert_timer_views(60.0, 60.0)
+        self.app._time_fn = lambda: 400.0
+        self._assert_timer_views(60.0, 60.0)
+        self.assertEqual(self.app._saved_state.session_elapsed_seconds, 60.0)
+
+        self._start_timer_test_haul(500.0)
+        self._assert_timer_views(60.0, 0.0)
+        self.app._time_fn = lambda: 520.0
+        self._assert_timer_views(80.0, 20.0)
+        self.app._stop_haul_stats()
+        self.app._time_fn = lambda: 900.0
+        self.app._stop_haul_stats()
+        self._assert_timer_views(80.0, 20.0)
+
+    def test_stopping_paused_haul_excludes_pause_and_idle_time(self) -> None:
+        self._start_timer_test_haul(100.0)
+        self.app._time_fn = lambda: 160.0
+        self.app._pause_haul_stats()
+        self.app._time_fn = lambda: 300.0
+        self.app._stop_haul_stats()
+        self.app._time_fn = lambda: 400.0
+        self._assert_timer_views(60.0, 60.0)
+        self._start_timer_test_haul(500.0)
+        self._assert_timer_views(60.0, 0.0)
+
+    def test_stop_preserves_docked_cycle_duration_and_final_completed_elapsed(self) -> None:
+        from edap.control_room.haul_tracking import finalize_completed_haul_run
+        for completed in (False, True):
+            with self.subTest(completed=completed):
+                self.app._haul_stats = HaulStats()
+                self._start_timer_test_haul(100.0)
+                self.app._haul_stats.clean_run_active = True
+                self.app._time_fn = lambda: 160.0
+                self.app._handle_haul_event({"event": "Docked", "StationName": "Alpha"}, station_before="Beta")
+                if completed:
+                    finalize_completed_haul_run(self.app)
+                self.app._time_fn = lambda: 180.0
+                self.app._stop_haul_stats()
+                self.app._time_fn = lambda: 400.0
+                self._assert_timer_views(80.0, 60.0)
+
+    def test_relaunch_keeps_session_frozen_then_resumes_accumulated_duration(self) -> None:
+        self._start_timer_test_haul(100.0)
+        self.app._time_fn = lambda: 160.0
+        self.app._save_saved_state()
+        self.app._haul_stats = HaulStats()
+        self.app._time_fn = lambda: 200.0
+        self.app._load_saved_state()
+        self.app._time_fn = lambda: 400.0
+        from edap.control_room.dependencies import LocalControlRoomDataSource
+        remote = LocalControlRoomDataSource(self.app).current().haul_session
+        self.assertEqual(remote.session_elapsed_s, 60.0)
+        self.assertIsNone(self.app._haul_stats.session_started_at)
+        # A reboot can give the next process a smaller monotonic clock origin.
+        self._start_timer_test_haul(10.0)
+        self.app._time_fn = lambda: 30.0
+        self._assert_timer_views(80.0, 20.0)
+
+    def test_new_session_while_idle_stays_frozen_until_haul_starts(self) -> None:
+        self._start_timer_test_haul(100.0)
+        self.app._time_fn = lambda: 160.0
+        self.app._stop_haul_stats()
+        self.app._dispatch_command("new_session")
+        self.app._time_fn = lambda: 400.0
+        self._assert_timer_views(0.0, None)
+        self._start_timer_test_haul(500.0)
+        self.app._time_fn = lambda: 520.0
+        self._assert_timer_views(20.0, 20.0)
+
+    def test_new_session_while_paused_waits_for_resume_to_tick(self) -> None:
+        self._start_timer_test_haul(100.0)
+        self.app._time_fn = lambda: 160.0
+        self.app._pause_haul_stats()
+        self.app._dispatch_command("new_session")
+        self.app._time_fn = lambda: 400.0
+        self._assert_timer_views(0.0, 0.0)
+        self.app._resume_haul_stats()
+        self.app._time_fn = lambda: 420.0
+        self._assert_timer_views(20.0, 20.0)
+
+    def test_zero_clock_start_is_preserved_when_replacing_active_haul(self) -> None:
+        self._start_timer_test_haul(0.0)
+        self._start_timer_test_haul(60.0)
+        self._assert_timer_views(60.0, 0.0)
 
     def test_pause_and_resume_haul_stats_freezes_elapsed_timers(self) -> None:
         self.app._haul_stats.station_1_buying = "Aluminium"

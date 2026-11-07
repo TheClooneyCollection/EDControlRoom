@@ -53,7 +53,11 @@ def start_haul_stats(
         station_2_buying=station_2_buying,
         station_1=station_1,
         station_2=station_2,
-        session_started_at=previous.session_started_at or started_at,
+        session_started_at=(
+            previous.session_started_at
+            if previous.session_started_at is not None
+            else started_at - previous.session_elapsed_s
+        ),
         session_elapsed_s=previous.session_elapsed_s,
         session_active=True,
         active=True,
@@ -75,7 +79,15 @@ def start_haul_stats(
 
 
 def stop_haul_stats(app: HaulTrackingHost) -> None:
-    close_run(app._haul_stats, "aborted", "stats stopped", utc_timestamp(None), app._time_fn())
+    stats = app._haul_stats
+    now = app._time_fn()
+    if stats.session_started_at is not None:
+        stats.session_elapsed_s = max(0.0, now - stats.session_started_at)
+        stats.session_started_at = None
+    if stats.current_run_started_at is not None and not stats.docked_back_at_station_1:
+        stats.current_run_elapsed_s = max(0.0, now - stats.current_run_started_at)
+    stats.current_run_started_at = None
+    close_run(stats, "aborted", "stats stopped", utc_timestamp(None), now)
     if not (app._haul_stats.station_1 or app._haul_stats.station_1_buying):
         return
     if app._haul_stats.completed_runs > 0:
@@ -139,7 +151,7 @@ def finalize_completed_haul_run(app: HaulTrackingHost) -> None:
     stats.clean_run_active = False
     stats.current_run_profit = 0
     stats.current_run_started_at = None
-    stats.current_run_elapsed_s = None
+    stats.current_run_elapsed_s = elapsed
     stats.docked_back_at_station_1 = False
     stats.waiting_for_station_1_departure = True
     stats.resumed_mid_run = False
@@ -262,9 +274,8 @@ def handle_haul_event(
         if stats.clean_run_active and at_station_2:
             stats.current_run_profit -= total_cost
         elif at_station_1 and stats.waiting_for_station_1_departure:
-            if stats.current_run_started_at is not None:
-                stats.current_run_started_at = None
-                stats.current_run_elapsed_s = None
+            stats.current_run_started_at = None
+            stats.current_run_elapsed_s = None
             stats.current_run_profit -= total_cost
     elif event == "MarketSell" and "TotalSale" in ev:
         total_sale = int(ev["TotalSale"])

@@ -104,7 +104,7 @@ def clear_session_stats(app: PersistenceHost) -> None:
     stats = app._haul_stats
     now_fn = app._time_fn
     now = now_fn() if callable(now_fn) else 0.0
-    stats.session_started_at = now
+    stats.session_started_at = now if stats.active and not stats.paused else None
     stats.session_elapsed_s = 0.0
     stats.session_active = True
     stats.accumulated_profit = 0
@@ -116,8 +116,8 @@ def clear_session_stats(app: PersistenceHost) -> None:
     stats.last_run_elapsed_s = None
     stats.current_run_profit = 0
     if stats.active:
-        stats.current_run_started_at = now
-        stats.current_run_elapsed_s = None
+        stats.current_run_started_at = now if not stats.paused else None
+        stats.current_run_elapsed_s = 0.0 if stats.paused else None
         stats.docked_back_at_station_1 = False
     else:
         stats.current_run_started_at = None
@@ -145,7 +145,7 @@ def _restore_persisted_session(app: PersistenceHost) -> None:
     now = now_fn() if callable(now_fn) else 0.0
     stats.session_elapsed_s = saved.session_elapsed_seconds
     stats.session_active = saved.session_active
-    if saved.session_active:
+    if saved.session_active and stats.active and not stats.paused:
         stats.session_started_at = max(0.0, now - saved.session_elapsed_seconds)
     else:
         stats.session_started_at = None
