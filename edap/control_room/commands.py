@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import datetime
 
 from rich.markup import escape
 
@@ -11,6 +12,9 @@ from edap.control_room.help import CONTROL_ROOM_COMMAND_INDEX, CONTROL_ROOM_COMM
 from edap.control_room.history import now_iso
 from edap.control_room.interfaces import CommandHost
 from edap.control_room_state import CommandHistoryEntry
+from edap.control_room.rendering import haul_history_summary_lines
+from edap.haul_history import load_runs, parse_window, summarize
+from edap.platform.local_time import SystemLocalTimezone
 from edap.platform.input.base import DEFAULT_AUTO_TARGET_PROCESS_NAME
 
 def dispatch(app: CommandHost, raw: str, *, skip_delay_override: bool | None = None) -> None:
@@ -101,6 +105,9 @@ def dispatch(app: CommandHost, raw: str, *, skip_delay_override: bool | None = N
     elif verb == "resume":
         app._record_history_entry(CommandHistoryEntry(raw=raw, command="resume", timestamp=now_iso()))
         app._resume_haul("Resume command")
+    elif verb == "stats":
+        app._record_history_entry(CommandHistoryEntry(raw=raw, command="stats", params={"value": rest}, timestamp=now_iso()))
+        cmd_stats(app, rest, now=datetime.now(SystemLocalTimezone()))
     elif verb in {"new_session", "clear"}:
         app._record_history_entry(
             CommandHistoryEntry(raw=raw, command="new_session", timestamp=now_iso())
@@ -331,3 +338,23 @@ def _parse_int_target(value: str) -> int | None:
     if parsed <= 0:
         raise ValueError("Target identifiers must be positive integers.")
     return parsed
+
+
+def cmd_stats(app: CommandHost, window: str, *, now: datetime) -> None:
+    try:
+        since, until, label = parse_window(window, now)
+        rows, skipped = load_runs(app._config.control_room.haul_runs_file)
+        summary = summarize(rows, since, until, skipped_lines=skipped)
+    except ValueError as exc:
+        app._log(f"[yellow]{escape(str(exc))}[/]")
+        return
+    except OSError as exc:
+        app._log(f"[yellow]Cannot read haul history: {escape(str(exc))}[/]")
+        return
+    if not rows:
+        app._log("[dim]no haul runs recorded yet[/]")
+        if skipped:
+            app._log(f"[yellow]Skipped {skipped} invalid haul history lines.[/]")
+        return
+    for line in haul_history_summary_lines(summary, label):
+        app._log(line)

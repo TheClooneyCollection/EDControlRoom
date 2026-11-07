@@ -340,6 +340,14 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertIsNone(host._market_filter)
         self.assertIn("Unknown command: market filter gold", "\n".join(content.plain for content, _ in host._activity_widget.writes))
 
+    def test_headless_host_accepts_stats_via_submit_input(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
+            host.submit_input("stats all")
+            output = "\n".join(content.plain for content, _ in host._activity_widget.writes)
+            self.assertIn("no haul runs recorded yet", output)
+            self.assertNotIn("Unknown command", output)
+
     def test_headless_host_emits_announcement_events_without_local_speech(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             host = HeadlessControlRoomHost(_make_context_with_tts(Path(temp_dir)))

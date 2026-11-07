@@ -4502,5 +4502,43 @@ class HaulRunHistoryTests(unittest.TestCase):
         self.assertEqual(completed["profit"], self.app._haul_stats.last_run_profit)
 
 
+class HaulStatsCommandTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.app = _HarnessApp(_make_context(Path(self.directory.name)))
+        self.path = self.app._config.control_room.haul_runs_file
+
+    def test_missing_and_empty_file_report_no_runs(self):
+        self.app._dispatch_command("stats")
+        self.assertIn("no haul runs recorded yet", "\n".join(self.app.logged))
+        self.path.write_text("", encoding="utf-8")
+        self.app.logged.clear()
+        self.app._dispatch_command("stats all")
+        self.assertIn("no haul runs recorded yet", "\n".join(self.app.logged))
+
+    def test_usage_and_help_are_available(self):
+        self.app._dispatch_command("stats yesterday")
+        self.assertTrue(any("[yellow]Usage: stats" in line for line in self.app.logged))
+        self.app._dispatch_command("help stats")
+        self.assertIn("completed runs only", "\n".join(self.app.logged))
+
+    def test_populated_summary_keeps_aborted_and_expected_values_separate(self):
+        from datetime import datetime, timezone
+        from edap.control_room.commands import cmd_stats
+        rows = [dict(schema=1, kind="two_way", status=status, started_at="2026-11-01T10:00:00Z",
+                     ended_at=("2026-11-01T11:00:00Z" if status == "completed" else "2026-11-01T12:00:00Z"), cost=100, revenue=revenue,
+                     duration_s=3600, expected_profit=50,
+                     route={"station_1": "[red]Alpha", "station_2": "Beta"}, legs=[])
+                for status, revenue in (("completed", 150), ("aborted", 0))]
+        self.path.write_text("\n".join(json.dumps(row) for row in rows) + "\ninvalid\n", encoding="utf-8")
+        cmd_stats(self.app, "all", now=datetime(2026, 11, 2, tzinfo=timezone.utc))
+        output = "\n".join(self.app.logged)
+        for expected in ("Completed: 1 runs | profit 50 CR", "Aborted: 1 runs | realized profit -100 CR",
+                         "All-in: profit -50 CR", "Expected vs actual (1 completed runs)", "Skipped 1"):
+            self.assertIn(expected, output)
+        self.assertIn(r"\[red]Alpha", output)
+
+
 if __name__ == "__main__":
     unittest.main()

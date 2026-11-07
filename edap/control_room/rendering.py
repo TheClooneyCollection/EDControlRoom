@@ -17,6 +17,7 @@ from edap.control_room.view_models import (
     market_panel_view_model,
     status_panel_view_model,
 )
+from edap.haul_history import HaulSummary
 from edap.routines.market import _is_sell_market_item
 
 
@@ -493,3 +494,39 @@ def activity_line(ev: dict[str, Any]) -> str | None:
         label = escape(ev.get("LocalisedName") or ev.get("Name", "mission"))
         return f"Mission: {label}  →  [green]{fmt_cr(ev.get('Reward', 0))}[/]"
     return None
+
+
+def haul_history_summary_lines(summary: HaulSummary, label: str) -> list[str]:
+    """Compact query output shared by the control-room log and CLI."""
+    completed = summary.completed
+    rate = fmt_cr(round(completed.profit_per_hour)) + "/h" if completed.profit_per_hour is not None else "n/a"
+    mean = fmt_cr(round(completed.mean_profit)) if completed.mean_profit is not None else "n/a"
+    best = fmt_cr(completed.best_profit) if completed.best_profit is not None else "n/a"
+    lines = [
+        f"[bold]Haul stats — {escape(label)}[/]",
+        f"Completed: {completed.count} runs | profit {fmt_cr(completed.profit)} | "
+        f"revenue {fmt_cr(completed.revenue)} | cost {fmt_cr(completed.cost)}",
+        f"Completed time: {fmt_duration(completed.duration_s)} | {rate} | mean {mean} | best {best}",
+        f"Aborted: {summary.aborted.count} runs | realized profit {fmt_cr(summary.aborted.profit)}",
+        f"All-in: profit {fmt_cr(summary.all_in.profit)} | revenue {fmt_cr(summary.all_in.revenue)} | "
+        f"cost {fmt_cr(summary.all_in.cost)}",
+    ]
+    if completed.expected_count:
+        lines.append(
+            f"Expected vs actual ({completed.expected_count} completed runs): "
+            f"{fmt_cr(completed.expected_profit)} vs {fmt_cr(completed.expected_actual_profit)} | "
+            f"delta {fmt_cr(completed.profit_delta)}"
+        )
+    for route in summary.routes:
+        lines.append(
+            f"Route {escape(route.station_1)} ↔ {escape(route.station_2)}: "
+            f"{route.completed.count} completed / {route.aborted.count} aborted | "
+            f"profit {fmt_cr(route.all_in.profit)}"
+        )
+    for item in summary.commodities:
+        trade = item.all_in
+        lines.append(f"{escape(item.commodity)}: bought {trade.tons_bought}t / sold {trade.tons_sold}t | "
+                     f"cost {fmt_cr(trade.cost)} | revenue {fmt_cr(trade.revenue)}")
+    if summary.skipped_lines:
+        lines.append(f"[yellow]Skipped {summary.skipped_lines} invalid haul history lines.[/]")
+    return lines

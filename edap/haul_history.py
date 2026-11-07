@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+import re
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Iterable
 
-from edap.control_room.models import HaulStats
+if TYPE_CHECKING:
+    from edap.control_room.models import HaulStats
 from edap.version import get_current_version
 
 WARNING_IDS = frozenset({"haul_buy_still_short", "haul_top_up_unaffordable", "market_buy_none_available"})
@@ -153,3 +156,184 @@ def close_run(stats: HaulStats, status: str, reason: str, ended_at: str | None, 
             row["legs"][-1]["completed"] = True
     stats.pending_runs.append(row)
     stats.current_run = None
+
+
+# Query records are immutable and can be serialized with dataclasses.asdict.
+@dataclass(frozen=True)
+class RunTotals:
+    count: int
+    cost: int
+    revenue: int
+    profit: int
+
+
+@dataclass(frozen=True)
+class CompletedSummary:
+    count: int
+    cost: int
+    revenue: int
+    profit: int
+    duration_s: float
+    profit_per_hour: float | None
+    mean_profit: float | None
+    best_profit: int | None
+    expected_count: int
+    expected_profit: int | None
+    expected_actual_profit: int | None
+    profit_delta: int | None
+
+
+@dataclass(frozen=True)
+class RouteSummary:
+    station_1: str
+    system_1: str | None
+    station_2: str
+    system_2: str | None
+    completed: RunTotals
+    aborted: RunTotals
+    all_in: RunTotals
+
+
+@dataclass(frozen=True)
+class TradeTotals:
+    tons_bought: int
+    tons_sold: int
+    cost: int
+    revenue: int
+
+
+@dataclass(frozen=True)
+class CommoditySummary:
+    commodity: str
+    completed: TradeTotals
+    aborted: TradeTotals
+    all_in: TradeTotals
+
+
+@dataclass(frozen=True)
+class HaulSummary:
+    completed: CompletedSummary
+    aborted: RunTotals
+    all_in: RunTotals
+    routes: tuple[RouteSummary, ...]
+    commodities: tuple[CommoditySummary, ...]
+    skipped_lines: int
+
+
+WINDOW_USAGE = "Usage: stats [today | 48h | week | month | all | since YYYY-MM-DD]"
+
+
+def parse_window(text: str, now: datetime) -> tuple[datetime | None, datetime, str]:
+    """Use now's local timezone for calendar windows; 48h is elapsed time.
+
+    Endpoints are inclusive, with `all` having no lower bound. Callers supply
+    an aware local datetime (ZoneInfo retains calendar offsets across DST).
+    """
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError(f"{WINDOW_USAGE}; now must include a timezone")
+    label = " ".join(text.lower().split()) or "today"
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if label == "today":
+        since = midnight
+    elif label == "48h":
+        since = (now.astimezone(timezone.utc) - timedelta(hours=48)).astimezone(now.tzinfo)
+    elif label == "week":
+        since = midnight - timedelta(days=now.weekday())
+    elif label == "month":
+        since = midnight.replace(day=1)
+    elif label == "all":
+        since = None
+    elif re.fullmatch(r"since \d{4}-\d{2}-\d{2}", label):
+        try:
+            day = date.fromisoformat(label[6:])
+        except ValueError as exc:
+            raise ValueError(WINDOW_USAGE) from exc
+        since = datetime.combine(day, datetime.min.time(), tzinfo=now.tzinfo)
+        if since > now:
+            raise ValueError(f"{WINDOW_USAGE}; since date cannot be in the future")
+    else:
+        raise ValueError(WINDOW_USAGE)
+    return since, now, label
+
+
+def _run_totals(rows: list[dict[str, Any]]) -> RunTotals:
+    cost = sum(row["cost"] for row in rows)
+    revenue = sum(row["revenue"] for row in rows)
+    return RunTotals(len(rows), cost, revenue, revenue - cost)
+
+
+def _trade_totals(trades: list[tuple[str, dict[str, Any]]]) -> TradeTotals:
+    return TradeTotals(
+        tons_bought=sum(int(trade.get("tons") or 0) for side, trade in trades if side == "buys"),
+        tons_sold=sum(int(trade.get("tons") or 0) for side, trade in trades if side == "sells"),
+        cost=sum(int(trade.get("cost") or 0) for side, trade in trades if side == "buys"),
+        revenue=sum(int(trade.get("revenue") or 0) for side, trade in trades if side == "sells"),
+    )
+
+
+def summarize(
+    rows: Iterable[dict[str, Any]], since: datetime | None, until: datetime,
+    *, skipped_lines: int = 0,
+) -> HaulSummary:
+    """Summarize schema-1 rows by ended_at, keeping aborted money separate.
+
+    `skipped_lines` is the reader's file-wide invalid-line count. Unknown
+    expectations never enter the expected/actual comparison. Invalid end
+    timestamps are counted as additional skipped rows rather than guessed.
+    """
+    if until.utcoffset() is None or (since is not None and since.utcoffset() is None):
+        raise ValueError("Summary window boundaries must include a timezone")
+    selected = []
+    for row in rows:
+        try:
+            ended = datetime.fromisoformat(row["ended_at"].replace("Z", "+00:00"))
+            if ended.utcoffset() is None:
+                raise ValueError("Missing timezone")
+        except (ValueError, KeyError, TypeError, AttributeError):
+            skipped_lines += 1
+            continue
+        if (since is None or ended >= since) and ended <= until:
+            selected.append(row)
+    completed = [row for row in selected if row["status"] == "completed"]
+    aborted = [row for row in selected if row["status"] == "aborted"]
+    totals = _run_totals(completed)
+    duration = sum(float(row.get("duration_s", 0)) for row in completed)
+    profits = [row["revenue"] - row["cost"] for row in completed]
+    expected = [row for row in completed if row.get("expected_profit") is not None]
+    expected_profit = sum(row["expected_profit"] for row in expected) if expected else None
+    actual_profit = _run_totals(expected).profit if expected else None
+    route_groups: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
+    commodity_groups: dict[str, dict[str, list[tuple[str, dict[str, Any]]]]] = {}
+    for row in selected:
+        route = row["route"]
+        key = tuple(str(route.get(field) or "") for field in ("station_1", "system_1", "station_2", "system_2"))
+        route_groups.setdefault(key, []).append(row)
+        for leg in row.get("legs", []):
+            for side in ("buys", "sells"):
+                for trade in leg.get(side, []):
+                    commodity = str(trade.get("commodity") or "unknown")
+                    group = commodity_groups.setdefault(commodity, {"completed": [], "aborted": []})
+                    group[row["status"]].append((side, trade))
+    routes = tuple(
+        RouteSummary(key[0], key[1] or None, key[2], key[3] or None,
+                     _run_totals([row for row in group if row["status"] == "completed"]),
+                     _run_totals([row for row in group if row["status"] == "aborted"]),
+                     _run_totals(group))
+        for key, group in sorted(route_groups.items())
+    )
+    commodities = tuple(
+        CommoditySummary(name, _trade_totals(group["completed"]), _trade_totals(group["aborted"]),
+                         _trade_totals(group["completed"] + group["aborted"]))
+        for name, group in sorted(commodity_groups.items())
+    )
+    return HaulSummary(
+        completed=CompletedSummary(
+            totals.count, totals.cost, totals.revenue, totals.profit, duration,
+            totals.profit * 3600 / duration if duration > 0 else None,
+            totals.profit / totals.count if totals.count else None,
+            max(profits) if profits else None, len(expected), expected_profit, actual_profit,
+            actual_profit - expected_profit if expected else None,
+        ),
+        aborted=_run_totals(aborted), all_in=_run_totals(selected), routes=routes,
+        commodities=commodities, skipped_lines=skipped_lines,
+    )

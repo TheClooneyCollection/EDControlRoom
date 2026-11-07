@@ -34,6 +34,7 @@ Other:
     replay             open the replay history browser
     pause              pause an active two-way haul at the next station
     resume             resume a paused two-way haul
+    stats [window]     summarize persisted haul history (default today)
     new_session        clear persisted haul session time/profit and start a fresh session now
     stop               freeze persisted haul session time/profit until hauling resumes or you start a new session
     q / quit           cancel active work if needed, then exit
@@ -163,7 +164,7 @@ _STARTUP_BINDING_WARNING_IGNORED_ACTIONS = frozenset({
     "YawRightButton",
 })
 
-_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul start | haul load | haul search [system] | haul search url <url> | haul route <n> | travel <system> [/ <station>] | pause | resume | multi_leg_haul <route> | dest <system> | home | set_pid | set_hwnd | market ... | instant | new_session | stop | reload | q"
+_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul start | haul load | haul search [system] | haul search url <url> | haul route <n> | travel <system> [/ <station>] | pause | resume | multi_leg_haul <route> | dest <system> | home | set_pid | set_hwnd | market ... | instant | stats [window] | new_session | stop | reload | q"
 _ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS = 10.0
 _JOURNAL_ARTIFACT_LOG_PATH = Path("artifacts/control-room.log")
 _DEBUG_ARTIFACT_LOG_PATH = Path("artifacts/control-room-debug.log")

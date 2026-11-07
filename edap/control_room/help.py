@@ -109,6 +109,12 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
         detail="Releases a paused two-way haul so it continues from the station boundary where it stopped. If a pause was requested but the ship has not reached the next station yet, this cancels the pending pause request.",
     ),
     CommandHelp(
+        name="stats",
+        usage="stats [today | 48h | week | month | all | since YYYY-MM-DD]",
+        summary="Summarize persisted haul runs in a local-time window (default today).",
+        detail="Shows completed and aborted runs separately, all-in money, route and commodity breakdowns. Profit/hour and expected-vs-actual use completed runs only. Clear does not remove this history.",
+    ),
+    CommandHelp(
         name="new_session",
         usage="new_session",
         summary="Clear persisted haul session time and profit, then start a fresh session now.",
