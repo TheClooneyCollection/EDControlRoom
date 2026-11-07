@@ -1,8 +1,8 @@
 # CI and Release Status
 ## Current
-- Latest stable release is `v1.22.1` (docs-only user docs/README refresh). Tag `v1.22.0` (Spansh neutron travel, route comparison, active-route UI, Inara haul filters) exists but has no published GitHub release.
-- The unittest timing budget now scales as `0.0006s` per executed test, so the current `796`-test suite budget is `0.4776s`; when a release-prep or CI run exceeds that computed ceiling, capture a timing report before wrapping up.
-- Latest timing check (v1.22.1 prep): `796` tests passed in `0.523s`, slightly over the `0.4776s` budget; the timing report showed no outlier (slowest `0.016s`), so treat it as variance unless it recurs.
+- Latest stable release is `v1.23.0` (haul stats history: per-run JSONL log with aborted runs, `stats` command, `tools/haul_stats.py`, `/api/haul-stats` and web History panel, journal trade ledger and backfill; plus near-station haul resume, balance-aware buy top-ups, buy-warning TTS). `v1.22.1` was the docs-only user docs/README refresh. Tag `v1.22.0` (Spansh neutron travel, route comparison, active-route UI, Inara haul filters) exists but has no published GitHub release.
+- The unittest timing budget now scales as `0.0006s` per executed test, so the current `854`-test suite budget is `0.5124s`; when a release-prep or CI run exceeds that computed ceiling, capture a timing report before wrapping up.
+- Latest timing check (v1.23.0 prep): `854` tests passed in `0.674s`, over the `0.5124s` budget, as at v1.22.1 prep. The timing report showed no outlier (slowest `0.015s`), so it looks like machine load. If it keeps recurring, profile suite-wide overhead rather than single tests.
 - The Discord workflow-failure notifier is now split into a checked-in Python script plus a thin workflow wrapper, so the same payload/fetch/post path can be dry-run locally against saved jobs JSON and exercised in CI without keeping the logic trapped inside inline workflow shell.
 - `main` is now the rolling-update branch, and stable features or releases are identified with tags instead of `dev -> main` promotion.
 - The legacy `.github/workflows/promote-dev-to-main.yml` automation has been removed; release/process automation now centers on `main`, semantic version tags, and manual GitHub release publishing.
