@@ -34,7 +34,8 @@ class FocusFailed(HelperError):
     """The helper could not make Elite the Win32 foreground; no key was sent."""
 
 
-FOCUS_ATTEMPTS = 3
+# One focus can take about 4.2s when the helper falls back to a child process, so two attempts cap a refused burst near 8.5s.
+FOCUS_ATTEMPTS = 2
 FOCUS_RETRY_S = 0.1
 FOCUS_FAILED_MESSAGE = "wine helper couldn't focus Elite inside the CrossOver bottle (focus_failed); no keys were sent."
 

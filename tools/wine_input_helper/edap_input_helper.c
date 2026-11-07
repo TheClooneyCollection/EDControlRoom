@@ -15,7 +15,7 @@
 #define TEXT_MAX 512
 #define FOCUS_ATTEMPTS 3
 #define FOCUS_RETRY_MS 30
-#define CHILD_FOCUS_TIMEOUT_MS 1500
+#define CHILD_FOCUS_TIMEOUT_MS 4000
 #define CHILD_FOCUS_NOT_RUN 100
 #define CHILD_FOCUS_TIMED_OUT 101
 #define IDLE_WAIT_MS 1000
@@ -207,15 +207,18 @@ static int focus_in_process(const char **step) {
 }
 /* Live runs only ever focused from a freshly started process; a long-lived helper
  * lost that ability. Run the same focus in a short-lived child of this exe. */
-static DWORD focus_in_child(void) {
+static DWORD focus_in_child(ULONGLONG *elapsed_ms) {
     char exe[MAX_PATH], cmd[MAX_PATH+64]; DWORD code=CHILD_FOCUS_NOT_RUN;
     DWORD length=GetModuleFileNameA(NULL,exe,sizeof(exe));
     if (!length || length>=sizeof(exe)) return code;
     snprintf(cmd,sizeof(cmd),"\"%s\" --focus-hwnd %llu",exe,(unsigned long long)(UINT_PTR)target);
     STARTUPINFOA si={0}; PROCESS_INFORMATION pi; si.cb=sizeof(si);
+    ULONGLONG started=GetTickCount64();
     if (!CreateProcessA(NULL,cmd,NULL,NULL,FALSE,CREATE_NO_WINDOW,NULL,NULL,&si,&pi)) return code;
+    /* Wine process startup under Rosetta alone can take over 1.5s on a busy Mac, so wait long. */
     if (WaitForSingleObject(pi.hProcess,CHILD_FOCUS_TIMEOUT_MS)==WAIT_OBJECT_0) GetExitCodeProcess(pi.hProcess,&code);
     else { TerminateProcess(pi.hProcess,1); code=CHILD_FOCUS_TIMED_OUT; }
+    *elapsed_ms=GetTickCount64()-started;
     CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
     return code;
 }
@@ -223,13 +226,15 @@ static int focus_target(const char **step) {
     *step="already";
     if (GetForegroundWindow()==target) return 1;
     if (focus_in_process(step)) return 1;
-    DWORD err=GetLastError(), child=focus_in_child();
-    *step="child_focus";
+    static char child_step[48];
+    ULONGLONG child_ms=0; DWORD err=GetLastError(), child=focus_in_child(&child_ms);
+    snprintf(child_step,sizeof(child_step),"child_focus ms=%llu",child_ms);
+    *step=child_step;
     /* A child killed at the deadline may still have focused Elite, so judge by the result. */
     if (GetForegroundWindow()==target) return 1;
-    char name[TEXT_MAX], line[TEXT_MAX+96]; DWORD pid;
+    char name[TEXT_MAX], line[TEXT_MAX+128]; DWORD pid;
     if (!process_for(GetForegroundWindow(),name,sizeof(name),&pid)) strcpy(name,"?");
-    snprintf(line,sizeof(line),"focus_failed fg=%s err=%lu child=%lu",name,(unsigned long)err,(unsigned long)child);
+    snprintf(line,sizeof(line),"focus_failed fg=%s err=%lu child=%lu child_ms=%llu",name,(unsigned long)err,(unsigned long)child,child_ms);
     log_event(line); return 0;
 }
 static void quote(const char *src, char *out) {

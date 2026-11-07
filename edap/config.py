@@ -144,7 +144,7 @@ class WineHelperConfig:
     port: int = 47811
     launch: str = "managed"
     startup_timeout_s: float = 10.0
-    request_timeout_s: float = 3.0
+    request_timeout_s: float = 6.0
     max_hold_s: float = 30.0
     token_file: Path = Path(".wine_input_helper.token")
 

@@ -97,7 +97,7 @@ Other keys, with their defaults (see `defaults/input.toml`):
 | `port` | `47811` | Loopback port for the helper |
 | `launch` | `"managed"` | `managed`: Control Room starts and stops the helper. `manual`: you start it yourself and Control Room only connects. |
 | `startup_timeout_s` | `10.0` | How long to wait for a freshly launched helper |
-| `request_timeout_s` | `3.0` | Timeout for each request to the helper. Keep it above 2s: a `focus` can take up to about 1.7s when it falls back to a child process |
+| `request_timeout_s` | `6.0` | Timeout for each request to the helper. Keep it above 5s: a `focus` can take up to about 4.2s when it falls back to a child process |
 | `max_hold_s` | `30.0` | Safety watchdog: the helper releases any key held longer than this. It must be greater than `controls.market.buy_max_hold_seconds`. |
 | `token_file` | `".wine_input_helper.token"` | Private token, created on first use (owner-only, git-ignored) |
 
@@ -153,7 +153,7 @@ The bottle is running under a different CrossOver app than `wine_path` points at
 **`wine helper couldn't focus Elite inside the CrossOver bottle (focus_failed); no keys were sent.`**
 In Control Room this shows as `Input to Elite failed: ...`.
 - **Cause:** the helper couldn't make Elite the focused window inside Wine, even after retrying, so no keys were sent.
-- **Fix:** retry. If it keeps failing, run `set_input wine_helper` to reconnect, restart Control Room to restart the helper, or run `set_input foreground` and keep Elite in front. The helper log line `focus_failed fg=<process> err=<code> child=<code>` shows which window held focus and how the child-process retry ended (`0` focused, `1` refused, `100` didn't start, `101` timed out); include it when reporting the problem.
+- **Fix:** retry. If it keeps failing, run `set_input wine_helper` to reconnect, restart Control Room to restart the helper, or run `set_input foreground` and keep Elite in front. The helper log line `focus_failed fg=<process> err=<code> child=<code> child_ms=<ms>` shows which window held focus, how the child-process retry ended (`0` focused, `1` refused, `100` didn't start, `101` timed out after 4s) and how long it took; include it when reporting the problem.
 
 **`wine helper refuses Alt scan code 0x38`**
 - **Cause:** a binding the routine needs uses Alt.

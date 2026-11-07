@@ -153,11 +153,11 @@ class HelperProtocolTests(unittest.TestCase):
         server = Server()
         waits = []
         client = connected(server, sleeper=waits.append)
-        server.replies = [{'ok': False, 'error': 'focus_failed', 'detail': 'focus_failed'}] * 3
+        server.replies = [{'ok': False, 'error': 'focus_failed', 'detail': 'focus_failed'}] * 2
         with self.assertRaisesRegex(FocusFailed, "couldn't focus Elite inside the CrossOver bottle"):
             client.tap_key('m', 'left_control', 0)
-        self.assertEqual([r['op'] for r in server.requests[3:]], ['focus'] * 3)
-        self.assertEqual(waits, [0.1, 0.1])
+        self.assertEqual([r['op'] for r in server.requests[3:]], ['focus'] * 2)
+        self.assertEqual(waits, [0.1])
         self.assertFalse(server.closed)
         server.requests.clear()
         client.tap_key('m', 'left_control', 0)
