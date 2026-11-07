@@ -333,6 +333,26 @@ class HelperLifecycleTests(unittest.TestCase):
         client.close()
         self.assertEqual(server.requests[-1], {'op': 'bye'})
 
+    def test_quit_after_a_helper_error_reconnects_to_stop_the_managed_helper(self):
+        server, replacement = Server(), Server()
+        client = connected(server, config=replace(CONFIG, launch='managed'), connect=Connections(server, replacement))
+        server.replies = [{'ok': False, 'error': 'no_target', 'detail': 'no_target'}]
+        with self.assertRaises(HelperError):
+            client.tap_key('m', None, 0)
+        client.close()
+        self.assertEqual([r['op'] for r in replacement.requests], ['hello', 'target', 'release_all', 'release_all', 'bye'])
+
+    def test_quit_with_the_helper_already_gone_still_closes(self):
+        server = Server()
+        client = connected(server, config=replace(CONFIG, launch='managed'),
+                           connect=Connections(server, ConnectionRefusedError()))
+        server.replies = [{'ok': False, 'error': 'no_target', 'detail': 'no_target'}]
+        with self.assertRaises(HelperError):
+            client.tap_key('m', None, 0)
+        client.close()
+        with self.assertRaisesRegex(RuntimeError, 'client is closed'):
+            client.press_key('m')
+
     def test_unreachable_manual_helper_reports_endpoint_and_never_launches(self):
         client = helper_client(CONFIG, connect=Connections(ConnectionRefusedError()), read_token=lambda path: TOKEN)
         with self.assertRaisesRegex(RuntimeError, 'wine helper not reachable on 127.0.0.1:47811'):

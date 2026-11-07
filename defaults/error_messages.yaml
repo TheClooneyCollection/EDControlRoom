@@ -7,7 +7,7 @@ error_messages:
       suggestion: "Review the latest ACTIVITY lines for the last completed step, then retry."
     input_backend_failed:
       message: "Input to Elite failed: {error}"
-      suggestion: "Check input with `set_input wine_helper` (restarts the helper) or switch with `set_input foreground`, then retry. See docs/user/background-input.md, Troubleshooting."
+      suggestion: "Retry. If it keeps failing, run `set_input wine_helper` to reconnect, restart Control Room to restart the helper, or switch with `set_input foreground` and keep Elite in front. See docs/user/background-input.md, Troubleshooting."
     station_mismatch:
       message: "Station mismatch: market data indicates {market_station}, but we are docked at {docked_station}."
       suggestion: "Open replay history with Ctrl-R, press e to edit the station name, then rerun. If this is a different route, start a new haul with the correct station parameters."

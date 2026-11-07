@@ -333,7 +333,13 @@ class WineHelperClient:
 
     def close(self) -> None:
         with self._lock:
-            self._closed = True
+            was_open, self._closed = not self._closed, True
+            if was_open and self._stream is None and self.config.launch == 'managed':
+                # An earlier helper error dropped the connection; reconnect once so bye still stops it.
+                try:
+                    self._open()
+                except (OSError, RuntimeError):
+                    self._disconnect()
             try:
                 if self._stream is not None:
                     self._exchange('release_all')
