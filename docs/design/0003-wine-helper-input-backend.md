@@ -100,7 +100,8 @@ Newline-delimited JSON over TCP, one request → one response, synchronous.
 - Activation order in the helper:
   1. `SetForegroundWindow(hwnd)`, then verify.
   2. Else `AttachThreadInput(cur, target_thread)` + `SetForegroundWindow` + `BringWindowToTop`, then detach and verify.
-  3. Else return `focus_failed`.
+  3. Else run the same steps in a short-lived child of the helper exe (`--focus-hwnd <hwnd>`, 700ms timeout), since only freshly started processes focused reliably in live runs. Log step `child_focus`.
+  4. Else return `focus_failed`.
   - Never synthesize Alt.
   - Log which step worked. Phase 1 should confirm step 1 alone suffices under Wine.
 - **Do not restore the previous fg afterwards.**

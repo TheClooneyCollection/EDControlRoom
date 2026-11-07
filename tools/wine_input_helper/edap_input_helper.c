@@ -15,6 +15,9 @@
 #define TEXT_MAX 512
 #define FOCUS_ATTEMPTS 3
 #define FOCUS_RETRY_MS 30
+#define CHILD_FOCUS_TIMEOUT_MS 700
+#define CHILD_FOCUS_NOT_RUN 100
+#define CHILD_FOCUS_TIMED_OUT 101
 #define IDLE_WAIT_MS 1000
 #define WATCHDOG_RETRY_MS 20
 #define BUSY_WAKES_PER_S 1000
@@ -179,13 +182,10 @@ static int resolve_target(void) {
 static void attach_input(DWORD cur, DWORD other, BOOL on) {
     if (other && other!=cur) AttachThreadInput(cur,other,on);
 }
-/* A long-lived process loses the foreground right a fresh one has, and winemac
- * moves the Win32 foreground to the desktop when the Mac app is deactivated.
+/* winemac moves the Win32 foreground to the desktop when the Mac app is deactivated.
  * Escalate within a bounded retry: plain SetForegroundWindow, then share input
  * state with both the current foreground thread and the target's thread. */
-static int focus_target(const char **step) {
-    *step="already";
-    if (GetForegroundWindow()==target) return 1;
+static int focus_in_process(const char **step) {
     LockSetForegroundWindow(LSFW_UNLOCK);
     AllowSetForegroundWindow(ASFW_ANY);
     for (int attempt=0; attempt<FOCUS_ATTEMPTS; attempt++) {
@@ -203,9 +203,32 @@ static int focus_target(const char **step) {
         attach_input(cur,owner,FALSE);
         if (GetForegroundWindow()==target) return 1;
     }
-    char name[TEXT_MAX], line[TEXT_MAX+64]; DWORD pid;
+    return 0;
+}
+/* Live runs only ever focused from a freshly started process; a long-lived helper
+ * lost that ability. Run the same focus in a short-lived child of this exe. */
+static DWORD focus_in_child(void) {
+    char exe[MAX_PATH], cmd[MAX_PATH+64]; DWORD code=CHILD_FOCUS_NOT_RUN;
+    DWORD length=GetModuleFileNameA(NULL,exe,sizeof(exe));
+    if (!length || length>=sizeof(exe)) return code;
+    snprintf(cmd,sizeof(cmd),"\"%s\" --focus-hwnd %llu",exe,(unsigned long long)(UINT_PTR)target);
+    STARTUPINFOA si={0}; PROCESS_INFORMATION pi; si.cb=sizeof(si);
+    if (!CreateProcessA(NULL,cmd,NULL,NULL,FALSE,CREATE_NO_WINDOW,NULL,NULL,&si,&pi)) return code;
+    if (WaitForSingleObject(pi.hProcess,CHILD_FOCUS_TIMEOUT_MS)==WAIT_OBJECT_0) GetExitCodeProcess(pi.hProcess,&code);
+    else { TerminateProcess(pi.hProcess,1); code=CHILD_FOCUS_TIMED_OUT; }
+    CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+    return code;
+}
+static int focus_target(const char **step) {
+    *step="already";
+    if (GetForegroundWindow()==target) return 1;
+    if (focus_in_process(step)) return 1;
+    DWORD err=GetLastError(), child=focus_in_child();
+    *step="child_focus";
+    if (child==0 && GetForegroundWindow()==target) return 1;
+    char name[TEXT_MAX], line[TEXT_MAX+96]; DWORD pid;
     if (!process_for(GetForegroundWindow(),name,sizeof(name),&pid)) strcpy(name,"?");
-    snprintf(line,sizeof(line),"focus_failed fg=%s err=%lu",name,(unsigned long)GetLastError());
+    snprintf(line,sizeof(line),"focus_failed fg=%s err=%lu child=%lu",name,(unsigned long)err,(unsigned long)child);
     log_event(line); return 0;
 }
 static void quote(const char *src, char *out) {
@@ -296,6 +319,13 @@ static int send_reply(SOCKET client, const char *out) {
 }
 int main(int argc, char **argv) {
     int port=47811, result=1; const char *log_path=NULL;
+    if (argc==3 && !strcmp(argv[1],"--focus-hwnd")) {
+        /* Child mode for focus_in_child: exit 0 only when the target is the foreground. */
+        char *end; unsigned long long hwnd=strtoull(argv[2],&end,10); const char *step;
+        if (!*argv[2] || *end || !hwnd) return 2;
+        target=(HWND)(UINT_PTR)hwnd;
+        return IsWindow(target) && focus_in_process(&step) ? 0 : 1;
+    }
     for (int i=1;i<argc;i+=2) {
         if (i+1>=argc) goto usage;
         char *end; const char *v=argv[i+1];
