@@ -13,6 +13,8 @@
 #define LINE_MAX_BYTES 4096
 #define FIELD_MAX 8
 #define TEXT_MAX 512
+#define FOCUS_ATTEMPTS 3
+#define FOCUS_RETRY_MS 30
 static CRITICAL_SECTION input_lock;
 static ULONGLONG held[2][128];
 static volatile LONG stopping;
@@ -156,6 +158,38 @@ static int resolve_target(void) {
     if (*process_name) EnumWindows(find_window,0);
     return target != NULL;
 }
+static void attach_input(DWORD cur, DWORD other, BOOL on) {
+    if (other && other!=cur) AttachThreadInput(cur,other,on);
+}
+/* A long-lived process loses the foreground right a fresh one has, and winemac
+ * moves the Win32 foreground to the desktop when the Mac app is deactivated.
+ * Escalate within a bounded retry: plain SetForegroundWindow, then share input
+ * state with both the current foreground thread and the target's thread. */
+static int focus_target(const char **step) {
+    *step="already";
+    if (GetForegroundWindow()==target) return 1;
+    LockSetForegroundWindow(LSFW_UNLOCK);
+    AllowSetForegroundWindow(ASFW_ANY);
+    for (int attempt=0; attempt<FOCUS_ATTEMPTS; attempt++) {
+        if (attempt) Sleep(FOCUS_RETRY_MS);
+        *step="set_foreground"; SetForegroundWindow(target);
+        if (GetForegroundWindow()==target) return 1;
+        HWND fg=GetForegroundWindow();
+        DWORD cur=GetCurrentThreadId(), other=GetWindowThreadProcessId(target,NULL);
+        DWORD owner=fg ? GetWindowThreadProcessId(fg,NULL) : 0;
+        *step="attach_thread_input";
+        attach_input(cur,owner,TRUE);
+        if (owner!=other) attach_input(cur,other,TRUE);
+        BringWindowToTop(target); SetForegroundWindow(target); SetActiveWindow(target); SetFocus(target);
+        if (owner!=other) attach_input(cur,other,FALSE);
+        attach_input(cur,owner,FALSE);
+        if (GetForegroundWindow()==target) return 1;
+    }
+    char name[TEXT_MAX], line[TEXT_MAX+64]; DWORD pid;
+    if (!process_for(GetForegroundWindow(),name,sizeof(name),&pid)) strcpy(name,"?");
+    snprintf(line,sizeof(line),"focus_failed fg=%s err=%lu",name,(unsigned long)GetLastError());
+    log_event(line); return 0;
+}
 static void quote(const char *src, char *out) {
     *out++='"';
     for (; *src; src++) {
@@ -191,7 +225,12 @@ static int dispatch(const char *line, int *authenticated, char *out) {
         Field *s=field(&r,"scan",'n'), *e=field(&r,"ext",'b'), *d=field(&r,"down",'b');
         if (r.count!=4 || !s || !e || !d || s->number<1 || s->number>127 || s->number==0x38) goto bad;
         if (d->number && !target_alive()) { error_reply(out,"no_target"); return 0; }
-        if (d->number && GetForegroundWindow()!=target) { error_reply(out,"focus_failed"); return 0; }
+        /* Foreground can move between focus and a later down press; re-focus once. */
+        if (d->number && GetForegroundWindow()!=target) {
+            const char *step;
+            if (!focus_target(&step)) { error_reply(out,"focus_failed"); return 0; }
+            log_event(step);
+        }
         EnterCriticalSection(&input_lock);
         if (d->number && InterlockedCompareExchange(&stopping,0,0)) {
             error_reply(out,"input_failed");
@@ -207,19 +246,8 @@ static int dispatch(const char *line, int *authenticated, char *out) {
             char before[TEXT_MAX], encoded[TEXT_MAX*2+3]; DWORD pid;
             process_for(GetForegroundWindow(),before,sizeof(before),&pid); quote(before,encoded);
             if (!target_alive() && !resolve_target()) { error_reply(out,"no_target"); return 0; }
-            const char *step="already";
-            if (GetForegroundWindow()!=target) {
-                step="set_foreground"; SetForegroundWindow(target);
-                if (GetForegroundWindow()!=target) {
-                    DWORD cur=GetCurrentThreadId(), other=GetWindowThreadProcessId(target,NULL);
-                    step="attach_thread_input";
-                    if (cur!=other && AttachThreadInput(cur,other,TRUE)) {
-                        SetForegroundWindow(target); BringWindowToTop(target);
-                        AttachThreadInput(cur,other,FALSE);
-                    }
-                }
-            }
-            if (GetForegroundWindow()!=target) { log_event("focus_failed"); error_reply(out,"focus_failed"); return 0; }
+            const char *step;
+            if (!focus_target(&step)) { error_reply(out,"focus_failed"); return 0; }
             log_event(step);
             snprintf(out,LINE_MAX_BYTES,"{\"ok\":true,\"step\":\"%s\",\"fg_before\":%s}\n",step,encoded);
         } else if (!strcmp(op->text,"release_all")) {
@@ -262,6 +290,7 @@ int main(int argc, char **argv) {
     if (!token || !*token || strlen(token)>=TEXT_MAX) goto usage;
     if (log_path && !(log_file=fopen(log_path,"a"))) { perror("log"); return 1; }
     InitializeCriticalSection(&input_lock); atexit(cleanup_input);
+    SystemParametersInfoA(SPI_SETFOREGROUNDLOCKTIMEOUT,0,(PVOID)0,0); /* Session only, never persisted. */
     SetConsoleCtrlHandler(console_stop,TRUE);
     WNDCLASSA wc={0}; wc.lpfnWndProc=window_proc; wc.hInstance=GetModuleHandle(NULL); wc.lpszClassName="EdapInputHelper";
     if (!RegisterClassA(&wc)) return 1;

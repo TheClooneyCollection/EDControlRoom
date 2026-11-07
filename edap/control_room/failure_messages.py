@@ -4,6 +4,7 @@ import re
 
 from edap.config import AppConfig
 from edap.control_room import error_text
+from edap.platform.input.wine_helper import BurstAborted, HelperError
 from edap.routines import RoutineResult
 
 
@@ -116,8 +117,13 @@ def describe_routine_failure(
 
 
 def describe_routine_exception(exc: Exception, config: AppConfig) -> tuple[str, str | None]:
+    if isinstance(exc, (HelperError, BurstAborted)):
+        return (
+            error_text.render(config, "input_backend_failed_message", error=str(exc)),
+            error_text.render(config, "input_backend_failed_suggestion"),
+        )
     return (
-        error_text.render(config, "routine_unexpected_exception", error=str(exc)),
+        error_text.render(config, "routine_unexpected_exception_message", error=str(exc)),
         error_text.render(config, "routine_unexpected_exception_suggestion"),
     )
 

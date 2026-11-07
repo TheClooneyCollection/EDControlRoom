@@ -150,9 +150,10 @@ The bottle is running under a different CrossOver app than `wine_path` points at
 - **Cause:** the helper can't find `EliteDangerous64.exe`. Elite isn't running in that bottle, or `process_name` is wrong.
 - **Fix:** start Elite. The helper finds it again on the next burst, so there's no need to restart anything.
 
-**`wine helper focus_failed: focus_failed`**
-- **Cause:** the helper couldn't make Elite the focused window inside Wine, so no keys were sent.
-- **Fix:** try again. If it keeps failing, bring CrossOver to the front once, then switch away.
+**`wine helper couldn't focus Elite inside the CrossOver bottle (focus_failed); no keys were sent.`**
+In Control Room this shows as `Input to Elite failed: ...`.
+- **Cause:** the helper couldn't make Elite the focused window inside Wine, even after retrying, so no keys were sent.
+- **Fix:** retry. If it keeps failing, run `set_input wine_helper` to restart the helper, or `set_input foreground` and keep Elite in front. The helper log line `focus_failed fg=<process> err=<code>` shows which window held focus; include it when reporting the problem.
 
 **`wine helper refuses Alt scan code 0x38`**
 - **Cause:** a binding the routine needs uses Alt.

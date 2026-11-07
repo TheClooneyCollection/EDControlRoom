@@ -41,7 +41,8 @@ from edap.control_room.app import (
     _detect_lan_host,
 )
 from edap.control_room.backend import ControlRoomBackendEventHandler
-from edap.control_room.failure_messages import describe_routine_failure
+from edap.platform.input.wine_helper import FOCUS_FAILED_MESSAGE, FocusFailed
+from edap.control_room.failure_messages import describe_routine_exception, describe_routine_failure
 from edap.control_room.events import apply_ship_event
 from edap.control_room import rendering as control_room_rendering
 from edap.control_room.haul_tracking import parse_credit_amount
@@ -4087,6 +4088,19 @@ class ControlRoomFailureMessageTests(unittest.TestCase):
         self.assertIsNotNone(suggestion)
         self.assertIn("Ctrl-R", suggestion or "")
         self.assertIn("press e to edit", suggestion or "")
+
+    def test_wine_helper_focus_failure_names_input_and_recovery_commands(self) -> None:
+        message, suggestion = describe_routine_exception(FocusFailed(FOCUS_FAILED_MESSAGE), self.app._config)
+
+        self.assertEqual(message, f"Input to Elite failed: {FOCUS_FAILED_MESSAGE}")
+        self.assertIn("set_input wine_helper", suggestion or "")
+        self.assertIn("set_input foreground", suggestion or "")
+
+    def test_unexpected_routine_exception_shows_its_error(self) -> None:
+        message, suggestion = describe_routine_exception(ValueError("boom"), self.app._config)
+
+        self.assertEqual(message, "Routine hit an unexpected error: boom.")
+        self.assertIn("ACTIVITY", suggestion or "")
 
     def test_route_mismatch_includes_replay_guidance(self) -> None:
         result = RoutineResult(

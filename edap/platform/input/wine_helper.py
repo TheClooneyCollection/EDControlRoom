@@ -30,6 +30,15 @@ class HelperError(RuntimeError):
     """A helper protocol or application failure; never a reason to launch another helper."""
 
 
+class FocusFailed(HelperError):
+    """The helper could not make Elite the Win32 foreground; no key was sent."""
+
+
+FOCUS_ATTEMPTS = 3
+FOCUS_RETRY_S = 0.1
+FOCUS_FAILED_MESSAGE = "wine helper couldn't focus Elite inside the CrossOver bottle (focus_failed); no keys were sent."
+
+
 class BurstAborted(RuntimeError):
     """Transport recovery reset held keys; the interrupted burst must not be replayed."""
 
@@ -122,6 +131,8 @@ class WineHelperClient:
         if not isinstance(reply, dict) or not isinstance(reply.get('ok'), bool):
             raise HelperError('wine helper invalid reply; check input.wine_helper.port')
         if not reply['ok']:
+            if reply.get('error') == 'focus_failed':
+                raise FocusFailed(FOCUS_FAILED_MESSAGE)
             raise HelperError(f"wine helper {reply.get('error', 'bad_request')}: {reply.get('detail', '')}")
         return reply
 
@@ -217,6 +228,8 @@ class WineHelperClient:
             except (OSError, RuntimeError) as recovery:
                 raise BurstAborted(f'{self._unreachable()} Interrupted input burst aborted; reconnect failed: {recovery}') from exc
             raise BurstAborted('wine helper transport failed; reconnected and released all keys; interrupted input burst aborted (not replayed).') from exc
+        except FocusFailed:
+            raise  # A refused focus or key-down sent nothing, so the connection stays usable.
         except HelperError:
             # Invalid replies can leave the result of a key-down unknown. Disconnect releases it.
             self._disconnect()
@@ -229,13 +242,23 @@ class WineHelperClient:
             raise ValueError('wine helper refuses Alt scan code 0x38')
         return keys
 
+    def _focus(self) -> None:
+        for attempt in range(FOCUS_ATTEMPTS):
+            try:
+                self._request('focus')
+                return
+            except FocusFailed:
+                if attempt == FOCUS_ATTEMPTS - 1:
+                    raise
+                self._sleep(FOCUS_RETRY_S)
+
     def _key(self, code: tuple[int, bool], down: bool) -> None:
         self._request('key', scan=code[0], ext=code[1], down=down)
 
     def press_key(self, key: str, modifier: str | None = None) -> None:
         keys = self._keys(key, modifier)
         with self._lock:
-            self._request('focus')
+            self._focus()
             try:
                 for code in keys:
                     self._key(code, True)
@@ -263,7 +286,7 @@ class WineHelperClient:
     def tap_key(self, key: str, modifier: str | None, hold_s: float) -> None:
         keys = self._keys(key, modifier)
         with self._lock:
-            self._request('focus')
+            self._focus()
             pressed: list[tuple[int, bool]] = []
             failed = False
             try:

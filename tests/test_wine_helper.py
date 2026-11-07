@@ -11,7 +11,7 @@ from edap.binding_lookup import KEY_ALIASES, normalize_internal_key_name
 from edap.config import ConfigError, InputConfig, WineHelperConfig, load_config, validate_wine_helper
 from edap.platform.input.macos import MacOSInputController
 from edap.platform.input.scancodes import resolve_scancode
-from edap.platform.input.wine_helper import BurstAborted, HelperError, check_crossover_match, load_or_create_token
+from edap.platform.input.wine_helper import BurstAborted, FocusFailed, HelperError, check_crossover_match, load_or_create_token
 from edap.timing import no_jitter_timing_sampler
 from tests.fixtures.wine_helper import helper_client, unexpected
 
@@ -106,16 +106,52 @@ class HelperProtocolTests(unittest.TestCase):
         self.assertEqual(client.status()['held'], [])
         self.assertIn('wine helper (EliteDangerous64.exe hwnd 0x2A, helper 0.1.0)', client.target.summary())
 
-    def test_failed_focus_aborts_before_any_key(self):
-        for error in ('focus_failed', 'no_target'):
-            with self.subTest(error=error):
-                server = Server()
-                client = connected(server)
-                server.replies = [{'ok': False, 'error': error, 'detail': 'fg=explorer.exe'}]
-                with self.assertRaisesRegex(HelperError, f'wine helper {error}: fg=explorer.exe'):
-                    client.tap_key('m', 'left_control', 0)
-                self.assertFalse(any(r['op'] == 'key' for r in server.requests))
-                self.assertTrue(server.closed)
+    def test_missing_target_aborts_before_any_key_and_disconnects(self):
+        server = Server()
+        client = connected(server)
+        server.replies = [{'ok': False, 'error': 'no_target', 'detail': 'no_target'}]
+        with self.assertRaisesRegex(HelperError, 'wine helper no_target: no_target'):
+            client.tap_key('m', 'left_control', 0)
+        self.assertFalse(any(r['op'] == 'key' for r in server.requests))
+        self.assertTrue(server.closed)
+
+    def test_long_lived_helper_retries_focus_lost_after_mac_app_switch(self):
+        # A long-running server's helper focuses Elite once, then the Mac front app changes and
+        # winemac moves the Win32 foreground away, so the next burst's first focus is refused.
+        server = Server()
+        waits = []
+        client = connected(server, sleeper=waits.append)
+        client.tap_key('m', 'left_control', 0)
+        server.requests.clear()
+        server.replies = [{'ok': False, 'error': 'focus_failed', 'detail': 'focus_failed'}]
+        client.tap_key('m', 'left_control', 0)
+        self.assertEqual([r['op'] for r in server.requests], ['focus', 'focus', 'key', 'key', 'key', 'key'])
+        self.assertEqual(waits, [0.1])
+        self.assertFalse(server.closed)
+
+    def test_persistent_focus_failure_sends_no_keys_and_keeps_the_connection(self):
+        server = Server()
+        waits = []
+        client = connected(server, sleeper=waits.append)
+        server.replies = [{'ok': False, 'error': 'focus_failed', 'detail': 'focus_failed'}] * 3
+        with self.assertRaisesRegex(FocusFailed, "couldn't focus Elite inside the CrossOver bottle"):
+            client.tap_key('m', 'left_control', 0)
+        self.assertEqual([r['op'] for r in server.requests[3:]], ['focus'] * 3)
+        self.assertEqual(waits, [0.1, 0.1])
+        self.assertFalse(server.closed)
+        server.requests.clear()
+        client.tap_key('m', 'left_control', 0)
+        self.assertEqual(server.requests[0], {'op': 'focus'})
+        self.assertEqual(server.held, set())
+
+    def test_focus_lost_before_a_key_down_releases_and_reports_focus_failure(self):
+        server = Server()
+        client = connected(server)
+        server.replies = [None, None, {'ok': False, 'error': 'focus_failed', 'detail': 'focus_failed'}]
+        with self.assertRaises(FocusFailed):
+            client.tap_key('m', 'left_control', 0)
+        self.assertEqual([r['op'] for r in server.requests[3:]], ['focus', 'key', 'key', 'release_all'])
+        self.assertEqual(server.held, set())
 
     def test_partial_modifier_burst_reconnects_releases_and_never_replays_key_down(self):
         first, second = Server(), Server()
