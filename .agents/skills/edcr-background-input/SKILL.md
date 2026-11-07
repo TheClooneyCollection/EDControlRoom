@@ -48,9 +48,9 @@ Everything else (reading `ps`, reading files, building into `build/`, editing th
 6. **Verify (consent gate).**
    - Make sure Control Room is not running (the helper serves one client), and ask the player to keep another Mac app in front.
    - Note the newest `Journal.*.log` in the journal folder and its current line count.
-   - Run `uv run python3 -m tools.ship_controls --input-target wine_helper --sequence 'GalaxyMapOpen; GalaxyMapOpen delay=3'`.
+   - Run `uv run python3 -m tools.ship_controls --input-target wine_helper --sequence 'GalaxyMapOpen; GalaxyMapOpen delay=8'`.
 
-   **Done:** the newly appended journal lines include a `Music` event with `MusicTrack` `GalaxyMap`, followed by another `Music` event (for example `Starport`), and the player confirms their front Mac app did not change. Judge by the journal, never `Status.json` `GuiFocus`. If the check fails, go to the doc's Troubleshooting section, match the exact error text, apply that fix and repeat this step.
+   **Done:** the newly appended journal lines include a `Music` event with `MusicTrack` `GalaxyMap`, followed by another `Music` event (for example `Starport`). If only `GalaxyMap` appears, the second press probably landed while the map was loading: send `--action GalaxyMapOpen` once with the map loaded and check for the closing event, and the player confirms their front Mac app did not change. Judge by the journal, never `Status.json` `GuiFocus`. If the check fails, go to the doc's Troubleshooting section, match the exact error text, apply that fix and repeat this step.
 
 7. **Hand over.** Tell the player:
    - Control Room now starts the helper automatically (`uv run python3 control_room.py lan` as usual);

@@ -2,7 +2,7 @@
 
 Run routines while another Mac app is in front. By default EDControlRoom types into whichever macOS app is frontmost, so Elite has to stay in front for the whole routine. The **wine helper** is a small Windows program that runs inside your CrossOver bottle and sends keys to Elite from there, so you can keep using other Mac apps.
 
-> Status: new and still being validated. `foreground` stays the default until you switch.
+> Status: verified live on 2026-11-07 (CrossOver Preview, Elite docked). `foreground` stays the default until you switch.
 
 Want your coding agent (Claude Code, Codex, ...) to set this up for you? Ask it to "set up background input". The repo ships the `edcr-background-input` skill, which walks it through the steps below.
 
@@ -120,10 +120,10 @@ Check that Elite actually receives keys while another Mac app is in front. Elite
 2. Keep another app (e.g. Terminal) in front and run:
 
    ```sh
-   uv run python3 -m tools.ship_controls --input-target wine_helper --sequence 'GalaxyMapOpen; GalaxyMapOpen delay=3'
+   uv run python3 -m tools.ship_controls --input-target wine_helper --sequence 'GalaxyMapOpen; GalaxyMapOpen delay=8'
    ```
 
-   This opens the galaxy map, waits 3 seconds, then toggles it closed.
+   This opens the galaxy map, waits 8 seconds, then toggles it closed. Elite ignores the second press while the map is still loading, so keep the gap long; if the map stays open, run `--action GalaxyMapOpen` once more after it has loaded.
 3. Check the newest journal file (`Journal.*.log` in your Elite journal folder). You should see a `"event":"Music"` line with `"MusicTrack":"GalaxyMap"`, then one with the previous track (for example `Starport` when docked). Your Mac's front app should not have changed.
 
 Use the journal `Music` event as the check. `Status.json` `GuiFocus` lags behind and is not reliable for this.
