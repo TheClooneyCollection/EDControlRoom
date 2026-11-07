@@ -7,6 +7,10 @@ import sys
 from pathlib import Path
 from time import monotonic, sleep
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from edap.binding_lookup import BindingLookup
 from edap.config import ConfigError, DEFAULT_CONFIG_PATH
 from edap.progress_controls import ProgressShipControls

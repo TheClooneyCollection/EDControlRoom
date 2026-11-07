@@ -20,6 +20,10 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from edap.binding_groups import BindingGroup, BindingRow, group_bindings
 from edap.binding_lookup import load_binding_lookup
 from edap.bindings import REQUIRED_BINDINGS

@@ -2,6 +2,11 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from edap.config import ConfigError, default_runtime_platform
 from edap.tts import NullSpeechBackend, build_speech_backend, normalize_tts_value

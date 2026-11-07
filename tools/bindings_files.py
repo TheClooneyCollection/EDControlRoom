@@ -14,6 +14,10 @@ except ImportError:  # pragma: no cover - exercised on non-POSIX hosts
     termios = None
     tty = None
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from edap.bindings_inventory import (
     DEFAULT_BACKUP_DIR,
     BindingsFileEntry,

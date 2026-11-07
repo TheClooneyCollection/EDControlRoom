@@ -3,7 +3,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 from typing import Callable
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from edap.binding_conflicts import read_galaxy_map_binding_conflicts
 from edap.binding_lookup import load_binding_lookup
