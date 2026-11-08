@@ -34,11 +34,12 @@
 # title = "captain"
 # disabled_messages = []
 
-# Speak through a local Piper voice (https://github.com/rhasspy/piper) instead of
-# the platform default (`say`, `spd-say`/`espeak-ng`, or Windows speech).
+# Speak through a local Piper voice instead of the platform default (`say`,
+# `spd-say`/`espeak-ng`, or Windows speech). `uv run python3 tools/setup_piper.py`
+# installs piper-tts and a voice and writes this section for you.
 # [tts.piper]
-# executable = "~/.local/share/piper/piper/piper"
-# model = "~/.local/share/piper/voices/en_GB-cori-high.onnx"
+# executable = '~/.local/bin/piper'
+# model = '~/.local/share/EDControlRoom/piper/voices/cori/en_GB-cori-high.onnx'
 
 [tts.phrases]
 # destination_set = "Setting destination to {system_name}."

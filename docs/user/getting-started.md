@@ -78,15 +78,14 @@ Swap `edcr` for your token if you overrode it.
 
 The haul page can also speak in the browser, for example on an iPhone. Open **Speak announcements on this device** at the bottom of the Active haul routine panel and turn it on. It is per device, so a laptop already running the TUI does not double up. iOS needs one tap on the page after each load, and speech stops when the screen locks.
 
-The server and the TUI use the platform voice (`say`, `spd-say`/`espeak-ng`, or Windows speech). For a more natural local voice, install [Piper](https://github.com/rhasspy/piper) and a voice from [piper-voices](https://huggingface.co/rhasspy/piper-voices), then point `config.toml` at them:
+The server and the TUI use the platform voice (`say`, `spd-say`/`espeak-ng`, or Windows speech) until you set up [Piper](https://github.com/OHF-Voice/piper1-gpl), a natural-sounding local voice. One command installs it on macOS, Linux (including Steam Deck) and Windows:
 
-```toml
-[tts.piper]
-executable = "~/.local/share/piper/piper/piper"
-model = "~/.local/share/piper/voices/en_GB-cori-high.onnx"
+```sh
+uv run python3 tools/setup_piper.py            # Cori, British English, high quality (default)
+uv run python3 tools/setup_piper.py --voice jenny   # Jenny (Dioco), British English, medium quality
 ```
 
-Piper stays loaded between callouts and plays each line with `pw-play`, `paplay` or `aplay` on Linux, or `afplay` on macOS.
+It installs `piper-tts` with `uv tool` (in its own environment, separate from EDControlRoom), downloads the voice into your user data folder and checks it, writes `[tts.piper]` into `config.toml`, and speaks a test line. Rerun it with the other `--voice` to switch voices. Then restart Control Room. Cori is trained on public-domain LibriVox recordings; the Jenny voice is from the [Jenny (Dioco)](https://github.com/dioco-group/jenny-tts-dataset) dataset.
 
 Typical setup: the game machine runs `control_room.py lan` and speaks callouts, and an iPad or another window drives the browser UI. Optionally a second LAN box runs `connect ...` for the activity log.
 

@@ -39,28 +39,30 @@ class _BlockingBackend:
 
 
 class _FakePiperProcess:
-    """Writes one wav per stdin line like Piper; `dies_after` lines then stops answering."""
+    """Writes one wav per stdin line and logs it like piper-tts; dies after `dies_after` lines."""
 
     def __init__(self, output_dir: str, *, dies_after: int | None = None) -> None:
         self.lines: list[str] = []
         self.killed = False
         self._output_dir = Path(output_dir)
         self._dies_after = dies_after
+        self._pending_logs: list[str] = []
         self.stdin = self
-        self.stdout = self
+        self.stderr = self
 
     def write(self, data: str) -> None:
         self.lines.append(data)
+        if self._dies_after is not None and len(self.lines) > self._dies_after:
+            return
+        wav = self._output_dir / f"{len(self.lines)}.wav"
+        wav.write_bytes(b"RIFF")
+        self._pending_logs += ["WARNING:onnxruntime:noise\n", f"INFO:piper.__main__:Wrote {wav}\n"]
 
     def flush(self) -> None:
         return None
 
     def readline(self) -> str:
-        if self._dies_after is not None and len(self.lines) > self._dies_after:
-            return ""
-        wav = self._output_dir / f"{len(self.lines)}.wav"
-        wav.write_bytes(b"RIFF")
-        return f"{wav}\n"
+        return self._pending_logs.pop(0) if self._pending_logs else ""
 
     def poll(self) -> int | None:
         return -9 if self.killed else None
@@ -73,7 +75,7 @@ class PiperSpeechBackendTests(unittest.TestCase):
     def _backend(self, *, dies_after: int | None = None):
         started: list[list[str]] = []
         processes: list[_FakePiperProcess] = []
-        played: list[list[str]] = []
+        played: list[str] = []
 
         def start_process(args: list[str]) -> _FakePiperProcess:
             started.append(args)
@@ -81,13 +83,12 @@ class PiperSpeechBackendTests(unittest.TestCase):
             processes.append(_FakePiperProcess(args[-1], dies_after=dies_after if not processes else None))
             return processes[-1]
 
-        def play(args: list[str]) -> None:
-            self.assertTrue(Path(args[-1]).is_file())
-            played.append(args)
+        def play(wav_path: str) -> None:
+            self.assertTrue(Path(wav_path).is_file())
+            played.append(wav_path)
 
         backend = PiperSpeechBackend(
             PiperVoiceConfig(executable=Path("piper"), model=Path("voice.onnx")),
-            ("pw-play",),
             start_process=start_process,
             play=play,
         )
@@ -103,8 +104,8 @@ class PiperSpeechBackendTests(unittest.TestCase):
         self.assertEqual(len(started), 1)
         self.assertEqual(started[0][:3], ["piper", "--model", "voice.onnx"])
         self.assertEqual(processes[0].lines, ["Warning commander, we are under attack.\n", "Docking complete.\n"])
-        self.assertEqual([args[0] for args in played], ["pw-play", "pw-play"])
-        self.assertFalse(any(Path(args[-1]).exists() for args in played))
+        self.assertEqual(len(played), 2)
+        self.assertFalse(any(Path(wav_path).exists() for wav_path in played))
 
     def test_restarts_piper_once_when_it_stops_answering(self) -> None:
         backend, started, processes, played = self._backend(dies_after=1)

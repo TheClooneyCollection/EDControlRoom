@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 from enum import Enum
+import os
 from pathlib import Path
 import re
 from shutil import which
@@ -130,25 +131,22 @@ class PowerShellSpeechBackend:
 
 
 class PiperSpeechBackend:
-    """Keeps one Piper process loaded so each line skips the model load."""
+    """Keeps one Piper (piper-tts) process loaded so each line skips the model load."""
 
     def __init__(
         self,
         voice: PiperVoiceConfig,
-        player: tuple[str, ...],
         *,
         start_process: Callable[[list[str]], subprocess.Popen[str]],
-        play: Callable[[list[str]], object],
+        play: Callable[[str], object],
     ) -> None:
         self._voice = voice
-        self._player = player
         self._start_process = start_process
         self._play = play
         self._output_dir = tempfile.mkdtemp(prefix="edcr-piper-")
         self._process: subprocess.Popen[str] | None = None
 
     def speak(self, text: str) -> None:
-        # Piper reads one utterance per line and answers with the path of the wav it wrote.
         line = " ".join(text.split())
         if not line:
             return
@@ -156,7 +154,7 @@ class PiperSpeechBackend:
         if not wav_path:
             return
         try:
-            self._play([*self._player, wav_path])
+            self._play(wav_path)
         finally:
             Path(wav_path).unlink(missing_ok=True)
 
@@ -169,15 +167,22 @@ class PiperSpeechBackend:
                 "--output_dir",
                 self._output_dir,
             ])
+        # piper-tts reads one utterance per stdin line and logs `Wrote <path>` to stderr once the wav is complete.
+        wav_path = ""
         try:
-            assert self._process.stdin is not None and self._process.stdout is not None
+            assert self._process.stdin is not None and self._process.stderr is not None
             self._process.stdin.write(line + "\n")
             self._process.stdin.flush()
-            wav_path = self._process.stdout.readline().strip()
+            while not wav_path:
+                log_line = self._process.stderr.readline()
+                if not log_line:
+                    break
+                _, marker, path = log_line.strip().partition("Wrote ")
+                wav_path = path if marker else ""
         except OSError:
             wav_path = ""
         if not wav_path:
-            # Dead or wedged Piper: drop it so the next attempt starts a fresh one.
+            # Dead Piper: drop it so the next attempt starts a fresh one.
             self._process.kill()
             self._process = None
         return wav_path
@@ -193,28 +198,30 @@ def _start_piper_process(args: list[str]) -> subprocess.Popen[str]:
     return subprocess.Popen(
         args,
         stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
         text=True,
+        encoding="utf-8",
         bufsize=1,
+        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
     )
 
 
-def _play_wav(args: list[str]) -> None:
-    subprocess.run(args, check=False, capture_output=True)
+def _wav_player(platform_name: str) -> Callable[[str], object] | None:
+    if platform_name == "windows":
+        import winsound
+
+        return lambda wav_path: winsound.PlaySound(wav_path, winsound.SND_FILENAME)
+    player = next((name for name in _WAV_PLAYERS.get(platform_name, ()) if which(name)), None)
+    if player is None:
+        return None
+    return lambda wav_path: subprocess.run([player, wav_path], check=False, capture_output=True)
 
 
 def build_speech_backend(platform_name: str, piper: PiperVoiceConfig | None) -> SpeechBackend:
     platform_name = platform_name.lower()
-    if piper is not None:
-        player = next((name for name in _WAV_PLAYERS.get(platform_name, ()) if which(name)), None)
-        if player is not None:
-            return PiperSpeechBackend(
-                piper,
-                (player,),
-                start_process=_start_piper_process,
-                play=_play_wav,
-            )
+    if piper is not None and (play := _wav_player(platform_name)) is not None:
+        return PiperSpeechBackend(piper, start_process=_start_piper_process, play=play)
     if platform_name == "macos" and which("say"):
         return CommandSpeechBackend(("say",))
     if platform_name == "linux":
