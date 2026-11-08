@@ -11,7 +11,7 @@
 ## Changes
 
 - Haul v1 setup panel: a `Copy / paste route` disclosure with a text box, `Copy selected` and `Import pasted`. Scope per the user: the selected route only, route fields only (no search form parameters), haul page only (not `/multi-haul`).
-- Copy writes `tradeRoutePayload(route)` as pretty JSON. The Clipboard API needs https or localhost, so a LAN `http://` page falls back to `execCommand("copy")`, then to leaving the text selected for Ctrl+C.
+- Copy writes `routeTransferPayload(route)` as pretty JSON: the 11 route fields a haul needs or shows (systems, stations, commodities, station and route distances, profits), empty ones dropped. Index, `raw_text`, `url_links`, supply/demand snapshots and `distance_from_system` stay local; `raw_text` only feeds a debug log on search load. Older pasted JSON with those fields still imports. The Clipboard API needs https or localhost, so a LAN `http://` page falls back to `execCommand("copy")`, then to leaving the text selected for Ctrl+C.
 - Import requires from/to systems and stations, keeps the index of a matching local route (same `routeKey`) or takes a fresh one, then selects it and persists it with the existing `command.select_trade_route`, which validates the route server side. No new server command.
 
 ## Verification

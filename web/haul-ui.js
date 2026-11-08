@@ -259,6 +259,20 @@ let routes = [];
       };
     }
 
+    // Copy only what another Control Room needs to run the route; index, Inara text and market snapshots stay local.
+    const ROUTE_TRANSFER_FIELDS = [
+      "from_system", "from_station", "source_buy_commodity", "from_station_distance",
+      "to_system", "to_station", "target_buy_commodity", "to_station_distance",
+      "route_distance", "profit_per_trip", "profit_per_hour"
+    ];
+
+    function routeTransferPayload(route) {
+      const payload = tradeRoutePayload(route);
+      return Object.fromEntries(ROUTE_TRANSFER_FIELDS
+        .filter((field) => payload[field] !== null && payload[field] !== "")
+        .map((field) => [field, payload[field]]));
+    }
+
     function routeKey(route) {
       return [
         route.buyStation,
@@ -307,7 +321,7 @@ let routes = [];
         return;
       }
       const textarea = document.getElementById("route-transfer-text");
-      textarea.value = JSON.stringify(tradeRoutePayload(route), null, 2);
+      textarea.value = JSON.stringify(routeTransferPayload(route), null, 2);
       textarea.focus();
       textarea.select();
       // The Clipboard API only exists on https or localhost; a LAN http page falls back to execCommand.

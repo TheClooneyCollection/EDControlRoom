@@ -208,11 +208,21 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         html = _haul_web_source()
 
         for hook in ('id="route-transfer-text"', 'id="copy-route"', 'id="import-route"',
-                     "JSON.stringify(tradeRoutePayload(route), null, 2)",
+                     "JSON.stringify(routeTransferPayload(route), null, 2)",
                      'navigator.clipboard && window.isSecureContext', 'document.execCommand("copy")',
                      'const required = ["from_system", "from_station", "to_system", "to_station"]',
                      "mergeHydratedRoute({ ...pasted, index })", "persistSelectedRoute(route)"):
             self.assertIn(hook, html)
+
+    def test_haul_web_copied_route_leaves_out_local_and_stale_fields(self) -> None:
+        html = _haul_web_source()
+        start = html.index("const ROUTE_TRANSFER_FIELDS = [")
+        fields = html[start:html.index("];", start)]
+
+        for kept in ("from_system", "to_station", "source_buy_commodity", "target_buy_commodity", "profit_per_trip"):
+            self.assertIn(f'"{kept}"', fields)
+        for dropped in ("index", "raw_text", "url_links", "from_supply", "to_demand", "distance_from_system"):
+            self.assertNotIn(f'"{dropped}"', fields)
 
     def test_haul_web_route_table_shows_trip_profit(self) -> None:
         html = _haul_web_source()
