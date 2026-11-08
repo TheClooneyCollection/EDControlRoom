@@ -153,6 +153,7 @@ class WineHelperConfig:
 @dataclass(frozen=True)
 class InputConfig:
     target: str = "foreground"
+    linux_backend: str = "uinput"
     wine_helper: WineHelperConfig = field(default_factory=WineHelperConfig)
 
 
@@ -173,9 +174,11 @@ def validate_wine_helper(config: WineHelperConfig, *, selected: bool) -> None:
 def _input_config(raw: dict[str, object]) -> InputConfig:
     source = _optional_table(raw, "input")
     helper = _optional_table(source, "wine_helper")
+    linux = _optional_table(source, "linux")
     default = WineHelperConfig()
     config = InputConfig(
         target=_string(source, "target", "foreground"),
+        linux_backend=_string(linux, "backend", InputConfig.linux_backend),
         wine_helper=WineHelperConfig(
             **{key: _string(helper, key, getattr(default, key)) for key in
                ("wine_path", "bottle", "helper_path", "process_name", "launch")},
@@ -187,6 +190,8 @@ def _input_config(raw: dict[str, object]) -> InputConfig:
     )
     if config.target not in {"foreground", "pid", "wine_helper"}:
         raise ConfigError("Config value `input.target` must be foreground, pid or wine_helper.")
+    if config.linux_backend not in {"uinput", "xdotool"}:
+        raise ConfigError("Config value `input.linux.backend` must be uinput or xdotool.")
     validate_wine_helper(config.wine_helper, selected=config.target == "wine_helper")
     return config
 

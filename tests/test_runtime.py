@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from edap.config import load_config
-from edap.platform.input.linux import LinuxInputController
+from edap.platform.input.uinput import LinuxUinputController
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.platform.input.windows import WindowsInputController
 
@@ -236,4 +236,4 @@ platform = "linux"
             ):
                 runtime = build_runtime_context(config)
 
-        self.assertIsInstance(runtime.input_controller, LinuxInputController)
+        self.assertIsInstance(runtime.input_controller, LinuxUinputController)

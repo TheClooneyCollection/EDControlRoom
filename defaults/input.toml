@@ -12,3 +12,7 @@ startup_timeout_s = 10.0
 request_timeout_s = 6.0
 max_hold_s = 30.0
 token_file = ".wine_input_helper.token"
+
+[input.linux]
+# uinput drives a kernel virtual keyboard (X11 desktop and Steam Deck gamescope); xdotool needs X11.
+backend = "uinput"

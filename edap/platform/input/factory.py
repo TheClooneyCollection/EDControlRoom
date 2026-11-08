@@ -22,9 +22,14 @@ def build_input_controller(platform_name: str, *, input_config: InputConfig, tim
             controller.auto_target()
         return controller
     if normalized == "linux":
-        from .linux import LinuxInputController
+        if input_config.linux_backend == "uinput":
+            from .uinput import build_uinput_controller
 
-        controller = LinuxInputController(timing_sampler=timing_sampler)
+            controller = build_uinput_controller(timing_sampler=timing_sampler)
+        else:
+            from .linux import LinuxInputController
+
+            controller = LinuxInputController(timing_sampler=timing_sampler)
         if input_config.target == "pid":
             controller.auto_target()
         return controller
