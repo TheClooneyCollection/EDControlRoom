@@ -75,23 +75,15 @@ from edap.control_room.dependencies import (
 )
 from edap.control_room import (
     bootstrap as _bootstrap,
-    commands as _commands,
     error_text,
     events as _events,
     facade as _facade,
     haul_tracking as _haul_tracking,
-    help as _help,
     history as _history,
     persistence as _persistence,
     prompts as _prompts,
     replay as _replay,
     rendering as _rendering,
-    tts as _tts_module,
-    routines_haul,
-    routines_movement,
-    routines_nav,
-    routines_station,
-    routines_trade,
     workers as _workers,
 )
 from edap.control_room.models import (
@@ -123,28 +115,6 @@ from edap.control_room.protocol.sink import ControlRoomEventSink
 from edap.control_room.routine_stop import RoutineStopMode
 from edap.inara.trade_routes import TradeRoute
 
-# Modules eligible for in-place hot reload via the `reload` command.
-# Order matters: leaf modules first, then modules that import from them.
-_RELOADABLE_MODULES = [
-    routines_haul,
-    routines_trade,
-    routines_nav,
-    routines_movement,
-    routines_station,
-    _bootstrap,
-    _events,
-    _facade,
-    _haul_tracking,
-    _history,
-    _help,
-    _commands,
-    _persistence,
-    _prompts,
-    _replay,
-    _rendering,
-    _tts_module,
-    _workers,
-]
 from edap.control_room_state import (
     CommandHistoryEntry,
     ControlRoomState,
@@ -170,7 +140,7 @@ _STARTUP_BINDING_WARNING_IGNORED_ACTIONS = frozenset({
     "YawRightButton",
 })
 
-_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul start | haul load | haul search [system] | haul search url <url> | haul route <n> | travel <system> [/ <station>] | pause | resume | multi_leg_haul <route> | dest <system> | home | set_input | set_pid | set_hwnd | market ... | instant | stats [window] | new_session | stop | reload | reload_keymap | q"
+_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul start | haul load | haul search [system] | haul search url <url> | haul route <n> | travel <system> [/ <station>] | pause | resume | multi_leg_haul <route> | dest <system> | home | set_input | set_pid | set_hwnd | market ... | instant | stats [window] | new_session | stop | reload_keymap | q"
 _ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS = 10.0
 _JOURNAL_ARTIFACT_LOG_PATH = Path("artifacts/control-room.log")
 _DEBUG_ARTIFACT_LOG_PATH = Path("artifacts/control-room-debug.log")
@@ -487,7 +457,6 @@ class ControlRoomApp(App[None]):
         self._facade = _facade.ControlRoomFacade(
             self,
             default_placeholder=_DEFAULT_COMMAND_PLACEHOLDER,
-            reloadable_modules=_RELOADABLE_MODULES,
         )
         self._dependencies = dependencies or build_local_control_room_dependencies(self)
         self._view_actions = view_actions or build_control_room_app_view_actions(self)

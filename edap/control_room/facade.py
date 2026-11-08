@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-import importlib
 from typing import TYPE_CHECKING, Any, Callable
 
-from rich.markup import escape
-
-from edap.control_room import error_text
 from edap.control_room import (
     commands as _commands,
     persistence as _persistence,
@@ -35,11 +31,9 @@ class ControlRoomFacade:
         app: ControlRoomApp,
         *,
         default_placeholder: str,
-        reloadable_modules: list[Any],
     ) -> None:
         self._app = app
         self._default_placeholder = default_placeholder
-        self._reloadable_modules = reloadable_modules
 
     def dispatch_command(self, raw: str, *, skip_delay: bool | None = None) -> None:
         _commands.dispatch(self._app, raw, skip_delay_override=skip_delay)
@@ -354,24 +348,6 @@ class ControlRoomFacade:
             raw_command=raw_command,
         )
 
-    def cmd_reload(self) -> None:
-        reloaded: list[str] = []
-        for module in self._reloadable_modules:
-            try:
-                importlib.reload(module)
-                reloaded.append(module.__name__)
-            except Exception as exc:
-                self._app._log(
-                    f"[red]{escape(error_text.render(self._app._config, 'reload_failed', module_name=module.__name__, error=str(exc)))}[/]"
-                )
-                return
-        self._app._log("[green]Hot-reloaded modules:[/]")
-        for name in reloaded:
-            self._app._log(f"  [dim]•[/] {escape(name)}")
-        self._app._log(
-            "[dim]Next command dispatch will use the new code. App/widget edits still need a restart.[/]"
-        )
-
 
 FACADE_METHOD_MAP = {
     "_record_history_entry": "record_history_entry",
@@ -415,6 +391,5 @@ FACADE_METHOD_MAP = {
     "_dispatch_haul_search": "dispatch_haul_search",
     "_dispatch_travel": "dispatch_travel",
     "_load_trade_route": "load_trade_route",
-    "_cmd_reload": "cmd_reload",
     "_dispatch_command": "dispatch_command",
 }

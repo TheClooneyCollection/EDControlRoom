@@ -1,6 +1,5 @@
 messages:
   templates:
-    reload_failed: "Hot reload failed for {module_name}: {error}."
     journal_dir_not_found: "Journal directory could not be resolved (source: {source_status}). Set paths.journal_dir in config.toml or fix CrossOver auto-detection."
     dest_usage: "Usage: dest <system name>"
     home_usage: "Usage: home | home set <system name>"

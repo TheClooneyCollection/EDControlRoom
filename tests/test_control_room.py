@@ -3624,6 +3624,11 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertIsNone(self.app._ctx.binding_lookup)
         self.assertIn("Stop the running routine before reload_keymap.", "\n".join(self.app.logged))
 
+    def test_reload_is_no_longer_a_command(self) -> None:
+        self.app._dispatch_command("reload")
+
+        self.assertIn("Unknown command: reload", "\n".join(self.app.logged))
+
     def test_reload_keymap_reports_a_missing_or_broken_bindings_file(self) -> None:
         bindings_path = self._use_bindings_file("Key_Tab")
         bindings_path.write_text("<Root><UseBoostJuice>", encoding="utf-8")
