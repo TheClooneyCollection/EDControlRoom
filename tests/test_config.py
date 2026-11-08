@@ -569,6 +569,28 @@ title = ""
             with self.assertRaisesRegex(ConfigError, "tts.title"):
                 load_config(config_path)
 
+    def test_tts_piper_voice_needs_both_existing_files(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            config_path = temp_path / "config.toml"
+            executable = temp_path / "piper"
+            model = temp_path / "voice.onnx"
+            executable.write_text("", encoding="utf-8")
+            base = "[paths]\n\n[controls]\n\n[screen]\n\n[runtime]\n\n[tts.piper]\n"
+
+            _write_config(config_path, base + f"executable = '{executable}'\n")
+            with self.assertRaisesRegex(ConfigError, "needs both `executable` and `model`"):
+                load_config(config_path)
+
+            _write_config(config_path, base + f"executable = '{executable}'\nmodel = '{model}'\n")
+            with self.assertRaisesRegex(ConfigError, "tts.piper.model"):
+                load_config(config_path)
+
+            model.write_text("", encoding="utf-8")
+            config = load_config(config_path)
+            self.assertEqual(config.tts.piper.executable, executable)
+            self.assertEqual(config.tts.piper.model, model)
+
     def test_rejects_omitted_runtime_platform_on_unsupported_host(self) -> None:
         with TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)

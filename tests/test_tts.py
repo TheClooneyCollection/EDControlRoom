@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+import io
+from pathlib import Path
+import shutil
 from threading import Event
 import unittest
 
-from edap.config import TTSConfig
-from edap.tts import AnnouncementId, QueuedSpeaker, TTSAnnouncer, format_credits_short, normalize_tts_value
+from edap.config import PiperVoiceConfig, TTSConfig
+from edap.tts import (
+    AnnouncementId,
+    PiperSpeechBackend,
+    QueuedSpeaker,
+    TTSAnnouncer,
+    format_credits_short,
+    normalize_tts_value,
+)
 
 
 class _FakeBackend:
@@ -26,6 +36,86 @@ class _BlockingBackend:
         if len(self.spoken) == 1:
             self.started.set()
             self.release.wait(timeout=1.0)
+
+
+class _FakePiperProcess:
+    """Writes one wav per stdin line like Piper; `dies_after` lines then stops answering."""
+
+    def __init__(self, output_dir: str, *, dies_after: int | None = None) -> None:
+        self.lines: list[str] = []
+        self.killed = False
+        self._output_dir = Path(output_dir)
+        self._dies_after = dies_after
+        self.stdin = self
+        self.stdout = self
+
+    def write(self, data: str) -> None:
+        self.lines.append(data)
+
+    def flush(self) -> None:
+        return None
+
+    def readline(self) -> str:
+        if self._dies_after is not None and len(self.lines) > self._dies_after:
+            return ""
+        wav = self._output_dir / f"{len(self.lines)}.wav"
+        wav.write_bytes(b"RIFF")
+        return f"{wav}\n"
+
+    def poll(self) -> int | None:
+        return -9 if self.killed else None
+
+    def kill(self) -> None:
+        self.killed = True
+
+
+class PiperSpeechBackendTests(unittest.TestCase):
+    def _backend(self, *, dies_after: int | None = None):
+        started: list[list[str]] = []
+        processes: list[_FakePiperProcess] = []
+        played: list[list[str]] = []
+
+        def start_process(args: list[str]) -> _FakePiperProcess:
+            started.append(args)
+            # Only the first process misbehaves; a restarted Piper is healthy.
+            processes.append(_FakePiperProcess(args[-1], dies_after=dies_after if not processes else None))
+            return processes[-1]
+
+        def play(args: list[str]) -> None:
+            self.assertTrue(Path(args[-1]).is_file())
+            played.append(args)
+
+        backend = PiperSpeechBackend(
+            PiperVoiceConfig(executable=Path("piper"), model=Path("voice.onnx")),
+            ("pw-play",),
+            start_process=start_process,
+            play=play,
+        )
+        self.addCleanup(shutil.rmtree, backend._output_dir, True)
+        return backend, started, processes, played
+
+    def test_keeps_one_process_and_plays_then_removes_each_wav(self) -> None:
+        backend, started, processes, played = self._backend()
+
+        backend.speak("Warning commander,\nwe are under attack.")
+        backend.speak("Docking complete.")
+
+        self.assertEqual(len(started), 1)
+        self.assertEqual(started[0][:3], ["piper", "--model", "voice.onnx"])
+        self.assertEqual(processes[0].lines, ["Warning commander, we are under attack.\n", "Docking complete.\n"])
+        self.assertEqual([args[0] for args in played], ["pw-play", "pw-play"])
+        self.assertFalse(any(Path(args[-1]).exists() for args in played))
+
+    def test_restarts_piper_once_when_it_stops_answering(self) -> None:
+        backend, started, processes, played = self._backend(dies_after=1)
+
+        backend.speak("First.")
+        backend.speak("Second.")
+
+        self.assertEqual(len(started), 2)
+        self.assertTrue(processes[0].killed)
+        self.assertEqual(processes[1].lines, ["Second.\n"])
+        self.assertEqual(len(played), 2)
 
 
 class TTSHelpersTests(unittest.TestCase):

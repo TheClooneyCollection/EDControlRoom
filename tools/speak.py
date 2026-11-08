@@ -34,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.write(f"{exc}\n")
         return 2
 
-    backend = build_speech_backend(platform_name)
+    backend = build_speech_backend(platform_name, None)
     if isinstance(backend, NullSpeechBackend):
         sys.stderr.write(f"No TTS backend available for detected platform: {platform_name}\n")
         return 2

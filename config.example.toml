@@ -34,6 +34,12 @@
 # title = "captain"
 # disabled_messages = []
 
+# Speak through a local Piper voice (https://github.com/rhasspy/piper) instead of
+# the platform default (`say`, `spd-say`/`espeak-ng`, or Windows speech).
+# [tts.piper]
+# executable = "~/.local/share/piper/piper/piper"
+# model = "~/.local/share/piper/voices/en_GB-cori-high.onnx"
+
 [tts.phrases]
 # destination_set = "Setting destination to {system_name}."
 

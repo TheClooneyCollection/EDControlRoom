@@ -28,7 +28,7 @@ class SpeakScriptTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         detect_platform.assert_called_once_with()
-        build_backend.assert_called_once_with("linux")
+        build_backend.assert_called_once_with("linux", None)
         self.assertEqual(backend.spoken, ["hello there"])
 
     def test_main_can_normalize_system_name_text(self) -> None:

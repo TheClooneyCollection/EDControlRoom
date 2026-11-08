@@ -218,12 +218,20 @@ class ControlRoomConfig:
 
 
 @dataclass(frozen=True)
+class PiperVoiceConfig:
+    executable: Path
+    model: Path
+
+
+@dataclass(frozen=True)
 class TTSConfig:
     enabled: bool = True
     title_mode: str = "commander"
     title: str = "commander"
     disabled_messages: tuple[str, ...] = ()
     phrases: dict[str, str] = field(default_factory=dict)
+    # Speak through a Piper voice instead of the platform default when set.
+    piper: PiperVoiceConfig | None = None
 
 
 @dataclass(frozen=True)
@@ -349,6 +357,16 @@ def _optional_path(value: object) -> Path | None:
     if not value:
         return None
     return Path(str(value)).expanduser()
+
+
+def _piper_voice(raw: dict[str, object]) -> PiperVoiceConfig | None:
+    if not raw:
+        return None
+    executable = _optional_path(raw.get("executable"))
+    model = _optional_path(raw.get("model"))
+    if executable is None or model is None:
+        raise ConfigError("Config section `tts.piper` needs both `executable` and `model`.")
+    return PiperVoiceConfig(executable=executable, model=model)
 
 
 def _require_table(raw: dict[str, object], key: str) -> dict[str, object]:
@@ -749,6 +767,10 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError(f"Config value `tts.title_mode` must be one of: {supported}.")
     if config.tts.title_mode == "custom" and not config.tts.title.strip():
         raise ConfigError("Config value `tts.title` cannot be empty when `tts.title_mode` is `custom`.")
+    if config.tts.piper is not None:
+        for key, path in (("executable", config.tts.piper.executable), ("model", config.tts.piper.model)):
+            if not path.is_file():
+                raise ConfigError(f"Config path `tts.piper.{key}` must point to an existing file: {path}")
 
     _validate_path_shape(config.paths.journal_dir, key="paths.journal_dir", should_be_dir=True)
     _validate_path_shape(config.paths.bindings_file, key="paths.bindings_file", should_be_dir=False)
@@ -1127,6 +1149,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
                 **_string_dict(default_tts, "phrases"),
                 **_string_dict(tts, "phrases"),
             },
+            piper=_piper_voice(_optional_table(tts, "piper")),
         ),
         messages=MessagesConfig(
             templates={

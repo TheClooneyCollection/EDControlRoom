@@ -3,13 +3,15 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 import re
 from shutil import which
 import subprocess
+import tempfile
 from threading import Condition, Thread
-from typing import Protocol
+from typing import Callable, Protocol
 
-from edap.config import TTSConfig
+from edap.config import PiperVoiceConfig, TTSConfig
 
 
 class AnnouncementId(str, Enum):
@@ -127,8 +129,92 @@ class PowerShellSpeechBackend:
         )
 
 
-def build_speech_backend(platform_name: str) -> SpeechBackend:
+class PiperSpeechBackend:
+    """Keeps one Piper process loaded so each line skips the model load."""
+
+    def __init__(
+        self,
+        voice: PiperVoiceConfig,
+        player: tuple[str, ...],
+        *,
+        start_process: Callable[[list[str]], subprocess.Popen[str]],
+        play: Callable[[list[str]], object],
+    ) -> None:
+        self._voice = voice
+        self._player = player
+        self._start_process = start_process
+        self._play = play
+        self._output_dir = tempfile.mkdtemp(prefix="edcr-piper-")
+        self._process: subprocess.Popen[str] | None = None
+
+    def speak(self, text: str) -> None:
+        # Piper reads one utterance per line and answers with the path of the wav it wrote.
+        line = " ".join(text.split())
+        if not line:
+            return
+        wav_path = self._synthesize(line) or self._synthesize(line)
+        if not wav_path:
+            return
+        try:
+            self._play([*self._player, wav_path])
+        finally:
+            Path(wav_path).unlink(missing_ok=True)
+
+    def _synthesize(self, line: str) -> str:
+        if self._process is None or self._process.poll() is not None:
+            self._process = self._start_process([
+                str(self._voice.executable),
+                "--model",
+                str(self._voice.model),
+                "--output_dir",
+                self._output_dir,
+            ])
+        try:
+            assert self._process.stdin is not None and self._process.stdout is not None
+            self._process.stdin.write(line + "\n")
+            self._process.stdin.flush()
+            wav_path = self._process.stdout.readline().strip()
+        except OSError:
+            wav_path = ""
+        if not wav_path:
+            # Dead or wedged Piper: drop it so the next attempt starts a fresh one.
+            self._process.kill()
+            self._process = None
+        return wav_path
+
+
+_WAV_PLAYERS = {
+    "linux": ("pw-play", "paplay", "aplay"),
+    "macos": ("afplay",),
+}
+
+
+def _start_piper_process(args: list[str]) -> subprocess.Popen[str]:
+    return subprocess.Popen(
+        args,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        bufsize=1,
+    )
+
+
+def _play_wav(args: list[str]) -> None:
+    subprocess.run(args, check=False, capture_output=True)
+
+
+def build_speech_backend(platform_name: str, piper: PiperVoiceConfig | None) -> SpeechBackend:
     platform_name = platform_name.lower()
+    if piper is not None:
+        player = next((name for name in _WAV_PLAYERS.get(platform_name, ()) if which(name)), None)
+        if player is not None:
+            return PiperSpeechBackend(
+                piper,
+                (player,),
+                start_process=_start_piper_process,
+                play=_play_wav,
+            )
     if platform_name == "macos" and which("say"):
         return CommandSpeechBackend(("say",))
     if platform_name == "linux":
@@ -223,7 +309,7 @@ class TTSAnnouncer:
         self._commander_name: str | None = None
         self._speaker: QueuedSpeaker | None = None
         self._last_text = ""
-        selected_backend = backend if backend is not None else build_speech_backend(platform_name)
+        selected_backend = backend if backend is not None else build_speech_backend(platform_name, config.piper)
         if config.enabled and not isinstance(selected_backend, NullSpeechBackend):
             self._speaker = QueuedSpeaker(selected_backend)
 
