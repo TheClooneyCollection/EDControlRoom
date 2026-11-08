@@ -8017,4 +8017,4 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 ## Verification
 
-- Full suite passes. A node round trip of the real `routeFromApi` → `tradeRoutePayload` → JSON → `routeFromApi` gives identical fields and the same `routeKey`. Not yet clicked through in a live browser.
+- Full suite passes. A node round trip of the real `routeFromApi` → `tradeRoutePayload` → JSON → `routeFromApi` gives identical fields and the same `routeKey`. Confirmed live 2026-11-08 by the user: copied on the laptop Control Room, pasted into the Steam Deck one.
