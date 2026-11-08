@@ -1,6 +1,6 @@
 [tts]
 enabled = true
-title_mode = "commander"
+title_mode = "commander_name"
 title = "commander"
 disabled_messages = []
 

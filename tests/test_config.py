@@ -97,7 +97,7 @@ class LoadConfigTests(unittest.TestCase):
             self.assertEqual(config.control_room.route_compare_navroute_wait_seconds, 6.0)
             self.assertEqual(config.control_room.route_compare_compare_retry_attempts, 3)
             self.assertTrue(config.tts.enabled)
-            self.assertEqual(config.tts.title_mode, "commander")
+            self.assertEqual(config.tts.title_mode, "commander_name")
             self.assertEqual(config.tts.title, "commander")
             self.assertEqual(config.tts.phrases["destination_set"], "Opening galaxy map to set destination to {system_name}.")
             self.assertEqual(config.tts.phrases["fsd_target_locked"], "New FSD target acquired: {system_name}.")

@@ -226,7 +226,7 @@ class PiperVoiceConfig:
 @dataclass(frozen=True)
 class TTSConfig:
     enabled: bool = True
-    title_mode: str = "commander"
+    title_mode: str = "commander_name"
     title: str = "commander"
     disabled_messages: tuple[str, ...] = ()
     phrases: dict[str, str] = field(default_factory=dict)
@@ -1138,7 +1138,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
         ),
         tts=TTSConfig(
             enabled=_boolean(tts, "enabled", _boolean(default_tts, "enabled", True)),
-            title_mode=_string(tts, "title_mode", _string(default_tts, "title_mode", "commander")),
+            title_mode=_string(tts, "title_mode", _string(default_tts, "title_mode", "commander_name")),
             title=_string(tts, "title", _string(default_tts, "title", "commander")),
             disabled_messages=(
                 _string_list(tts, "disabled_messages")

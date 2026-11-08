@@ -8209,6 +8209,7 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - New `--no-tts` flag keeps the server silent. A `connect` TUI also speaks every server announcement (`_play_local_announcement`), so a TUI on the same machine as `lan` needs `lan --no-tts` to avoid double callouts.
 - With a real backend the announcer now dedups consecutive identical callouts on the server too, so a repeated identical line is no longer re-broadcast to clients (same as the embedded TUI).
 - README and getting-started describe the new default.
+- Default `tts.title_mode` is now `commander_name` (falls back to "commander" until a journal `LoadGame` names the commander).
 
 ## Follow-ups
 
