@@ -592,6 +592,10 @@ let routes = [];
           applyHydratePayload(message.payload || {});
           return;
         }
+        if (message.message_type === "event.announcement_emitted") {
+          window.dispatchEvent(new CustomEvent("edcr:announcement", { detail: message.payload || {} }));
+          return;
+        }
         if (message.message_type === "event.activity_log_appended") {
           addActivityEntry(message.payload.entry || {});
           renderActivityLog();

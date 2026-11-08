@@ -224,6 +224,19 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         for dropped in ("index", "raw_text", "url_links", "from_supply", "to_demand", "distance_from_system"):
             self.assertNotIn(f'"{dropped}"', fields)
 
+    def test_haul_web_speaks_announcements_on_opted_in_devices(self) -> None:
+        html = _haul_web_source()
+        speech = (Path(__file__).resolve().parents[1] / "web" / "speech.js").read_text(encoding="utf-8")
+
+        self.assertIn('window.dispatchEvent(new CustomEvent("edcr:announcement"', html)
+        for hook in ('id="speech-enabled"', 'id="speech-voice"', 'id="speech-rate"', 'id="speech-test"',
+                     'src="/assets/speech.js"'):
+            self.assertIn(hook, html)
+        for hook in ('window.addEventListener("edcr:announcement"', "if (settings.enabled && unlocked && text)",
+                     'document.addEventListener("pointerdown", unlock, { once: true })',
+                     "utterance.voice = voice", "utterance.rate = settings.rate"):
+            self.assertIn(hook, speech)
+
     def test_haul_web_route_table_shows_trip_profit(self) -> None:
         html = _haul_web_source()
 

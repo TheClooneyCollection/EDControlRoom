@@ -741,6 +741,7 @@ class ControlRoomServerTests(unittest.TestCase):
             css_response = client.get("/assets/haul-ui.css")
             js_response = client.get("/assets/haul-ui.js")
             multi_js_response = client.get("/assets/multi-haul.js")
+            speech_js_response = client.get("/assets/speech.js")
             missing_response = client.get("/assets/unknown.js")
 
         self.assertEqual(css_response.status_code, 200)
@@ -755,6 +756,8 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(multi_js_response.status_code, 200)
         self.assertEqual(multi_js_response.headers["cache-control"], "no-store")
         self.assertIn("command.dispatch_multi_leg_haul", multi_js_response.text)
+        self.assertEqual(speech_js_response.status_code, 200)
+        self.assertIn("speechSynthesis", speech_js_response.text)
         self.assertEqual(missing_response.status_code, 404)
 
     def test_haul_web_renderer_rereads_html_file_without_server_restart(self) -> None:

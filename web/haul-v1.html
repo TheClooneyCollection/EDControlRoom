@@ -137,6 +137,27 @@
               <button class="btn danger" id="clear-haul-stats" type="button">Clear stats</button>
               <button class="btn" id="stop-haul-stats" type="button">Stop stats</button>
             </div>
+            <details class="debug-disclosure speech-settings">
+              <summary>Speak announcements on this device</summary>
+              <label class="speech-toggle">
+                <input type="checkbox" id="speech-enabled">
+                <span>Speak on this device</span>
+              </label>
+              <div class="field-row">
+                <label>
+                  <span class="field-label">Voice</span>
+                  <select class="select" id="speech-voice"></select>
+                </label>
+                <label>
+                  <span class="field-label">Rate <span id="speech-rate-value" class="field-hint"></span></span>
+                  <input class="speech-rate" type="range" id="speech-rate" min="0.5" max="1.5" step="0.1" value="1">
+                </label>
+              </div>
+              <div class="btn-row">
+                <button class="btn" type="button" id="speech-test">Test voice</button>
+              </div>
+              <p class="field-hint" id="speech-status" role="status"></p>
+            </details>
           </div>
         </section>
 
@@ -477,6 +498,7 @@
   <script src="/assets/haul-ui.js" defer></script>
   <script src="/assets/route-compare.js" defer></script>
   <script src="/assets/active-route.js" defer></script>
+  <script src="/assets/speech.js" defer></script>
 
 </body>
 </html>

@@ -1046,6 +1046,30 @@
       padding: 0 10px;
     }
 
+    .speech-settings {
+      margin-top: 10px;
+    }
+
+    .speech-settings[open] {
+      display: grid;
+      gap: 8px;
+      padding-bottom: 10px;
+    }
+
+    .speech-settings > :not(summary) {
+      margin: 0 10px;
+    }
+
+    .speech-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .speech-rate {
+      width: 100%;
+    }
+
     .routine-bar {
       display: grid;
       grid-template-columns: repeat(5, minmax(0, 1fr));

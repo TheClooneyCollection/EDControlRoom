@@ -245,6 +245,7 @@ def build_observer_server_app(
             "multi-haul.js": "text/javascript; charset=utf-8",
             "route-compare.js": "text/javascript; charset=utf-8",
             "active-route.js": "text/javascript; charset=utf-8",
+            "speech.js": "text/javascript; charset=utf-8",
         }
         media_type = allowed_assets.get(asset_name)
         if media_type is None:
