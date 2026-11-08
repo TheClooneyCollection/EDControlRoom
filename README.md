@@ -11,13 +11,14 @@ This tool is well past that line. **Do not run it on an account you'd mind losin
 
 Multiplatform Elite Dangerous command-and-routine tooling. It handles the repetitive station-side loop of trading and hauling so the commander can stay focused on the parts that still benefit from human attention. It is **not** a hands-off flight bot.
 
-Live-validated on **macOS** (Elite through CrossOver) and **Windows** (community-validated). **Linux** paths exist in the code but are not yet validated.
+Live-validated on **macOS** (Elite through CrossOver), **Windows** (community-validated) and the **Steam Deck** (Elite under Proton, Desktop and Game Mode).
 
 ## Contents
 
 - [The Idea](#the-idea)
 - [What You Get](#what-you-get)
 - [Quick Start](#quick-start)
+- [Steam Deck](#steam-deck)
 - [Documentation](#documentation)
 - [Development](#development)
 - [Repo Layout](#repo-layout)
@@ -110,6 +111,22 @@ Both the server and the web page default to token `edcr`, so no `--token` overri
 **Before your first run:** set arrow-key secondaries on `UI_Up / UI_Down / UI_Left / UI_Right` in Elite. See [docs/user/bindings-setup.md](docs/user/bindings-setup.md).
 
 Full walkthrough: [docs/user/getting-started.md](docs/user/getting-started.md).
+
+## Steam Deck
+
+Everything lives in your home folder, so it survives SteamOS updates. No `sudo` and no `config.toml`: journal and bindings paths are found in the Proton prefix, and keys go through a `/dev/uinput` virtual keyboard the `deck` user can already open.
+
+```sh
+curl -LsSf https://astral.sh/uv/install.sh | sh
+git clone https://github.com/TheClooneyCollection/EDControlRoom.git ~/EDControlRoom
+cd ~/EDControlRoom
+~/.local/bin/uv sync
+~/.local/bin/uv run python3 tools/deck_keymap.py           # show the keyboard keys it would add
+~/.local/bin/uv run python3 tools/deck_keymap.py --write   # with Elite closed
+~/.local/bin/uv run python3 control_room.py lan
+```
+
+The Deck's controller preset leaves most actions off the keyboard; `tools/deck_keymap.py` adds the keys routines press without touching your controller bindings. Details: [docs/user/install.md](docs/user/install.md#steam-deck--linux).
 
 ## Documentation
 

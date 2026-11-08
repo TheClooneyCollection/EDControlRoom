@@ -2,6 +2,8 @@
 
 EDControlRoom drives Elite by looking up your live `.binds` file and pressing whatever keys those actions are bound to. Two things need to be true before your first run.
 
+On a Steam Deck (or any controller preset), `tools/deck_keymap.py` covers both steps for you: see [install.md](install.md#steam-deck--linux).
+
 ## Contents
 
 - [1. Arrow-Key Secondaries on the Menu Cursor (Required)](#1-arrow-key-secondaries-on-the-menu-cursor-required)

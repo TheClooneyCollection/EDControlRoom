@@ -7,14 +7,14 @@ EDControlRoom needs Python 3.12 and, on macOS/Linux, the `uv` package manager.
 - [Platform Status](#platform-status)
 - [macOS](#macos)
 - [Windows](#windows)
-- [Linux (untested)](#linux-untested)
+- [Steam Deck / Linux](#steam-deck--linux)
 - [Config Overrides](#config-overrides)
 
 ## Platform Status
 
 - **macOS**: fully supported and actively used. Elite runs through CrossOver.
 - **Windows**: fully supported and community-validated.
-- **Linux**: runtime paths exist but are not live-validated. Expect small adjustments (paths, input backend) before it works end to end. See the note at the bottom of this page.
+- **Steam Deck**: live-validated in Desktop and Game Mode with Elite under Proton. Other Linux desktops use the same path but are untested.
 
 ## macOS
 
@@ -44,25 +44,29 @@ pip install -r requirements.txt
 
 Then start Elite Dangerous.
 
-## Linux (untested)
+## Steam Deck / Linux
 
-1. Install Python 3.12 and `uv`.
-2. Install `xdotool` for synthetic key input. The Linux input path is X11-oriented; Wayland is unverified.
-3. Start Elite Dangerous through Steam / Proton.
+Run these in Konsole (Desktop Mode) or over `ssh`. Everything goes into your home folder, which SteamOS updates leave alone; the system partition is read-only, so do not use `sudo` or `pacman`.
 
-If auto-detection does not find the Proton journal directory, set `paths.journal_dir` and `paths.bindings_file` explicitly in a repo-root `config.toml`. Minimal example:
+1. Install `uv`: `curl -LsSf https://astral.sh/uv/install.sh | sh` (it lands in `~/.local/bin`).
+2. `git clone https://github.com/TheClooneyCollection/EDControlRoom.git ~/EDControlRoom`, then `cd ~/EDControlRoom`.
+3. `~/.local/bin/uv sync`. `uv` downloads Python 3.12 itself.
+4. Add keyboard keys to your controller preset. Routines press keyboard keys, and the Deck's preset puts most actions on the controller only.
+   - `~/.local/bin/uv run python3 tools/deck_keymap.py` shows the plan.
+   - Close Elite, then rerun it with `--write`. Saving controls inside Elite rewrites the file from memory, so never write while it runs.
+   - It fills only empty slots (Secondary first), keeps keys you already chose, and leaves controller bindings alone. Menu directions get arrow keys because WASD also moves the galaxy map camera. The first run saves the original as `Custom.4.2.binds.bak`; later runs never overwrite it.
+   - Keys follow Elite's keyboard default where it has one (Boost `Tab`, zero throttle `X`, supercruise/jump `J`, menus arrows, `Space`, `Backspace`). Gaps take free keys: roll `,` `.`, pitch `I` `K`, full throttle `F5`, head look reset `F6`, galaxy map `F7`.
+5. Start Elite, then `~/.local/bin/uv run python3 tools/check_bindings.py` should report every required binding.
+6. `~/.local/bin/uv run python3 control_room.py lan`, and open the printed URL from another device.
+
+To update later: `git pull` in `~/EDControlRoom`, then `~/.local/bin/uv sync`.
+
+No `config.toml` is needed: the journal and bindings paths are found in the Proton prefix (`compatdata/359320`). Input goes through a `/dev/uinput` virtual keyboard, which works in both Desktop Mode and Game Mode (gamescope); SteamOS already gives the `deck` user access to it. On another Linux desktop where `/dev/uinput` is not writable, either add a udev rule granting your user access or switch to `xdotool` (X11 only):
 
 ```toml
-[paths]
-journal_dir = ""
-bindings_file = ""
-
-[tts]
-title_mode = "custom"
-title = "captain"
+[input.linux]
+backend = "xdotool"
 ```
-
-Linux input is currently implemented through `xdotool`. Wayland behavior is unverified.
 
 ## Config Overrides
 
