@@ -1,8 +1,8 @@
 # CI and Release Status
 ## Current
-- Latest stable release is `v1.24.0` (background input: beta macOS `wine_helper` mode; Linux/Steam Deck `uinput` input backend; web haul route copy/paste; hardpoint retract before FSD, galaxy-map binding conflict warnings). `v1.23.0` was haul stats history; `v1.22.1` was the docs-only user docs/README refresh. Tag `v1.22.0` (Spansh neutron travel, route comparison, active-route UI, Inara haul filters) exists but has no published GitHub release.
-- The unittest timing budget now scales as `0.0006s` per executed test, so the current `944`-test suite budget is `0.5664s`; when a release-prep or CI run exceeds that computed ceiling, capture a timing report before wrapping up.
-- Latest timing check (v1.24.0 prep): `944` tests passed in `0.461s`, within the `0.5664s` budget (v1.23.0 prep had been over, likely machine load).
+- Latest stable release is `v1.25.0` (Steam Deck setup: install docs, `tools/deck_keymap.py`, `reload_keymap`, `reload` removed). `v1.24.0` was background input (beta macOS `wine_helper`, Linux/Steam Deck `uinput`, web haul route copy/paste); `v1.23.0` was haul stats history. Tag `v1.22.0` exists but has no published GitHub release.
+- The unittest timing budget now scales as `0.0006s` per executed test, so the current `953`-test suite budget is `0.5718s`; when a release-prep or CI run exceeds that computed ceiling, capture a timing report before wrapping up.
+- Latest timing check (v1.25.0 prep): `953` tests passed in `0.453s`, within the `0.5718s` budget.
 - The Discord workflow-failure notifier is now split into a checked-in Python script plus a thin workflow wrapper, so the same payload/fetch/post path can be dry-run locally against saved jobs JSON and exercised in CI without keeping the logic trapped inside inline workflow shell.
 - `main` is now the rolling-update branch, and stable features or releases are identified with tags instead of `dev -> main` promotion.
 - The legacy `.github/workflows/promote-dev-to-main.yml` automation has been removed; release/process automation now centers on `main`, semantic version tags, and manual GitHub release publishing.
