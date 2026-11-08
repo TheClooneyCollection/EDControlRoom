@@ -7,9 +7,22 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from edap.actions import ActionDispatchResult
-from edap.routines._base import RoutineResult, SupportsRoutineControls, SupportsPollEvents, _is_in_supercruise_event
+from edap.routines._base import (
+    RoutineResult,
+    SupportsPollEvents,
+    SupportsRoutineControls,
+    _is_in_supercruise_event,
+    _is_starting_hyperspace_event,
+    _wait_for_event_with_pending,
+)
 from edap.routines.callbacks import AnnouncementCallback, ProgressCallback
-from edap.routines.docking import _undock_until_undocked, _wait_for_clear_of_station, dock, station_refuel_menu
+from edap.routines.docking import (
+    _undock_until_undocked,
+    _wait_for_clear_of_station,
+    dock,
+    station_refuel_menu,
+    undocked_at_from,
+)
 from edap.routines.escape import escape_mass_lock
 from edap.routines.galaxy_map import set_gal_map_destination
 from edap.routines.hardpoints import retract_hardpoints_before_jump
@@ -73,6 +86,8 @@ class ShipPosition:
 
 
 MANUAL_LANDING_REASON = "manual landing required"
+# Mass-lock boosting is done before the FSD press, so this only covers the charge.
+SUPERCRUISE_ESCAPE_TIMEOUT_S = 45.0
 
 
 def read_latest_journal_events(journal_dir: Path) -> list[dict]:
@@ -278,6 +293,58 @@ def engage_hyperspace_after_escape(runtime: TransitRuntime, *, progress_message:
     runtime.controls.hyper_super_combination()
 
 
+def escape_attack_into_supercruise(runtime: TransitRuntime, *, routine_name: str) -> RoutineResult:
+    escape_mass_lock(
+        runtime.controls,
+        journal_dir=runtime.journal_dir,
+        step_delay_s=runtime.timing.step_delay_s,
+        boost_delay_s=runtime.timing.mass_lock_boost_delay_s,
+        sleeper=runtime.sleeper,
+        progress_fn=runtime.progress_fn,
+    )
+    failure = guard_hardpoints(runtime)
+    if failure is not None:
+        runtime.announce_fn(AnnouncementId.HAUL_ABORTED)
+        return failure
+
+    runtime.progress_fn("Under attack - engaging supercruise to escape...")
+    dispatch = runtime.controls.supercruise()
+    if dispatch.status != "ok":
+        runtime.progress_fn(
+            f"Warning: Supercruise dispatch failed ({dispatch.reason or dispatch.status}); "
+            "falling back to HyperSuperCombination"
+        )
+        dispatch = runtime.controls.hyper_super_combination()
+
+    escape_event, _ = _wait_for_event_with_pending(
+        runtime.watcher,
+        predicate=lambda event: _is_in_supercruise_event(event) or _is_starting_hyperspace_event(event),
+        deadline=runtime.time_fn() + SUPERCRUISE_ESCAPE_TIMEOUT_S,
+        time_fn=runtime.time_fn,
+    )
+    if escape_event is None:
+        reason = f"FSD did not engage within {SUPERCRUISE_ESCAPE_TIMEOUT_S:.0f}s while under attack"
+        runtime.progress_fn(f"Error: {reason}; {routine_name} aborted. Take manual control.")
+        runtime.announce_fn(AnnouncementId.HAUL_ABORTED)
+        return RoutineResult(
+            action="SupercruiseEscape",
+            dispatch=ActionDispatchResult(action="SupercruiseEscape", status="error", reason=reason),
+            details={"phase": "escape_under_attack"},
+        )
+
+    runtime.progress_fn(
+        "Escaped the attack. Align with the route target and jump manually; "
+        f"{routine_name} will continue after journal arrival events."
+    )
+    runtime.announce_fn(AnnouncementId.SUPERCRUISE_ESCAPE_ALIGN)
+    return RoutineResult(
+        action="SupercruiseEscape",
+        dispatch=dispatch,
+        trigger_event=escape_event,
+        details={"phase": "escape_under_attack"},
+    )
+
+
 def set_galaxy_map_destination_for_transit(
     *,
     runtime: TransitRuntime,
@@ -368,11 +435,15 @@ def undock_and_route_to_system(
     clear_result = _wait_for_clear_of_station(
         runtime.watcher,
         undocked_event=result.trigger_event,
+        undocked_at=undocked_at_from(result),
+        threat_fn=lambda _event: runtime.announce_fn(AnnouncementId.UNDER_ATTACK),
         no_track_timeout_s=runtime.timing.undock_no_track_timeout_s,
         time_fn=runtime.time_fn,
         progress_fn=runtime.progress_fn,
         pending_events=pending_events,
     )
+    if clear_result.action == "UnderAttack":
+        return escape_attack_into_supercruise(runtime, routine_name=routine_name)
     if clear_result.dispatch.status != "ok":
         runtime.progress_fn(
             "Error: "

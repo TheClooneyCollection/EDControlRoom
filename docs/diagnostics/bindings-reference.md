@@ -10,6 +10,7 @@ These are Elite XML action tags that matter to the current runtime:
 - `SetSpeedZero`: throttle to 0%
 - `SetSpeed100`: throttle to 100%
 - `HyperSuperCombination`: jump / supercruise engage
+- `Supercruise`: supercruise only (optional; used to escape an attack after undock, falls back to `HyperSuperCombination` when unbound)
 - `UseBoostJuice`: boost
 - `FocusLeftPanel`: open left ship panel
 - `UI_Up`, `UI_Down`, `UI_Left`, `UI_Right`, `UI_Select`, `UI_Back`: menu navigation

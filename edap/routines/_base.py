@@ -22,6 +22,9 @@ class SupportsJumpControls(SupportsSetSpeedZero, Protocol):
     def hyper_super_combination(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         """Dispatch the HyperSuperCombination action."""
 
+    def supercruise(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the Supercruise action."""
+
 
 class SupportsPollEvents(Protocol):
     def poll(self) -> list[dict[str, object]]:

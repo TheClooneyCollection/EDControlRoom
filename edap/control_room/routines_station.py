@@ -67,5 +67,6 @@ def cmd_undock(app: RoutineHost, *, skip_delay: bool = False) -> None:
             time_fn=time_fn,
             sleeper=sleeper,
             progress_fn=progress,
+            announce_fn=app._announce_tts,
         ),
     )

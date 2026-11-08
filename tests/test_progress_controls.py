@@ -13,6 +13,7 @@ _EXPECTED_DEFAULT_ACTIONS = {
     "SetSpeedZero",
     "SetSpeed100",
     "HyperSuperCombination",
+    "Supercruise",
     "DeployHardpointToggle",
     "UseBoostJuice",
     "FocusLeftPanel",

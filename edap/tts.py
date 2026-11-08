@@ -17,6 +17,8 @@ class AnnouncementId(str, Enum):
     DESTINATION_SET = "destination_set"
     FSD_TARGET_LOCKED = "fsd_target_locked"
     STATION_CLEARED = "station_cleared"
+    UNDER_ATTACK = "under_attack"
+    SUPERCRUISE_ESCAPE_ALIGN = "supercruise_escape_align"
     HAUL_ABORTED = "haul_aborted"
     HAUL_CANCELLED = "haul_cancelled"
     HAUL_PAUSE_REQUESTED = "haul_pause_requested"

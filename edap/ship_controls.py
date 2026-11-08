@@ -15,6 +15,7 @@ DEFAULT_SHIP_CONTROL_ACTIONS = [
     "SetSpeedZero",
     "SetSpeed100",
     "HyperSuperCombination",
+    "Supercruise",
     "DeployHardpointToggle",
     "UseBoostJuice",
     "FocusLeftPanel",
@@ -226,6 +227,9 @@ class ShipControls:
 
     def hyper_super_combination(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
         return self.dispatch_action("HyperSuperCombination", repeat=repeat, hold_s=hold_s)
+
+    def supercruise(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        return self.dispatch_action("Supercruise", repeat=repeat, hold_s=hold_s)
 
     def galaxy_map_open(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
         return self.dispatch_action("GalaxyMapOpen", repeat=repeat, hold_s=hold_s)

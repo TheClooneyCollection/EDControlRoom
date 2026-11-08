@@ -28,6 +28,7 @@ REQUIRED_BINDINGS = [
     "PrimaryFire",
     "SecondaryFire",
     "MouseReset",
+    "Supercruise",
 ]
 
 AUTOPILOT_REQUIRED_BINDINGS = [
@@ -56,6 +57,7 @@ AUTOPILOT_OPTIONAL_BINDINGS = [
     "PrimaryFire",
     "SecondaryFire",
     "MouseReset",
+    "Supercruise",
 ]
 
 

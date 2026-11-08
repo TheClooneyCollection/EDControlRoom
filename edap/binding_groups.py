@@ -59,6 +59,7 @@ GROUPS: list[tuple[str, list[str]]] = [
         "Cockpit & Travel",
         [
             "HyperSuperCombination",
+            "Supercruise",
             "DeployHardpointToggle",
             "HeadLookReset",
         ],

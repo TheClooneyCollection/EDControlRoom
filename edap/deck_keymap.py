@@ -31,6 +31,7 @@ DECK_KEYMAP: tuple[DeckKey, ...] = (
     DeckKey("SetSpeedZero", "x"),
     DeckKey("SetSpeed100", "f5"),
     DeckKey("HyperSuperCombination", "j"),
+    DeckKey("Supercruise", "f8"),
     DeckKey("DeployHardpointToggle", "u"),
     DeckKey("UseBoostJuice", "tab"),
     DeckKey("UIFocus", "left_shift"),

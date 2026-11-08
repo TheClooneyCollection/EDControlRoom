@@ -64,6 +64,10 @@ class ProgressShipControls:
         self._log("HyperSuperCombination", repeat)
         return self._controls.hyper_super_combination(repeat=repeat, hold_s=hold_s)
 
+    def supercruise(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        self._log("Supercruise", repeat)
+        return self._controls.supercruise(repeat=repeat, hold_s=hold_s)
+
     def focus_left_panel(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
         self._log("FocusLeftPanel", repeat)
         return self._controls.focus_left_panel(repeat=repeat, hold_s=hold_s)

@@ -19,6 +19,7 @@ _ACTION_INFO: dict[str, BindingActionInfo] = {
         "Toggle Frame Shift Drive",
         "Ship Controls > Flight Miscellaneous",
     ),
+    "Supercruise": BindingActionInfo("Supercruise", "Supercruise", "Ship Controls > Flight Miscellaneous"),
     "UseBoostJuice": BindingActionInfo("UseBoostJuice", "Engine Boost", "Ship Controls > Flight Miscellaneous"),
     "FocusLeftPanel": BindingActionInfo("FocusLeftPanel", "External Panel", "Ship Controls > Mode Switches"),
     "UIFocus": BindingActionInfo("UIFocus", "UI Focus", "Ship Controls > Mode Switches"),

@@ -54,6 +54,7 @@ def dock(*args, **kwargs):
 
 def undock(*args, **kwargs):
     kwargs.setdefault("progress_fn", noop_progress)
+    kwargs.setdefault("announce_fn", noop_announce)
     return _undock(*args, **kwargs)
 
 
@@ -393,7 +394,7 @@ class RoutinesTests(unittest.TestCase):
                 {"event": "Music", "MusicTrack": "NoTrack"},
             ],
         ])
-        time_values = iter([0.0, 0.0, 0.1, 0.2])
+        time_values = iter([0.0, 0.0, 0.0, 0.1, 0.2])
 
         result = undock(
             controls,
@@ -445,7 +446,7 @@ class RoutinesTests(unittest.TestCase):
             [{"event": "Undocked", "StationName": "Pawelczyk Dock"}],
             [{"event": "Music", "MusicTrack": "DockingComputer"}],
         ])
-        time_values = iter([0.0, 0.0, 0.1, 0.2, 0.3, 1.2])
+        time_values = iter([0.0, 0.0, 0.0, 0.1, 0.2, 0.3, 1.2])
 
         result = undock(
             controls,

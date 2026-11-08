@@ -12,10 +12,12 @@ class FakeShipControls:
         *,
         set_speed_zero_result: ActionDispatchResult = _OK,
         jump_result: ActionDispatchResult | None = None,
+        supercruise_result: ActionDispatchResult | None = None,
     ) -> None:
         self.calls: list[dict[str, object]] = []
         self._set_speed_zero_result = set_speed_zero_result
         self._jump_result = jump_result or set_speed_zero_result
+        self._supercruise_result = supercruise_result
 
     def _dispatch(self, action: str, repeat: int, hold_s: float) -> ActionDispatchResult:
         self.calls.append({"action": action, "repeat": repeat, "hold_s": hold_s})
@@ -35,6 +37,10 @@ class FakeShipControls:
     def hyper_super_combination(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         self.calls.append({"action": "HyperSuperCombination", "repeat": repeat, "hold_s": hold_s})
         return self._jump_result
+
+    def supercruise(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        self.calls.append({"action": "Supercruise", "repeat": repeat, "hold_s": hold_s})
+        return self._supercruise_result or self._set_speed_zero_result
 
     def head_look_reset(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         return self._dispatch("HeadLookReset", repeat, hold_s)

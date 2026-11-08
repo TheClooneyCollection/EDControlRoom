@@ -4,7 +4,12 @@ from time import monotonic, sleep
 from typing import Callable
 
 from edap.actions import ActionDispatchResult
-from edap.journal_events import is_manual_launch_control_resumed_event, is_no_fire_zone_exited_event
+from edap.journal_events import (
+    is_manual_launch_control_resumed_event,
+    is_no_fire_zone_exited_event,
+    is_player_taking_damage_event,
+    is_player_under_attack_event,
+)
 from edap.routines._base import (
     RoutineResult,
     SupportsDockingControls,
@@ -21,6 +26,10 @@ from edap.routines._base import (
 )
 from edap.routines.callbacks import AnnouncementCallback, ProgressCallback
 from edap.tts import AnnouncementId
+
+# A normal auto-launch clears the mail slot (NoTrack) roughly 37s after Undocked;
+# boosting earlier than this risks hitting the station interior.
+UNDER_ATTACK_FLEE_AFTER_UNDOCK_S = 40.0
 
 
 def _is_pad_full_docking_denial(reason: object) -> bool:
@@ -457,6 +466,7 @@ def undock(
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
     progress_fn: ProgressCallback,
+    announce_fn: AnnouncementCallback,
 ) -> RoutineResult:
     result, pending_events = _undock_until_undocked(
         controls,
@@ -473,6 +483,8 @@ def undock(
     clear_result = _wait_for_clear_of_station(
         watcher,
         undocked_event=result.trigger_event,
+        undocked_at=undocked_at_from(result),
+        threat_fn=lambda _event: announce_fn(AnnouncementId.UNDER_ATTACK),
         no_track_timeout_s=no_track_timeout_s,
         time_fn=time_fn,
         progress_fn=progress_fn,
@@ -480,6 +492,17 @@ def undock(
     )
     if clear_result.dispatch.status != "ok":
         return clear_result
+    if clear_result.action == "UnderAttack":
+        return RoutineResult(
+            action="UnderAttack",
+            dispatch=ActionDispatchResult(
+                action="UnderAttack",
+                status="error",
+                reason="Under attack after undock; take manual control",
+            ),
+            trigger_event=clear_result.trigger_event,
+            details=clear_result.details,
+        )
 
     return RoutineResult(
         action=clear_result.action,
@@ -487,6 +510,13 @@ def undock(
         trigger_event=clear_result.trigger_event,
         details={"phase": "complete", "undocked_event": result.trigger_event},
     )
+
+
+def undocked_at_from(result: RoutineResult) -> float:
+    undocked_at = (result.details or {}).get("undocked_at")
+    if not isinstance(undocked_at, (int, float)):
+        raise ValueError("undock result is missing undocked_at")
+    return float(undocked_at)
 
 
 def _undock_until_undocked(
@@ -567,6 +597,7 @@ def _undock_until_undocked(
             details={"phase": "wait_for_undocked", "undock_timeout_s": undock_timeout_s},
         ), []
 
+    undocked_at = time_fn()
     station = undocked_event.get("StationName", "")
     progress_fn(f"Undocked: {station}" if station else "Undocked")
 
@@ -574,7 +605,7 @@ def _undock_until_undocked(
         action="Undocked",
         dispatch=launch_dispatch,
         trigger_event=undocked_event,
-        details={"phase": "wait_for_no_track"},
+        details={"phase": "wait_for_no_track", "undocked_at": undocked_at},
     ), pending_events
 
 
@@ -582,7 +613,10 @@ def _wait_for_clear_of_station(
     watcher: SupportsPollEvents,
     *,
     undocked_event: dict[str, object] | None,
+    undocked_at: float,
+    threat_fn: Callable[[dict[str, object]], None],
     no_track_timeout_s: float = 600.0,
+    flee_after_s: float = UNDER_ATTACK_FLEE_AFTER_UNDOCK_S,
     time_fn: Callable[[], float] = monotonic,
     progress_fn: ProgressCallback,
     pending_events: list[dict[str, object]] | None = None,
@@ -606,13 +640,39 @@ def _wait_for_clear_of_station(
             )
         )
 
-    no_track_event, _ = _wait_for_event_with_pending(
-        watcher,
-        predicate=_is_clear_of_station_event,
-        deadline=time_fn() + no_track_timeout_s,
-        time_fn=time_fn,
-        pending_events=pending_events,
-    )
+    def _under_attack_result(trigger: dict[str, object]) -> RoutineResult:
+        progress_fn("Under attack after undock - escaping instead of waiting for station clear")
+        return RoutineResult(
+            action="UnderAttack",
+            dispatch=ActionDispatchResult(action="UnderAttack", status="ok"),
+            trigger_event=trigger,
+            details={"phase": "under_attack", "undocked_event": undocked_event},
+        )
+
+    # Combat music can hide NoTrack, and the docking computer may never fly the
+    # ship clear while it is being shot, so a threat ends the wait early. Boosting
+    # is deferred until damage lands or the launch has had time to leave the slot.
+    threat_event: dict[str, object] | None = None
+    no_track_event: dict[str, object] | None = None
+    queued_events = list(pending_events or [])
+    deadline = time_fn() + no_track_timeout_s
+    while no_track_event is None and time_fn() <= deadline:
+        batch = queued_events if queued_events else watcher.poll()
+        queued_events = []
+        for event in batch:
+            if is_player_under_attack_event(event) or is_player_taking_damage_event(event):
+                if threat_event is None:
+                    threat_event = event
+                    threat_fn(event)
+                if is_player_taking_damage_event(event):
+                    return _under_attack_result(event)
+            elif _is_clear_of_station_event(event):
+                no_track_event = event
+                break
+        if threat_event is not None and (
+            no_track_event is not None or time_fn() - undocked_at >= flee_after_s
+        ):
+            return _under_attack_result(threat_event)
     if no_track_event is None:
         return RoutineResult(
             action="Undocked",

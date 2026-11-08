@@ -35,3 +35,16 @@ def is_no_fire_zone_exited_event(event: dict[str, Any]) -> bool:
         and event.get("Message") == "$STATION_NoFireZone_exited;"
     )
 
+
+def is_player_under_attack_event(event: dict[str, Any]) -> bool:
+    return event.get("event") == "UnderAttack" and event.get("Target") == "You"
+
+
+def is_player_taking_damage_event(event: dict[str, Any]) -> bool:
+    if event.get("event") == "ShieldState":
+        return event.get("ShieldsUp") is False
+    return (
+        event.get("event") == "HullDamage"
+        and event.get("PlayerPilot") is True
+        and event.get("Fighter") is not True
+    )

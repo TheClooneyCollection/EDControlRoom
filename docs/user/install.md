@@ -55,7 +55,7 @@ Run these in Konsole (Desktop Mode) or over `ssh`. Everything goes into your hom
    - `~/.local/bin/uv run python3 tools/deck_keymap.py` shows the plan.
    - Close Elite, then rerun it with `--write`. Saving controls inside Elite rewrites the file from memory, so never write while it runs.
    - It fills only empty slots (Secondary first), keeps keys you already chose, and leaves controller bindings alone. Menu directions get arrow keys because WASD also moves the galaxy map camera. The first run saves the original as `Custom.4.2.binds.bak`; later runs never overwrite it.
-   - Keys follow Elite's keyboard default where it has one (Boost `Tab`, zero throttle `X`, supercruise/jump `J`, menus arrows, `Space`, `Backspace`). Gaps take free keys: roll `,` `.`, pitch `I` `K`, full throttle `F5`, head look reset `F6`, galaxy map `F7`.
+   - Keys follow Elite's keyboard default where it has one (Boost `Tab`, zero throttle `X`, supercruise/jump `J`, menus arrows, `Space`, `Backspace`). Gaps take free keys: roll `,` `.`, pitch `I` `K`, full throttle `F5`, head look reset `F6`, galaxy map `F7`, supercruise-only `F8`.
 5. Start Elite, then `~/.local/bin/uv run python3 tools/check_bindings.py` should report every required binding.
 6. `~/.local/bin/uv run python3 control_room.py lan`, and open the printed URL from another device.
 
