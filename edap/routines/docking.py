@@ -316,6 +316,23 @@ def dock(
     pad_full_attempts = 0
     pad_full_announced = False
     last_denial_reason = ""
+    threat_announced = False
+
+    # Warn only: the docking computer flying on into the no-fire zone is usually
+    # the quickest way out, so an attack does not change the docking flow.
+    def _warning_on_threat(predicate: Callable[[dict[str, object]], bool]) -> Callable[[dict[str, object]], bool]:
+        def _check(event: dict[str, object]) -> bool:
+            nonlocal threat_announced
+            if not threat_announced and (
+                is_player_under_attack_event(event) or is_player_taking_damage_event(event)
+            ):
+                threat_announced = True
+                progress_fn("Warning: under attack while docking")
+                announce_fn(AnnouncementId.UNDER_ATTACK)
+            return predicate(event)
+
+        return _check
+
     if announce_station_name:
         announce_fn(AnnouncementId.DOCKING_REQUEST, station_name=announce_station_name)
     while standard_attempts < max_retries:
@@ -333,7 +350,7 @@ def dock(
         progress_fn("Waiting for docking response...")
         response_event, queued_events = _wait_for_event_with_pending(
             watcher,
-            predicate=_is_docking_response_event,
+            predicate=_warning_on_threat(_is_docking_response_event),
             deadline=time_fn() + request_timeout_s,
             time_fn=time_fn,
             pending_events=queued_events,
@@ -396,7 +413,7 @@ def dock(
     progress_fn("Waiting for Docked...")
     docked_event, queued_events = _wait_for_event_with_pending(
         watcher,
-        predicate=_is_docked_event,
+        predicate=_warning_on_threat(_is_docked_event),
         deadline=time_fn() + dock_timeout_s,
         time_fn=time_fn,
         pending_events=queued_events,

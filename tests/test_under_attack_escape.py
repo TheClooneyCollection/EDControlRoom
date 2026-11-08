@@ -6,7 +6,7 @@ from pathlib import Path
 
 from edap.actions import ActionDispatchResult
 from edap.routines.callbacks import noop_announce, noop_progress
-from edap.routines.docking import UNDER_ATTACK_FLEE_AFTER_UNDOCK_S, _wait_for_clear_of_station, undock
+from edap.routines.docking import UNDER_ATTACK_FLEE_AFTER_UNDOCK_S, _wait_for_clear_of_station, dock, undock
 from edap.routines.transit import undock_and_route_to_system
 from edap.tts import AnnouncementId
 from tests.fakes import FakeShipControls, FakeWatcher
@@ -96,6 +96,40 @@ class StandaloneUndockThreatTests(unittest.TestCase):
         self.assertEqual(result.dispatch.status, "error")
         self.assertEqual(result.action, "UnderAttack")
         self.assertEqual(announcements, [AnnouncementId.UNDER_ATTACK])
+
+
+class DockingThreatTests(unittest.TestCase):
+    def test_attack_while_docking_warns_once_and_keeps_docking(self) -> None:
+        announcements: list[object] = []
+        controls = FakeShipControls()
+
+        result = dock(
+            controls,
+            FakeWatcher([
+                [],
+                [{"event": "DockingGranted", "LandingPad": 9}],
+                [{"event": "Music", "MusicTrack": "Combat_Dogfight"}, _UNDER_ATTACK, _UNDER_ATTACK],
+                [_SHIELDS_DOWN],
+                [{"event": "Docked", "StationName": "Voltaire Terminal"}],
+            ]),
+            wait_for_supercruise_exit=False,
+            max_retries=1,
+            request_timeout_s=10.0,
+            dock_timeout_s=60.0,
+            step_delay_s=0.0,
+            time_fn=lambda: 1.0,
+            sleeper=lambda _: None,
+            progress_fn=noop_progress,
+            announce_fn=lambda message_id, **_: announcements.append(message_id),
+        )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(result.trigger_event, {"event": "Docked", "StationName": "Voltaire Terminal"})
+        self.assertEqual(
+            announcements,
+            [AnnouncementId.AUTO_DOCKING_ENGAGED, AnnouncementId.UNDER_ATTACK],
+        )
+        self.assertNotIn("UseBoostJuice", [call["action"] for call in controls.calls])
 
 
 class SupercruiseEscapeTests(unittest.TestCase):
