@@ -204,6 +204,16 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn("route_profit_per_trip: route.profitTrip !== \"-\" ? route.profitTrip : \"\"", html)
         self.assertIn("apiRoute: { ...route, index }", html)
 
+    def test_haul_web_copies_selected_route_and_imports_a_pasted_one_without_searching(self) -> None:
+        html = _haul_web_source()
+
+        for hook in ('id="route-transfer-text"', 'id="copy-route"', 'id="import-route"',
+                     "JSON.stringify(tradeRoutePayload(route), null, 2)",
+                     'navigator.clipboard && window.isSecureContext', 'document.execCommand("copy")',
+                     'const required = ["from_system", "from_station", "to_system", "to_station"]',
+                     "mergeHydratedRoute({ ...pasted, index })", "persistSelectedRoute(route)"):
+            self.assertIn(hook, html)
+
     def test_haul_web_route_table_shows_trip_profit(self) -> None:
         html = _haul_web_source()
 

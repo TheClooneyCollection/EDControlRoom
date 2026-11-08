@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `281`
-- Latest generated iteration number: `414`
+- Generated iteration count: `282`
+- Latest generated iteration number: `415`
 
 ## Iteration 134
 
@@ -7991,3 +7991,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Test the same sequence in Game Mode (gamescope).
 - uinput is foreground-only input: keys go to whatever window has focus. No pid targeting on Linux.
+
+## Iteration 415
+
+- When: `2026-11-08 11:43`
+- Area: `web`
+- Title: `route-copy-paste`
+- Source: [2026-11-08-11-43_____web______route-copy-paste.md](iteration-logs/2026-11-08-11-43_____web______route-copy-paste.md)
+
+# Iteration Log
+
+- Area: `web`
+- Title: `route-copy-paste`
+- Started: `2026-11-08 11:43`
+
+## Summary
+
+- Haul search scrapes Inara through Playwright and Chrome. The Steam Deck should not need either, so a route is now searched on the laptop's Control Room and pasted into the Deck's.
+
+## Changes
+
+- Haul v1 setup panel: a `Copy / paste route` disclosure with a text box, `Copy selected` and `Import pasted`. Scope per the user: the selected route only, route fields only (no search form parameters), haul page only (not `/multi-haul`).
+- Copy writes `tradeRoutePayload(route)` as pretty JSON. The Clipboard API needs https or localhost, so a LAN `http://` page falls back to `execCommand("copy")`, then to leaving the text selected for Ctrl+C.
+- Import requires from/to systems and stations, keeps the index of a matching local route (same `routeKey`) or takes a fresh one, then selects it and persists it with the existing `command.select_trade_route`, which validates the route server side. No new server command.
+
+## Verification
+
+- Full suite passes. A node round trip of the real `routeFromApi` → `tradeRoutePayload` → JSON → `routeFromApi` gives identical fields and the same `routeKey`. Not yet clicked through in a live browser.

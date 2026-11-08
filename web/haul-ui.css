@@ -1028,6 +1028,24 @@
       margin: 0;
     }
 
+    .route-transfer[open] {
+      display: grid;
+      gap: 8px;
+      padding-bottom: 10px;
+    }
+
+    .route-transfer-text {
+      width: calc(100% - 20px);
+      margin: 0 10px;
+      min-height: 96px;
+      resize: vertical;
+      font-size: 11px;
+    }
+
+    .route-transfer .btn-row {
+      padding: 0 10px;
+    }
+
     .routine-bar {
       display: grid;
       grid-template-columns: repeat(5, minmax(0, 1fr));

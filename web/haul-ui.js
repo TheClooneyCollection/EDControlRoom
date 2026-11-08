@@ -300,6 +300,54 @@ let routes = [];
         });
     }
 
+    async function copySelectedRoute() {
+      const route = routeByIndex(selectedRouteIndex);
+      if (!route) {
+        appendActivity("Select a route before copying it.", "Route", "warning");
+        return;
+      }
+      const textarea = document.getElementById("route-transfer-text");
+      textarea.value = JSON.stringify(tradeRoutePayload(route), null, 2);
+      textarea.focus();
+      textarea.select();
+      // The Clipboard API only exists on https or localhost; a LAN http page falls back to execCommand.
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(textarea.value);
+        } else if (!document.execCommand("copy")) {
+          throw new Error("copy rejected");
+        }
+        appendActivity("Selected route copied to the clipboard.", "Route", "success");
+      } catch (error) {
+        appendActivity("Route text is selected in the box; press Ctrl+C to copy it.", "Route", "warning");
+      }
+    }
+
+    function importPastedRoute() {
+      const text = document.getElementById("route-transfer-text").value.trim();
+      let pasted;
+      try {
+        pasted = JSON.parse(text);
+      } catch (error) {
+        appendActivity("Pasted text is not a copied route.", "Route", "warning");
+        return;
+      }
+      const required = ["from_system", "from_station", "to_system", "to_station"];
+      if (!pasted || typeof pasted !== "object" || Array.isArray(pasted)
+          || required.some((field) => typeof pasted[field] !== "string" || !pasted[field].trim())) {
+        appendActivity("Pasted route needs from/to systems and stations.", "Route", "warning");
+        return;
+      }
+      // Keep the index of a matching route; otherwise take a fresh one so it cannot collide with local results.
+      const existing = routes.find((route) => routeKey(route) === routeKey(routeFromApi(pasted, 0)));
+      const index = existing ? existing.index : routes.reduce((max, route) => Math.max(max, route.index), 0) + 1;
+      const route = mergeHydratedRoute({ ...pasted, index });
+      renderRows();
+      renderSelected();
+      persistSelectedRoute(route);
+      appendActivity(`Imported route ${route.buySystem} -> ${route.sellSystem}.`, "Route", "success");
+    }
+
     function profitHourLabel(route) {
       if (!route.profitHour || route.profitHour === "-") {
         return "-";
@@ -927,6 +975,9 @@ let routes = [];
       renderSelected();
       persistSelectedRoute(routeByIndex(selectedRouteIndex));
     });
+
+    document.getElementById("copy-route").addEventListener("click", copySelectedRoute);
+    document.getElementById("import-route").addEventListener("click", importPastedRoute);
 
     document.getElementById("search-form").addEventListener("submit", (event) => {
       event.preventDefault();
