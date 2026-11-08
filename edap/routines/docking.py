@@ -4,7 +4,7 @@ from time import monotonic, sleep
 from typing import Callable
 
 from edap.actions import ActionDispatchResult
-from edap.journal_events import is_manual_launch_control_resumed_event
+from edap.journal_events import is_manual_launch_control_resumed_event, is_no_fire_zone_exited_event
 from edap.routines._base import (
     RoutineResult,
     SupportsDockingControls,
@@ -596,10 +596,14 @@ def _wait_for_clear_of_station(
     station_type = undocked_event.get("StationType") if undocked_event is not None else None
 
     def _is_clear_of_station_event(event: dict[str, object]) -> bool:
-        return _is_music_no_track_event(event) or is_manual_launch_control_resumed_event(
-            event,
-            station_name=station_name,
-            station_type=station_type,
+        return (
+            _is_music_no_track_event(event)
+            or is_no_fire_zone_exited_event(event)
+            or is_manual_launch_control_resumed_event(
+                event,
+                station_name=station_name,
+                station_type=station_type,
+            )
         )
 
     no_track_event, _ = _wait_for_event_with_pending(
@@ -616,7 +620,7 @@ def _wait_for_clear_of_station(
                 action="Undocked",
                 status="error",
                 reason=(
-                    "NoTrack or carrier Exploration music event was not observed "
+                    "NoTrack, no-fire-zone exit or carrier Exploration event was not observed "
                     f"within {no_track_timeout_s:.0f}s after Undocked"
                 ),
             ),
@@ -633,6 +637,15 @@ def _wait_for_clear_of_station(
         return RoutineResult(
             action="ManualLaunchControlResumed",
             dispatch=ActionDispatchResult(action="ManualLaunchControlResumed", status="ok"),
+            trigger_event=no_track_event,
+            details={"phase": "complete", "undocked_event": undocked_event},
+        )
+
+    if is_no_fire_zone_exited_event(no_track_event):
+        progress_fn("Confirmed clear of station via no-fire-zone exit")
+        return RoutineResult(
+            action="NoFireZoneExited",
+            dispatch=ActionDispatchResult(action="NoFireZoneExited", status="ok"),
             trigger_event=no_track_event,
             details={"phase": "complete", "undocked_event": undocked_event},
         )

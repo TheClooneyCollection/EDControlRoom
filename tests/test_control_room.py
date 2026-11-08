@@ -4172,6 +4172,22 @@ class ControlRoomEventReducerTests(unittest.TestCase):
         self.assertEqual(ship.status, "in_space")
         self.assertIsNone(ship.station)
 
+    def test_no_fire_zone_exit_clears_station_when_combat_music_replaces_no_track(self) -> None:
+        ship = ShipState(system="Pegasi Sector KD-R b5-0", station="Voltaire Terminal", status="in_station")
+
+        apply_ship_event(ship, {"event": "Undocked", "StationName": "Voltaire Terminal"})
+        apply_ship_event(ship, {"event": "Music", "MusicTrack": "Combat_Dogfight"})
+
+        self.assertEqual(ship.status, "in_undocking")
+
+        apply_ship_event(
+            ship,
+            {"event": "ReceiveText", "Message": "$STATION_NoFireZone_exited;", "Channel": "npc"},
+        )
+
+        self.assertEqual(ship.status, "in_space")
+        self.assertIsNone(ship.station)
+
     def test_carrier_exploration_marks_manual_launch_resume(self) -> None:
         ship = ShipState(system="HIP 17597", station="Stronghold Carrier", status="in_station")
 

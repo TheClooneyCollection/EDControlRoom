@@ -25,3 +25,13 @@ def is_manual_launch_control_resumed_event(
         and event.get("MusicTrack") == "Exploration"
         and is_carrier_station(station_name=station_name, station_type=station_type)
     )
+
+
+def is_no_fire_zone_exited_event(event: dict[str, Any]) -> bool:
+    # Combat music (e.g. Powerplay security attacking on launch) can replace
+    # the NoTrack cue entirely; the station's no-fire-zone exit text still fires.
+    return (
+        event.get("event") == "ReceiveText"
+        and event.get("Message") == "$STATION_NoFireZone_exited;"
+    )
+

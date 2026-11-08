@@ -14,7 +14,7 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
         name="undock",
         usage="undock",
         summary="Launch from the current station and wait until the ship is clear of the station.",
-        detail="Runs the station launch menu flow, waits for the Undocked journal event, then waits for the NoTrack music event that confirms the ship has cleared the station before reporting success.",
+        detail="Runs the station launch menu flow, waits for the Undocked journal event, then waits for the NoTrack music event (or the no-fire-zone exit message when combat music replaces it) that confirms the ship has cleared the station before reporting success.",
     ),
     CommandHelp(
         name="jump",

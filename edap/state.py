@@ -7,7 +7,7 @@ from pathlib import Path
 from time import sleep
 from typing import Callable, Iterator
 
-from edap.journal_events import is_manual_launch_control_resumed_event
+from edap.journal_events import is_manual_launch_control_resumed_event, is_no_fire_zone_exited_event
 
 
 @dataclass(frozen=True)
@@ -143,12 +143,9 @@ def read_ship_state(log_path: Path) -> ShipState:
             log = loads(line)
             event = log.get("event")
             status_before_event = ship["status"]
-            manual_launch_control_resumed = (
-                ship["status"] == "in_undocking"
-                and is_manual_launch_control_resumed_event(
-                    log,
-                    station_name=ship["station"],
-                )
+            cleared_station_cue = ship["status"] == "in_undocking" and (
+                is_manual_launch_control_resumed_event(log, station_name=ship["station"])
+                or is_no_fire_zone_exited_event(log)
             )
 
             if event == "StartJump":
@@ -164,7 +161,7 @@ def read_ship_state(log_path: Path) -> ShipState:
                     and log.get("MusicTrack") == "NoTrack"
                     and ship["status"] == "in_undocking"
                 )
-                or manual_launch_control_resumed
+                or cleared_station_cue
                 or (event in {"Location", "CarrierJump"} and log.get("Docked") is False)
             ):
                 ship["status"] = "in_space"
@@ -250,7 +247,7 @@ def read_ship_state(log_path: Path) -> ShipState:
                 event == "Music"
                 and log.get("MusicTrack") == "NoTrack"
                 and status_before_event == "in_undocking"
-            ) or manual_launch_control_resumed or (
+            ) or cleared_station_cue or (
                 event in {"Location", "CarrierJump"} and log.get("Docked") is False
             ):
                 ship["station"] = None

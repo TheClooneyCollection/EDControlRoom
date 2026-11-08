@@ -2,18 +2,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from edap.journal_events import is_manual_launch_control_resumed_event
+from edap.journal_events import is_manual_launch_control_resumed_event, is_no_fire_zone_exited_event
 from edap.control_room.models import ShipState
 
 
 def apply_ship_event(ship: ShipState, ev: dict[str, Any]) -> None:
     event = ev.get("event", "")
-    manual_launch_control_resumed = (
-        ship.status == "in_undocking"
-        and is_manual_launch_control_resumed_event(
-            ev,
-            station_name=ship.station,
-        )
+    cleared_station_cue = ship.status == "in_undocking" and (
+        is_manual_launch_control_resumed_event(ev, station_name=ship.station)
+        or is_no_fire_zone_exited_event(ev)
     )
 
     if event == "Commander":
@@ -60,7 +57,7 @@ def apply_ship_event(ship: ShipState, ev: dict[str, Any]) -> None:
         event == "Music"
         and ev.get("MusicTrack") == "NoTrack"
         and ship.status == "in_undocking"
-    ) or manual_launch_control_resumed or (
+    ) or cleared_station_cue or (
         event in {"Location", "CarrierJump"} and ev.get("Docked") is False
     ):
         ship.station = None
@@ -73,7 +70,7 @@ def apply_ship_event(ship: ShipState, ev: dict[str, Any]) -> None:
         event == "Music"
         and ev.get("MusicTrack") == "NoTrack"
         and ship.status == "in_undocking"
-    ) or manual_launch_control_resumed or (
+    ) or cleared_station_cue or (
         event in {"Location", "CarrierJump"} and ev.get("Docked") is False
     ):
         ship.status = "in_space"

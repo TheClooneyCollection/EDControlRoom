@@ -120,6 +120,26 @@ class StateTests(unittest.TestCase):
             self.assertEqual(state.status, "in_space")
             self.assertIsNone(state.station)
 
+    def test_read_ship_state_treats_no_fire_zone_exit_as_in_space_under_combat_music(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            log_path = Path(temp_dir) / "Journal.log"
+            _write_lines(
+                log_path,
+                [
+                    '{"event":"LoadGame","Ship":"type6"}',
+                    '{"event":"Location","Docked":true,"StarSystem":"Sol","StationName":"Abraham Lincoln"}',
+                    '{"event":"Undocked","StationName":"Abraham Lincoln"}',
+                    '{"event":"Music","MusicTrack":"Combat_Dogfight"}',
+                    '{"event":"ReceiveText","Message":"$STATION_NoFireZone_exited;","Channel":"npc"}',
+                ],
+            )
+            os.utime(log_path, None)
+
+            state = read_ship_state(log_path)
+
+            self.assertEqual(state.status, "in_space")
+            self.assertIsNone(state.station)
+
     def test_read_ship_state_treats_carrier_exploration_as_manual_launch_resume(self) -> None:
         with TemporaryDirectory() as temp_dir:
             log_path = Path(temp_dir) / "Journal.log"

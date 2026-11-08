@@ -409,6 +409,35 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(result.action, "NoTrack")
         self.assertEqual(result.trigger_event, {"event": "Music", "MusicTrack": "NoTrack"})
 
+    def test_undock_accepts_no_fire_zone_exit_when_combat_music_replaces_no_track(self) -> None:
+        controls = FakeShipControls()
+        no_fire_zone_exited = {
+            "event": "ReceiveText",
+            "Message": "$STATION_NoFireZone_exited;",
+            "Channel": "npc",
+        }
+        watcher = FakeWatcher([
+            [],
+            [{"event": "Undocked", "StationName": "Voltaire Terminal"}],
+            [{"event": "Music", "MusicTrack": "Combat_Dogfight"}],
+            [no_fire_zone_exited],
+        ])
+        time_values = iter([0.0, 0.0, 0.1, 0.2, 0.3, 0.4])
+
+        result = undock(
+            controls,
+            watcher,
+            undock_timeout_s=1.0,
+            no_track_timeout_s=1.0,
+            step_delay_s=0.0,
+            time_fn=lambda: next(time_values),
+            sleeper=lambda _: None,
+        )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(result.action, "NoFireZoneExited")
+        self.assertEqual(result.trigger_event, no_fire_zone_exited)
+
     def test_undock_errors_if_no_track_never_arrives(self) -> None:
         controls = FakeShipControls()
         watcher = FakeWatcher([
