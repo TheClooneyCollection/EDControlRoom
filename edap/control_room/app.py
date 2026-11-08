@@ -50,6 +50,7 @@ import socket
 import subprocess
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import IO, Any, Callable, Protocol
 
@@ -149,6 +150,7 @@ from edap.control_room_state import (
     ControlRoomState,
 )
 from edap.binding_conflicts import read_galaxy_map_binding_conflicts
+from edap.binding_lookup import load_binding_lookup
 from edap.binding_names import format_binding_action_hint
 from edap.runtime import RuntimeContext, build_runtime_context, load_config_with_fallback
 from edap.ship_controls import DEFAULT_SHIP_CONTROL_ACTIONS, ShipControls
@@ -168,7 +170,7 @@ _STARTUP_BINDING_WARNING_IGNORED_ACTIONS = frozenset({
     "YawRightButton",
 })
 
-_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul start | haul load | haul search [system] | haul search url <url> | haul route <n> | travel <system> [/ <station>] | pause | resume | multi_leg_haul <route> | dest <system> | home | set_input | set_pid | set_hwnd | market ... | instant | stats [window] | new_session | stop | reload | q"
+_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul start | haul load | haul search [system] | haul search url <url> | haul route <n> | travel <system> [/ <station>] | pause | resume | multi_leg_haul <route> | dest <system> | home | set_input | set_pid | set_hwnd | market ... | instant | stats [window] | new_session | stop | reload | reload_keymap | q"
 _ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS = 10.0
 _JOURNAL_ARTIFACT_LOG_PATH = Path("artifacts/control-room.log")
 _DEBUG_ARTIFACT_LOG_PATH = Path("artifacts/control-room-debug.log")
@@ -995,6 +997,25 @@ class ControlRoomApp(App[None]):
             continuous_action_hold_s=self._config.controls.continuous_action_hold_seconds,
             sleeper=self._make_sleeper(),
         )
+
+    def _cmd_reload_keymap(self) -> None:
+        # A running routine keeps the controls it started with, so swapping keys mid-run would mislead.
+        if self._routine_active:
+            self._log("[yellow]Stop the running routine before reload_keymap.[/]")
+            return
+        bindings_path = self._ctx.bindings.effective_path
+        if bindings_path is None or not bindings_path.exists():
+            self._log("[yellow]Bindings file unavailable; keymap not reloaded.[/]")
+            return
+        try:
+            binding_lookup = load_binding_lookup(bindings_path, actions=_ALL_ROUTINE_ACTIONS)
+        except Exception as exc:
+            self._log(f"[red]Keymap reload failed: {escape(str(exc))}[/]")
+            return
+        self._ctx = replace(self._ctx, binding_lookup=binding_lookup)
+        self._build_controls()
+        self._log("[green]Keymap reloaded.[/] [dim]Elite reads its bindings only at launch; restart the game for in-game changes.[/]")
+        self._log_bindings_status()
 
     def _load_saved_state(self) -> None:
         _persistence.load_saved_state(self)

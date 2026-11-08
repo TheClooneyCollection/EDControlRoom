@@ -3585,6 +3585,57 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertIn(f"Bindings file: {bindings_path}", output)
         self.assertIn("source: configured", output)
 
+    def _use_bindings_file(self, boost_key: str) -> Path:
+        bindings_path = Path(self.tmpdir.name) / "Custom.binds"
+        boost = f'<Primary Device="Keyboard" Key="{boost_key}" />' if boost_key else '<Primary Device="{NoDevice}" Key="" />'
+        bindings_path.write_text(
+            f'<Root><UseBoostJuice>{boost}<Secondary Device="{{NoDevice}}" Key="" /></UseBoostJuice></Root>',
+            encoding="utf-8",
+        )
+        report = {"path": str(bindings_path), "status": "ok", "source": "configured", "reason": "test bindings file"}
+        self.app._ctx = replace(
+            self.app._ctx,
+            bindings=ResolvedPath(configured=report, auto_detected=report, effective=report),
+            input_controller=_InputControllerStub(),
+        )
+        return bindings_path
+
+    def test_reload_keymap_picks_up_a_key_bound_after_startup(self) -> None:
+        self._use_bindings_file("")
+        self.app._dispatch_command("reload_keymap")
+        self.assertIsNone(self.app._ctx.binding_lookup.get("UseBoostJuice"))
+
+        self._use_bindings_file("Key_Tab")
+        self.app._dispatch_command("reload_keymap")
+
+        self.assertIsNotNone(self.app._ctx.binding_lookup.get("UseBoostJuice"))
+        self.assertIsNotNone(self.app._controls)
+        output = "\n".join(self.app.logged)
+        self.assertIn("Keymap reloaded.", output)
+        self.assertIn("Bindings file:", output)
+        self.assertEqual(self.app._saved_state.history[-1].command, "reload_keymap")
+
+    def test_reload_keymap_is_refused_while_a_routine_runs(self) -> None:
+        self._use_bindings_file("Key_Tab")
+        self.app._routine_active = True
+
+        self.app._dispatch_command("reload_keymap")
+
+        self.assertIsNone(self.app._ctx.binding_lookup)
+        self.assertIn("Stop the running routine before reload_keymap.", "\n".join(self.app.logged))
+
+    def test_reload_keymap_reports_a_missing_or_broken_bindings_file(self) -> None:
+        bindings_path = self._use_bindings_file("Key_Tab")
+        bindings_path.write_text("<Root><UseBoostJuice>", encoding="utf-8")
+        self.app._dispatch_command("reload_keymap")
+        bindings_path.unlink()
+        self.app._dispatch_command("reload_keymap")
+
+        self.assertIsNone(self.app._ctx.binding_lookup)
+        output = "\n".join(self.app.logged)
+        self.assertIn("Keymap reload failed:", output)
+        self.assertIn("Bindings file unavailable; keymap not reloaded.", output)
+
     def test_log_bindings_status_warns_about_missing_mappings(self) -> None:
         bindings_path = Path(self.tmpdir.name) / "Custom.binds"
         resolved = ResolvedPath(

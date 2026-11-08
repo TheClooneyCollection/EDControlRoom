@@ -134,6 +134,12 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
         detail="wine_helper authenticates or launches the configured helper in the CrossOver bottle. Failures abort input with no foreground fallback. foreground explicitly restores host input; pid auto-detects Elite or accepts a pid/process name. Configure input.wine_helper wine_path and bottle first.",
     ),
     CommandHelp(
+        name="reload_keymap",
+        usage="reload_keymap",
+        summary="Re-read the Elite bindings file without restarting Control Room.",
+        detail="Rebuilds routine controls from the current bindings file and reprints the bindings check. Refused while a routine runs. Elite itself only reads bindings at launch, so restart the game after changing them.",
+    ),
+    CommandHelp(
         name="set_pid",
         usage="set_pid [pid|process-name|foreground]",
         summary="Keep using the foreground app, or target a specific process id for input dispatch.",
