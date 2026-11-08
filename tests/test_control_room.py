@@ -559,6 +559,7 @@ class ControlRoomCliTests(unittest.TestCase):
             host="192.168.1.42",
             port=8765,
             access_token="1001",
+            speak_tts=True,
             web_default_access_token="",
         )
 
@@ -574,6 +575,7 @@ class ControlRoomCliTests(unittest.TestCase):
             host="192.168.1.42",
             port=8765,
             access_token="1001",
+            speak_tts=True,
             web_default_access_token="",
         )
 
@@ -588,8 +590,17 @@ class ControlRoomCliTests(unittest.TestCase):
             host="127.0.0.1",
             port=8765,
             access_token="1001",
+            speak_tts=True,
             web_default_access_token="",
         )
+
+    def test_no_tts_keeps_the_server_silent(self) -> None:
+        with patch("sys.argv", ["control_room.py", "local", "--token", "1001", "--no-tts"]), patch(
+            "edap.control_room.server.serve.serve_observer_mode"
+        ) as serve:
+            main()
+
+        self.assertFalse(serve.call_args.kwargs["speak_tts"])
 
     def test_local_rejects_explicit_host(self) -> None:
         argv = ["control_room.py", "local", "--host", "0.0.0.0", "--token", "1001"]
@@ -607,6 +618,7 @@ class ControlRoomCliTests(unittest.TestCase):
             host="127.0.0.1",
             port=8765,
             access_token=DEFAULT_OBSERVER_ACCESS_TOKEN,
+            speak_tts=True,
             web_default_access_token=DEFAULT_OBSERVER_ACCESS_TOKEN,
         )
 

@@ -7,6 +7,7 @@ import unittest
 import warnings
 from pathlib import Path
 import tempfile
+import threading
 from unittest.mock import patch
 
 warnings.filterwarnings(
@@ -66,7 +67,7 @@ from edap.routing.route_cache import RouteRequestKey
 from edap.routing.types import Route, RouteWaypoint, SpanshMetadata
 from edap.runtime import ResolvedPath, RuntimeContext
 from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler
-from edap.tts import AnnouncementId
+from edap.tts import AnnouncementId, NullSpeechBackend
 
 
 def _make_timing_config() -> TimingConfig:
@@ -315,7 +316,7 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
 class ControlRoomServerTests(unittest.TestCase):
     def test_headless_host_initializes_data_source_before_mount(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend())
 
             data = host.dependencies.data_source.current()
 
@@ -324,7 +325,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_accepts_simple_remote_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend())
 
             host.handle_remote_input("market filter gold")
 
@@ -334,7 +335,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_submit_input_alias_accepts_simple_remote_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend())
 
             host.submit_input("market filter gold")
 
@@ -343,7 +344,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_accepts_stats_via_submit_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend())
             host.submit_input("stats all")
             output = "\n".join(content.plain for content, _ in host._activity_widget.writes)
             self.assertIn("no haul runs recorded yet", output)
@@ -351,7 +352,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_emits_announcement_events_without_local_speech(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context_with_tts(Path(temp_dir)))
+            host = HeadlessControlRoomHost(_make_context_with_tts(Path(temp_dir)), speech_backend=NullSpeechBackend())
             sink = _EventSinkRecorder()
             host._protocol_event_sink = sink
 
@@ -360,6 +361,28 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual([event.announcement_id for event in sink.announcements], ["arrival"])
         self.assertIsNone(host._tts._speaker)
 
+    def test_headless_host_speaks_announcements_on_its_own_backend(self) -> None:
+        class _RecordingBackend:
+            def __init__(self) -> None:
+                self.spoken: list[str] = []
+                self.done = threading.Event()
+
+            def speak(self, text: str) -> None:
+                self.spoken.append(text)
+                self.done.set()
+
+        backend = _RecordingBackend()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            host = HeadlessControlRoomHost(_make_context_with_tts(Path(temp_dir)), speech_backend=backend)
+            sink = _EventSinkRecorder()
+            host._protocol_event_sink = sink
+
+            host._announce_tts(AnnouncementId.ARRIVAL, system_name="Sol")
+            self.assertTrue(backend.done.wait(timeout=1.0))
+
+        self.assertEqual(backend.spoken, ["Arrived in Sol"])
+        self.assertEqual([event.message_text for event in sink.announcements], ["Arrived in Sol"])
+
     def test_headless_host_start_bootstraps_commander_before_startup_greeting(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             journal_dir = Path(temp_dir)
@@ -367,7 +390,7 @@ class ControlRoomServerTests(unittest.TestCase):
                 '{"event":"LoadGame","Commander":"VRYAE"}\n',
                 encoding="utf-8",
             )
-            host = HeadlessControlRoomHost(_make_context_with_tts(journal_dir))
+            host = HeadlessControlRoomHost(_make_context_with_tts(journal_dir), speech_backend=NullSpeechBackend())
             host._start_watcher_loop = lambda: None
 
             host.start()
@@ -376,7 +399,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_publishes_data_refresh_after_remote_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend())
             sink = _EventSinkRecorder()
             host._protocol_event_sink = sink
 
@@ -387,7 +410,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_remote_ctrl_c_cancels_prompt_flow_and_publishes_data_refresh(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend())
             sink = _EventSinkRecorder()
             host._protocol_event_sink = sink
             host._start_dest_prompt("Achenar")
@@ -1114,7 +1137,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             broker = InMemoryObserverSessionBroker()
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)))
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend())
             host._controls = object()
             app = build_observer_server_app(
                 data_provider=host.dependencies.data_source.current,

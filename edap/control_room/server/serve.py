@@ -17,6 +17,7 @@ from edap.control_room.server.sink import (
     ServerActivityLogSink,
 )
 from edap.runtime import build_runtime_context, load_config_with_fallback
+from edap.tts import NullSpeechBackend, build_speech_backend
 
 
 def serve_observer_mode(
@@ -25,6 +26,7 @@ def serve_observer_mode(
     host: str,
     port: int,
     access_token: str,
+    speak_tts: bool,
     web_default_access_token: str = "",
 ) -> None:
     loaded = load_config_with_fallback(config_path)
@@ -49,7 +51,14 @@ def serve_observer_mode(
         sys.exit(1)
 
     broker = InMemoryObserverSessionBroker()
-    runtime_host = HeadlessControlRoomHost(ctx)
+    # The server speaks on its own host so a headless Deck needs no TUI; `--no-tts` avoids
+    # a double callout when a `connect` TUI runs on the same machine.
+    speech_backend = (
+        build_speech_backend(ctx.config.runtime.platform, ctx.config.tts.piper)
+        if speak_tts
+        else NullSpeechBackend()
+    )
+    runtime_host = HeadlessControlRoomHost(ctx, speech_backend=speech_backend)
 
     def data_provider():
         return _server_hydrate_data(

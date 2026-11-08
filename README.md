@@ -99,7 +99,7 @@ uv run python3 control_room.py lan
 
 `lan` starts a headless server and prints the bound URL on startup (e.g. `http://192.168.1.50:8765`). Open that URL in a browser to use the web frontend — ideally on a **secondary device** (tablet, phone, or another laptop) so Elite can stay the foreground application on the game machine. Routines drive Elite by key input, and alt-tabbing away from the game window will break them.
 
-`lan` does **not** run a TUI or speak TTS. For TTS callouts, attach a TUI client from another terminal (same machine or another LAN box). Paste the URL `lan` printed, or use the shorter `host:port` form:
+`lan` speaks TTS callouts on the machine it runs on, so a headless game box needs no extra terminal. Pass `--no-tts` to keep it silent, for example when a TUI client on the same machine already speaks. For a live activity log, or callouts on another LAN box, attach a TUI client. Paste the URL `lan` printed, or use the shorter `host:port` form:
 
 ```sh
 uv run python3 control_room.py connect http://<ip>:8765/ --token edcr

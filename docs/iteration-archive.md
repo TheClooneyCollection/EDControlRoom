@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `287`
-- Latest generated iteration number: `420`
+- Generated iteration count: `289`
+- Latest generated iteration number: `422`
 
 ## Iteration 134
 
@@ -8157,3 +8157,59 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - Not yet tested on a real iPhone: which voices Safari lists (downloaded enhanced voices vs Siri voices) and whether the silent switch mutes it.
 - Locked screen or background tab suspends the page, so speech stops. Wake Lock needs https (for example `tailscale serve`); Web Push plus AirPods announce notifications is the locked-screen option.
 - The server must restart once to serve `speech.js` because the asset allowlist lives in `app.py`.
+
+## Iteration 421
+
+- When: `2026-11-08 22:58`
+- Area: `runtime`
+- Title: `piper-tts-backend`
+- Source: [2026-11-08-22-58___runtime____piper-tts-backend.md](iteration-logs/2026-11-08-22-58___runtime____piper-tts-backend.md)
+
+# Iteration Log
+
+- Area: `runtime`
+- Title: `piper-tts-backend`
+- Started: `2026-11-08 22:58`
+
+## Summary
+
+- Add a Piper TTS backend so the Deck (and Mac) get a natural local voice instead of `spd-say`/espeak.
+
+## Changes
+
+- `[tts.piper] executable` + `model` (`PiperVoiceConfig`); config load rejects a half-filled table or missing files.
+- `PiperSpeechBackend` keeps one `piper --output_dir` process loaded: write a line, read back the wav path, play it, delete it. A dead or silent Piper is killed and restarted once per line. Players: `pw-play`/`paplay`/`aplay` on Linux, `afplay` on macOS; no player means the platform voice.
+- Deck measurements: cold `cori-high` about 3.1s per line, warm about 1.85s; medium voices about 0.9s cold. Live check on the Deck through `build_speech_backend` played two lines and left no wavs.
+- `tools/speak.py` still uses the platform voice. Docs: `config.example.toml`, getting-started (browser speech plus Piper; dropped the stale "browser will not speak").
+
+## Follow-ups
+
+- `lan` still passes `NullSpeechBackend`; speaking on the server host by default is the planned next step.
+
+## Iteration 422
+
+- When: `2026-11-08 23:02`
+- Area: `control-room`
+- Title: `lan-mode-speaks-tts`
+- Source: [2026-11-08-23-02_control-room_lan-mode-speaks-tts.md](iteration-logs/2026-11-08-23-02_control-room_lan-mode-speaks-tts.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `lan-mode-speaks-tts`
+- Started: `2026-11-08 23:02`
+
+## Summary
+
+- `serve`/`lan`/`local` now speak TTS on the server host by default, so the Steam Deck no longer needs a `connect` TUI just for callouts.
+
+## Changes
+
+- `HeadlessControlRoomHost` takes a required `speech_backend`; `serve_observer_mode` takes a required `speak_tts` and builds the platform or Piper backend (`tts.piper`) when it is set.
+- New `--no-tts` flag keeps the server silent. A `connect` TUI also speaks every server announcement (`_play_local_announcement`), so a TUI on the same machine as `lan` needs `lan --no-tts` to avoid double callouts.
+- With a real backend the announcer now dedups consecutive identical callouts on the server too, so a repeated identical line is no longer re-broadcast to clients (same as the embedded TUI).
+- README and getting-started describe the new default.
+
+## Follow-ups
+
+- Mac Piper support is paused: the official macOS binary misses `libespeak-ng`, and PyPI `piper-tts` 1.8 (installed on the Mac via `uv tool`) logs `Wrote <path>` to stderr instead of printing the path to stdout, so `PiperSpeechBackend` needs to read either.

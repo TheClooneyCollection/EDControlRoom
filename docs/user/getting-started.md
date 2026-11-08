@@ -1,13 +1,13 @@
 # Getting Started
 
-This is the recommended way to run EDControlRoom day to day: one process serves the runtime, you keep the terminal TUI open for TTS callouts, and you drive it from your browser.
+This is the recommended way to run EDControlRoom day to day: one process serves the runtime and speaks TTS callouts, and you drive it from your browser.
 
 ## Contents
 
 - [Before You Start](#before-you-start)
 - [Start Control Room in LAN Mode](#start-control-room-in-lan-mode)
 - [Open the Web Frontend](#open-the-web-frontend)
-- [Attach a TUI for TTS](#attach-a-tui-for-tts)
+- [TTS callouts and the TUI](#tts-callouts-and-the-tui)
 - [The Five-Second Safety Delay](#the-five-second-safety-delay)
 - [First Haul](#first-haul)
 - [Stopping](#stopping)
@@ -63,18 +63,32 @@ The route comparison panel fetches a Spansh route between two systems and lays i
 
 From, jump range, and supercharge mode auto-fill from live ship state (current system + Loadout event). Set To, adjust efficiency and any other fields, and optionally a final station. **Fetch Spansh**, **Compare**, or **All in one** to run the full flow, then **Switch to Spansh** to start the Spansh route runner — it flies the route waypoint by waypoint and auto-sets the galaxy map for the next waypoint every time you arrive.
 
-## Attach a TUI for TTS
+## TTS callouts and the TUI
 
-`lan` is headless, so it does not speak TTS on its own. Open a TUI client in a separate terminal to get the "commander, ship ready to jump" callouts and a live activity log. Paste the URL `lan` printed, or use the shorter `host:port` form:
+`lan` speaks the "commander, ship ready to jump" callouts on the machine it runs on. Pass `--no-tts` to keep the server silent.
+
+A TUI client adds a live activity log and also speaks every callout on its own machine. If it runs on the same machine as `lan`, start `lan --no-tts` so callouts are not spoken twice. Paste the URL `lan` printed, or use the shorter `host:port` form:
 
 ```sh
 uv run python3 control_room.py connect http://<ip>:8765/ --token edcr
 uv run python3 control_room.py connect <ip>:8765 --token edcr
 ```
 
-Swap `edcr` for your token if you overrode it. TTS is client-local; the browser will not speak.
+Swap `edcr` for your token if you overrode it.
 
-Typical setup: one machine runs `control_room.py lan`, a second terminal (same machine or a second monitor / LAN box) runs `connect ...` for TTS + activity log, iPad or another window drives the browser UI.
+The haul page can also speak in the browser, for example on an iPhone. Open **Speak announcements on this device** at the bottom of the Active haul routine panel and turn it on. It is per device, so a laptop already running the TUI does not double up. iOS needs one tap on the page after each load, and speech stops when the screen locks.
+
+The server and the TUI use the platform voice (`say`, `spd-say`/`espeak-ng`, or Windows speech). For a more natural local voice, install [Piper](https://github.com/rhasspy/piper) and a voice from [piper-voices](https://huggingface.co/rhasspy/piper-voices), then point `config.toml` at them:
+
+```toml
+[tts.piper]
+executable = "~/.local/share/piper/piper/piper"
+model = "~/.local/share/piper/voices/en_GB-cori-high.onnx"
+```
+
+Piper stays loaded between callouts and plays each line with `pw-play`, `paplay` or `aplay` on Linux, or `afplay` on macOS.
+
+Typical setup: the game machine runs `control_room.py lan` and speaks callouts, and an iPad or another window drives the browser UI. Optionally a second LAN box runs `connect ...` for the activity log.
 
 ## The Five-Second Safety Delay
 

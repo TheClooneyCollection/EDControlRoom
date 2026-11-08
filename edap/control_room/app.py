@@ -2400,6 +2400,11 @@ def main() -> None:
     )
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--token", help="shared access token for serve/connect observer mode")
+    parser.add_argument(
+        "--no-tts",
+        action="store_true",
+        help="serve/lan/local: do not speak callouts on the server host",
+    )
     parser.add_argument("--client-name", help="observer client name for connect mode")
     parser.add_argument(
         "--claim-operator",
@@ -2436,6 +2441,7 @@ def main() -> None:
             host=host,
             port=args.port,
             access_token=access_token,
+            speak_tts=not args.no_tts,
             web_default_access_token=web_default_access_token,
         )
         return

@@ -16,7 +16,7 @@ from edap.inara.trade_routes import TradeRoute
 from edap.routing.types import Route
 from edap.runtime import RuntimeContext
 from edap.state import JournalWatcher
-from edap.tts import NullSpeechBackend, TTSAnnouncer
+from edap.tts import SpeechBackend, TTSAnnouncer
 
 
 _CLIENT_LOCAL_REMOTE_VERBS = {
@@ -93,6 +93,7 @@ class HeadlessControlRoomHost(ControlRoomApp):
         self,
         ctx: RuntimeContext,
         *,
+        speech_backend: SpeechBackend,
         market_filter: str | None = None,
     ) -> None:
         self._activity_widget = _ActivityWidgetStub()
@@ -110,7 +111,7 @@ class HeadlessControlRoomHost(ControlRoomApp):
         self._tts = TTSAnnouncer(
             self._config.tts,
             platform_name=self._config.runtime.platform,
-            backend=NullSpeechBackend(),
+            backend=speech_backend,
         )
         self._watcher_stop = threading.Event()
         self._watcher_thread: threading.Thread | None = None
