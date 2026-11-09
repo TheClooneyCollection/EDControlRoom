@@ -1,8 +1,8 @@
 # CI and Release Status
 ## Current
-- Latest stable release is `v1.25.0` (Steam Deck setup: install docs, `tools/deck_keymap.py`, `reload_keymap`, `reload` removed). `v1.24.0` was background input (beta macOS `wine_helper`, Linux/Steam Deck `uinput`, web haul route copy/paste); `v1.23.0` was haul stats history. Tag `v1.22.0` exists but has no published GitHub release.
-- The unittest timing budget now scales as `0.0006s` per executed test, so the current `953`-test suite budget is `0.5718s`; when a release-prep or CI run exceeds that computed ceiling, capture a timing report before wrapping up.
-- Latest timing check (v1.25.0 prep): `953` tests passed in `0.453s`, within the `0.5718s` budget.
+- Latest stable release is `v1.26.0` (Piper voices and haul safety: `tools/setup_piper.py`, `lan`/`serve` speak by default, web-page speech, commander-name callouts, attack escape after undock, market reopen on stale station check, `reload_config`). `v1.25.0` was Steam Deck setup (install docs, `tools/deck_keymap.py`, `reload_keymap`); `v1.24.0` was background input.
+- The unittest timing budget now scales as `0.0006s` per executed test, so the current `983`-test suite budget is `0.5898s`; when a release-prep or CI run exceeds that computed ceiling, capture a timing report before wrapping up.
+- Latest timing check (v1.26.0 prep): `983` tests passed in `0.486s`, within the `0.5898s` budget.
 - The Discord workflow-failure notifier is now split into a checked-in Python script plus a thin workflow wrapper, so the same payload/fetch/post path can be dry-run locally against saved jobs JSON and exercised in CI without keeping the logic trapped inside inline workflow shell.
 - `main` is now the rolling-update branch, and stable features or releases are identified with tags instead of `dev -> main` promotion.
 - The legacy `.github/workflows/promote-dev-to-main.yml` automation has been removed; release/process automation now centers on `main`, semantic version tags, and manual GitHub release publishing.
