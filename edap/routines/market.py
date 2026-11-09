@@ -472,6 +472,72 @@ def _market_ui_reset(
     return dispatch
 
 
+def _open_commodities_market(
+    controls: SupportsMarketControls,
+    *,
+    step_delay_s: float,
+    nav_delay_s: float,
+    sleeper: Callable[[float], None],
+    progress_fn: ProgressCallback,
+) -> RoutineResult | None:
+    """Reset to the station menu and open the commodities market. Returns a result only on a dispatch failure."""
+    dispatch = _market_ui_reset(
+        controls,
+        step_delay_s=step_delay_s,
+        sleeper=sleeper,
+        progress_fn=progress_fn,
+    )
+    if dispatch.status != "ok":
+        return RoutineResult(action="UI_Back", dispatch=dispatch, details={"phase": "reset"})
+
+    progress_fn("Navigating to commodities market...")
+
+    progress_fn("  UI_Select (enter station services)")
+    dispatch = controls.ui_select()
+    if dispatch.status != "ok":
+        return RoutineResult(action=dispatch.action, dispatch=dispatch, details={"phase": "navigate_to_market"})
+    # Station services UI takes a moment to populate after selection
+    sleeper(7.0)
+
+    for fn, label, delay in [
+        (controls.ui_down, "UI_Down (to commodities market)", nav_delay_s),
+        (controls.ui_select, "UI_Select (open market)", step_delay_s),
+    ]:
+        progress_fn(f"  {label}")
+        dispatch = fn()
+        if dispatch.status != "ok":
+            return RoutineResult(action=dispatch.action, dispatch=dispatch, details={"phase": "navigate_to_market"})
+        if delay > 0:
+            sleeper(delay)
+
+    sleeper(5.0)
+    return None
+
+
+def _check_market_station(market_path: Path) -> tuple[dict, str | None]:
+    """Read Market.json and confirm it belongs to the station we last docked at."""
+    if not market_path.exists():
+        return {}, "Market.json not found"
+    with market_path.open() as fh:
+        data = json.load(fh)
+    docked = _read_last_docked_state(market_path.parent)
+    if docked is None:
+        return data, (
+            "no docked station state found in journal "
+            "(expected Docked or Location(Docked=true)) -- cannot verify current station"
+        )
+    market_id = data.get("MarketID")
+    docked_id = docked.get("MarketID")
+    if market_id and docked_id and market_id == docked_id:
+        return data, None
+    if data.get("StationName") and data.get("StationName") == docked.get("StationName"):
+        return data, None
+    return data, (
+        f"Market.json is from {data.get('StationName', '?')!r} "
+        f"but last Docked event is {docked.get('StationName', '?')!r}"
+    )
+
+
 def _market_back_out_to_station_menu(
     controls: SupportsMarketControls,
     *,
@@ -701,91 +767,44 @@ def _market_trade_attempt(
         if not docked:
             return _market_error(event_type, f"sell requires an in-station start: {reason}")
 
-    dispatch = _market_ui_reset(
-        controls,
-        step_delay_s=step_delay_s,
-        sleeper=sleeper,
-        progress_fn=progress_fn,
-    )
-    if dispatch.status != "ok":
-        return RoutineResult(action="UI_Back", dispatch=dispatch, details={"phase": "reset"})
-
-    # Navigate to commodities market first -- the game writes Market.json when the screen opens
-    progress_fn("Navigating to commodities market...")
-
-    progress_fn("  UI_Select (enter station services)")
-    dispatch = controls.ui_select()
-    if dispatch.status != "ok":
-        return RoutineResult(action=dispatch.action, dispatch=dispatch, details={"phase": "navigate_to_market"})
-    # Station services UI takes a moment to populate after selection
-    sleeper(7.0)
-
-    for fn, label, delay in [
-        (controls.ui_down, "UI_Down (to commodities market)", nav_delay_s),
-        (controls.ui_select, "UI_Select (open market)", step_delay_s),
-    ]:
-        progress_fn(f"  {label}")
-        dispatch = fn()
-        if dispatch.status != "ok":
-            return RoutineResult(action=dispatch.action, dispatch=dispatch, details={"phase": "navigate_to_market"})
-        if delay > 0:
-            sleeper(delay)
-
-    sleeper(5.0)
-
-    # Verify Market.json matches the current docked station.
-    # The game writes it when the market screen opens; retry up to 3 times if delayed.
+    # The game writes Market.json when the market screen opens. Right after docking the station
+    # services screen can still be loading, so the presses that open the market get lost and
+    # Market.json stays from the previous station: back out and navigate again instead of re-reading.
+    _ATTEMPTS = 3
     data: dict = {}
-    if skip_station_check:
-        if not market_path.exists():
-            return _market_error(event_type, "Market.json not found")
-        with market_path.open() as fh:
-            data = json.load(fh)
-        progress_fn("Station check skipped")
-    else:
-        _RETRIES = 3
-        _RETRY_DELAY_S = 10.0
-        for attempt in range(1, _RETRIES + 1):
-            fail_reason: str | None = None
+    for attempt in range(1, _ATTEMPTS + 1):
+        navigation_failure = _open_commodities_market(
+            controls,
+            step_delay_s=step_delay_s,
+            nav_delay_s=nav_delay_s,
+            sleeper=sleeper,
+            progress_fn=progress_fn,
+        )
+        if navigation_failure is not None:
+            return navigation_failure
+        if skip_station_check:
             if not market_path.exists():
-                fail_reason = "Market.json not found"
-            else:
-                with market_path.open() as fh:
-                    data = json.load(fh)
-                docked = _read_last_docked_state(market_path.parent)
-                if docked is None:
-                    fail_reason = (
-                        "no docked station state found in journal "
-                        "(expected Docked or Location(Docked=true)) -- cannot verify current station"
-                    )
-                else:
-                    market_id = data.get("MarketID")
-                    docked_id = docked.get("MarketID")
-                    if market_id and docked_id and market_id == docked_id:
-                        pass  # confirmed match
-                    elif data.get("StationName") and data.get("StationName") == docked.get("StationName"):
-                        pass  # fallback name match
-                    else:
-                        fail_reason = (
-                            f"Market.json is from {data.get('StationName', '?')!r} "
-                            f"but last Docked event is {docked.get('StationName', '?')!r}"
-                        )
-            if fail_reason is None:
-                break
-            if attempt < _RETRIES:
-                progress_fn(f"Station check failed (attempt {attempt}/{_RETRIES}): {fail_reason}")
-                progress_fn(f"  Retrying in {_RETRY_DELAY_S:.0f}s...")
-                sleeper(_RETRY_DELAY_S)
-            else:
-                return _market_error_with_back_out(
-                    controls,
-                    action=event_type,
-                    reason=f"Station check failed after {_RETRIES} attempts: {fail_reason}",
-                    step_delay_s=step_delay_s,
-                    sleeper=sleeper,
-                    progress_fn=progress_fn,
-                    phase="station_check",
-                )
+                return _market_error(event_type, "Market.json not found")
+            with market_path.open() as fh:
+                data = json.load(fh)
+            progress_fn("Station check skipped")
+            break
+        data, fail_reason = _check_market_station(market_path)
+        if fail_reason is None:
+            break
+        if attempt < _ATTEMPTS:
+            progress_fn(f"Station check failed (attempt {attempt}/{_ATTEMPTS}): {fail_reason}")
+            progress_fn("  Market may not have opened; backing out to open it again...")
+        else:
+            return _market_error_with_back_out(
+                controls,
+                action=event_type,
+                reason=f"Station check failed after {_ATTEMPTS} attempts: {fail_reason}",
+                step_delay_s=step_delay_s,
+                sleeper=sleeper,
+                progress_fn=progress_fn,
+                phase="station_check",
+            )
 
     items: list[dict] = data.get("Items", [])
 

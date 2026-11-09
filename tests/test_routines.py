@@ -1158,6 +1158,59 @@ class RoutinesTests(unittest.TestCase):
             progress,
         )
 
+    def test_market_buy_reopens_the_market_when_the_first_open_is_lost(self) -> None:
+        def run(opens_on_attempt: int):
+            with tempfile.TemporaryDirectory() as tmp:
+                journal_dir = Path(tmp)
+                (journal_dir / "Journal.240101000000.01.log").write_text(
+                    json.dumps({"event": "Docked", "StationName": "Melroy Gateway", "MarketID": 2}) + "\n",
+                    encoding="utf-8",
+                )
+                market_path = journal_dir / "Market.json"
+
+                def write_market(station: str, market_id: int) -> None:
+                    market_path.write_text(json.dumps({"StationName": station, "MarketID": market_id, "Items": [
+                        {"Category": "Metals", "Name": "silver", "Stock": 1000},
+                    ]}), encoding="utf-8")
+
+                write_market("Voltaire Terminal", 1)
+                controls = FakeShipControls()
+                progress: list[str] = []
+
+                def record_progress(line: str) -> None:
+                    progress.append(line)
+                    if line == "  UI_Select (open market)" and progress.count(line) == opens_on_attempt:
+                        write_market("Melroy Gateway", 2)
+                result = market_buy(
+                    controls,
+                    FakeWatcher([[{"event": "MarketBuy", "Type": "silver", "Count": 1, "TotalCost": 1}]]),
+                    market_path=market_path,
+                    target="silver",
+                    amount=1,
+                    step_delay_s=0.0,
+                    nav_delay_s=0.0,
+                    trade_timeout_s=30.0,
+                    time_fn=lambda: 0.0,
+                    sleeper=lambda _: None,
+                    progress_fn=record_progress,
+                )
+                navigations = progress.count("Navigating to commodities market...")
+                return result, navigations, progress
+
+        result, navigations, progress = run(opens_on_attempt=2)
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(navigations, 2)
+        self.assertIn("  Market may not have opened; backing out to open it again...", progress)
+
+        result, navigations, _ = run(opens_on_attempt=99)
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertEqual(navigations, 3)
+        self.assertIn(
+            "Station check failed after 3 attempts: "
+            "Market.json is from 'Voltaire Terminal' but last Docked event is 'Melroy Gateway'",
+            result.dispatch.reason or "",
+        )
+
     def test_max_buy_caps_expected_quantity_by_balance_and_skips_zero_limit(self) -> None:
         from edap.routines.haul_support import buy_shortfall
 
