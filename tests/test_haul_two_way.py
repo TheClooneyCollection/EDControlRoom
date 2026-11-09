@@ -23,6 +23,7 @@ from edap.routines.haul_two_way import (
     TwoWayHaulRoute,
     _detect_start_phase,
     _run_market_buy,
+    _run_market_sell,
     _wait_for_arrival_or_approach_event,
     haul_loop_two_way as _haul_loop_two_way,
 )
@@ -84,6 +85,7 @@ def haul_loop_two_way(*args, **kwargs):
             ),
         ),
         market=HaulMarketSettings(
+            nav_delay_s=kwargs.pop("market_nav_delay_s", 0.0),
             buy_top_up_max_attempts=_DEFAULTS.market_buy_top_up_max_attempts,
             buy_hold_segments=kwargs.pop("market_buy_hold_segments", _DEFAULTS.market_buy_hold_segments),
             sell_quantity_restore_taps=kwargs.pop(
@@ -229,6 +231,7 @@ def _test_haul_runtime(
             nav_panel_open_delay_s=0.0,
         ),
         market=HaulMarketSettings(
+            nav_delay_s=0.0,
             buy_top_up_max_attempts=_DEFAULTS.market_buy_top_up_max_attempts,
             buy_hold_segments=_DEFAULTS.market_buy_hold_segments,
             sell_quantity_restore_taps=_DEFAULTS.market_sell_quantity_restore_taps,
@@ -248,6 +251,27 @@ def _test_haul_runtime(
 
 
 class TwoWayHaulLoopTests(unittest.TestCase):
+    def test_market_trades_use_the_configured_nav_delay(self) -> None:
+        def traded(controls, watcher, *, nav_delay_s, **kwargs):
+            nav_delays.append(nav_delay_s)
+            return RoutineResult(action="MarketTrade", dispatch=ActionDispatchResult(action="MarketTrade", status="ok"))
+
+        nav_delays: list[float] = []
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_cargo(journal_dir, [{"Name": _CARGO_2, "Count": 64}])
+            ctx = _HaulCtx(
+                runtime=_test_haul_runtime(journal_dir, FakeShipControls(), FakeWatcher([])),
+                station_1=_station_1_leg(), station_2=_station_2_leg(),
+            )
+            ctx.runtime.market = replace(ctx.runtime.market, nav_delay_s=0.2)
+            with patch("edap.routines.haul_two_way.market_sell", traded), \
+                    patch("edap.routines.haul_two_way.market_buy", traded):
+                _run_market_sell(ctx, leg=ctx.station_1, next_phase=Phase.AT_STATION_1_BUY)
+                _write_cargo(journal_dir, [])
+                _run_market_buy(ctx, leg=ctx.station_1, next_phase=Phase.UNDOCK_STATION_1)
+        self.assertEqual(nav_delays, [0.2, 0.2])
+
     def test_buy_top_ups_are_bounded_and_require_known_quantities(self) -> None:
         def bought(expected, count, status="ok"):
             return RoutineResult(

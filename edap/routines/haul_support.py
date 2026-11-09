@@ -50,6 +50,7 @@ class HaulTiming:
 
 @dataclass(frozen=True)
 class HaulMarketSettings:
+    nav_delay_s: float
     buy_top_up_max_attempts: int
     buy_hold_segments: tuple[MarketBuyHoldSegmentConfig, ...]
     sell_quantity_restore_taps: int

@@ -58,6 +58,7 @@ def _runtime(
             nav_panel_open_delay_s=0.0,
         ),
         market=HaulMarketSettings(
+            nav_delay_s=0.0,
             buy_top_up_max_attempts=_DEFAULTS.market_buy_top_up_max_attempts,
             buy_hold_segments=_DEFAULTS.market_buy_hold_segments,
             sell_quantity_restore_taps=0,

@@ -86,6 +86,7 @@ def multi_leg_haul(*args, **kwargs):
             ),
         ),
         market=HaulMarketSettings(
+            nav_delay_s=kwargs.pop("market_nav_delay_s", 0.0),
             buy_top_up_max_attempts=kwargs.pop("buy_top_up_max_attempts", _DEFAULTS.market_buy_top_up_max_attempts),
             buy_hold_segments=kwargs.pop("market_buy_hold_segments", _DEFAULTS.market_buy_hold_segments),
             sell_quantity_restore_taps=kwargs.pop(
