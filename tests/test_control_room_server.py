@@ -350,6 +350,20 @@ class ControlRoomServerTests(unittest.TestCase):
             self.assertIn("no haul runs recorded yet", output)
             self.assertNotIn("Unknown command", output)
 
+    def test_headless_host_reloads_config_via_submit_input(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend())
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text("[controls.market]\nnav_delay_seconds = 0.25\n", encoding="utf-8")
+            host._config_path = config_path
+
+            host.submit_input("reload_config")
+
+            output = "\n".join(content.plain for content, _ in host._activity_widget.writes)
+        self.assertEqual(host._config.controls.market_nav_delay_seconds, 0.25)
+        self.assertIn("Config reloaded from", output)
+        self.assertNotIn("Unknown command", output)
+
     def test_headless_host_emits_announcement_events_without_local_speech(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             host = HeadlessControlRoomHost(_make_context_with_tts(Path(temp_dir)), speech_backend=NullSpeechBackend())
