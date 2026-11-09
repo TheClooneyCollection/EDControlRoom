@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 from enum import Enum
+import logging
 import os
 from pathlib import Path
 import re
@@ -10,9 +11,11 @@ from shutil import which
 import subprocess
 import tempfile
 from threading import Condition, Thread
-from typing import Callable, Protocol
+from typing import Callable, Mapping, Protocol
 
 from edap.config import PiperVoiceConfig, TTSConfig
+
+logger = logging.getLogger(__name__)
 
 
 class AnnouncementId(str, Enum):
@@ -215,7 +218,25 @@ def _wav_player(platform_name: str) -> Callable[[str], object] | None:
     player = next((name for name in _WAV_PLAYERS.get(platform_name, ()) if which(name)), None)
     if player is None:
         return None
-    return lambda wav_path: subprocess.run([player, wav_path], check=False, capture_output=True)
+    env = audio_env(os.environ, runtime_dir_exists=os.path.isdir) if platform_name == "linux" else None
+
+    def play(wav_path: str) -> None:
+        result = subprocess.run([player, wav_path], check=False, capture_output=True, text=True, env=env)
+        if result.returncode != 0:
+            logger.warning("TTS playback failed (%s exit %s): %s", player, result.returncode, result.stderr.strip())
+
+    return play
+
+
+def audio_env(environ: Mapping[str, str], *, runtime_dir_exists: Callable[[str], bool]) -> dict[str, str]:
+    """PipeWire and PulseAudio clients find the sound server through XDG_RUNTIME_DIR, which
+    processes started outside a login session (systemd-run scopes, some ssh/tmux setups) lack."""
+    env = dict(environ)
+    if not env.get("XDG_RUNTIME_DIR") and hasattr(os, "getuid"):
+        runtime_dir = f"/run/user/{os.getuid()}"
+        if runtime_dir_exists(runtime_dir):
+            env["XDG_RUNTIME_DIR"] = runtime_dir
+    return env
 
 
 def build_speech_backend(platform_name: str, piper: PiperVoiceConfig | None) -> SpeechBackend:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import os
 from pathlib import Path
 import shutil
 from threading import Event
@@ -12,6 +13,7 @@ from edap.tts import (
     PiperSpeechBackend,
     QueuedSpeaker,
     TTSAnnouncer,
+    audio_env,
     format_credits_short,
     normalize_tts_value,
 )
@@ -117,6 +119,23 @@ class PiperSpeechBackendTests(unittest.TestCase):
         self.assertTrue(processes[0].killed)
         self.assertEqual(processes[1].lines, ["Second.\n"])
         self.assertEqual(len(played), 2)
+
+
+@unittest.skipUnless(hasattr(os, "getuid"), "XDG_RUNTIME_DIR is a POSIX session concept")
+class AudioEnvTests(unittest.TestCase):
+    def test_fills_missing_runtime_dir_so_pipewire_is_reachable(self) -> None:
+        runtime_dir = f"/run/user/{os.getuid()}"
+
+        env = audio_env({"PATH": "/usr/bin"}, runtime_dir_exists=lambda path: path == runtime_dir)
+
+        self.assertEqual(env, {"PATH": "/usr/bin", "XDG_RUNTIME_DIR": runtime_dir})
+
+    def test_keeps_an_existing_runtime_dir_and_skips_a_missing_one(self) -> None:
+        self.assertEqual(
+            audio_env({"XDG_RUNTIME_DIR": "/custom"}, runtime_dir_exists=lambda _: True),
+            {"XDG_RUNTIME_DIR": "/custom"},
+        )
+        self.assertEqual(audio_env({}, runtime_dir_exists=lambda _: False), {})
 
 
 class TTSHelpersTests(unittest.TestCase):
