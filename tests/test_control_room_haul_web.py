@@ -200,10 +200,21 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         html = _haul_web_source()
 
         self.assertIn('sendCommand("command.select_trade_route", { route: payload })', html)
-        self.assertIn("mergeHydratedRoute(payload.selected_trade_route || payload.running_trade_route)", html)
+        self.assertIn("const hydratedApiRoute = payload.selected_trade_route || payload.running_trade_route;", html)
+        self.assertIn("mergeHydratedRoute(hydratedApiRoute)", html)
         self.assertIn("trade_route: tradeRoutePayload(route)", html)
         self.assertIn("route_profit_per_trip: route.profitTrip !== \"-\" ? route.profitTrip : \"\"", html)
         self.assertIn("apiRoute: { ...route, index }", html)
+
+    def test_haul_web_hydrates_do_not_undo_operator_edits_or_route_choice(self) -> None:
+        html = _haul_web_source()
+
+        self.assertIn("if (hydratedRouteKey !== lastHydratedRouteKey) {", html)
+        self.assertIn('syncHydratedField("origin", hydratedCurrentSystem);', html)
+        self.assertIn('syncHydratedField("capacity", ship.cargo_capacity);', html)
+        self.assertIn("if (element === document.activeElement) {", html)
+        self.assertIn('if (element.value === "" || element.value === previous) {', html)
+        self.assertNotIn('document.getElementById("capacity").value = ship.cargo_capacity;', html)
 
     def test_haul_web_copies_selected_route_and_imports_a_pasted_one_without_searching(self) -> None:
         html = _haul_web_source()

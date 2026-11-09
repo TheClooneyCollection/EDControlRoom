@@ -19,6 +19,8 @@ let routes = [];
     let clientRole = "observer";
     let commandSequence = 1;
     let hydratedCurrentSystem = "";
+    let lastHydratedRouteKey = "";
+    const hydratedFieldValues = new Map();
     let currentRoutine = {};
     let reconnectDelayMs = RECONNECT_INITIAL_DELAY_MS;
     let reconnectTimer = null;
@@ -141,6 +143,23 @@ let routes = [];
       const element = document.getElementById(id);
       if (element) {
         element.value = String(value ?? "");
+      }
+    }
+
+    // Hydrates arrive on every journal change, so only refill a field the operator has not edited or focused.
+    function syncHydratedField(id, value) {
+      const element = document.getElementById(id);
+      const next = String(value ?? "");
+      if (!element) {
+        return;
+      }
+      const previous = hydratedFieldValues.get(id);
+      hydratedFieldValues.set(id, next);
+      if (element === document.activeElement) {
+        return;
+      }
+      if (element.value === "" || element.value === previous) {
+        element.value = next;
       }
     }
 
@@ -292,6 +311,7 @@ let routes = [];
       const hydratedKey = routeKey(hydratedRoute);
       const existingIndex = routes.findIndex((route) => routeKey(route) === hydratedKey);
       if (existingIndex >= 0) {
+        hydratedRoute.index = routes[existingIndex].index;
         routes[existingIndex] = hydratedRoute;
       } else {
         routes = [hydratedRoute, ...routes];
@@ -956,7 +976,7 @@ let routes = [];
       document.getElementById("summary-runs").textContent = haulSession.completed_runs || 0;
       if (ship.system) {
         hydratedCurrentSystem = ship.system;
-        document.getElementById("origin").value = hydratedCurrentSystem;
+        syncHydratedField("origin", hydratedCurrentSystem);
       }
       window.EDCR_HAUL = window.EDCR_HAUL || {};
       window.EDCR_HAUL.shipState = {
@@ -969,11 +989,18 @@ let routes = [];
       window.dispatchEvent(new CustomEvent("edcr:hydrate", { detail: payload }));
       if (ship.cargo_capacity) {
         WEB_DEFAULTS.cargoCapacity = String(ship.cargo_capacity);
-        document.getElementById("capacity").value = ship.cargo_capacity;
+        syncHydratedField("capacity", ship.cargo_capacity);
       }
-      if (mergeHydratedRoute(payload.selected_trade_route || payload.running_trade_route)) {
-        renderRows();
-        renderSelected();
+      // Only a route change from the server moves the selection: repeat hydrates must not undo the operator's
+      // row or page choice, or re-render rows under a tap between mousedown and mouseup.
+      const hydratedApiRoute = payload.selected_trade_route || payload.running_trade_route;
+      const hydratedRouteKey = hydratedApiRoute ? routeKey(routeFromApi(hydratedApiRoute, 0)) : "";
+      if (hydratedRouteKey !== lastHydratedRouteKey) {
+        lastHydratedRouteKey = hydratedRouteKey;
+        if (mergeHydratedRoute(hydratedApiRoute)) {
+          renderRows();
+          renderSelected();
+        }
       }
       document.getElementById("summary-profit").textContent = formatCredits(sessionProfit(haulSession));
       updateRoutinePanel(routine, haulSession, ship);
