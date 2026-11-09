@@ -323,6 +323,16 @@ class TTSAnnouncer:
         platform_name: str,
         backend: SpeechBackend | None = None,
     ) -> None:
+        self.apply_wording(config)
+        self._commander_name: str | None = None
+        self._speaker: QueuedSpeaker | None = None
+        self._last_text = ""
+        selected_backend = backend if backend is not None else build_speech_backend(platform_name, config.piper)
+        if config.enabled and not isinstance(selected_backend, NullSpeechBackend):
+            self._speaker = QueuedSpeaker(selected_backend)
+
+    def apply_wording(self, config: TTSConfig) -> None:
+        """Adopt title, phrase and disabled-message settings. The voice and on/off switch stay as built."""
         self._config = config
         self._disabled = {
             parsed
@@ -334,12 +344,6 @@ class TTSAnnouncer:
             for raw, text in config.phrases.items()
             if (parsed := parse_announcement_id(raw)) is not None
         }
-        self._commander_name: str | None = None
-        self._speaker: QueuedSpeaker | None = None
-        self._last_text = ""
-        selected_backend = backend if backend is not None else build_speech_backend(platform_name, config.piper)
-        if config.enabled and not isinstance(selected_backend, NullSpeechBackend):
-            self._speaker = QueuedSpeaker(selected_backend)
 
     def set_commander_name(self, name: str | None) -> None:
         text = str(name).strip() if name is not None else ""

@@ -67,7 +67,7 @@ from textual.widgets import Footer, Header, Input, OptionList, RichLog, Static, 
 from edap.haul_history import WARNING_IDS
 from edap.haul_stats_cache import TodayHaulCache
 from edap.platform.local_time import SystemLocalTimezone
-from edap.config import AppConfig
+from edap.config import AppConfig, load_config
 from edap.control_room.backend import ControlRoomBackend, LocalControlRoomBackend
 from edap.control_room.dependencies import (
     ControlRoomDependencies,
@@ -140,7 +140,7 @@ _STARTUP_BINDING_WARNING_IGNORED_ACTIONS = frozenset({
     "YawRightButton",
 })
 
-_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul start | haul load | haul search [system] | haul search url <url> | haul route <n> | travel <system> [/ <station>] | pause | resume | multi_leg_haul <route> | dest <system> | home | set_input | set_pid | set_hwnd | market ... | instant | stats [window] | new_session | stop | reload_keymap | q"
+_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | haul start | haul load | haul search [system] | haul search url <url> | haul route <n> | travel <system> [/ <station>] | pause | resume | multi_leg_haul <route> | dest <system> | home | set_input | set_pid | set_hwnd | market ... | instant | stats [window] | new_session | stop | reload_config | reload_keymap | q"
 _ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS = 10.0
 _JOURNAL_ARTIFACT_LOG_PATH = Path("artifacts/control-room.log")
 _DEBUG_ARTIFACT_LOG_PATH = Path("artifacts/control-room-debug.log")
@@ -985,6 +985,26 @@ class ControlRoomApp(App[None]):
         self._build_controls()
         self._log("[green]Keymap reloaded.[/] [dim]Elite reads its bindings only at launch; restart the game for in-game changes.[/]")
         self._log_bindings_status()
+
+    def _cmd_reload_config(self) -> None:
+        # Routines read their settings when they start, so a mid-run swap would only apply to some steps.
+        if self._routine_active:
+            self._log("[yellow]Stop the running routine before reload_config.[/]")
+            return
+        try:
+            config = load_config(self._config_path)
+        except Exception as exc:
+            self._log(f"[red]Config reload failed: {escape(str(exc))}[/] [dim]Kept the running config.[/]")
+            return
+        self._config = config
+        self._ctx = replace(self._ctx, config=config)
+        self._build_controls()
+        self._tts.apply_wording(config.tts)
+        self._log(f"[green]Config reloaded from {escape(str(self._config_path))}.[/]")
+        self._log(
+            "[dim]Routine timings, haul and market settings and TTS wording apply from the next routine. "
+            "Paths, input backend, timing jitter, TTS voice and server settings still need a restart.[/]"
+        )
 
     def _load_saved_state(self) -> None:
         _persistence.load_saved_state(self)

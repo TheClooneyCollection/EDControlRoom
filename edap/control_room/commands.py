@@ -141,6 +141,9 @@ def dispatch(app: CommandHost, raw: str, *, skip_delay_override: bool | None = N
     elif verb in {"replay", "history"}:
         app._record_history_entry(CommandHistoryEntry(raw=raw, command="replay", timestamp=now_iso()))
         cmd_resume(app)
+    elif verb == "reload_config":
+        app._record_history_entry(CommandHistoryEntry(raw=raw, command="reload_config", timestamp=now_iso()))
+        app._cmd_reload_config()
     elif verb == "reload_keymap":
         app._record_history_entry(CommandHistoryEntry(raw=raw, command="reload_keymap", timestamp=now_iso()))
         app._cmd_reload_keymap()

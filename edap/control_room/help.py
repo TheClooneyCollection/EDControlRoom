@@ -134,6 +134,12 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
         detail="wine_helper authenticates or launches the configured helper in the CrossOver bottle. Failures abort input with no foreground fallback. foreground explicitly restores host input; pid auto-detects Elite or accepts a pid/process name. Configure input.wine_helper wine_path and bottle first.",
     ),
     CommandHelp(
+        name="reload_config",
+        usage="reload_config",
+        summary="Re-read config.toml without restarting Control Room.",
+        detail="Applies routine timings, haul and market settings, and TTS wording (title, phrases, disabled messages) from the next routine. Paths, input backend, timing jitter, the TTS voice and server settings still need a restart. Refused while a routine runs; a broken file keeps the running config.",
+    ),
+    CommandHelp(
         name="reload_keymap",
         usage="reload_keymap",
         summary="Re-read the Elite bindings file without restarting Control Room.",

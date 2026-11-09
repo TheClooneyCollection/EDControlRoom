@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `291`
-- Latest generated iteration number: `424`
+- Generated iteration count: `292`
+- Latest generated iteration number: `425`
 
 ## Iteration 134
 
@@ -8271,3 +8271,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - If lost presses keep showing up, wait for the services screen (a longer settle after a fresh `Docked`) rather than adding more attempts.
 - Meaney Depot (2026-11-08 23:16 failure) has no `Market` event in the journals; not investigated.
+
+## Iteration 425
+
+- When: `2026-11-09 12:07`
+- Area: `control-room`
+- Title: `reload-config-command`
+- Source: [2026-11-09-12-07_control-room_reload-config-command.md](iteration-logs/2026-11-09-12-07_control-room_reload-config-command.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `reload-config-command`
+- Started: `2026-11-09 12:07`
+
+## Summary
+
+- New `reload_config` command so a Deck config tweak (here `controls.market.nav_delay_seconds = 0.2` against dropped list presses) no longer needs a server restart that kills the running haul.
+
+## Changes
+
+- `ControlRoomApp._cmd_reload_config` loads `_config_path`, swaps `_config` and `_ctx.config`, rebuilds controls (hold settings) and calls `TTSAnnouncer.apply_wording` (title, phrases, disabled messages; the speech backend and on/off stay as built).
+- Routines read `app._config` when they start, so market, haul and timing settings take effect from the next routine. Anything built once at startup (paths, input controller, timing sampler, Piper voice, server host/port/state files) still needs a restart; the command says so.
+- Refused while a routine runs, like `reload_keymap`; a parse or validation error keeps the running config.
+
+## Follow-ups
+
+- Not yet exercised live on the Deck.

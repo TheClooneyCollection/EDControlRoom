@@ -3636,6 +3636,39 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertIsNone(self.app._ctx.binding_lookup)
         self.assertIn("Stop the running routine before reload_keymap.", "\n".join(self.app.logged))
 
+    def test_reload_config_applies_the_edited_file_to_the_next_routine(self) -> None:
+        config_path = Path(self.tmpdir.name) / "config.toml"
+        config_path.write_text(
+            '[controls.market]\nnav_delay_seconds = 0.25\n\n[tts]\ntitle_mode = "custom"\ntitle = "boss"\n',
+            encoding="utf-8",
+        )
+        self.app._config_path = config_path
+
+        self.app._dispatch_command("reload_config")
+
+        self.assertEqual(self.app._config.controls.market_nav_delay_seconds, 0.25)
+        self.assertIs(self.app._ctx.config, self.app._config)
+        self.assertIn("boss", self.app._tts.render_announcement(AnnouncementId.STARTUP_GREETING) or "")
+        self.assertIn("Config reloaded from", "\n".join(self.app.logged))
+        self.assertEqual(self.app._saved_state.history[-1].command, "reload_config")
+
+    def test_reload_config_keeps_the_running_config_when_refused_or_broken(self) -> None:
+        config_path = Path(self.tmpdir.name) / "config.toml"
+        config_path.write_text("[controls.market]\nnav_delay_seconds = 0.25\n", encoding="utf-8")
+        self.app._config_path = config_path
+        original = self.app._config
+
+        self.app._routine_active = True
+        self.app._dispatch_command("reload_config")
+        self.app._routine_active = False
+        config_path.write_text("[controls.market\n", encoding="utf-8")
+        self.app._dispatch_command("reload_config")
+
+        self.assertIs(self.app._config, original)
+        output = "\n".join(self.app.logged)
+        self.assertIn("Stop the running routine before reload_config.", output)
+        self.assertIn("Config reload failed:", output)
+
     def test_reload_is_no_longer_a_command(self) -> None:
         self.app._dispatch_command("reload")
 
