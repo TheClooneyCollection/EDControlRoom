@@ -847,24 +847,24 @@ let routes = [];
       const visibleRoutes = routes.slice(startIndex, startIndex + ROUTES_PER_PAGE);
       tbody.innerHTML = visibleRoutes.map((route) => `
         <tr class="${route.index === selectedRouteIndex ? "selected" : ""}" data-index="${route.index}">
-          <td class="mono">${escapeHtml(route.index)}</td>
-          <td class="num profit">${escapeHtml(profitHourLabel(route))}</td>
-          <td class="num profit">${escapeHtml(route.profitTrip || "-")}</td>
-          <td>
+          <td class="mono" data-label="#">${escapeHtml(route.index)}</td>
+          <td class="num profit" data-label="Profit / hr">${escapeHtml(profitHourLabel(route))}</td>
+          <td class="num profit" data-label="Profit / trip">${escapeHtml(route.profitTrip || "-")}</td>
+          <td data-label="Cargo">
             <div class="route-main">${escapeHtml(route.commodity || "No buy commodity")} / ${escapeHtml(route.targetCommodity || "No buy commodity")}</div>
           </td>
-          <td>
+          <td data-label="Station 1">
             <div class="route-main">${escapeHtml(route.buyStation)}</div>
             <div class="route-sub mono">${escapeHtml(route.buySystem)} / ${escapeHtml(route.buyStationDistance)}</div>
             <div class="route-sub mono">Sup ${escapeHtml(route.buyStationSupply)} / Dem ${escapeHtml(route.buyStationDemand)}</div>
           </td>
-          <td>
+          <td data-label="Station 2">
             <div class="route-main">${escapeHtml(route.sellStation)}</div>
             <div class="route-sub mono">${escapeHtml(route.sellSystem)} / ${escapeHtml(route.sellStationDistance)}</div>
             <div class="route-sub mono">Sup ${escapeHtml(route.sellStationSupply)} / Dem ${escapeHtml(route.sellStationDemand)}</div>
           </td>
-          <td class="num">${escapeHtml(route.distanceFromSystem)}</td>
-          <td class="num">${escapeHtml(route.routeDistance)}</td>
+          <td class="num" data-label="Distance">${escapeHtml(route.distanceFromSystem)}</td>
+          <td class="num" data-label="Route">${escapeHtml(route.routeDistance)}</td>
         </tr>
       `).join("");
       updateRoutePager(startIndex + 1, startIndex + visibleRoutes.length, routes.length, totalPages);

@@ -103,6 +103,10 @@
 
   function renderRows(tbody, waypoints, kind) {
     tbody.innerHTML = "";
+    // Mobile cards label each cell from its column header.
+    const labels = Array.from(tbody.closest("table").querySelectorAll("thead th")).map(function (th) {
+      return th.textContent;
+    });
     let running = 0;
     waypoints.forEach(function (w, i) {
       running += (w.ly_from_prev || 0);
@@ -117,6 +121,7 @@
       cells.forEach(function (text, idx) {
         const td = document.createElement("td");
         td.textContent = text;
+        td.dataset.label = labels[idx] || "";
         if (idx === 3 || idx === 4) td.className = "num";
         tr.appendChild(td);
       });

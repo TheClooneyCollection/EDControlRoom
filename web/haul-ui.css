@@ -1405,27 +1405,26 @@
       .route-table td {
         display: grid;
         grid-template-columns: 88px minmax(0, 1fr);
-        gap: 8px;
+        gap: 2px 8px;
         border-top: 0;
         padding: 4px 0;
         text-align: left;
       }
 
       .route-table td::before {
+        grid-column: 1;
+        grid-row: 1;
         color: var(--text-3);
-        content: "";
+        content: attr(data-label);
         font-size: 10px;
         font-weight: 650;
         text-transform: uppercase;
       }
 
-      .route-table td:nth-child(1)::before { content: "#"; }
-      .route-table td:nth-child(2)::before { content: "Profit / hr"; }
-      .route-table td:nth-child(3)::before { content: "Cargo"; }
-      .route-table td:nth-child(4)::before { content: "Station 1"; }
-      .route-table td:nth-child(5)::before { content: "Station 2"; }
-      .route-table td:nth-child(6)::before { content: "Distance"; }
-      .route-table td:nth-child(7)::before { content: "Route"; }
+      /* Multi-line cells (station name, system, supply/demand) stack in the value column. */
+      .route-table td > * {
+        grid-column: 2;
+      }
 
       .route-table td.empty-route-message {
         display: block;

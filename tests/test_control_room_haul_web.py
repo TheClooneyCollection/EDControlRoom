@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -241,8 +242,18 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         html = _haul_web_source()
 
         self.assertIn("<th>Profit / trip</th>", html)
-        self.assertIn('<td class="num profit">${escapeHtml(route.profitTrip || "-")}</td>', html)
+        self.assertIn('data-label="Profit / trip">${escapeHtml(route.profitTrip || "-")}</td>', html)
         self.assertIn('colspan="8"', html)
+
+    def test_haul_route_cards_label_every_column_like_the_table_header(self) -> None:
+        web_dir = Path(__file__).resolve().parents[1] / "web"
+        html = (web_dir / "haul-v1.html").read_text(encoding="utf-8")
+        js = (web_dir / "haul-ui.js").read_text(encoding="utf-8")
+        thead = html.split('aria-label="Haul route results"', 1)[1].split("</thead>", 1)[0]
+        headers = re.findall(r"<th[^>]*>([^<]+)</th>", thead)
+        row_template = js.split("function renderRows()", 1)[1].split("</tr>", 2)[1]
+
+        self.assertEqual(re.findall(r'data-label="([^"]+)"', row_template), headers)
 
     def test_haul_web_uses_spansh_style_parameters_and_result_cards(self) -> None:
         html = _multi_haul_web_source()
@@ -310,6 +321,6 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertNotIn("min-width: 1160px", html)
         self.assertIn("@media (max-width: 760px)", html)
         self.assertIn(".shell {\n        display: block;", html)
-        self.assertIn(".route-table td:nth-child(2)::before { content: \"Profit / hr\"; }", html)
+        self.assertIn("content: attr(data-label);", html)
         self.assertIn("empty-route-message", html)
         self.assertIn("@media (max-width: 480px)", html)

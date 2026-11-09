@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `294`
-- Latest generated iteration number: `427`
+- Generated iteration count: `295`
+- Latest generated iteration number: `428`
 
 ## Iteration 134
 
@@ -8353,3 +8353,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Try it in a browser on the Deck; in the preview check hydrate `ship.station` came back empty, so confirm the Station tile fills in when docked.
+
+## Iteration 428
+
+- When: `2026-11-09 19:37`
+- Area: `control-room`
+- Title: `mobile-route-cards`
+- Source: [2026-11-09-19-37_control-room_mobile-route-cards.md](iteration-logs/2026-11-09-19-37_control-room_mobile-route-cards.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `mobile-route-cards`
+- Started: `2026-11-09 19:37`
+
+## Summary
+
+- On phone width the `/haul` route results cards showed the wrong labels: CARGO next to the profit, STATION 1 next to the commodity, and the station/system sub-lines fell into the label column.
+
+## Changes
+
+- `web/haul-ui.css`: mobile card labels now come from `content: attr(data-label)` instead of hardcoded `nth-child` labels; every child of a cell sits in the value column (`grid-column: 2`), so multi-line station and supply/demand cells stack correctly.
+- `web/haul-ui.js`: each route row cell carries a `data-label` matching its header. `web/route-compare.js` copies labels from its table's `thead` so the comparison tables get the same card layout.
+- Test `test_haul_route_cards_label_every_column_like_the_table_header` keeps the row labels in sync with the `haul-v1.html` headers.
+- Verified with Playwright at 390x844 against a local preview `serve`.
+
+## Follow-ups
+
+- Route Comparison tables on mobile were not screenshotted with real data.
