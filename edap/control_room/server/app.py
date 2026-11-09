@@ -64,6 +64,7 @@ BROWSER_PROBE_URL_PATH = "/browser-probe"
 HAUL_WEB_ENTRY_URL_PATH = "/"
 HAUL_WEB_URL_PATH = "/haul"
 MULTI_HAUL_WEB_URL_PATH = "/multi-haul"
+CONTROLS_WEB_URL_PATH = "/controls"
 HAUL_WEB_ASSET_URL_PATH = "/assets/{asset_name:str}"
 _MESSAGE_SCHEMA_PATH = (
     Path(__file__).resolve().parents[3] / "docs" / "schemas" / "control_room_message.schema.json"
@@ -73,6 +74,7 @@ _BROWSER_PROBE_PATH = (
 )
 _HAUL_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "haul-v1.html"
 _MULTI_HAUL_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "multi-haul.html"
+_CONTROLS_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "controls.html"
 _HAUL_WEB_ASSET_DIR = Path(__file__).resolve().parents[3] / "web"
 CONTROL_ROOM_MESSAGE_SCHEMA = json.loads(_MESSAGE_SCHEMA_PATH.read_text(encoding="utf-8"))
 CONTROL_ROOM_BROWSER_PROBE_HTML = _BROWSER_PROBE_PATH.read_text(encoding="utf-8")
@@ -94,6 +96,18 @@ def _render_multi_haul_web_html(
 ) -> str:
     return _render_web_html(
         _MULTI_HAUL_WEB_PATH,
+        web_config=web_config,
+        web_default_access_token=web_default_access_token,
+    )
+
+
+def _render_controls_web_html(
+    *,
+    web_config: dict[str, Any] | None = None,
+    web_default_access_token: str = "",
+) -> str:
+    return _render_web_html(
+        _CONTROLS_WEB_PATH,
         web_config=web_config,
         web_default_access_token=web_default_access_token,
     )
@@ -237,12 +251,27 @@ def build_observer_server_app(
             headers={"Cache-Control": "no-store"},
         )
 
+    async def controls_web(request):
+        data = data_provider()
+        return HTMLResponse(
+            _render_controls_web_html(
+                web_config=_haul_web_config(
+                    data,
+                    auth=auth,
+                    request=request,
+                    web_default_access_token=web_default_access_token,
+                )
+            ),
+            headers={"Cache-Control": "no-store"},
+        )
+
     async def haul_web_asset(request):
         asset_name = request.path_params["asset_name"]
         allowed_assets = {
             "haul-ui.css": "text/css; charset=utf-8",
             "haul-ui.js": "text/javascript; charset=utf-8",
             "multi-haul.js": "text/javascript; charset=utf-8",
+            "controls.js": "text/javascript; charset=utf-8",
             "route-compare.js": "text/javascript; charset=utf-8",
             "active-route.js": "text/javascript; charset=utf-8",
             "speech.js": "text/javascript; charset=utf-8",
@@ -436,6 +465,7 @@ def build_observer_server_app(
             Route(HAUL_WEB_ENTRY_URL_PATH, haul_web),
             Route(HAUL_WEB_URL_PATH, haul_web),
             Route(MULTI_HAUL_WEB_URL_PATH, multi_haul_web),
+            Route(CONTROLS_WEB_URL_PATH, controls_web),
             Route("/api/route-compare", route_compare),
             Route("/api/route-compare/config", route_compare_config_endpoint),
             Route("/api/spansh-route", spansh_route_endpoint),

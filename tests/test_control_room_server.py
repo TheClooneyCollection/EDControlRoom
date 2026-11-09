@@ -714,6 +714,29 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertNotIn('src="/assets/haul-ui.js"', response.text)
         self.assertEqual(response.headers["cache-control"], "no-store")
 
+    def test_controls_endpoint_serves_button_board(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        app = build_observer_server_app(
+            data_provider=_base_data_read_model,
+            command_handler=None,
+            broker=broker,
+            auth=SharedAccessTokenAuth("secret-token"),
+        )
+
+        with TestClient(app) as client:
+            response = client.get("/controls")
+            js_response = client.get("/assets/controls.js")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        for command in ("undock", "dock", "jump", "escape", "boost", "pause", "resume", "reload_config"):
+            self.assertIn(f'data-command="{command}"', response.text)
+        self.assertIn('src="/assets/controls.js"', response.text)
+        self.assertNotIn('src="/assets/haul-ui.js"', response.text)
+        self.assertEqual(js_response.status_code, 200)
+        self.assertIn("command.submit_input", js_response.text)
+        self.assertIn("command.cancel_active_routine", js_response.text)
+
     def test_haul_web_endpoint_can_inject_implicit_serve_token(self) -> None:
         broker = InMemoryObserverSessionBroker()
         app = build_observer_server_app(
