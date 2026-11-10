@@ -2493,6 +2493,7 @@ manual_landing = true
         self.app._ship.status = "in_station"
         self.app._ship.station = "Pawelczyk Dock"
         self.app._haul_stats.session_started_at = 25.0
+        self.app._haul_stats.session_active = True
         self.app._haul_stats.accumulated_profit = 1_500_000
         self.app._haul_stats.cargo_moved_t = 784
         self.app._haul_stats.completed_runs = 4
@@ -2537,10 +2538,9 @@ manual_landing = true
             "\n".join(self.app.logged),
         )
 
-    def test_stopped_mid_run_trades_stay_in_session_profit_after_new_haul(self) -> None:
+    def test_stopping_a_haul_keeps_its_totals_until_the_next_haul_starts_from_zero(self) -> None:
         self.app._ship.status = "in_station"
         self.app._ship.station = "Pawelczyk Dock"
-        self.app._haul_stats.accumulated_profit = 1_000_000
         self.app._time_fn = lambda: 100.0
         route = dict(
             station_1_buying="Aluminium",
@@ -2554,14 +2554,15 @@ manual_landing = true
             {"event": "MarketSell", "TotalSale": 250_000}, station_before="Hutton Orbital"
         )
 
+        self.app._time_fn = lambda: 400.0
         self.app._stop_haul_stats()
-        self.assertEqual(self.app._haul_stats.accumulated_profit, 1_250_000)
-        self.assertEqual(self.app._haul_stats.current_run_profit, 0)
-        self.assertEqual(self.app._saved_state.session_profit, 1_250_000)
+        self.assertIn("Haul session: 0 runs, 250,000 Cr in 05:00, average run —", "\n".join(self.app.logged))
+        self.assertEqual(self.app._haul_stats.accumulated_profit, 250_000)
+        self.assertEqual(self.app._saved_state.session_profit, 250_000)
 
+        self.app._time_fn = lambda: 500.0
         self.app._start_haul_stats(**route)
-        self.assertEqual(self.app._haul_stats.accumulated_profit, 1_250_000)
-        self.assertEqual(self.app._haul_stats.completed_runs, 0)
+        self.assertEqual((self.app._haul_stats.accumulated_profit, self.app._haul_stats.session_started_at), (0, 500.0))
 
     def test_haul_stats_ignore_partial_resume_until_next_clean_departure(self) -> None:
         self.app._ship.status = "in_supercruise"
@@ -3489,13 +3490,12 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertEqual(self.app._saved_state.session_elapsed_seconds, 60.0)
 
         self._start_timer_test_haul(500.0)
-        self._assert_timer_views(60.0, 0.0)
         self.app._time_fn = lambda: 520.0
-        self._assert_timer_views(80.0, 20.0)
+        self._assert_timer_views(20.0, 20.0)
         self.app._stop_haul_stats()
         self.app._time_fn = lambda: 900.0
         self.app._stop_haul_stats()
-        self._assert_timer_views(80.0, 20.0)
+        self._assert_timer_views(20.0, 20.0)
 
     def test_stopping_paused_haul_excludes_pause_and_idle_time(self) -> None:
         self._start_timer_test_haul(100.0)
@@ -3506,7 +3506,8 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.app._time_fn = lambda: 400.0
         self._assert_timer_views(60.0, 60.0)
         self._start_timer_test_haul(500.0)
-        self._assert_timer_views(60.0, 0.0)
+        self.app._time_fn = lambda: 530.0
+        self._assert_timer_views(30.0, 30.0)
 
     def test_stop_preserves_docked_cycle_duration_and_final_completed_elapsed(self) -> None:
         from edap.control_room.haul_tracking import finalize_completed_haul_run

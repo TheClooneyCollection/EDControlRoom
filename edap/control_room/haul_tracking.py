@@ -4,6 +4,7 @@ import re
 from typing import Any, Callable, Protocol
 
 from edap.control_room.models import HaulStats, RuntimeUIState, ShipState
+from edap.control_room.rendering import fmt_duration
 from edap.control_room_state import ControlRoomState
 from edap.haul_history import abort_run, close_run, record_event, utc_timestamp
 from edap.tts import AnnouncementId, format_credits_short
@@ -45,6 +46,8 @@ def start_haul_stats(
     )
     abort_run(app._haul_stats, "new haul started over stale run", utc_timestamp(None), app._time_fn())
     previous = app._haul_stats
+    if not previous.session_active:
+        previous = HaulStats(pending_runs=previous.pending_runs)
     started_at = app._time_fn()
     expected_profit_per_trip = parse_credit_amount(expected_profit_per_trip_text)
     app._haul_stats = HaulStats(
@@ -98,8 +101,20 @@ def stop_haul_stats(app: HaulTrackingHost) -> None:
         )
     app._haul_stats.active = False
     app._haul_stats.paused = False
+    # The numbers stay on screen until the next haul, which starts them from zero.
+    app._haul_stats.session_active = False
+    app._log(f"[dim]{session_summary(app._haul_stats)}.[/]")
     app._refresh_haul_stats()
     app._save_saved_state()
+
+
+def session_summary(stats: HaulStats) -> str:
+    runs = stats.completed_runs
+    average = fmt_duration(stats.total_run_elapsed_s / runs) if runs else "—"
+    return (
+        f"Haul session: {runs} run{'' if runs == 1 else 's'}, {stats.accumulated_profit:,} Cr "
+        f"in {fmt_duration(stats.session_elapsed_s)}, average run {average}"
+    )
 
 
 def pause_haul_stats(app: HaulTrackingHost) -> None:
