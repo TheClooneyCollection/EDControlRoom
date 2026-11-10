@@ -204,7 +204,7 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn("mergeHydratedRoute(hydratedApiRoute)", html)
         self.assertIn("trade_route: tradeRoutePayload(route)", html)
         self.assertIn("route_profit_per_trip: route.profitTrip !== \"-\" ? route.profitTrip : \"\"", html)
-        self.assertIn("apiRoute: { ...route, index }", html)
+        self.assertIn("apiRoute: { ...route, index, from_on_land: routeFlag(route.from_on_land)", html)
 
     def test_haul_web_hydrates_do_not_undo_operator_edits_or_route_choice(self) -> None:
         html = _haul_web_source()
@@ -231,10 +231,21 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         start = html.index("const ROUTE_TRANSFER_FIELDS = [")
         fields = html[start:html.index("];", start)]
 
-        for kept in ("from_system", "to_station", "source_buy_commodity", "target_buy_commodity", "profit_per_trip"):
+        for kept in ("from_system", "to_station", "source_buy_commodity", "target_buy_commodity", "profit_per_trip",
+                     "from_on_land", "to_on_land"):
             self.assertIn(f'"{kept}"', fields)
         for dropped in ("index", "raw_text", "url_links", "from_supply", "to_demand", "distance_from_system"):
             self.assertNotIn(f'"{dropped}"', fields)
+
+    def test_haul_web_pasted_route_keeps_every_field_and_surface_flags(self) -> None:
+        html = _haul_web_source()
+
+        for hook in ("...route.apiRoute,", "buyOnLand: routeFlag(route.from_on_land)",
+                     "sellOnLand: routeFlag(route.to_on_land)", "from_on_land: route.buyOnLand",
+                     "to_on_land: route.sellOnLand", 'station_1_on_land: route.buyOnLand ? "true" : "false"',
+                     'station_2_on_land: route.sellOnLand ? "true" : "false"',
+                     "on_land: travelTargetOnLand(system, station)"):
+            self.assertIn(hook, html)
 
     def test_haul_web_speaks_announcements_on_opted_in_devices(self) -> None:
         html = _haul_web_source()

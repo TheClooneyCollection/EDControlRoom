@@ -978,6 +978,7 @@ class ControlRoomServerTests(unittest.TestCase):
             "from_demand": "1,204",
             "to_supply": "8,870",
             "to_demand": "96,431",
+            "from_on_land": True,
         }
 
         response = _handle_session_message(
@@ -1008,6 +1009,10 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(
             [selected[key] for key in ("from_supply", "from_demand", "to_supply", "to_demand")],
             ["52,113", "1,204", "8,870", "96,431"],
+        )
+        self.assertEqual(
+            [selected[key] for key in ("from_on_land", "to_on_land")],
+            [True, False],
         )
         self.assertIsNone(hydrate["payload"]["running_trade_route"])
 

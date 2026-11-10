@@ -98,8 +98,16 @@ class TradeRoute:
     to_supply: str | None = None
     to_demand: str | None = None
     updated: str | None = None
+    from_on_land: bool = False
+    to_on_land: bool = False
     raw_text: str = ""
     url_links: tuple[str, ...] = ()
+
+
+def route_flag_from_payload(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 @dataclass(frozen=True)

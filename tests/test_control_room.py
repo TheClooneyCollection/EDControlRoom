@@ -2089,6 +2089,7 @@ on_land = true
             source_buy_commodity="Beryllium",
             target_buy_commodity="Bauxite",
             profit_per_trip="43.1m",
+            from_on_land=True,
         )
         self.app._trade_routes = TradeRoutesData(
             system_name="Praea Euq AK-A d25",
@@ -2104,6 +2105,8 @@ on_land = true
         self.assertEqual(self.app._haul_params["station_1"], "Savitskaya Orbital")
         self.assertEqual(self.app._haul_params["station_2"], "Nyberg Vision")
         self.assertEqual(self.app._haul_params["route_profit_per_trip"], "43.1m")
+        self.assertEqual(self.app._haul_params["station_1_on_land"], "true")
+        self.assertEqual(self.app._haul_params["station_2_on_land"], "false")
         self.assertEqual(self.app._saved_state.selected_trade_route, route)
 
     def test_haul_dispatch_passes_on_land_flags(self) -> None:

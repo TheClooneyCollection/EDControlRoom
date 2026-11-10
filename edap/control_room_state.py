@@ -201,7 +201,7 @@ def save_control_room_state(path: Path, state: ControlRoomState) -> None:
 
 
 def _trade_route_from_payload(payload: object) -> TradeRoute | None:
-    from edap.inara.trade_routes import TradeRoute
+    from edap.inara.trade_routes import TradeRoute, route_flag_from_payload
 
     if not isinstance(payload, dict):
         return None
@@ -244,6 +244,8 @@ def _trade_route_from_payload(payload: object) -> TradeRoute | None:
         to_supply=_optional_str(payload.get("to_supply")),
         to_demand=_optional_str(payload.get("to_demand")),
         updated=_optional_str(payload.get("updated")),
+        from_on_land=route_flag_from_payload(payload.get("from_on_land")),
+        to_on_land=route_flag_from_payload(payload.get("to_on_land")),
         raw_text=str(payload.get("raw_text", "")),
         url_links=url_links,
     )

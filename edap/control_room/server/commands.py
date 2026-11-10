@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from edap.control_room.routine_stop import RoutineStopMode
-from edap.inara.trade_routes import TradeRoute
+from edap.inara.trade_routes import TradeRoute, route_flag_from_payload
 from edap.routing.types import Route
 
 
@@ -90,6 +90,8 @@ def trade_route_from_payload(payload: object) -> TradeRoute | None:
         to_supply=_optional_str(payload.get("to_supply")),
         to_demand=_optional_str(payload.get("to_demand")),
         updated=_optional_str(payload.get("updated")),
+        from_on_land=route_flag_from_payload(payload.get("from_on_land")),
+        to_on_land=route_flag_from_payload(payload.get("to_on_land")),
         raw_text=str(payload.get("raw_text", "")),
         url_links=url_links,
     )

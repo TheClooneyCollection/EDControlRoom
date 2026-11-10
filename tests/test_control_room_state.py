@@ -48,6 +48,7 @@ class ControlRoomStateTests(unittest.TestCase):
                     to_system="Alioth",
                     source_buy_commodity="Agronomic Treatment",
                     profit_per_hour="88.3m",
+                    to_on_land=True,
                 ),
                 running_trade_route=TradeRoute(
                     index=8,
@@ -85,6 +86,8 @@ class ControlRoomStateTests(unittest.TestCase):
         self.assertIsNotNone(loaded.selected_trade_route)
         self.assertEqual(loaded.selected_trade_route.to_system, "Alioth")
         self.assertEqual(loaded.selected_trade_route.profit_per_hour, "88.3m")
+        self.assertTrue(loaded.selected_trade_route.to_on_land)
+        self.assertFalse(loaded.selected_trade_route.from_on_land)
         self.assertIsNotNone(loaded.running_trade_route)
         self.assertEqual(loaded.running_trade_route.from_station, "Jameson Memorial")
         self.assertEqual(len(loaded.history), 1)

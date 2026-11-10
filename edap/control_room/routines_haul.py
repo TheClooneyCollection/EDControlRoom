@@ -295,11 +295,11 @@ def haul_params_from_trade_route(route: TradeRoute) -> dict[str, str]:
         "station_1_buying": route.source_buy_commodity or "",
         "station_1": route.from_station,
         "station_1_system": route.from_system,
-        "station_1_on_land": "false",
+        "station_1_on_land": "true" if route.from_on_land else "false",
         "station_2_buying": route.target_buy_commodity or "",
         "station_2": route.to_station,
         "station_2_system": route.to_system,
-        "station_2_on_land": "false",
+        "station_2_on_land": "true" if route.to_on_land else "false",
         "route_profit_per_trip": route.profit_per_trip or "",
     }
 

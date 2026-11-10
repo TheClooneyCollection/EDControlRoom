@@ -65,6 +65,7 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
                         source_buy_commodity="Agronomic Treatment",
                         from_supply="52,113",
                         to_demand="96,431",
+                        from_on_land=True,
                     )
                 ]
             ),
@@ -130,3 +131,5 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
         self.assertEqual(parsed.selected_trade_route.to_system, "Alioth")
         self.assertEqual(parsed.selected_trade_route.from_supply, "52,113")
         self.assertEqual(parsed.selected_trade_route.to_demand, "96,431")
+        self.assertTrue(parsed.selected_trade_route.from_on_land)
+        self.assertFalse(parsed.selected_trade_route.to_on_land)

@@ -16,7 +16,7 @@ from edap.control_room.dependencies import (
 )
 from edap.control_room.models import HaulStats, MarketData, ShipState
 from edap.control_room_state import CommandHistoryEntry
-from edap.inara.trade_routes import TradeRoute
+from edap.inara.trade_routes import TradeRoute, route_flag_from_payload
 
 
 DATA_MESSAGE_SCHEMA = "edcontrolroom.control_room_data_message"
@@ -306,6 +306,8 @@ def _trade_route(payload: object) -> TradeRoute | None:
         to_supply=_optional_str(payload.get("to_supply")),
         to_demand=_optional_str(payload.get("to_demand")),
         updated=_optional_str(payload.get("updated")),
+        from_on_land=route_flag_from_payload(payload.get("from_on_land")),
+        to_on_land=route_flag_from_payload(payload.get("to_on_land")),
         raw_text=str(payload.get("raw_text", "")),
         url_links=url_links,
     )
