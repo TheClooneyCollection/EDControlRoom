@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from edap.control_room.routine_stop import RoutineStopMode
-from edap.inara.trade_routes import TradeRoute, route_flag_from_payload
+from edap.inara.trade_routes import TradeRoute, manual_landing_from_payload
 from edap.routing.types import Route
 
 
@@ -32,7 +32,7 @@ class ObserverSessionCommandHandler(Protocol):
         *,
         system: str,
         station: str | None = None,
-        on_land: bool = False,
+        manual_landing: bool = False,
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None: ...
@@ -90,8 +90,8 @@ def trade_route_from_payload(payload: object) -> TradeRoute | None:
         to_supply=_optional_str(payload.get("to_supply")),
         to_demand=_optional_str(payload.get("to_demand")),
         updated=_optional_str(payload.get("updated")),
-        from_on_land=route_flag_from_payload(payload.get("from_on_land")),
-        to_on_land=route_flag_from_payload(payload.get("to_on_land")),
+        from_manual_landing=manual_landing_from_payload(payload, "from"),
+        to_manual_landing=manual_landing_from_payload(payload, "to"),
         raw_text=str(payload.get("raw_text", "")),
         url_links=url_links,
     )

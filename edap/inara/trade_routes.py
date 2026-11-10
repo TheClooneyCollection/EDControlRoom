@@ -98,8 +98,8 @@ class TradeRoute:
     to_supply: str | None = None
     to_demand: str | None = None
     updated: str | None = None
-    from_on_land: bool = False
-    to_on_land: bool = False
+    from_manual_landing: bool = False
+    to_manual_landing: bool = False
     raw_text: str = ""
     url_links: tuple[str, ...] = ()
 
@@ -108,6 +108,11 @@ def route_flag_from_payload(value: object) -> bool:
     if isinstance(value, bool):
         return value
     return str(value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def manual_landing_from_payload(payload: Mapping[str, object], side: str) -> bool:
+    """The `from` or `to` manual landing flag; `<side>_on_land` is its old name in saved routes."""
+    return route_flag_from_payload(payload.get(f"{side}_manual_landing", payload.get(f"{side}_on_land")))
 
 
 @dataclass(frozen=True)

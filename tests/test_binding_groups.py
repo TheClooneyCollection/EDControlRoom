@@ -37,7 +37,7 @@ class GroupBindingsTests(unittest.TestCase):
     def _issue(self, action: str, status: str = "missing", reason: str = "") -> BindingLookupResult:
         return BindingLookupResult(action=action, status=status, reason=reason or status)
 
-    def test_supported_action_lands_in_its_declared_group(self) -> None:
+    def test_supported_actimanual_landings_in_its_declared_group(self) -> None:
         supported = self._supported(
             RollLeftButton=NormalizedBinding(key="a"),
             HyperSuperCombination=NormalizedBinding(key="j", modifier="left_shift"),
@@ -112,7 +112,7 @@ class GroupBindingsTests(unittest.TestCase):
         # All declared groups still render.
         self.assertEqual(titles, [title for title, _ in GROUPS])
 
-    def test_unsupported_action_lands_in_unmapped_with_reason(self) -> None:
+    def test_unsupported_actimanual_landings_in_unmapped_with_reason(self) -> None:
         supported = {
             action: NormalizedBinding(key="a")
             for action in REQUIRED_BINDINGS

@@ -23,7 +23,7 @@ from edap.tts import AnnouncementId
 class TravelDestination:
     system: str
     station: str = ""
-    on_land: bool = False
+    manual_landing: bool = False
 
     @property
     def label(self) -> str:

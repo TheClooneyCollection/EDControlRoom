@@ -295,11 +295,11 @@ def haul_params_from_trade_route(route: TradeRoute) -> dict[str, str]:
         "station_1_buying": route.source_buy_commodity or "",
         "station_1": route.from_station,
         "station_1_system": route.from_system,
-        "station_1_on_land": "true" if route.from_on_land else "false",
+        "station_1_manual_landing": "true" if route.from_manual_landing else "false",
         "station_2_buying": route.target_buy_commodity or "",
         "station_2": route.to_station,
         "station_2_system": route.to_system,
-        "station_2_on_land": "true" if route.to_on_land else "false",
+        "station_2_manual_landing": "true" if route.to_manual_landing else "false",
         "route_profit_per_trip": route.profit_per_trip or "",
     }
 
@@ -464,11 +464,15 @@ def dispatch_haul_loop(
     station_1_buying = app._haul_params.get("station_1_buying", "")
     station_1 = app._haul_params.get("station_1", "")
     station_1_system = app._haul_params.get("station_1_system", "")
-    station_1_on_land = _haul_param_as_bool(app._haul_params.get("station_1_on_land", ""))
+    station_1_manual_landing = _haul_param_as_bool(
+        app._haul_params.get("station_1_manual_landing", app._haul_params.get("station_1_on_land", ""))
+    )
     station_2_buying = app._haul_params.get("station_2_buying", "")
     station_2 = app._haul_params.get("station_2", "")
     station_2_system = app._haul_params.get("station_2_system", "")
-    station_2_on_land = _haul_param_as_bool(app._haul_params.get("station_2_on_land", ""))
+    station_2_manual_landing = _haul_param_as_bool(
+        app._haul_params.get("station_2_manual_landing", app._haul_params.get("station_2_on_land", ""))
+    )
     route_profit_per_trip = app._haul_params.get("route_profit_per_trip", "")
     galaxy_map_settle_raw = app._haul_params.get("galaxy_map_settle", "")
     dock_timeout_raw = app._haul_params.get("dock_timeout", "")
@@ -519,7 +523,7 @@ def dispatch_haul_loop(
             index=1,
             station=station_1,
             system=station_1_system,
-            on_land=station_1_on_land,
+            manual_landing=station_1_manual_landing,
             buy_commodity=station_1_buying,
             sell_commodity=station_2_buying,
         ),
@@ -527,7 +531,7 @@ def dispatch_haul_loop(
             index=2,
             station=station_2,
             system=station_2_system,
-            on_land=station_2_on_land,
+            manual_landing=station_2_manual_landing,
             buy_commodity=station_2_buying,
             sell_commodity=station_1_buying,
         ),
@@ -541,11 +545,11 @@ def dispatch_haul_loop(
             "station_1_buying": station_1_buying,
             "station_1": station_1,
             "station_1_system": station_1_system,
-            "station_1_on_land": "true" if station_1_on_land else "false",
+            "station_1_manual_landing": "true" if station_1_manual_landing else "false",
             "station_2_buying": station_2_buying,
             "station_2": station_2,
             "station_2_system": station_2_system,
-            "station_2_on_land": "true" if station_2_on_land else "false",
+            "station_2_manual_landing": "true" if station_2_manual_landing else "false",
             "route_profit_per_trip": route_profit_per_trip,
             "galaxy_map_settle": str(galaxy_map_settle),
             "dock_timeout": str(dock_timeout),
@@ -567,12 +571,12 @@ def dispatch_haul_loop(
     ]
     if station_1_system:
         label_parts.append(f"station 1 sys: [cyan]{escape(station_1_system)}[/]")
-    if station_1_on_land:
-        label_parts.append("station 1 landing: [cyan]on land[/]")
+    if station_1_manual_landing:
+        label_parts.append("station 1 landing: [cyan]manual[/]")
     if station_2_system:
         label_parts.append(f"station 2 sys: [cyan]{escape(station_2_system)}[/]")
-    if station_2_on_land:
-        label_parts.append("station 2 landing: [cyan]on land[/]")
+    if station_2_manual_landing:
+        label_parts.append("station 2 landing: [cyan]manual[/]")
     if route_profit_per_trip:
         label_parts.append(f"route trip profit: [green]{escape(route_profit_per_trip)}[/]")
     label_parts.append(f"map settle: [cyan]{galaxy_map_settle:.1f}s[/]")

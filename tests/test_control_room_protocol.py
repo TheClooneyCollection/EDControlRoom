@@ -289,7 +289,7 @@ class _BackendStub(ControlRoomBackend):
         *,
         system: str,
         station: str,
-        on_land: bool = False,
+        manual_landing: bool = False,
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None:
@@ -367,11 +367,11 @@ class _ExecutionRecorder:
         *,
         system: str,
         station: str,
-        on_land: bool = False,
+        manual_landing: bool = False,
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None:
-        self.dispatched_travels.append((system, station, on_land, skip_delay, raw_command))
+        self.dispatched_travels.append((system, station, manual_landing, skip_delay, raw_command))
 
     def load_trade_route(self, route: TradeRoute, *, raw_command: str | None = None) -> None:
         return None

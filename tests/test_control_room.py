@@ -436,7 +436,7 @@ class _RemoteBackendStub:
         *,
         system: str,
         station: str,
-        on_land: bool = False,
+        manual_landing: bool = False,
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None:
@@ -1776,7 +1776,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
 
         self.assertEqual(captured["route"].station_1.station, "Mystery Base")
         self.assertEqual(captured["route"].station_1.system, "Sol")
-        self.assertFalse(captured["route"].station_1.on_land)
+        self.assertFalse(captured["route"].station_1.manual_landing)
         self.assertIn("Station 1 defaulting to current station", "\n".join(self.app.logged))
 
     def test_haul_dispatch_allows_empty_station_2_buying(self) -> None:
@@ -1833,7 +1833,7 @@ system = "Sol"
 buying = "Bertrandite"
 name = "Trevithick Dock"
 system = "Achenar"
-on_land = true
+manual_landing = true
 """.strip(),
             encoding="utf-8",
         )
@@ -1861,7 +1861,7 @@ on_land = true
         self.assertEqual(captured["route"].station_2.buy_commodity, "Bertrandite")
         self.assertEqual(captured["runtime"].timing.galaxy_map_settle_s, 4.5)
         self.assertEqual(captured["runtime"].timing.dock_timeout_s, 900.0)
-        self.assertTrue(captured["route"].station_2.on_land)
+        self.assertTrue(captured["route"].station_2.manual_landing)
         self.assertEqual(self.app._saved_state.history[-1].raw, f"haul load {config_path}")
         self.assertIn("Loaded haul config", "\n".join(self.app.logged))
 
@@ -1874,11 +1874,11 @@ on_land = true
                 "station_1_buying": "Aluminium",
                 "station_1": "Pawelczyk Dock",
                 "station_1_system": "Sol",
-                "station_1_on_land": "false",
+                "station_1_manual_landing": "false",
                 "station_2_buying": "Bertrandite",
                 "station_2": "Trevithick Dock",
                 "station_2_system": "Achenar",
-                "station_2_on_land": "false",
+                "station_2_manual_landing": "false",
                 "galaxy_map_settle": "2.0",
                 "dock_timeout": "1200.0",
             }
@@ -2123,7 +2123,7 @@ on_land = true
             source_buy_commodity="Beryllium",
             target_buy_commodity="Bauxite",
             profit_per_trip="43.1m",
-            from_on_land=True,
+            from_manual_landing=True,
         )
         self.app._trade_routes = TradeRoutesData(
             system_name="Praea Euq AK-A d25",
@@ -2139,11 +2139,11 @@ on_land = true
         self.assertEqual(self.app._haul_params["station_1"], "Savitskaya Orbital")
         self.assertEqual(self.app._haul_params["station_2"], "Nyberg Vision")
         self.assertEqual(self.app._haul_params["route_profit_per_trip"], "43.1m")
-        self.assertEqual(self.app._haul_params["station_1_on_land"], "true")
-        self.assertEqual(self.app._haul_params["station_2_on_land"], "false")
+        self.assertEqual(self.app._haul_params["station_1_manual_landing"], "true")
+        self.assertEqual(self.app._haul_params["station_2_manual_landing"], "false")
         self.assertEqual(self.app._saved_state.selected_trade_route, route)
 
-    def test_haul_dispatch_passes_on_land_flags(self) -> None:
+    def test_haul_dispatch_passes_manual_landing_flags(self) -> None:
         captured: dict[str, object] = {}
 
         self.app._ship.status = "in_station"
@@ -2151,11 +2151,11 @@ on_land = true
             "station_1_buying": "Aluminium",
             "station_1": "Pawelczyk Dock",
             "station_1_system": "Sol",
-            "station_1_on_land": "false",
+            "station_1_manual_landing": "false",
             "station_2_buying": "Bertrandite",
             "station_2": "Trevithick Dock",
             "station_2_system": "Achenar",
-            "station_2_on_land": "true",
+            "station_2_manual_landing": "true",
             "galaxy_map_settle": "",
             "dock_timeout": "",
         }
@@ -2176,9 +2176,9 @@ on_land = true
         with patch("edap.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
             self.app._dispatch_haul_loop()
 
-        self.assertFalse(captured["route"].station_1.on_land)
-        self.assertTrue(captured["route"].station_2.on_land)
-        self.assertIn("station 2 landing: [cyan]on land[/]", "\n".join(self.app.logged))
+        self.assertFalse(captured["route"].station_1.manual_landing)
+        self.assertTrue(captured["route"].station_2.manual_landing)
+        self.assertIn("station 2 landing: [cyan]manual[/]", "\n".join(self.app.logged))
 
     def test_multi_leg_haul_dispatch_loads_route_and_starts_routine(self) -> None:
         captured: dict[str, object] = {}
@@ -2308,7 +2308,7 @@ on_land = true
                 "station_1_buying": "Aluminium",
                 "station_1": "Pawelczyk Dock",
                 "station_1_system": "Sol",
-                "station_1_on_land": "false",
+                "station_1_manual_landing": "false",
                 "station_2_buying": "Bertrandite",
                 "station_2": "Trevithick Dock",
                 "station_2_system": "Achenar",
@@ -2322,7 +2322,7 @@ on_land = true
         self.app._handle_haul_prompt("Pawelczyk Dock")
         self.assertEqual(input_stub.value, "Sol")
         self.app._handle_haul_prompt("Sol")
-        self.assertEqual(self.app._haul_prompt_step, "station_1_on_land")
+        self.assertEqual(self.app._haul_prompt_step, "station_1_manual_landing")
         self.app._handle_haul_prompt("no")
         self.assertEqual(input_stub.value, "Bertrandite")
 

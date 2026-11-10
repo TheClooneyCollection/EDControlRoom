@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -213,14 +214,14 @@ class MultiLegHaulDefinitionTests(unittest.TestCase):
         self.assertEqual(stops[1].inbound[0].commodity, "Water Purifiers")
         self.assertEqual(stops[1].outbound[0].commodity, "Aluminium")
 
-    def test_external_round_trip_preserves_on_land_endpoints(self) -> None:
+    def test_external_round_trip_preserves_manual_landing_endpoints(self) -> None:
         definition = MultiLegHaulDefinition(
             route_name="Surface run",
             legs=(
                 RouteLeg(
                     index=1,
-                    source=RouteEndpoint(system="Sol", station="Galileo", on_land=False),
-                    destination=RouteEndpoint(system="Achenar", station="Mahatma Settlement", on_land=True),
+                    source=RouteEndpoint(system="Sol", station="Galileo", manual_landing=False),
+                    destination=RouteEndpoint(system="Achenar", station="Mahatma Settlement", manual_landing=True),
                     cargo=(CargoTransfer(commodity="Tea", amount=10),),
                 ),
             ),
@@ -228,8 +229,11 @@ class MultiLegHaulDefinitionTests(unittest.TestCase):
 
         payload = multi_leg_haul_definition_to_external_json(definition)
         loaded = multi_leg_haul_definition_from_data(payload, source_label="fixture")
+        # Routes exported before the rename name the flag `on_land`.
+        legacy = json.loads(json.dumps(payload).replace('"manual_landing"', '"on_land"'))
 
-        self.assertTrue(loaded.legs[0].destination.on_land)
+        self.assertTrue(loaded.legs[0].destination.manual_landing)
+        self.assertTrue(multi_leg_haul_definition_from_data(legacy, source_label="fixture").legs[0].destination.manual_landing)
 
 
 class MultiLegHaulRoutineTests(unittest.TestCase):
@@ -512,7 +516,7 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
         self.assertTrue(arrival_observed)
         self.assertEqual(pending_events, [])
 
-    def test_haul_keeps_waiting_at_on_land_station_instead_of_stopping(self) -> None:
+    def test_haul_keeps_waiting_at_manual_landing_station_instead_of_stopping(self) -> None:
         controls = FakeShipControls()
         watcher = FakeWatcher([
             [{"event": "FSDJump", "StarSystem": "HIP 68076"}],
@@ -524,7 +528,7 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
                 RouteLeg(
                     index=1,
                     source=RouteEndpoint(system="HIP 58412", station="Pawelczyk Dock"),
-                    destination=RouteEndpoint(system="HIP 68076", station="Mahatma Settlement", on_land=True),
+                    destination=RouteEndpoint(system="HIP 68076", station="Mahatma Settlement", manual_landing=True),
                     cargo=(CargoTransfer(commodity="Water Purifiers", amount=460),),
                 ),
             ),

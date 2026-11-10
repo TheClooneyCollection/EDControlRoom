@@ -341,7 +341,7 @@ function startTravel() {
   sendCommand("command.dispatch_travel", {
     system,
     station,
-    on_land: Boolean(station) && document.getElementById("nav-on-land").checked,
+    manual_landing: Boolean(station) && document.getElementById("nav-manual-landing").checked,
     raw_command: station ? `web travel ${system} / ${station}` : `web travel ${system}`
   })
     .then(() => addLocalActivity(station ? `Travel accepted for ${station}.` : `Travel accepted for ${system}.`, "success"))

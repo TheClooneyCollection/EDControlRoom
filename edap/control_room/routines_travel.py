@@ -56,7 +56,7 @@ def dispatch_travel(
     *,
     system: str,
     station: str | None = None,
-    on_land: bool = False,
+    manual_landing: bool = False,
     skip_delay: bool = False,
     raw_command: str | None = None,
 ) -> None:
@@ -82,7 +82,7 @@ def dispatch_travel(
         dock_timeout_s=app._config.controls.haul_dock_timeout_seconds,
         galaxy_map_settle_s=app._config.controls.galaxy_map_settle_seconds,
     )
-    destination = TravelDestination(system=system, station=station, on_land=on_land)
+    destination = TravelDestination(system=system, station=station, manual_landing=manual_landing)
 
     app._record_history_entry(CommandHistoryEntry(
         raw=raw_command or _travel_raw_command(system=system, station=station, skip_delay=skip_delay),
@@ -90,7 +90,7 @@ def dispatch_travel(
         params={
             "system": system,
             "station": station,
-            "on_land": on_land,
+            "manual_landing": manual_landing,
         },
         timestamp=now_iso(),
     ))

@@ -488,11 +488,11 @@ def begin_haul_prompt(
         "station_1_buying": commodity.strip(),
         "station_1": "",
         "station_1_system": "",
-        "station_1_on_land": "",
+        "station_1_manual_landing": "",
         "station_2_buying": "",
         "station_2": "",
         "station_2_system": "",
-        "station_2_on_land": "",
+        "station_2_manual_landing": "",
         "route_profit_per_trip": haul_prompt_defaults.get("route_profit_per_trip", ""),
         "galaxy_map_settle": "",
         "dock_timeout": "",
@@ -630,42 +630,42 @@ def advance_haul_prompt(
     if prompt_state.haul_prompt_step == "station_1_system":
         resolved = value.strip()
         prompt_state.haul_params["station_1_system"] = resolved
-        prompt_state.haul_prompt_step = "station_1_on_land"
-        default_station_1_on_land = _parse_yes_no(
-            prompt_state.haul_prompt_defaults.get("station_1_on_land", ""),
+        prompt_state.haul_prompt_step = "station_1_manual_landing"
+        default_station_1_manual_landing = _parse_yes_no(
+            prompt_state.haul_prompt_defaults.get("station_1_manual_landing", ""),
             default=False,
         )
-        default_label = "yes" if default_station_1_on_land else "no"
+        default_label = "yes" if default_station_1_manual_landing else "no"
         return HaulPromptTransition(
             log_lines=(
                 f"  Station 1 system: [cyan]{escape(resolved)}[/]"
                 if resolved
                 else "  Station 1 system: [dim](current system)[/]",
-                f"[dim]Station 1 on land? (Enter = {default_label}; yes for settlement/manual landing)[/]",
+                f"[dim]Station 1 manual landing? (Enter = {default_label}; yes if you cannot glide to the pad)[/]",
             ),
             ui_state=HaulPromptUiState(
-                placeholder=f"station 1 on land? (Enter = {default_label})...",
-                value=_prefill_value_from_state(prompt_state, "station_1_on_land"),
+                placeholder=f"station 1 manual landing? (Enter = {default_label})...",
+                value=_prefill_value_from_state(prompt_state, "station_1_manual_landing"),
             ),
         )
 
-    if prompt_state.haul_prompt_step == "station_1_on_land":
-        default_station_1_on_land = _parse_yes_no(
-            prompt_state.haul_prompt_defaults.get("station_1_on_land", ""),
+    if prompt_state.haul_prompt_step == "station_1_manual_landing":
+        default_station_1_manual_landing = _parse_yes_no(
+            prompt_state.haul_prompt_defaults.get("station_1_manual_landing", ""),
             default=False,
         )
-        parsed = _parse_yes_no(value, default=bool(default_station_1_on_land))
+        parsed = _parse_yes_no(value, default=bool(default_station_1_manual_landing))
         if parsed is None:
             return HaulPromptTransition(
                 log_lines=(f"[red]{escape(render_error('confirm_yes_no'))}[/]",),
             )
-        prompt_state.haul_params["station_1_on_land"] = "true" if parsed else "false"
+        prompt_state.haul_params["station_1_manual_landing"] = "true" if parsed else "false"
         prompt_state.haul_prompt_step = "station_2_buying"
         default_station_2_buying = prompt_state.haul_prompt_defaults.get("station_2_buying", "")
         if default_station_2_buying:
             return HaulPromptTransition(
                 log_lines=(
-                    f"  Station 1 on land: [cyan]{'yes' if parsed else 'no'}[/]",
+                    f"  Station 1 manual landing: [cyan]{'yes' if parsed else 'no'}[/]",
                     f"[dim]Station 2 buying? (optional, Enter = {escape(default_station_2_buying)})[/]",
                 ),
                 ui_state=HaulPromptUiState(
@@ -675,7 +675,7 @@ def advance_haul_prompt(
             )
         return HaulPromptTransition(
             log_lines=(
-                f"  Station 1 on land: [cyan]{'yes' if parsed else 'no'}[/]",
+                f"  Station 1 manual landing: [cyan]{'yes' if parsed else 'no'}[/]",
                 "[dim]Station 2 buying? (optional; this cargo will be sold at station 1)[/]",
             ),
             ui_state=HaulPromptUiState(
@@ -753,34 +753,34 @@ def advance_haul_prompt(
                 log_lines=(f"[red]{escape(render_error('station_2_system_required'))}[/]",),
             )
         prompt_state.haul_params["station_2_system"] = resolved
-        prompt_state.haul_prompt_step = "station_2_on_land"
-        default_station_2_on_land = _parse_yes_no(
-            prompt_state.haul_prompt_defaults.get("station_2_on_land", ""),
+        prompt_state.haul_prompt_step = "station_2_manual_landing"
+        default_station_2_manual_landing = _parse_yes_no(
+            prompt_state.haul_prompt_defaults.get("station_2_manual_landing", ""),
             default=False,
         )
-        default_label = "yes" if default_station_2_on_land else "no"
+        default_label = "yes" if default_station_2_manual_landing else "no"
         return HaulPromptTransition(
             log_lines=(
                 f"  Station 2 system: [cyan]{escape(resolved)}[/]",
-                f"[dim]Station 2 on land? (Enter = {default_label}; yes for settlement/manual landing)[/]",
+                f"[dim]Station 2 manual landing? (Enter = {default_label}; yes if you cannot glide to the pad)[/]",
             ),
             ui_state=HaulPromptUiState(
-                placeholder=f"station 2 on land? (Enter = {default_label})...",
-                value=_prefill_value_from_state(prompt_state, "station_2_on_land"),
+                placeholder=f"station 2 manual landing? (Enter = {default_label})...",
+                value=_prefill_value_from_state(prompt_state, "station_2_manual_landing"),
             ),
         )
 
-    if prompt_state.haul_prompt_step == "station_2_on_land":
-        default_station_2_on_land = _parse_yes_no(
-            prompt_state.haul_prompt_defaults.get("station_2_on_land", ""),
+    if prompt_state.haul_prompt_step == "station_2_manual_landing":
+        default_station_2_manual_landing = _parse_yes_no(
+            prompt_state.haul_prompt_defaults.get("station_2_manual_landing", ""),
             default=False,
         )
-        parsed = _parse_yes_no(value, default=bool(default_station_2_on_land))
+        parsed = _parse_yes_no(value, default=bool(default_station_2_manual_landing))
         if parsed is None:
             return HaulPromptTransition(
                 log_lines=(f"[red]{escape(render_error('confirm_yes_no'))}[/]",),
             )
-        prompt_state.haul_params["station_2_on_land"] = "true" if parsed else "false"
+        prompt_state.haul_params["station_2_manual_landing"] = "true" if parsed else "false"
         default_settle = float(
             prompt_state.haul_prompt_defaults.get(
                 "galaxy_map_settle",
@@ -790,7 +790,7 @@ def advance_haul_prompt(
         prompt_state.haul_prompt_step = "galaxy_map_settle"
         return HaulPromptTransition(
             log_lines=(
-                f"  Station 2 on land: [cyan]{'yes' if parsed else 'no'}[/]",
+                f"  Station 2 manual landing: [cyan]{'yes' if parsed else 'no'}[/]",
                 f"[dim]Galaxy-map settle seconds? (Enter = {default_settle:.1f})[/]",
             ),
             ui_state=HaulPromptUiState(

@@ -279,11 +279,11 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
         *,
         system: str,
         station: str,
-        on_land: bool = False,
+        manual_landing: bool = False,
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None:
-        self.dispatched_travels.append((system, station, on_land, skip_delay, raw_command))
+        self.dispatched_travels.append((system, station, manual_landing, skip_delay, raw_command))
 
     def dispatch_spansh_route(
         self,
@@ -816,11 +816,11 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertIn("command.cancel_active_routine", js_response.text)
         self.assertIn('"serverCommit": "b2a65e4+dirty"', response.text)
         self.assertIn('id="status-version"', response.text)
-        for element_id in ("nav-system", "nav-station", "nav-on-land", "nav-plot", "nav-travel",
+        for element_id in ("nav-system", "nav-station", "nav-manual-landing", "nav-plot", "nav-travel",
                            "nav-plot-home", "nav-set-home"):
             self.assertIn(f'id="{element_id}"', response.text)
         for hook in ('sendCommand("command.dispatch_destination"', 'sendCommand("command.dispatch_travel"',
-                     'on_land: Boolean(station) && document.getElementById("nav-on-land").checked',
+                     'manual_landing: Boolean(station) && document.getElementById("nav-manual-landing").checked',
                      "plotDestination(homeSystem)",
                      'homeSystem = String(payload.home_system || "").trim()', "submitInput(`home set ",
                      "serverStatus.web_form_defaults"):
@@ -1075,7 +1075,7 @@ class ControlRoomServerTests(unittest.TestCase):
             "from_demand": "1,204",
             "to_supply": "8,870",
             "to_demand": "96,431",
-            "from_on_land": True,
+            "from_manual_landing": True,
         }
 
         response = _handle_session_message(
@@ -1108,7 +1108,7 @@ class ControlRoomServerTests(unittest.TestCase):
             ["52,113", "1,204", "8,870", "96,431"],
         )
         self.assertEqual(
-            [selected[key] for key in ("from_on_land", "to_on_land")],
+            [selected[key] for key in ("from_manual_landing", "to_manual_landing")],
             [True, False],
         )
         self.assertIsNone(hydrate["payload"]["running_trade_route"])
@@ -1192,10 +1192,10 @@ class ControlRoomServerTests(unittest.TestCase):
                                     "station_1_buying": "Agronomic Treatment",
                                     "station_1": "Galileo",
                                     "station_1_system": "Sol",
-                                    "station_1_on_land": "false",
+                                    "station_1_manual_landing": "false",
                                     "station_2": "Irkutsk",
                                     "station_2_system": "Alioth",
-                                    "station_2_on_land": "false",
+                                    "station_2_manual_landing": "false",
                                 },
                                 "trade_route": {
                                     "index": 1,
@@ -1224,10 +1224,10 @@ class ControlRoomServerTests(unittest.TestCase):
                 "station_1_buying": "Agronomic Treatment",
                 "station_1": "Galileo",
                 "station_1_system": "Sol",
-                "station_1_on_land": "false",
+                "station_1_manual_landing": "false",
                 "station_2": "Irkutsk",
                 "station_2_system": "Alioth",
-                "station_2_on_land": "false",
+                "station_2_manual_landing": "false",
                 "route_profit_per_trip": "43.1m",
             },
         )
@@ -1594,7 +1594,7 @@ class ControlRoomServerTests(unittest.TestCase):
                 "payload": {
                     "system": "Sol",
                     "station": "Abraham Lincoln",
-                    "on_land": False,
+                    "manual_landing": False,
                     "skip_delay": True,
                     "raw_command": "web travel Sol / Abraham Lincoln",
                 },

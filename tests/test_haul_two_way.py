@@ -122,7 +122,7 @@ def haul_loop_two_way(*args, **kwargs):
             index=1,
             station=kwargs.pop("station_1"),
             system=kwargs.pop("station_1_system", ""),
-            on_land=kwargs.pop("station_1_on_land", False),
+            manual_landing=kwargs.pop("station_1_manual_landing", False),
             buy_commodity=station_1_buying,
             sell_commodity=station_2_buying,
         ),
@@ -130,7 +130,7 @@ def haul_loop_two_way(*args, **kwargs):
             index=2,
             station=kwargs.pop("station_2"),
             system=kwargs.pop("station_2_system", ""),
-            on_land=kwargs.pop("station_2_on_land", False),
+            manual_landing=kwargs.pop("station_2_manual_landing", False),
             buy_commodity=station_2_buying,
             sell_commodity=station_1_buying,
         ),
@@ -1895,8 +1895,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
         self.assertTrue(arrival_observed)
         self.assertEqual(pending_events, [])
 
-    def test_on_land_transit_waits_for_manual_landing_or_hands_off(self) -> None:
-        on_land = replace(_station_2_leg(), on_land=True)
+    def test_manual_landing_transit_waits_for_manual_landing_or_hands_off(self) -> None:
+        manual_landing = replace(_station_2_leg(), manual_landing=True)
         for wait in (True, False):
             with self.subTest(wait_for_manual_landing=wait), tempfile.TemporaryDirectory() as tmp:
                 journal_dir = Path(tmp)
@@ -1915,7 +1915,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                             watcher,
                             announce_fn=lambda message_id, **values: announcements.append((message_id, values)),
                         ),
-                        destination=on_land, destination_label="station 2", routine_name="haul",
+                        destination=manual_landing, destination_label="station 2", routine_name="haul",
                         wait_for_manual_landing=wait,
                     )
                 dock_mock.assert_not_called()
@@ -1927,7 +1927,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                     self.assertEqual(result.dispatch.reason, "manual landing required")
                     self.assertNotIn(AnnouncementId.MANUAL_LANDING, [message_id for message_id, _ in announcements])
 
-    def test_haul_keeps_waiting_at_on_land_station_instead_of_stopping(self) -> None:
+    def test_haul_keeps_waiting_at_manual_landing_station_instead_of_stopping(self) -> None:
         controls = FakeShipControls()
         watcher = FakeWatcher([
             [{"event": "FSDJump", "StarSystem": _SYSTEM_2}],
@@ -1956,7 +1956,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                     station_2=_STATION_2,
                     station_2_buying=_CARGO_2,
                     station_2_system=_SYSTEM_2,
-                    station_2_on_land=True,
+                    station_2_manual_landing=True,
                     iterations=1,
                     start_phase=Phase.TRANSIT_TO_STATION_2,
                     step_delay_s=0.0,

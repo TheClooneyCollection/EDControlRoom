@@ -1381,12 +1381,12 @@ def _handle_session_message(
         try:
             skip_delay_value = payload.get("skip_delay")
             skip_delay = bool(skip_delay_value) if isinstance(skip_delay_value, bool) else False
-            on_land_value = payload.get("on_land")
-            on_land = bool(on_land_value) if isinstance(on_land_value, bool) else False
+            manual_landing_value = payload.get("manual_landing", payload.get("on_land"))
+            manual_landing = bool(manual_landing_value) if isinstance(manual_landing_value, bool) else False
             command_handler.dispatch_travel(
                 system=system.strip(),
                 station=station.strip(),
-                on_land=on_land,
+                manual_landing=manual_landing,
                 skip_delay=skip_delay,
                 raw_command=raw_command,
             )

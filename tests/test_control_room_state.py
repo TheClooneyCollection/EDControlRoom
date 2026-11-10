@@ -10,7 +10,7 @@ from edap.control_room_state import (
     load_control_room_state,
     save_control_room_state,
 )
-from edap.inara.trade_routes import TradeRoute
+from edap.inara.trade_routes import TradeRoute, manual_landing_from_payload
 
 
 class ControlRoomStateTests(unittest.TestCase):
@@ -48,7 +48,7 @@ class ControlRoomStateTests(unittest.TestCase):
                     to_system="Alioth",
                     source_buy_commodity="Agronomic Treatment",
                     profit_per_hour="88.3m",
-                    to_on_land=True,
+                    to_manual_landing=True,
                 ),
                 running_trade_route=TradeRoute(
                     index=8,
@@ -86,13 +86,18 @@ class ControlRoomStateTests(unittest.TestCase):
         self.assertIsNotNone(loaded.selected_trade_route)
         self.assertEqual(loaded.selected_trade_route.to_system, "Alioth")
         self.assertEqual(loaded.selected_trade_route.profit_per_hour, "88.3m")
-        self.assertTrue(loaded.selected_trade_route.to_on_land)
-        self.assertFalse(loaded.selected_trade_route.from_on_land)
+        self.assertTrue(loaded.selected_trade_route.to_manual_landing)
+        self.assertFalse(loaded.selected_trade_route.from_manual_landing)
         self.assertIsNotNone(loaded.running_trade_route)
         self.assertEqual(loaded.running_trade_route.from_station, "Jameson Memorial")
         self.assertEqual(len(loaded.history), 1)
         self.assertEqual(loaded.history[0].raw, "haul Aluminium")
         self.assertEqual(loaded.history[0].params["dock_timeout"], "600.0")
+
+    def test_manual_landing_flag_still_reads_the_old_on_land_name(self) -> None:
+        self.assertTrue(manual_landing_from_payload({"from_on_land": True}, "from"))
+        self.assertTrue(manual_landing_from_payload({"to_manual_landing": "true", "to_on_land": False}, "to"))
+        self.assertFalse(manual_landing_from_payload({}, "to"))
 
     def test_loads_legacy_haul_defaults_key_for_backward_compatibility(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

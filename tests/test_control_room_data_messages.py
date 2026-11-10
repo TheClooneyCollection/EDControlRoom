@@ -67,7 +67,7 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
                         source_buy_commodity="Agronomic Treatment",
                         from_supply="52,113",
                         to_demand="96,431",
-                        from_on_land=True,
+                        from_manual_landing=True,
                     )
                 ]
             ),
@@ -147,8 +147,8 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
         self.assertEqual(parsed.selected_trade_route.to_system, "Alioth")
         self.assertEqual(parsed.selected_trade_route.from_supply, "52,113")
         self.assertEqual(parsed.selected_trade_route.to_demand, "96,431")
-        self.assertTrue(parsed.selected_trade_route.from_on_land)
-        self.assertFalse(parsed.selected_trade_route.to_on_land)
+        self.assertTrue(parsed.selected_trade_route.from_manual_landing)
+        self.assertFalse(parsed.selected_trade_route.to_manual_landing)
         self.assertTrue(parsed.voice.piper)
         self.assertEqual(parsed.voice.settings["volume"], 1.0)
         self.assertEqual(parsed.voice.phrase_presets["haul_paused"], "Jameson, haul paused at station {station_index}.")

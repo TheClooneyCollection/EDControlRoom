@@ -34,7 +34,7 @@ from edap.tts import AnnouncementId
 class TransitDestination(Protocol):
     station: str
     system: str
-    on_land: bool
+    manual_landing: bool
 
 
 class TransitTiming(Protocol):
@@ -171,7 +171,7 @@ def detect_transit_resume_state(events: list[dict], destination: TransitDestinat
         if evt_name == "SupercruiseExit":
             body_type = str(event.get("BodyType", "")).lower()
             system_name = str(event.get("StarSystem", "")).lower()
-            if not destination.on_land and body_type != "station":
+            if not destination.manual_landing and body_type != "station":
                 return TransitResumeState.NONE
             return (
                 TransitResumeState.POST_DROP_NEAR_STATION
@@ -220,7 +220,7 @@ def wait_for_arrival_or_approach_event(
     return False, []
 
 
-def wait_for_on_land_handoff(
+def wait_for_manual_landing_handoff(
     watcher: SupportsPollEvents,
     *,
     destination: TransitDestination,
@@ -254,7 +254,7 @@ def manual_landing_result(destination: TransitDestination) -> RoutineResult:
         details={
             "station": destination.station,
             "system": destination.system,
-            "on_land": True,
+            "manual_landing": True,
         },
     )
 
@@ -524,9 +524,9 @@ def transit_to_station(
 ) -> RoutineResult:
     """Fly to `destination` and dock.
 
-    On-land destinations need a manual landing: with `wait_for_manual_landing` the
-    routine asks the pilot to land and returns once `Docked` arrives; otherwise it
-    hands off and returns `manual_landing_result` after the drop.
+    Manual-landing destinations (the ship cannot glide to the pad) hand off after
+    the drop: with `wait_for_manual_landing` the routine asks the pilot to land and
+    returns once `Docked` arrives; otherwise it returns `manual_landing_result`.
     """
     recent_events = read_latest_journal_events(runtime.journal_dir)
     resume_state = detect_transit_resume_state(recent_events, destination)
@@ -547,8 +547,8 @@ def transit_to_station(
     if resume_state == TransitResumeState.ARRIVED_IN_DESTINATION_SYSTEM:
         runtime.progress_fn(f"Already in supercruise in {destination_label} system - opening navigation panel.")
     elif resume_state == TransitResumeState.POST_DROP_NEAR_STATION:
-        if destination.on_land:
-            runtime.progress_fn(f"Already in normal space near on-land {destination_label} - handing off for manual landing.")
+        if destination.manual_landing:
+            runtime.progress_fn(f"Already in normal space near {destination_label} - handing off for manual landing.")
         else:
             runtime.progress_fn(f"Already in normal space near {destination_label} - skipping drop wait.")
     else:
@@ -569,12 +569,12 @@ def transit_to_station(
     elif resume_state == TransitResumeState.ARRIVED_IN_DESTINATION_SYSTEM:
         open_navigation_panel_after_arrival(runtime, station_name=destination.station)
 
-    if destination.on_land:
+    if destination.manual_landing:
         if resume_state != TransitResumeState.POST_DROP_NEAR_STATION:
             runtime.progress_fn(
-                f"{destination_label} is marked on-land; waiting for SupercruiseExit before handing off."
+                f"{destination_label} is marked manual landing; waiting for SupercruiseExit before handing off."
             )
-            drop_event = wait_for_on_land_handoff(
+            drop_event = wait_for_manual_landing_handoff(
                 runtime.watcher,
                 destination=destination,
                 pending_events=pending_events,
@@ -592,11 +592,11 @@ def transit_to_station(
                 )
         if not wait_for_manual_landing:
             runtime.progress_fn(
-                f"Reached normal space near on-land {destination_label}; manual landing required."
+                f"Reached normal space near {destination_label}; manual landing required."
             )
             return manual_landing_result(destination)
         runtime.progress_fn(
-            f"Reached normal space near on-land {destination_label}; land manually, "
+            f"Reached normal space near {destination_label}; land manually, "
             f"{routine_name} continues once docked."
         )
         runtime.announce_fn(AnnouncementId.MANUAL_LANDING, station_name=destination.station)

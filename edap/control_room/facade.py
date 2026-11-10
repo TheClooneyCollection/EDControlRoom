@@ -262,7 +262,7 @@ class ControlRoomFacade:
         *,
         system: str,
         station: str | None = None,
-        on_land: bool = False,
+        manual_landing: bool = False,
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None:
@@ -270,7 +270,7 @@ class ControlRoomFacade:
             self._app,
             system=system,
             station=station,
-            on_land=on_land,
+            manual_landing=manual_landing,
             skip_delay=skip_delay,
             raw_command=raw_command,
         )

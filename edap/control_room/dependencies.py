@@ -132,7 +132,7 @@ class ControlRoomExecution(Protocol):
         *,
         system: str,
         station: str | None = None,
-        on_land: bool = False,
+        manual_landing: bool = False,
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None: ...
@@ -347,14 +347,14 @@ class LocalControlRoomExecution:
         *,
         system: str,
         station: str | None = None,
-        on_land: bool = False,
+        manual_landing: bool = False,
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None:
         self._app._facade.dispatch_travel(
             system=system,
             station=station,
-            on_land=on_land,
+            manual_landing=manual_landing,
             skip_delay=skip_delay,
             raw_command=raw_command,
         )

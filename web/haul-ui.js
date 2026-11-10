@@ -241,6 +241,9 @@ let routes = [];
     function routeFromApi(route, fallbackIndex) {
       const stationDistances = [route.from_station_distance, route.to_station_distance].filter(Boolean);
       const index = Number(route.index || fallbackIndex);
+      // Routes saved or copied before the rename carry `from_on_land` / `to_on_land`.
+      const buyManualLanding = routeFlag(route.from_manual_landing ?? route.from_on_land);
+      const sellManualLanding = routeFlag(route.to_manual_landing ?? route.to_on_land);
       return {
         index,
         profitHour: route.profit_per_hour || "-",
@@ -250,11 +253,11 @@ let routes = [];
         buyStation: route.from_station || "",
         buySystem: route.from_system || "",
         buyStationDistance: route.from_station_distance || "-",
-        buyOnLand: routeFlag(route.from_on_land),
+        buyManualLanding,
         sellStation: route.to_station || "",
         sellSystem: route.to_system || "",
         sellStationDistance: route.to_station_distance || "-",
-        sellOnLand: routeFlag(route.to_on_land),
+        sellManualLanding,
         distanceFromSystem: route.distance_from_system || "-",
         routeDistance: route.route_distance || "-",
         stationDistance: stationDistances.length ? stationDistances.join(" / ") : "-",
@@ -262,7 +265,7 @@ let routes = [];
         buyStationDemand: route.from_demand || "-",
         sellStationSupply: route.to_supply || "-",
         sellStationDemand: route.to_demand || "-",
-        apiRoute: { ...route, index, from_on_land: routeFlag(route.from_on_land), to_on_land: routeFlag(route.to_on_land) }
+        apiRoute: { ...route, index, from_manual_landing: buyManualLanding, to_manual_landing: sellManualLanding }
       };
     }
 
@@ -289,8 +292,8 @@ let routes = [];
         from_demand: route.buyStationDemand !== "-" ? route.buyStationDemand : null,
         to_supply: route.sellStationSupply !== "-" ? route.sellStationSupply : null,
         to_demand: route.sellStationDemand !== "-" ? route.sellStationDemand : null,
-        from_on_land: route.buyOnLand,
-        to_on_land: route.sellOnLand,
+        from_manual_landing: route.buyManualLanding,
+        to_manual_landing: route.sellManualLanding,
         raw_text: route.apiRoute?.raw_text || "",
         url_links: route.apiRoute?.url_links || []
       };
@@ -300,7 +303,7 @@ let routes = [];
     const ROUTE_TRANSFER_FIELDS = [
       "from_system", "from_station", "source_buy_commodity", "from_station_distance",
       "to_system", "to_station", "target_buy_commodity", "to_station_distance",
-      "route_distance", "profit_per_trip", "profit_per_hour", "from_on_land", "to_on_land"
+      "route_distance", "profit_per_trip", "profit_per_hour", "from_manual_landing", "to_manual_landing"
     ];
 
     function routeTransferPayload(route) {
@@ -893,12 +896,12 @@ let routes = [];
           </td>
           <td data-label="Station 1">
             <div class="route-main">${escapeHtml(route.buyStation)}</div>
-            <div class="route-sub mono">${escapeHtml(route.buySystem)} / ${escapeHtml(route.buyStationDistance)}${route.buyOnLand ? " / surface" : ""}</div>
+            <div class="route-sub mono">${escapeHtml(route.buySystem)} / ${escapeHtml(route.buyStationDistance)}${route.buyManualLanding ? " / manual landing" : ""}</div>
             <div class="route-sub mono">Sup ${escapeHtml(route.buyStationSupply)} / Dem ${escapeHtml(route.buyStationDemand)}</div>
           </td>
           <td data-label="Station 2">
             <div class="route-main">${escapeHtml(route.sellStation)}</div>
-            <div class="route-sub mono">${escapeHtml(route.sellSystem)} / ${escapeHtml(route.sellStationDistance)}${route.sellOnLand ? " / surface" : ""}</div>
+            <div class="route-sub mono">${escapeHtml(route.sellSystem)} / ${escapeHtml(route.sellStationDistance)}${route.sellManualLanding ? " / manual landing" : ""}</div>
             <div class="route-sub mono">Sup ${escapeHtml(route.sellStationSupply)} / Dem ${escapeHtml(route.sellStationDemand)}</div>
           </td>
           <td class="num" data-label="Distance">${escapeHtml(route.distanceFromSystem)}</td>
@@ -937,16 +940,16 @@ let routes = [];
     }
 
     // The travel target defaults to the route's first station, so it inherits that station's surface flag.
-    function travelTargetOnLand(system, station) {
+    function travelTargetManualLanding(system, station) {
       const route = routeByIndex(selectedRouteIndex);
       if (!route || !station) {
         return false;
       }
       const matches = (left, right) => String(left || "").toLowerCase() === String(right || "").toLowerCase();
       if (matches(system, route.buySystem) && matches(station, route.buyStation)) {
-        return route.buyOnLand;
+        return route.buyManualLanding;
       }
-      return matches(system, route.sellSystem) && matches(station, route.sellStation) ? route.sellOnLand : false;
+      return matches(system, route.sellSystem) && matches(station, route.sellStation) ? route.sellManualLanding : false;
     }
 
     function selectedHaulParams() {
@@ -960,11 +963,11 @@ let routes = [];
         station_1_buying: route.commodity || "",
         station_1: route.buyStation || "",
         station_1_system: route.buySystem || "",
-        station_1_on_land: route.buyOnLand ? "true" : "false",
+        station_1_manual_landing: route.buyManualLanding ? "true" : "false",
         station_2_buying: route.targetCommodity || "",
         station_2: route.sellStation || "",
         station_2_system: route.sellSystem || "",
-        station_2_on_land: route.sellOnLand ? "true" : "false",
+        station_2_manual_landing: route.sellManualLanding ? "true" : "false",
         route_profit_per_trip: route.profitTrip !== "-" ? route.profitTrip : "",
         galaxy_map_settle: settle,
         dock_timeout: timeout
@@ -1194,7 +1197,7 @@ let routes = [];
       sendCommand("command.dispatch_travel", {
         system,
         station,
-        on_land: travelTargetOnLand(system, station),
+        manual_landing: travelTargetManualLanding(system, station),
         raw_command: station ? `web travel ${system} / ${station}` : `web travel ${system}`
       })
         .then(() => {

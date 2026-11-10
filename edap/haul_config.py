@@ -68,14 +68,18 @@ def load_haul_config(path: Path | str = DEFAULT_HAUL_CONFIG_PATH) -> dict[str, s
         "station_1": _lookup_string(root, "station_1") or _lookup_string(station_1, "name"),
         "station_1_system": _lookup_string(root, "station_1_system")
         or _lookup_string(station_1, "system"),
-        "station_1_on_land": _lookup_bool(root, "station_1_on_land")
+        "station_1_manual_landing": _lookup_bool(root, "station_1_manual_landing")
+        or _lookup_bool(station_1, "manual_landing")
+        or _lookup_bool(root, "station_1_on_land")
         or _lookup_bool(station_1, "on_land"),
         "station_2_buying": _lookup_string(root, "station_2_buying")
         or _lookup_string(station_2, "buying"),
         "station_2": _lookup_string(root, "station_2") or _lookup_string(station_2, "name"),
         "station_2_system": _lookup_string(root, "station_2_system")
         or _lookup_string(station_2, "system"),
-        "station_2_on_land": _lookup_bool(root, "station_2_on_land")
+        "station_2_manual_landing": _lookup_bool(root, "station_2_manual_landing")
+        or _lookup_bool(station_2, "manual_landing")
+        or _lookup_bool(root, "station_2_on_land")
         or _lookup_bool(station_2, "on_land"),
         "galaxy_map_settle": _lookup_float(root, "galaxy_map_settle")
         or _lookup_float(root, "galaxy_map_settle_seconds"),

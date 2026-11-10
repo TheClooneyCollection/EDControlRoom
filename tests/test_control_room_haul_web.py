@@ -204,7 +204,7 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn("mergeHydratedRoute(hydratedApiRoute)", html)
         self.assertIn("trade_route: tradeRoutePayload(route)", html)
         self.assertIn("route_profit_per_trip: route.profitTrip !== \"-\" ? route.profitTrip : \"\"", html)
-        self.assertIn("apiRoute: { ...route, index, from_on_land: routeFlag(route.from_on_land)", html)
+        self.assertIn("apiRoute: { ...route, index, from_manual_landing: buyManualLanding, to_manual_landing: sellManualLanding }", html)
 
     def test_haul_web_hydrates_do_not_undo_operator_edits_or_route_choice(self) -> None:
         html = _haul_web_source()
@@ -232,19 +232,19 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         fields = html[start:html.index("];", start)]
 
         for kept in ("from_system", "to_station", "source_buy_commodity", "target_buy_commodity", "profit_per_trip",
-                     "from_on_land", "to_on_land"):
+                     "from_manual_landing", "to_manual_landing"):
             self.assertIn(f'"{kept}"', fields)
         for dropped in ("index", "raw_text", "url_links", "from_supply", "to_demand", "distance_from_system"):
             self.assertNotIn(f'"{dropped}"', fields)
 
-    def test_haul_web_pasted_route_keeps_every_field_and_surface_flags(self) -> None:
+    def test_haul_web_pasted_route_keeps_every_field_and_manual_landing_flags(self) -> None:
         html = _haul_web_source()
 
-        for hook in ("...route.apiRoute,", "buyOnLand: routeFlag(route.from_on_land)",
-                     "sellOnLand: routeFlag(route.to_on_land)", "from_on_land: route.buyOnLand",
-                     "to_on_land: route.sellOnLand", 'station_1_on_land: route.buyOnLand ? "true" : "false"',
-                     'station_2_on_land: route.sellOnLand ? "true" : "false"',
-                     "on_land: travelTargetOnLand(system, station)"):
+        for hook in ("...route.apiRoute,", "routeFlag(route.from_manual_landing ?? route.from_on_land)",
+                     "routeFlag(route.to_manual_landing ?? route.to_on_land)", "from_manual_landing: route.buyManualLanding",
+                     "to_manual_landing: route.sellManualLanding", 'station_1_manual_landing: route.buyManualLanding ? "true" : "false"',
+                     'station_2_manual_landing: route.sellManualLanding ? "true" : "false"',
+                     "manual_landing: travelTargetManualLanding(system, station)"):
             self.assertIn(hook, html)
 
     def test_haul_web_speaks_announcements_on_opted_in_devices(self) -> None:

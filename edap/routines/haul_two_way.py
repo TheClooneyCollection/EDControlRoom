@@ -170,7 +170,7 @@ class StationLeg:
     system: str
     buy_commodity: str
     sell_commodity: str
-    on_land: bool = False
+    manual_landing: bool = False
 
     @property
     def label(self) -> str:
