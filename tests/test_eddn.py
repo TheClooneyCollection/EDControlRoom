@@ -256,7 +256,7 @@ class EddnConfigTests(unittest.TestCase):
             path = Path(tmp) / "config.toml"
             path.write_text("", encoding="utf-8")
             eddn = load_config(path).eddn
-            self.assertTrue(eddn.enabled)
+            self.assertFalse(eddn.enabled)
             self.assertEqual(eddn.status_every_s, 30.0)
             self.assertEqual(eddn.relay, "tcp://eddn.edcd.io:9500")
             self.assertEqual(eddn.database_file, Path(".eddn_markets.sqlite3"))

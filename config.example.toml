@@ -18,8 +18,8 @@
 # command_delay_seconds = 5.0
 
 [eddn]
-# Live market prices for the /routes trade route search. The `lan` server listens by default.
-# enabled = false
+# Live market prices for the /routes trade route search; the `lan` server listens when enabled.
+# enabled = true
 # database_file = ".eddn_markets.sqlite3"
 # max_age_days = 7.0
 # status_every_s = 30.0

@@ -83,7 +83,7 @@ _(Expand / click the following sections to see the screenshots.)_
 <details>
 <summary><strong>Trade routes (EDDN)</strong> — round-trip routes from live market prices, no Inara needed.</summary>
 
-- The `lan` server listens to EDDN by default and keeps a local price database; the server log prints a status line every 30 s.
+- With `[eddn] enabled = true` the `lan` server listens to EDDN and keeps a local price database; the server log prints a status line every 30 s.
 - `/routes` ranks round trips by profit / hour: **Near** (from your system) or **Global**, sized by 1 / 2 / 4 jumps or 100 / 250 Ly, with supply, station distance and data age filters (demand is not filtered: any listed sell price counts).
 - **Copy** a route and paste it into the haul page's **Copy / paste route** box to run it.
 - Details and how to turn it off: [docs/user/trade-routes.md](docs/user/trade-routes.md).

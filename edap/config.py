@@ -247,7 +247,7 @@ class TTSConfig:
 
 @dataclass(frozen=True)
 class EddnConfig:
-    enabled: bool = True
+    enabled: bool = False
     relay: str = "tcp://eddn.edcd.io:9500"
     database_file: Path = Path(".eddn_markets.sqlite3")
     max_age_days: float = 7.0
@@ -1225,7 +1225,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             piper=_piper_voice(_optional_table(tts, "piper")),
         ),
         eddn=EddnConfig(
-            enabled=_boolean(eddn, "enabled", _boolean(default_eddn, "enabled", True)),
+            enabled=_boolean(eddn, "enabled", _boolean(default_eddn, "enabled", False)),
             relay=_string(eddn, "relay", _string(default_eddn, "relay", "")),
             database_file=Path(
                 _string(eddn, "database_file", _string(default_eddn, "database_file", ""))

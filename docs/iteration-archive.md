@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `314`
-- Latest generated iteration number: `447`
+- Generated iteration count: `315`
+- Latest generated iteration number: `448`
 
 ## Iteration 134
 
@@ -8910,3 +8910,29 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Selling a full hold where demand is tiny has only been seen at Sitterly; watch for price drops elsewhere.
+
+## Iteration 448
+
+- When: `2026-11-10 16:55`
+- Area: `haul`
+- Title: `eddn-default-off`
+- Source: [2026-11-10-16-55_____haul_____eddn-default-off.md](iteration-logs/2026-11-10-16-55_____haul_____eddn-default-off.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `eddn-default-off`
+- Started: `2026-11-10 16:55`
+
+## Summary
+
+- `eddn.enabled` defaults to false again: the user does not want every server listening to EDDN by default. Turn it on with `[eddn] enabled = true`.
+
+## Changes
+
+- `EddnConfig.enabled`, its parse fallback and `defaults/eddn.toml` are false; `config.example.toml`, README, `docs/user/trade-routes.md` and status describe opting in. The defaults test asserts it is off.
+- The user's ignored `config.toml` gets `[eddn] enabled = true` back (removed earlier as redundant) so their server keeps listening.
+
+## Follow-ups
+
+-

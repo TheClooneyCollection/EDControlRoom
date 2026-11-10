@@ -6,7 +6,7 @@ The web **Routes** page (`/routes`) finds two-way trade routes from live market 
 
 The `lan` server listens to [EDDN](https://github.com/EDCD/EDDN), the feed other commanders' tools upload market data to. Every market update goes into a local SQLite file, `.eddn_markets.sqlite3` in the repo folder (about 3.5 KB per market). Markets not updated for 7 days are dropped.
 
-This is on by default. The database starts empty, so give it a while: after an hour or so the busy parts of the bubble are covered, and coverage keeps growing while the server runs.
+This is off by default; turn it on with `enabled = true` under `[eddn]` (see Settings below). The database starts empty, so give it a while: after an hour or so the busy parts of the bubble are covered, and coverage keeps growing while the server runs.
 
 ## Checking it works
 
@@ -32,7 +32,7 @@ In `config.toml`:
 
 ```toml
 [eddn]
-enabled = false          # turn the listener off
+enabled = true           # off by default
 database_file = ".eddn_markets.sqlite3"
 max_age_days = 7.0       # drop markets older than this
 status_every_s = 30.0    # server log status line; 0 turns it off

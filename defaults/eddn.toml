@@ -1,6 +1,6 @@
 [eddn]
 # Listen to the EDDN relay for live market prices (used by the /routes trade route search).
-enabled = true
+enabled = false
 relay = "tcp://eddn.edcd.io:9500"
 database_file = ".eddn_markets.sqlite3"
 # Markets not updated for this many days are dropped.
