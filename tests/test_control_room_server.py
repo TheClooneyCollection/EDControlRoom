@@ -974,6 +974,10 @@ class ControlRoomServerTests(unittest.TestCase):
             "source_buy_commodity": "Agronomic Treatment",
             "target_buy_commodity": "Gold",
             "profit_per_hour": "88.3m",
+            "from_supply": "52,113",
+            "from_demand": "1,204",
+            "to_supply": "8,870",
+            "to_demand": "96,431",
         }
 
         response = _handle_session_message(
@@ -999,6 +1003,11 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(
             hydrate["payload"]["selected_trade_route"]["source_buy_commodity"],
             "Agronomic Treatment",
+        )
+        selected = hydrate["payload"]["selected_trade_route"]
+        self.assertEqual(
+            [selected[key] for key in ("from_supply", "from_demand", "to_supply", "to_demand")],
+            ["52,113", "1,204", "8,870", "96,431"],
         )
         self.assertIsNone(hydrate["payload"]["running_trade_route"])
 

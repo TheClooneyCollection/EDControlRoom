@@ -63,6 +63,8 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
                         to_station="Irkutsk",
                         to_system="Alioth",
                         source_buy_commodity="Agronomic Treatment",
+                        from_supply="52,113",
+                        to_demand="96,431",
                     )
                 ]
             ),
@@ -126,3 +128,5 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
         self.assertEqual(parsed.activity_log.entries[0].message_text, "Starting haul loop.")
         self.assertIsNotNone(parsed.selected_trade_route)
         self.assertEqual(parsed.selected_trade_route.to_system, "Alioth")
+        self.assertEqual(parsed.selected_trade_route.from_supply, "52,113")
+        self.assertEqual(parsed.selected_trade_route.to_demand, "96,431")
