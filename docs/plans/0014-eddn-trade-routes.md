@@ -41,7 +41,7 @@ When a station or system in a candidate route lacks coordinates, pad size or dis
 
 - Two-station round trips (A buys X sells at B, B buys Y sells at A; one-sided allowed), using the same shape as `TradeRoute` so a found route can be selected and run by the existing haul flow.
 - Pair candidates through a spatial grid with cell size = search range. Cost grows roughly with range cubed until it covers the whole bubble, so the global view is computed in the background on an interval and cached; the near view is computed on request.
-- Filters: cargo capacity, pad size, max station distance (ls), min supply / demand, carriers excluded, surface stations opt-in. Defaults come from the current ship `Loadout` and `haul_search.toml`.
+- Filters: cargo capacity, pad size, max station distance (ls), min supply (no demand filter: a listed sell price is enough), carriers excluded, surface stations opt-in. Defaults come from the current ship `Loadout` and `haul_search.toml`.
 
 ### 5. Ranking: profit per hour
 

@@ -19,7 +19,8 @@ This is on by default. The database starts empty, so give it a while: after an h
 
 - **Near** shows routes whose first station is within range of your current system (or the system you type). **Global** searches every market in the database.
 - **1 / 2 / 4 jumps** size the range by your laden jump range; **100 / 250 Ly** use a flat distance.
-- Filters: cargo, min supply / demand, max station distance (Ls), max data age, surface stations, fleet carriers. Empty fields fall back to `haul_search.toml` and your current ship.
+- Filters: cargo, min supply, max station distance (Ls), max data age, surface stations, fleet carriers. Empty fields fall back to `haul_search.toml` and your current ship.
+- Demand is not filtered: a station buys anything it lists a sell price for, even with a tiny demand (for example a station that also produces it).
 - Routes are ranked by profit per hour. The trip time is an estimate fitted from real haul runs: jumps, supercruise distance and time docked.
 - **Copy** puts the route on the clipboard as JSON; paste it into the **Copy / paste route** box on the haul page to run it. Routes with a commodity whose in-game name is not known yet show "name unknown" instead; visiting a market that sells it teaches the name.
 

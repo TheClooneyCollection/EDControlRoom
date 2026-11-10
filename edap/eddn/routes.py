@@ -2,7 +2,8 @@
 
 A route is A -> B -> A: the best commodity bought at A and sold at B, then the best
 commodity bought at B and sold at A (either side may be empty). Holds are capped by
-cargo capacity and the seller's stock; demand only has to clear `min_demand`.
+cargo capacity and the seller's stock. Demand is ignored: a station buys anything it
+lists a sell price for, even its own exports showing a demand of 1.
 """
 from __future__ import annotations
 
@@ -46,7 +47,6 @@ class RouteFilters:
     include_carriers: bool = False
     max_station_distance_ls: float | None = 5000.0
     min_supply: int = 0
-    min_demand: int = 0
     max_age_s: float = 2 * 86400
 
 
@@ -144,7 +144,7 @@ def load_route_markets(db: sqlite3.Connection, filters: RouteFilters, *, now: fl
             continue
         if buy > 0 and supply > 0 and supply >= filters.min_supply:
             market.exports[commodity] = (buy, supply)
-        if sell > 0 and demand > 0 and demand >= filters.min_demand:
+        if sell > 0:
             market.imports[commodity] = (sell, demand)
     return [market for market in markets.values() if market.exports or market.imports]
 

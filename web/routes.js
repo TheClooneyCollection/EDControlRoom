@@ -20,7 +20,6 @@ const FIELD_PARAMS = [
   ["route-laden", "laden_jump_range_ly"],
   ["route-capacity", "capacity"],
   ["route-min-supply", "min_supply"],
-  ["route-min-demand", "min_demand"],
   ["route-station-ls", "max_station_distance_ls"],
   ["route-age", "max_age_hours"]
 ];

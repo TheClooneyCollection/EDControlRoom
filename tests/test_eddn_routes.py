@@ -97,10 +97,20 @@ class EddnRouteFinderTests(unittest.TestCase):
         trips = {route.station_2.station: route.trip_s for route in found}
         self.assertEqual(trips["Crater Dock"] - trips["Alpha Port"], TimeModel().surface_extra_s)
 
+    def test_a_listed_sell_price_counts_whatever_the_demand(self) -> None:
+        store = galaxy()
+        # A producer still buys its own export: EDDN shows demand 1 (Sitterly Enterprise beryllium).
+        add_station(store, 6, "Producer", "Alpha", 10.0, "Orbis", LARGE, [price("gold", sell=30000, demand=1)])
+        store.commit()
+
+        [best, *_] = routes(store)
+
+        self.assertEqual((best.station_2.station, best.outbound.commodity, best.outbound.tons), ("Producer", "gold", 1137))
+
     def test_query_defaults_come_from_haul_search_and_ship(self) -> None:
         query = parse_route_query(
             {"jumps": "2"},
-            search_defaults={"max_route_distance_ly": "17.2", "min_supply": "5000", "max_station_distance_ls": "any",
+            search_defaults={"max_route_distance_ly": "17.2", "min_supply": "5000", "min_demand": "5000", "max_station_distance_ls": "any",
                              "min_landing_pad": "large", "use_surface_stations": "no"},
             current_system="Sol",
             cargo_capacity=1137,

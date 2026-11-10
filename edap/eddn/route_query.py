@@ -71,7 +71,6 @@ def parse_route_query(
             include_carriers=_flag(value("carriers")),
             max_station_distance_ls=max_station_ls or None,
             min_supply=int(number("min_supply", 0)),
-            min_demand=int(number("min_demand", 0)),
             max_age_s=number("max_age_hours", 48.0, "max_price_age_hours") * 3600 or 48 * 3600,
         ),
         limit=min(200, max(1, int(number("limit", 50)))),
