@@ -14,6 +14,7 @@
 - Status.json is polled instead of waiting for the `StartJump` journal event so the wait does not consume journal events that the later arrival wait needs.
 - New `AnnouncementId`s and `defaults/tts.toml` phrases: `fsd_engage_trying`, `supercruise_fallback`, `fsd_jump_blocked`. The `station_cleared` wording is unchanged.
 - Follow-up wording: the blocked lines say "Frame shift drive failed to engage", and the normal-space fallback adds `supercruise_countdown` ("Engaging supercruise in 3, 2, 1.") and waits `SUPERCRUISE_FALLBACK_COUNTDOWN_S = 8.0` before pressing `Supercruise`, since queued TTS gives no completion signal.
+- Mass lock: the 21:34 Chauhan Dock departure read Status.json as not mass locked 0.5s after NoTrack (every other departure boosted 3 to 10 times), so `HyperSuperCombination` and then the `Supercruise` fallback both did nothing. `escape_mass_lock` (`edap/routines/escape.py`) used to treat an unreadable Status.json as clear without logging; it now retries the read, warns if it stays unreadable, and needs `MASS_LOCK_CLEAR_CONFIRMATIONS = 2` clear reads. `engage_fsd_and_confirm_charging` boosts out and retries `HyperSuperCombination` once when the FSD did not charge and the ship is still mass locked.
 - Tests: `tests/test_fsd_engage.py`; the hardpoint transit test now sets `FsdCharging` on the jump press.
 
 ## Follow-ups

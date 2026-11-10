@@ -2167,7 +2167,7 @@ class EscapeMassLockTests(unittest.TestCase):
         self.assertEqual(result.details["boost_count"], 0)
         boost_calls = [c for c in controls.calls if c["action"] == "UseBoostJuice"]
         self.assertEqual(boost_calls, [])
-        self.assertEqual(sleep_calls, [0.3])
+        self.assertEqual(sleep_calls, [0.3, 0.25])
 
     def test_boosts_until_mass_lock_clears(self) -> None:
         controls = FakeShipControls()
@@ -2221,6 +2221,61 @@ class EscapeMassLockTests(unittest.TestCase):
         self.assertEqual(result.details["boost_count"], 0)
         boost_calls = [c for c in controls.calls if c["action"] == "UseBoostJuice"]
         self.assertEqual(boost_calls, [])
+
+    def test_unreadable_status_is_retried_instead_of_counting_as_clear(self) -> None:
+        controls = FakeShipControls()
+        progress: list[str] = []
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            status_path = journal_dir / "Status.json"
+            status_path.write_text("", encoding="utf-8")
+            reads = [0]
+
+            def sleeper(_seconds: float) -> None:
+                reads[0] += 1
+                if reads[0] == 2:
+                    self._write_status(journal_dir, mass_locked=True)
+                elif reads[0] == 3:
+                    self._write_status(journal_dir, mass_locked=False)
+
+            result = escape_mass_lock(
+                controls, journal_dir=journal_dir, boost_delay_s=5.0, step_delay_s=0.0,
+                sleeper=sleeper, progress_fn=progress.append,
+            )
+        self.assertEqual(result.details["boost_count"], 1)
+        self.assertFalse(any("Warning" in line for line in progress))
+
+    def test_a_single_clear_read_is_confirmed_before_leaving(self) -> None:
+        controls = FakeShipControls()
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            self._write_status(journal_dir, mass_locked=False)
+
+            confirm_sleeps = [0]
+
+            def sleeper(seconds: float) -> None:
+                if seconds == 0.25:
+                    confirm_sleeps[0] += 1
+                    if confirm_sleeps[0] == 1:
+                        self._write_status(journal_dir, mass_locked=True)
+                elif seconds == 5.0:
+                    self._write_status(journal_dir, mass_locked=False)
+
+            result = escape_mass_lock(
+                controls, journal_dir=journal_dir, boost_delay_s=5.0, step_delay_s=0.0, sleeper=sleeper,
+            )
+        self.assertEqual(result.details["boost_count"], 1)
+
+    def test_status_that_stays_unreadable_warns_and_continues(self) -> None:
+        controls = FakeShipControls()
+        progress: list[str] = []
+        with tempfile.TemporaryDirectory() as tmp:
+            result = escape_mass_lock(
+                controls, journal_dir=Path(tmp), boost_delay_s=5.0, step_delay_s=0.0,
+                sleeper=lambda _: None, progress_fn=progress.append,
+            )
+        self.assertEqual(result.details["boost_count"], 0)
+        self.assertTrue(any("Warning" in line and "Status.json" in line for line in progress))
 
 
 _OK = ActionDispatchResult(action="ok", status="ok", binding=NormalizedBinding(key="x", modifier=None))

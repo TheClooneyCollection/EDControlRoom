@@ -9,6 +9,29 @@ from edap.routines._base import RoutineResult, SupportsEscapeControls
 from edap.routines.callbacks import ProgressCallback
 from edap.status import read_status
 
+MASS_LOCK_POLL_S = 0.25
+MASS_LOCK_STATUS_READ_ATTEMPTS = 8
+MASS_LOCK_CLEAR_CONFIRMATIONS = 2
+
+
+def read_mass_locked(journal_dir: Path) -> bool | None:
+    try:
+        status = read_status(journal_dir, require_flags=True)
+    except (OSError, ValueError, TypeError, KeyError, AttributeError, IndexError):
+        # Status.json may be briefly empty or incomplete while Elite writes it.
+        return None
+    return None if status is None else status.flags.fsd_mass_locked
+
+
+def _read_mass_locked(journal_dir: Path, *, sleeper: Callable[[float], None]) -> bool | None:
+    for attempt in range(MASS_LOCK_STATUS_READ_ATTEMPTS):
+        mass_locked = read_mass_locked(journal_dir)
+        if mass_locked is not None:
+            return mass_locked
+        if attempt + 1 < MASS_LOCK_STATUS_READ_ATTEMPTS:
+            sleeper(MASS_LOCK_POLL_S)
+    return None
+
 
 def escape_mass_lock(
     controls: SupportsEscapeControls,
@@ -33,14 +56,21 @@ def escape_mass_lock(
 
     boost_count = 0
     last_boost: ActionDispatchResult | None = None
+    clear_reads = 0
 
     while True:
-        try:
-            status = read_status(journal_dir)
-        except (OSError, ValueError, TypeError, KeyError, AttributeError, IndexError):
-            status = None
-        if status is None or not status.flags.fsd_mass_locked:
+        mass_locked = _read_mass_locked(journal_dir, sleeper=sleeper)
+        if mass_locked is None:
+            progress_fn("Warning: cannot read mass lock from Status.json; continuing without confirmation.")
             break
+        if not mass_locked:
+            # A single clear read once let the FSD engage while still mass locked, so confirm it.
+            clear_reads += 1
+            if clear_reads >= MASS_LOCK_CLEAR_CONFIRMATIONS:
+                break
+            sleeper(MASS_LOCK_POLL_S)
+            continue
+        clear_reads = 0
         progress_fn("FSD mass locked -- boosting away...")
         last_boost = controls.boost()
         if last_boost.status != "ok":

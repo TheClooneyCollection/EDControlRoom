@@ -23,7 +23,7 @@ from edap.routines.docking import (
     station_refuel_menu,
     undocked_at_from,
 )
-from edap.routines.escape import escape_mass_lock
+from edap.routines.escape import escape_mass_lock, read_mass_locked
 from edap.routines.galaxy_map import set_gal_map_destination
 from edap.routines.hardpoints import retract_hardpoints_before_jump
 from edap.state import get_latest_journal_log, read_ship_state
@@ -304,6 +304,11 @@ def engage_fsd_and_confirm_charging(runtime: TransitRuntime, *, supercruise_fall
     runtime.announce_fn(AnnouncementId.FSD_ENGAGE_TRYING)
     runtime.controls.hyper_super_combination()
     charging = _wait_for_fsd_charging(runtime)
+    if charging is False and read_mass_locked(runtime.journal_dir):
+        runtime.progress_fn("FSD did not charge because the ship is still mass locked; boosting away and retrying...")
+        _escape_mass_lock(runtime)
+        runtime.controls.hyper_super_combination()
+        charging = _wait_for_fsd_charging(runtime)
     if charging is None:
         runtime.progress_fn("Warning: cannot read FSD charging from Status.json; assuming the jump started.")
         return
@@ -325,6 +330,17 @@ def engage_fsd_and_confirm_charging(runtime: TransitRuntime, *, supercruise_fall
     dispatch = runtime.controls.supercruise()
     if dispatch.status != "ok":
         runtime.progress_fn(f"Warning: Supercruise dispatch failed ({dispatch.reason or dispatch.status}).")
+
+
+def _escape_mass_lock(runtime: TransitRuntime) -> None:
+    escape_mass_lock(
+        runtime.controls,
+        journal_dir=runtime.journal_dir,
+        step_delay_s=runtime.timing.step_delay_s,
+        boost_delay_s=runtime.timing.mass_lock_boost_delay_s,
+        sleeper=runtime.sleeper,
+        progress_fn=runtime.progress_fn,
+    )
 
 
 def _wait_for_fsd_charging(runtime: TransitRuntime) -> bool | None:

@@ -8,6 +8,7 @@ from tests.fakes import FakeShipControls
 from tests.test_travel import _runtime
 
 FSD_CHARGING = 1 << 17
+MASS_LOCKED = 1 << 16
 
 
 class FsdEngageTests(unittest.TestCase):
@@ -45,6 +46,38 @@ class FsdEngageTests(unittest.TestCase):
         self.assertEqual(
             announced,
             [AnnouncementId.FSD_ENGAGE_TRYING, AnnouncementId.SUPERCRUISE_FALLBACK, AnnouncementId.SUPERCRUISE_COUNTDOWN],
+        )
+
+    def test_still_mass_locked_boosts_and_retries_before_the_supercruise_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            status_path = journal_dir / "Status.json"
+            status_path.write_text(f'{{"Flags": {MASS_LOCKED}}}', encoding="utf-8")
+            controls = FakeShipControls()
+            jump_result = controls.hyper_super_combination
+            boost_result = controls.boost
+            presses = [0]
+
+            def hyper_super_combination():
+                presses[0] += 1
+                if presses[0] == 2:
+                    status_path.write_text(f'{{"Flags": {FSD_CHARGING}}}', encoding="utf-8")
+                return jump_result()
+
+            def boost():
+                status_path.write_text('{"Flags": 0}', encoding="utf-8")
+                return boost_result()
+
+            controls.hyper_super_combination = hyper_super_combination
+            controls.boost = boost
+            announcements = []
+            runtime = _runtime(journal_dir, controls=controls, announcements=announcements)
+            engage_fsd_and_confirm_charging(runtime, supercruise_fallback=True)
+        actions = [call["action"] for call in controls.calls]
+        self.assertEqual(actions, ["HyperSuperCombination", "SetSpeed100", "UseBoostJuice", "HyperSuperCombination"])
+        self.assertEqual(
+            [message_id for message_id, _ in announcements],
+            [AnnouncementId.FSD_ENGAGE_TRYING, AnnouncementId.STATION_CLEARED],
         )
 
     def test_obscured_jump_in_supercruise_only_warns_so_the_ship_does_not_drop_out(self):
