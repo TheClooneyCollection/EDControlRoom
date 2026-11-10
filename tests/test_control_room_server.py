@@ -749,6 +749,10 @@ class ControlRoomServerTests(unittest.TestCase):
                      'homeSystem = String(payload.home_system || "").trim()', "submitInput(`home set ",
                      "serverStatus.web_form_defaults"):
             self.assertIn(hook, js_response.text)
+        self.assertIn('src="/assets/speech.js"', response.text)
+        for element_id in ("speech-say-text", "speech-say", "speech-voice", "speech-rate", "speech-enabled"):
+            self.assertIn(f'id="{element_id}"', response.text)
+        self.assertIn('new CustomEvent("edcr:announcement"', js_response.text)
 
     def test_haul_web_endpoint_can_inject_implicit_serve_token(self) -> None:
         broker = InMemoryObserverSessionBroker()
@@ -831,6 +835,7 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertIn("command.dispatch_multi_leg_haul", multi_js_response.text)
         self.assertEqual(speech_js_response.status_code, 200)
         self.assertIn("speechSynthesis", speech_js_response.text)
+        self.assertIn('el("speech-say").addEventListener("click", sayTyped)', speech_js_response.text)
         self.assertEqual(missing_response.status_code, 404)
 
     def test_haul_web_renderer_rereads_html_file_without_server_restart(self) -> None:

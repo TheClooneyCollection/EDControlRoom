@@ -52,6 +52,11 @@
       font-size: 13px;
       color: var(--text-2);
     }
+    .voice-rate {
+      display: grid;
+      gap: 4px;
+      margin-top: 10px;
+    }
     .nav-home {
       margin-top: 10px;
       font-size: 12px;
@@ -268,6 +273,34 @@
               </div>
             </section>
 
+            <section class="panel" aria-labelledby="voice-title">
+              <div class="panel-head">
+                <div class="panel-title" id="voice-title">Voice</div>
+                <div class="panel-action"><span class="field-hint">This device</span></div>
+              </div>
+              <div class="panel-body">
+                <div class="trade-form">
+                  <label class="spansh-field">
+                    <span class="field-label">Say</span>
+                    <input class="field" id="speech-say-text" placeholder="Type anything to speak" autocomplete="off">
+                  </label>
+                  <label class="spansh-field">
+                    <span class="field-label">Voice</span>
+                    <select class="select" id="speech-voice"></select>
+                  </label>
+                </div>
+                <div class="btn-row">
+                  <button class="btn primary" type="button" id="speech-say">Say</button>
+                  <button class="btn ghost" type="button" id="speech-test">Test voice</button>
+                </div>
+                <label class="field-label voice-rate">Rate <span id="speech-rate-value" class="field-hint"></span>
+                  <input class="speech-rate" type="range" id="speech-rate" min="0.5" max="1.5" step="0.1" value="1">
+                </label>
+                <label class="surface-check"><input type="checkbox" id="speech-enabled"> Also speak routine announcements here</label>
+                <p class="field-hint" id="speech-status" role="status"></p>
+              </div>
+            </section>
+
             <section class="panel" aria-labelledby="trade-title">
               <div class="panel-head">
                 <div class="panel-title" id="trade-title">Market</div>
@@ -333,5 +366,6 @@
     window.EDCR_WEB_CONFIG = {};
   </script>
   <script src="/assets/controls.js" defer></script>
+  <script src="/assets/speech.js" defer></script>
 </body>
 </html>
