@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
 from pathlib import Path
 import sys
 import time
@@ -12,22 +11,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from edap.config import load_config
-from edap.eddn.listener import EddnListener, EddnListenerStats, open_zmq_socket
-from edap.eddn.store import EddnStore, EddnStoreCounts
-
-
-def status_line(stats: EddnListenerStats, counts: EddnStoreCounts) -> str:
-    state = "connected" if stats.connected else "disconnected"
-    newest = (
-        datetime.fromtimestamp(counts.newest_market_at).strftime("%H:%M:%S")
-        if counts.newest_market_at is not None
-        else "-"
-    )
-    return (
-        f"{state}: {stats.messages} msgs, {stats.markets} market updates, {stats.errors} errors | "
-        f"db {counts.markets} markets, {counts.prices} prices, {counts.stations} stations, "
-        f"{counts.systems} systems, newest {newest}"
-    )
+from edap.eddn.listener import EddnListener, open_zmq_socket
+from edap.eddn.service import status_line
+from edap.eddn.store import EddnStore
 
 
 def main(argv: list[str] | None) -> int:

@@ -1,23 +1,51 @@
 """EDDN listener plus store, run as one background service inside the Control Room server."""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+import threading
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
 from typing import Any, Callable
 
 from edap.config import EddnConfig
-from edap.eddn.listener import EddnListener, EddnSocket
-from edap.eddn.store import EddnStore
+from edap.eddn.listener import EddnListener, EddnListenerStats, EddnSocket
+from edap.eddn.store import EddnStore, EddnStoreCounts
+
+
+def status_line(stats: EddnListenerStats, counts: EddnStoreCounts) -> str:
+    state = "connected" if stats.connected else "disconnected"
+    newest = (
+        datetime.fromtimestamp(counts.newest_market_at).strftime("%H:%M:%S")
+        if counts.newest_market_at is not None
+        else "-"
+    )
+    return (
+        f"{state}: {stats.messages} msgs, {stats.markets} market updates, {stats.errors} errors | "
+        f"db {counts.markets} markets, {counts.prices} prices, {counts.stations} stations, "
+        f"{counts.systems} systems, newest {newest}"
+    )
 
 
 @dataclass(frozen=True)
 class EddnService:
     store: EddnStore
     listener: EddnListener
+    _stop_status: threading.Event = field(default_factory=threading.Event)
 
     def status(self) -> dict[str, Any]:
         return {"listener": asdict(self.listener.stats()), "store": asdict(self.store.counts())}
 
+    def status_line(self) -> str:
+        return status_line(self.listener.stats(), self.store.counts())
+
+    def report_status_every(self, interval_s: float, log: Callable[[str], None]) -> None:
+        def report() -> None:
+            while not self._stop_status.wait(interval_s):
+                log(f"EDDN {self.status_line()}")
+
+        threading.Thread(target=report, name="eddn-status", daemon=True).start()
+
     def close(self) -> None:
+        self._stop_status.set()
         self.listener.stop()
         self.listener.join(5.0)
         self.store.close()
@@ -39,4 +67,7 @@ def start_eddn_service(
         log=log,
     )
     listener.start()
-    return EddnService(store=store, listener=listener)
+    service = EddnService(store=store, listener=listener)
+    if config.status_every_s > 0:
+        service.report_status_every(config.status_every_s, log)
+    return service

@@ -225,18 +225,28 @@ class EddnServiceTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "eddn.sqlite3"
             done = threading.Event()
+            reported = threading.Event()
+            logs: list[str] = []
+
+            def log(message: str) -> None:
+                logs.append(message)
+                if message.startswith("EDDN connected") and "1 market updates" in message:
+                    reported.set()
+
             service = start_eddn_service(
-                EddnConfig(enabled=True, database_file=path),
+                EddnConfig(enabled=True, database_file=path, status_every_s=0.01),
                 open_socket=lambda: FakeSocket([frame(commodity_envelope())], on_empty=done.set),
                 time_fn=lambda: 1000.0,
-                log=lambda message: None,
+                log=log,
             )
             self.assertTrue(done.wait(2.0))
+            self.assertTrue(reported.wait(2.0))
             status = service.status()
             service.close()
 
             self.assertEqual(status["listener"]["markets"], 1)
             self.assertEqual(status["store"]["prices"], 2)
+            self.assertIn("db 1 markets, 2 prices", next(line for line in logs if line.startswith("EDDN connected")))
             self.assertFalse(service.listener._thread.is_alive())
 
 
@@ -246,13 +256,17 @@ class EddnConfigTests(unittest.TestCase):
             path = Path(tmp) / "config.toml"
             path.write_text("", encoding="utf-8")
             eddn = load_config(path).eddn
-            self.assertFalse(eddn.enabled)
+            self.assertTrue(eddn.enabled)
+            self.assertEqual(eddn.status_every_s, 30.0)
             self.assertEqual(eddn.relay, "tcp://eddn.edcd.io:9500")
             self.assertEqual(eddn.database_file, Path(".eddn_markets.sqlite3"))
             self.assertEqual(eddn.max_age_days, 7.0)
 
             path.write_text("[eddn]\nmax_age_days = 0\n", encoding="utf-8")
             with self.assertRaisesRegex(ConfigError, "eddn.max_age_days"):
+                load_config(path)
+            path.write_text("[eddn]\nstatus_every_s = -1\n", encoding="utf-8")
+            with self.assertRaisesRegex(ConfigError, "eddn.status_every_s"):
                 load_config(path)
 
 if __name__ == "__main__":

@@ -247,10 +247,12 @@ class TTSConfig:
 
 @dataclass(frozen=True)
 class EddnConfig:
-    enabled: bool = False
+    enabled: bool = True
     relay: str = "tcp://eddn.edcd.io:9500"
     database_file: Path = Path(".eddn_markets.sqlite3")
     max_age_days: float = 7.0
+    # Seconds between EDDN status lines in the server log; 0 turns them off.
+    status_every_s: float = 30.0
 
 
 @dataclass(frozen=True)
@@ -676,6 +678,8 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `eddn.relay` cannot be empty.")
     if not math.isfinite(config.eddn.max_age_days) or config.eddn.max_age_days <= 0:
         raise ConfigError("Config value `eddn.max_age_days` must be positive and finite.")
+    if not math.isfinite(config.eddn.status_every_s) or config.eddn.status_every_s < 0:
+        raise ConfigError("Config value `eddn.status_every_s` must be zero or positive.")
     if not config.controls.start_hotkey.strip():
         raise ConfigError("Config value `controls.start_hotkey` cannot be empty.")
     if not config.controls.stop_hotkey.strip():
@@ -1221,12 +1225,13 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             piper=_piper_voice(_optional_table(tts, "piper")),
         ),
         eddn=EddnConfig(
-            enabled=_boolean(eddn, "enabled", _boolean(default_eddn, "enabled", False)),
+            enabled=_boolean(eddn, "enabled", _boolean(default_eddn, "enabled", True)),
             relay=_string(eddn, "relay", _string(default_eddn, "relay", "")),
             database_file=Path(
                 _string(eddn, "database_file", _string(default_eddn, "database_file", ""))
             ).expanduser(),
             max_age_days=_float(eddn, "max_age_days", _float(default_eddn, "max_age_days", 7.0)),
+            status_every_s=_float(eddn, "status_every_s", _float(default_eddn, "status_every_s", 30.0)),
         ),
         messages=MessagesConfig(
             templates={
