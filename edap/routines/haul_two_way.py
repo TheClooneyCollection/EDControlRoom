@@ -699,6 +699,7 @@ def _run_transit(
             destination=destination_leg,
             destination_label=destination_leg.label,
             routine_name="haul",
+            wait_for_manual_landing=True,
         ),
         next_phase,
     )

@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `304`
-- Latest generated iteration number: `437`
+- Generated iteration count: `305`
+- Latest generated iteration number: `438`
 
 ## Iteration 134
 
@@ -8631,3 +8631,28 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Run the listener inside the Control Room server when `eddn.enabled`, then slices 3 to 6 (Ardent lookups, route finder, profit-per-hour model, `/routes`).
+
+## Iteration 438
+
+- When: `2026-11-10 14:43`
+- Area: `haul`
+- Title: `on-land-manual-landing-wait`
+- Source: [2026-11-10-14-43_____haul_____on-land-manual-landing-wait.md](iteration-logs/2026-11-10-14-43_____haul_____on-land-manual-landing-wait.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `on-land-manual-landing-wait`
+- Started: `2026-11-10 14:43`
+
+## Summary
+
+- A haul to an `on land` station looked paused but could not be resumed: after the drop, `transit_to_station` returned the manual-landing result, the haul loop returned, and `clear_routine` stopped the session (run recorded `aborted` / `stats stopped` in transit, e.g. Chauhan Dock 2026-11-10 14:21). `resume` only works for the in-routine pause before a buy, so it reported no active haul.
+
+## Changes
+
+- `transit_to_station` takes a required `wait_for_manual_landing`. Two-way and multi-leg haul pass `True`: after the drop near an on-land station they log and TTS `manual_landing` ("please land manually at {station_name}. We continue once docked."), wait for `Docked` within the dock timeout, open the refuel menu as usual and continue trading. `travel` and Spansh routes pass `False` and still end at the handoff.
+
+## Follow-ups
+
+- Live-validate at Chauhan Dock: the routine should continue straight into the station 1 buy after a manual landing.

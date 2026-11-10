@@ -519,8 +519,15 @@ def transit_to_station(
     destination: TransitDestination,
     destination_label: str,
     routine_name: str,
+    wait_for_manual_landing: bool,
     assume_arrived_in_destination_system: bool = False,
 ) -> RoutineResult:
+    """Fly to `destination` and dock.
+
+    On-land destinations need a manual landing: with `wait_for_manual_landing` the
+    routine asks the pilot to land and returns once `Docked` arrives; otherwise it
+    hands off and returns `manual_landing_result` after the drop.
+    """
     recent_events = read_latest_journal_events(runtime.journal_dir)
     resume_state = detect_transit_resume_state(recent_events, destination)
     if assume_arrived_in_destination_system and resume_state == TransitResumeState.NONE:
@@ -563,36 +570,45 @@ def transit_to_station(
         open_navigation_panel_after_arrival(runtime, station_name=destination.station)
 
     if destination.on_land:
-        if resume_state == TransitResumeState.POST_DROP_NEAR_STATION:
+        if resume_state != TransitResumeState.POST_DROP_NEAR_STATION:
             runtime.progress_fn(
-                f"{destination_label} is marked on-land; manual landing required from normal space. "
-                f"Resume {routine_name} after landing."
+                f"{destination_label} is marked on-land; waiting for SupercruiseExit before handing off."
+            )
+            drop_event = wait_for_on_land_handoff(
+                runtime.watcher,
+                destination=destination,
+                pending_events=pending_events,
+                deadline=runtime.time_fn() + runtime.timing.dock_timeout_s,
+                time_fn=runtime.time_fn,
+            )
+            if drop_event is None:
+                return RoutineResult(
+                    action="manual_landing",
+                    dispatch=ActionDispatchResult(
+                        action="manual_landing",
+                        status="error",
+                        reason=f"timed out waiting for SupercruiseExit near {destination.station}",
+                    ),
+                )
+        if not wait_for_manual_landing:
+            runtime.progress_fn(
+                f"Reached normal space near on-land {destination_label}; manual landing required."
             )
             return manual_landing_result(destination)
         runtime.progress_fn(
-            f"{destination_label} is marked on-land; waiting for SupercruiseExit before handing off."
+            f"Reached normal space near on-land {destination_label}; land manually, "
+            f"{routine_name} continues once docked."
         )
-        drop_event = wait_for_on_land_handoff(
+        runtime.announce_fn(AnnouncementId.MANUAL_LANDING, station_name=destination.station)
+        return station_refuel_menu(
+            runtime.controls,
             runtime.watcher,
-            destination=destination,
-            pending_events=pending_events,
-            deadline=runtime.time_fn() + runtime.timing.dock_timeout_s,
+            dock_timeout_s=runtime.timing.dock_timeout_s,
+            settle_s=runtime.timing.settle_s,
             time_fn=runtime.time_fn,
+            sleeper=runtime.sleeper,
+            progress_fn=runtime.progress_fn,
         )
-        if drop_event is None:
-            return RoutineResult(
-                action="manual_landing",
-                dispatch=ActionDispatchResult(
-                    action="manual_landing",
-                    status="error",
-                    reason=f"timed out waiting for SupercruiseExit near {destination.station}",
-                ),
-            )
-        runtime.progress_fn(
-            f"Reached normal space near on-land {destination_label}; manual landing required. "
-            f"Resume {routine_name} after landing."
-        )
-        return manual_landing_result(destination)
 
     result = dock(
         runtime.controls,

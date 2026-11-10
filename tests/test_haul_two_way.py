@@ -554,6 +554,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 result = transit_to_station(
                     _test_haul_runtime(journal_dir, FakeShipControls(), FakeWatcher([])),
                     destination=_station_1_leg(), destination_label="station 1", routine_name="haul",
+                    wait_for_manual_landing=True,
                 )
             self.assertIs(result, ok)
             self.assertEqual(len(dock_requests), 1)
@@ -1894,7 +1895,39 @@ class TwoWayHaulLoopTests(unittest.TestCase):
         self.assertTrue(arrival_observed)
         self.assertEqual(pending_events, [])
 
-    def test_transit_hands_off_for_on_land_destination_after_supercruise_exit(self) -> None:
+    def test_on_land_transit_waits_for_manual_landing_or_hands_off(self) -> None:
+        on_land = replace(_station_2_leg(), on_land=True)
+        for wait in (True, False):
+            with self.subTest(wait_for_manual_landing=wait), tempfile.TemporaryDirectory() as tmp:
+                journal_dir = Path(tmp)
+                _write_journal(journal_dir, {"event": "FSDJump", "StarSystem": _SYSTEM_1})
+                announcements: list[tuple[object, dict[str, object]]] = []
+                watcher = FakeWatcher([
+                    [{"event": "FSDJump", "StarSystem": _SYSTEM_2}],
+                    [{"event": "SupercruiseExit", "BodyType": "Planet", "StarSystem": _SYSTEM_2}],
+                    [{"event": "Docked", "StationName": _STATION_2}],
+                ])
+                with patch("edap.routines.transit.dock") as dock_mock:
+                    result = transit_to_station(
+                        _test_haul_runtime(
+                            journal_dir,
+                            FakeShipControls(),
+                            watcher,
+                            announce_fn=lambda message_id, **values: announcements.append((message_id, values)),
+                        ),
+                        destination=on_land, destination_label="station 2", routine_name="haul",
+                        wait_for_manual_landing=wait,
+                    )
+                dock_mock.assert_not_called()
+                self.assertEqual(result.dispatch.status, "ok")
+                if wait:
+                    self.assertNotEqual(result.dispatch.reason, "manual landing required")
+                    self.assertIn((AnnouncementId.MANUAL_LANDING, {"station_name": _STATION_2}), announcements)
+                else:
+                    self.assertEqual(result.dispatch.reason, "manual landing required")
+                    self.assertNotIn(AnnouncementId.MANUAL_LANDING, [message_id for message_id, _ in announcements])
+
+    def test_haul_keeps_waiting_at_on_land_station_instead_of_stopping(self) -> None:
         controls = FakeShipControls()
         watcher = FakeWatcher([
             [{"event": "FSDJump", "StarSystem": _SYSTEM_2}],
@@ -1938,8 +1971,9 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                     sleeper=lambda _: None,
                 )
 
-        self.assertEqual(result.dispatch.status, "ok")
-        self.assertEqual(result.dispatch.reason, "manual landing required")
+        # No `Docked` arrives in this script, so the routine is still waiting for the pilot when it times out.
+        self.assertEqual(result.action, "Docked")
+        self.assertEqual(result.dispatch.reason, "docked event was not observed before timeout")
         dock_mock.assert_not_called()
 
     def test_undock_skips_galaxy_map_destination_for_same_system_stations(self) -> None:

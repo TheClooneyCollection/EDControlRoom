@@ -229,6 +229,7 @@ def _run_transit(ctx: _Ctx, next_stop: RouteStop) -> RoutineResult:
         destination=next_stop.endpoint,
         destination_label=next_stop.label,
         routine_name="multi-leg haul",
+        wait_for_manual_landing=True,
     )
 
 

@@ -162,6 +162,7 @@ def _travel_transit(
         destination=destination,
         destination_label=destination.label,
         routine_name="travel",
+        wait_for_manual_landing=False,
         assume_arrived_in_destination_system=assume_arrived,
     )
     if is_manual_landing_result(result):

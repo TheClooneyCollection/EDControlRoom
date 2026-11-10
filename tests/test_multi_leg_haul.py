@@ -512,7 +512,7 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
         self.assertTrue(arrival_observed)
         self.assertEqual(pending_events, [])
 
-    def test_transit_hands_off_for_on_land_destination_after_supercruise_exit(self) -> None:
+    def test_haul_keeps_waiting_at_on_land_station_instead_of_stopping(self) -> None:
         controls = FakeShipControls()
         watcher = FakeWatcher([
             [{"event": "FSDJump", "StarSystem": "HIP 68076"}],
@@ -562,8 +562,8 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
                     sleeper=lambda _: None,
                 )
 
-        self.assertEqual(result.dispatch.status, "ok")
-        self.assertEqual(result.dispatch.reason, "manual landing required")
+        self.assertEqual(result.action, "Docked")
+        self.assertEqual(result.dispatch.reason, "docked event was not observed before timeout")
         dock_mock.assert_not_called()
 
     def test_route_can_resume_midway_from_destination_station(self) -> None:

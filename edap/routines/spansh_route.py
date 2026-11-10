@@ -117,6 +117,7 @@ def fly_spansh_route(
             destination=destination,
             destination_label=destination.label,
             routine_name=_ROUTINE_NAME,
+            wait_for_manual_landing=False,
             assume_arrived_in_destination_system=True,
         )
         return result
