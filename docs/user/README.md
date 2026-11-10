@@ -8,6 +8,7 @@ Start here if you want to run EDControlRoom.
 4. [haul-workflow.md](haul-workflow.md): the end-to-end `haul` workflow, including `haul.toml`.
 5. [commands-reference.md](commands-reference.md): every Control Room command in one place.
 6. [troubleshooting.md](troubleshooting.md): what to check when input, journal, or bindings do not behave.
-7. [background-input.md](background-input.md): macOS + CrossOver only, optional. Let routines drive Elite while another Mac app is in front (the wine helper). Agents can set it up with the `edcr-background-input` skill.
+7. [trade-routes.md](trade-routes.md): the web Routes page, live EDDN market prices, and how to turn the listener off.
+8. [background-input.md](background-input.md): macOS + CrossOver only, optional. Let routines drive Elite while another Mac app is in front (the wine helper). Agents can set it up with the `edcr-background-input` skill.
 
 Deeper operator references (input timing, market timing, `.binds` file management, remote/multi-client mode) live under [../operators/](../operators/).

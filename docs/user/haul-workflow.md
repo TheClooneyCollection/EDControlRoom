@@ -64,19 +64,19 @@ dock_timeout = 1200.0
 buying = "Aluminium"
 name = "Pawelczyk Dock"
 system = "Sol"
-on_land = false
+manual_landing = false
 
 [haul.station_2]
 buying = "Bertrandite"
 name = "Trevithick Dock"
 system = "Achenar"
-on_land = false
+manual_landing = false
 ```
 
 Notes:
 
 - `buying` is optional on either side, but at least one station must have a buy cargo.
-- `on_land = true` hands off after `SupercruiseExit` in the destination system so you can do a surface approach and resume after landing.
+- `manual_landing = true` hands off after `SupercruiseExit` in the destination system so you can fly in and land yourself, then the run resumes after docking. Use it only when you cannot glide close to the station after the drop; planetary ports usually dock automatically with it off. The old name `on_land` is still read.
 - `haul load some-other-file.toml` if you keep multiple named profiles.
 
 ## Saved Default

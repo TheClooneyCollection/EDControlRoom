@@ -19,6 +19,7 @@ Live-validated on **macOS** (Elite through CrossOver), **Windows** (community-va
 - [What You Get](#what-you-get)
 - [Quick Start](#quick-start)
 - [Steam Deck](#steam-deck)
+- [Piper Voice](#piper-voice)
 - [Documentation](#documentation)
 - [Development](#development)
 - [Repo Layout](#repo-layout)
@@ -39,7 +40,7 @@ That makes it a direct fit for high-volume A↔B cargo work like community goal 
 
 ## What You Get
 
-A terminal Control Room with TTS callouts, a LAN web frontend for haul dashboard / search / Spansh routing, and journal-driven `dock`, `undock`, `jump`, `buy`, `sell`, `dest`, `home`.
+A terminal Control Room with TTS callouts, a LAN web frontend for haul dashboard / search / EDDN trade routes / Spansh routing, and journal-driven `dock`, `undock`, `jump`, `buy`, `sell`, `dest`, `home`.
 
 _(Expand / click the following sections to see the screenshots.)_
 
@@ -49,7 +50,7 @@ _(Expand / click the following sections to see the screenshots.)_
 - Live panels: SHIP STATUS (commander, system, station, fuel, cargo, FSD target), ACTIVITY log, and MARKET table from `Market.json`.
 - Full command bar for `dock`, `undock`, `jump`, `buy`, `sell`, `dest`, `home`, `travel`, `market ...`.
 - Start haul work from the command bar: `haul [commodity]`, `haul start`, `haul load`, `haul search [system]`, `haul search url <inara-url>`, `haul route <n>`, `multi_leg_haul <route>`.
-- `pause` / `resume` an active two-way haul; `stop` and `new_session` control the persisted session timer / profit.
+- `pause` / `resume` an active two-way haul. Session stats (timer, profit, runs, average run time) cover one haul: they stay on screen after it stops and start from zero on the next haul; `new_session` zeroes them mid-haul.
 - `Ctrl-R` reopens replay / command history; `Ctrl-C` interrupts (haul-aware safe stop first, cancel on second).
 - Speaks TTS callouts locally, e.g. "commander, ship ready to jump" at the end of a leg.
 
@@ -70,13 +71,22 @@ _(Expand / click the following sections to see the screenshots.)_
 <details>
 <summary><strong>Haul search</strong> — Inara-backed profitable route finder with one-click dispatch.</summary>
 
-- Filter by origin (and optional destination), max route distance with presets, station distance, cargo capacity, profit metric, and min supply / demand.
+- Filter by origin (and optional destination), max route distance with presets, station distance, cargo capacity, profit metric, surface stations, and min supply / demand.
 - Results sort by profit / hour or profit / trip and show cargo, both stations, distance, and route LY.
 - **Start route** hands the selected pair to the two-way haul routine; **Set destination** just routes there; **Travel assist** flies to an arbitrary system + station without hauling.
 - Same search is reachable from the TUI via `haul search [system]` and `haul search url <inara-url>`; `haul route <n>` picks a numbered result.
-- Note: v1 excludes surface / land settlements — station and carrier routes only.
+- **Surface stations** picks Inara's planetary filter: No (default), Yes excluding Odyssey settlements, or Yes with them.
 
 <img src="docs/assets/haul-search.png" alt="Web haul search with Inara route results" width="50%">
+</details>
+
+<details>
+<summary><strong>Trade routes (EDDN)</strong> — round-trip routes from live market prices, no Inara needed.</summary>
+
+- The `lan` server listens to EDDN by default and keeps a local price database; the server log prints a status line every 30 s.
+- `/routes` ranks round trips by profit / hour: **Near** (from your system) or **Global**, sized by 1 / 2 / 4 jumps or 100 / 250 Ly, with supply, demand, station distance and data age filters.
+- **Copy** a route and paste it into the haul page's **Copy / paste route** box to run it.
+- Details and how to turn it off: [docs/user/trade-routes.md](docs/user/trade-routes.md).
 </details>
 
 <details>
@@ -127,6 +137,17 @@ cd ~/EDControlRoom
 ```
 
 The Deck's controller preset leaves most actions off the keyboard; `tools/deck_keymap.py` adds the keys routines press without touching your controller bindings. Details: [docs/user/install.md](docs/user/install.md#steam-deck--linux).
+
+## Piper Voice
+
+Callouts use the system voice by default (`say` on macOS, `spd-say` / `espeak-ng` on Linux, Windows speech). For a more natural voice, install [Piper](https://github.com/OHF-Voice/piper1-gpl) with one command:
+
+```sh
+uv run python3 tools/setup_piper.py                 # Cori (en_GB, high quality), ~115 MB
+uv run python3 tools/setup_piper.py --voice jenny   # or Jenny (en_GB, medium quality)
+```
+
+It installs `piper-tts` as a `uv` tool, downloads the voice (on macOS into `~/Library/Application Support/EDControlRoom/piper`), writes `[tts.piper]` into `config.toml`, and speaks a test line. Restart `control_room.py` to pick it up. Pace, intonation and volume can be tuned in `[tts.piper]` (see [config.example.toml](config.example.toml)) or live from the `/controls` Voice panel. Delete the `[tts.piper]` section to go back to the system voice.
 
 ## Documentation
 

@@ -2,7 +2,7 @@
 
 ## Status
 
-In progress: slices 1 and 2 (listener, store, `tools/eddn_listen.py`) are built, and the server runs the listener when `eddn.enabled` (`GET /api/eddn-status`). Phase 1 below; "Good Deals / Exceptional Routes" alerts are a later phase.
+In progress: slices 1 and 2 (listener, store, `tools/eddn_listen.py`) are built, the server runs the listener when `eddn.enabled` (`GET /api/eddn-status`), and the route finder, profit/hour ranking (uncalibrated time model) and `/routes` page (`GET /api/eddn-routes`, computed on request) are built, with journal-fitted trip times and in-game names (from recent markets) so a route copies into `/haul`. Open: Ardent lookups, background global cache if bubble-scale search gets slow. Phase 1 below; "Good Deals / Exceptional Routes" alerts are a later phase.
 
 ## Why
 

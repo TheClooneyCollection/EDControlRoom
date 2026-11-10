@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `308`
-- Latest generated iteration number: `441`
+- Generated iteration count: `313`
+- Latest generated iteration number: `446`
 
 ## Iteration 134
 
@@ -8740,3 +8740,146 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Run only one writer per database: stop `tools/eddn_listen.py` before starting the server with EDDN enabled.
 - Next in plan 0014: route finder, profit/hour ranking, `/routes`.
+
+## Iteration 442
+
+- When: `2026-11-10 15:15`
+- Area: `haul`
+- Title: `eddn-routes-page`
+- Source: [2026-11-10-15-15_____haul_____eddn-routes-page.md](iteration-logs/2026-11-10-15-15_____haul_____eddn-routes-page.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `eddn-routes-page`
+- Started: `2026-11-10 15:15`
+
+## Summary
+
+- Plan 0014 route finder and `/routes` page, on the EDDN SQLite store. Live check on 147 eligible markets: near and global searches run in 0.04 to 0.1 s, top route Di Fiore Meteor Manor ↔ Braddocks Hide (gold / marine supplies, 1 jump) (before calibration it estimated 165M/h; with the fitted model 116M/h at a 780s round trip).
+
+## Changes
+
+- `edap/eddn/routes.py`: `load_route_markets` (skips carriers, construction depots, too-small pads with type-based pad fallback, surface unless opted in, far stations, stale markets; coordinates by system address or name), `best_leg` (hold capped by capacity and stock, demand only filtered), `find_routes` (spatial grid with cell = range, near view keeps station 1 within the origin radius, ranked by profit/hour), `TimeModel` fitted on 125 November journal legs (Undocked to Docked plus docked time): 90s docked + 110s + 170s first jump + 65s per extra jump + `13 × Ls^(1/3)`; Voltaire ↔ Melroy comes out at 880s against ~816s per run plus ~90s docked at station 1.
+- `edap/eddn/route_query.py`: query parsing with `haul_search.toml` and ship fallbacks (`max_route_distance_ly` is the laden jump range), read-only DB run, JSON payload.
+- Legs carry in-game names from recent-market snapshots (191 of 210 EDDN commodities named; the rest are salvage and illegal goods). Each route has a `trade_route` JSON (null when a name is unknown) that the `/routes` Copy button puts on the clipboard for the `/haul` paste box.
+- `GET /api/eddn-routes` and web `/routes` (Near/Global, 1/2/4 jumps, 100/250 Ly, filters), linked from every sidebar.
+- `/markets`: Best deal panel moved to the top; fixed the Save token button adding another 30 s refresh timer on every click.
+
+## Follow-ups
+
+- Not yet opened in a browser; check `/routes` and a Copy → `/haul` paste live.
+- Check global speed once the DB covers the bubble; add Ardent lookups for markets without coordinates.
+
+## Iteration 443
+
+- When: `2026-11-10 15:31`
+- Area: `haul`
+- Title: `eddn-default-on-and-docs`
+- Source: [2026-11-10-15-31_____haul_____eddn-default-on-and-docs.md](iteration-logs/2026-11-10-15-31_____haul_____eddn-default-on-and-docs.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `eddn-default-on-and-docs`
+- Started: `2026-11-10 15:31`
+
+## Summary
+
+- EDDN listening is on by default, the server logs a periodic status line, `/routes` shows a live listener log, and players have docs for it. README gained a Piper voice section.
+
+## Changes
+
+- `EddnConfig.enabled` and `defaults/eddn.toml` now default to true; new `eddn.status_every_s` (30 s, 0 turns it off, negative rejected).
+- `status_line` moved from `tools/eddn_listen.py` into `edap/eddn/service.py`; `EddnService` runs an `eddn-status` thread that logs `EDDN connected: N msgs, ... | db N markets, ...` through the `edap.eddn` logger, stopped by `close()`.
+- `/routes`: EDDN listener panel polls `/api/eddn-status` every 10 s and prepends one line per check (deltas since the last check, errors, reconnects, DB totals), capped at 60 lines.
+- Docs: `docs/user/trade-routes.md` (indexed in `docs/user/README.md`), README "Trade routes (EDDN)" block and new "Piper Voice" section with TOC entry, `config.example.toml` EDDN comments.
+- `TimeModel` checked against today's Chauhan Dock (Crater Outpost, 292 Ls) ↔ The Job Centre (2 Ls) loop, 1 jump each way: legs to the Job Centre averaged 302s vs 296s modeled, legs to Chauhan ~390s vs 366s, docked ~90 to 120s. Added `surface_extra_s = 30` for legs ending at a surface station; `leg_s` now takes `surface=`. Inara listed Chauhan at 3214 Ls, the journal and EDDN say 292 Ls. Handh is not in the EDDN DB yet, so `/routes` cannot show this route.
+- Removed the now redundant `[eddn] enabled = true` block from the local `config.toml`.
+
+## Follow-ups
+
+- Restart the running server to pick up the status line, then check the `/routes` log panel live.
+
+## Iteration 444
+
+- When: `2026-11-10 15:41`
+- Area: `control-room`
+- Title: `haul-search-surface-stations`
+- Source: [2026-11-10-15-41_control-room_haul-search-surface-stations.md](iteration-logs/2026-11-10-15-41_control-room_haul-search-surface-stations.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `haul-search-surface-stations`
+- Started: `2026-11-10 15:41`
+
+## Summary
+
+- The web `/haul` route search can now include surface stations, using Inara's own three-way filter.
+
+## Changes
+
+- Checked inara.cz `market-traderoutes` (Chrome extension was offline, so read the form HTML): `pi4` options are `0` Yes (with Odyssey stations), `2` Yes (exclude Odyssey stations), `1` No; our existing mapping already matched.
+- The server forced `use_surface_stations = "no"` for every web search. It now reads `use_surface_stations` from the payload (aliases via the shared `parse_surface_stations`, moved from `prompts.py` into `edap/inara/trade_routes.py`), rejects unknown values with `invalid_search`, saves it to `haul_search.toml`, and reports `station_carrier_only` / `use_surface_stations` truthfully.
+- `web/haul-v1.html`: Surface stations select (No / Yes, exclude Odyssey settlements / Yes, with Odyssey settlements), default from `haul_search.toml` via `webDefaults.surfaceStations`; result labels say "routes" instead of "station/carrier routes" when surface is included.
+- README and getting-started updated.
+
+## Follow-ups
+
+- Inara results never set the manual landing flag. Station type is only a sprite offset on `.stationicon` (seen: -13px Coriolis, -156px Orbis, -182px crater outpost, -780px Odyssey settlement), but the flag should not follow it: it is for stations you cannot glide close to, not surface stations. Crater outposts docked fine with it off (Chauhan Dock).
+
+## Iteration 445
+
+- When: `2026-11-10 16:11`
+- Area: `haul`
+- Title: `manual-landing-rename`
+- Source: [2026-11-10-16-11_____haul_____manual-landing-rename.md](iteration-logs/2026-11-10-16-11_____haul_____manual-landing-rename.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `manual-landing-rename`
+- Started: `2026-11-10 16:11`
+
+## Summary
+
+- The per-station haul `on_land` flag is renamed `manual_landing`. It only means "hand off after `SupercruiseExit` because the ship cannot glide close to the pad"; planetary ports dock automatically with it off (Chauhan Dock, `BodyType: "Planet"`, docked ~60s after the drop). "Surface" stays the name for station-on-a-planet concepts (Inara `pi4`, EDDN `is_surface`, `TimeModel.surface_extra_s`).
+
+## Changes
+
+- Renamed fields, params, TOML keys, JSON keys, web ids and labels (`from_manual_landing`, `station_N_manual_landing`, `nav-manual-landing`, "Manual landing (can't glide to the pad)").
+- Old names still load: `manual_landing_from_payload` in `edap/inara/trade_routes.py` covers saved state, pasted routes and server commands; `haul_config.py`, `multi_leg_haul.py`, `routines_haul.py`, the travel handler and `haul-ui.js` fall back to `on_land` / `<side>_on_land`. Tests cover each path.
+- `/routes` Copy no longer sets the flag from `is_surface`; it always emits `false`.
+- User docs, status and the 15:41 log follow-up reworded to the glide meaning.
+
+## Follow-ups
+
+- `detect_transit_resume_state` (`edap/routines/transit.py`) returns `NONE` for a `SupercruiseExit` with `BodyType` other than `Station` when the flag is off, so resuming right after a drop at a planetary port (before `DockingRequested`) does not pick up `POST_DROP_NEAR_STATION`. Kept on purpose: the user wants resume to pick it up only once docking starts.
+
+## Iteration 446
+
+- When: `2026-11-10 16:16`
+- Area: `haul`
+- Title: `reset-session-stats-per-haul`
+- Source: [2026-11-10-16-16_____haul_____reset-session-stats-per-haul.md](iteration-logs/2026-11-10-16-16_____haul_____reset-session-stats-per-haul.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `reset-session-stats-per-haul`
+- Started: `2026-11-10 16:16`
+
+## Summary
+
+- Haul session stats (timer, profit, runs, average run time) used to accumulate across hauls until `new_session`, which blurred how long runs take. The user asked for them to clear on stop.
+
+## Changes
+
+- `stop_haul_stats` sets `session_active = False` and logs `Haul session: N runs, X Cr in mm:ss, average run mm:ss`; the frozen numbers stay on screen.
+- `start_haul_stats` starts from zero when the previous session is not active (a stopped haul, `stop_session`, or a fresh state), and still carries totals over when resuming after a relaunch mid-haul.
+- Resume detection after a drop at a planetary port stays as is: the user only wants it picked up once docking starts (`DockingRequested`).
+
+## Follow-ups
+
+- If the user wants the panel blank right at stop instead of at the next start, clear in `stop_haul_stats` after the summary log.

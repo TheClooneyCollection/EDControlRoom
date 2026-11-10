@@ -6,6 +6,7 @@ Legacy pre-split global status history remains in `../../status-archive.md`.
 
 ## Archived 2026-11-10
 
+- Activity log redraws preserve first-observed display order across local prompt logs and remote server logs, so connect-mode hydrate refreshes do not reorder entries by cross-machine wall-clock timestamps.
 - `set_pid` and `set_hwnd` are available operator commands; bare forms auto-target `EliteDangerous64.exe`, explicit pid/hwnd values are accepted, and `foreground` clears the override.
 
 ## Archived 2026-11-09

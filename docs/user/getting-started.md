@@ -53,7 +53,7 @@ The `/haul` view searches Inara for profitable station-to-station routes near yo
 
 ![Haul search](../assets/haul-search.png)
 
-Fill in the origin (and optionally destination), max route distance, cargo capacity, min supply / demand, then **Search routes**. Click a result and use **Set destination** or **Start route** to dispatch it. Land settlements are excluded for now; only station and carrier routes are returned.
+Fill in the origin (and optionally destination), max route distance, cargo capacity, min supply / demand, then **Search routes**. Click a result and use **Set destination** or **Start route** to dispatch it. **Surface stations** defaults to No (orbital stations and carriers only); pick "Yes, exclude Odyssey settlements" for planetary ports, or "Yes, with Odyssey settlements" for everything. The docking computer handles planetary ports like orbital ones. Only if you cannot glide close to a station after the drop, turn on its **Manual landing** flag yourself (paste box or `haul.toml`).
 
 ### Spansh Route Fetch and Comparison
 
