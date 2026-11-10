@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ED Control Room - Routes</title>
+  <link rel="stylesheet" href="/assets/haul-ui.css">
+  <style>
+    .routes-form {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .routes-tools {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .routes-tools .btn[aria-pressed="true"] {
+      border-color: var(--amber);
+      color: var(--amber);
+    }
+    .route-table-scroll {
+      max-width: 100%;
+      overflow-x: auto;
+    }
+    .route-table {
+      width: 100%;
+      min-width: 760px;
+      border-collapse: collapse;
+    }
+    .route-table th,
+    .route-table td {
+      padding: 8px;
+      text-align: right;
+      vertical-align: top;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .route-table th:nth-child(-n+3),
+    .route-table td:nth-child(-n+3) {
+      text-align: left;
+      white-space: normal;
+    }
+    .route-table th {
+      color: var(--text-2);
+      font-weight: 500;
+    }
+    .route-table td {
+      font-family: var(--mono);
+    }
+    .route-table td:nth-child(-n+3) {
+      font-family: inherit;
+    }
+    .route-sub {
+      display: block;
+      font-size: 11px;
+      color: var(--text-3);
+    }
+    .profit {
+      color: var(--green);
+    }
+    .empty-note {
+      color: var(--text-2);
+    }
+    .eddn-log {
+      max-height: 220px;
+      overflow-y: auto;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+    .eddn-log li {
+      padding: 3px 0;
+      border-top: 1px solid var(--border);
+      color: var(--text-2);
+      overflow-wrap: anywhere;
+    }
+    .eddn-log li:first-child {
+      border-top: 0;
+      color: var(--text-1);
+    }
+    .eddn-log time {
+      color: var(--text-3);
+      margin-right: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Navigation">
+      <div class="brand">
+        <div class="brand-mark">ED</div>
+        <div>
+          <div class="brand-name">Control Room</div>
+          <div class="brand-sub">haul control</div>
+        </div>
+      </div>
+
+      <div class="nav-label">Haul</div>
+      <a class="nav-item link" href="/haul">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 12h5l2 5 4-14 2 9h5"/></svg>
+        Two-way haul
+      </a>
+      <a class="nav-item link" href="/multi-haul">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 18h5l3-12 3 12h5"/><path d="M4 6h4m8 0h4"/></svg>
+        Multi-leg haul
+      </a>
+      <a class="nav-item link" href="/markets">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 20V10m6 10V4m6 16v-7m4 7H2"/></svg>
+        Markets
+      </a>
+      <a class="nav-item link active" href="/routes" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="5" cy="18" r="2"/><circle cx="19" cy="6" r="2"/><path d="M7 18h6a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h6"/></svg>
+        Routes
+      </a>
+      <div class="nav-label">Ship</div>
+      <a class="nav-item link" href="/controls">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Controls
+      </a>
+
+      <div class="sidebar-foot">
+        <div class="status-row"><span><span class="dot"></span>Runtime</span><span id="status-runtime">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Journal</span><span id="status-journal">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Input target</span><span id="status-input-target">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Version</span><span id="status-version">-</span></div>
+      </div>
+    </aside>
+
+    <div>
+      <header class="topbar">
+        <div>
+          <div class="topbar-title">Routes</div>
+          <div class="topbar-sub">Round trips from live EDDN market data, ranked by estimated profit per hour. Holds are capped by stock; jumps use the laden jump range.</div>
+        </div>
+        <div class="chips" aria-label="Session status">
+          <div class="chip">Host <strong id="host-label">-</strong></div>
+          <div class="chip">EDDN <strong id="eddn-label">-</strong></div>
+          <div class="token-control">
+            <input class="token-input" id="access-token" type="password" placeholder="Access token" autocomplete="off" aria-label="Access token">
+            <button class="token-button" id="save-token" type="button">Save</button>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <section class="panel" aria-labelledby="routes-title">
+          <div class="panel-head">
+            <div class="panel-title" id="routes-title">Routes</div>
+            <div class="panel-action field-hint" id="routes-status">-</div>
+          </div>
+          <div class="panel-body">
+            <div class="routes-tools" role="group" aria-label="View">
+              <button class="btn" type="button" data-view="near" aria-pressed="true">Near</button>
+              <button class="btn" type="button" data-view="global" aria-pressed="false">Global</button>
+            </div>
+            <div class="routes-tools" role="group" aria-label="Range presets">
+              <button class="btn" type="button" data-jumps="1">1 jump</button>
+              <button class="btn" type="button" data-jumps="2">2 jumps</button>
+              <button class="btn" type="button" data-jumps="4" aria-pressed="true">4 jumps</button>
+              <button class="btn" type="button" data-range="100">100 Ly</button>
+              <button class="btn" type="button" data-range="250">250 Ly</button>
+            </div>
+            <div class="routes-form">
+              <label class="spansh-field">
+                <span class="field-label">Near system</span>
+                <input class="field" id="route-system" placeholder="Current system" autocomplete="off">
+              </label>
+              <label class="spansh-field">
+                <span class="field-label">Laden jump range (Ly)</span>
+                <input class="field mono" id="route-laden" placeholder="haul_search" inputmode="decimal" autocomplete="off">
+              </label>
+              <label class="spansh-field">
+                <span class="field-label">Cargo (t)</span>
+                <input class="field mono" id="route-capacity" placeholder="Ship" inputmode="numeric" autocomplete="off">
+              </label>
+              <label class="spansh-field">
+                <span class="field-label">Min supply</span>
+                <input class="field mono" id="route-min-supply" placeholder="haul_search" inputmode="numeric" autocomplete="off">
+              </label>
+              <label class="spansh-field">
+                <span class="field-label">Min demand</span>
+                <input class="field mono" id="route-min-demand" placeholder="haul_search" inputmode="numeric" autocomplete="off">
+              </label>
+              <label class="spansh-field">
+                <span class="field-label">Max station distance (Ls)</span>
+                <input class="field mono" id="route-station-ls" placeholder="haul_search" autocomplete="off">
+              </label>
+              <label class="spansh-field">
+                <span class="field-label">Max data age (h)</span>
+                <input class="field mono" id="route-age" placeholder="haul_search" inputmode="decimal" autocomplete="off">
+              </label>
+            </div>
+            <div class="routes-tools">
+              <label><input type="checkbox" id="route-surface"> Surface stations</label>
+              <label><input type="checkbox" id="route-carriers"> Fleet carriers</label>
+              <button class="btn" type="button" id="routes-search">Search</button>
+            </div>
+            <div class="route-table-scroll" id="route-table">
+              <p class="empty-note">Loading</p>
+            </div>
+          </div>
+        </section>
+        <section class="panel" aria-labelledby="eddn-log-title">
+          <div class="panel-head">
+            <div class="panel-title" id="eddn-log-title">EDDN listener</div>
+            <div class="panel-action field-hint">checked every 10 s</div>
+          </div>
+          <div class="panel-body">
+            <ul class="eddn-log" id="eddn-log">
+              <li>Waiting for the first status check</li>
+            </ul>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    window.EDCR_WEB_CONFIG = {};
+  </script>
+  <script src="/assets/routes.js" defer></script>
+</body>
+</html>

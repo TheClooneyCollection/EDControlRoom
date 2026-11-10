@@ -787,10 +787,24 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(missing.status_code, 404)
         self.assertEqual(invalid.status_code, 400)
 
-    def test_every_page_links_to_markets(self) -> None:
-        for page in ("haul-v1.html", "multi-haul.html", "controls.html", "markets.html"):
+    def test_every_page_links_to_markets_and_routes(self) -> None:
+        for page in ("haul-v1.html", "multi-haul.html", "controls.html", "markets.html", "routes.html"):
             html = (Path(server_app.__file__).resolve().parents[3] / "web" / page).read_text(encoding="utf-8")
             self.assertIn('href="/markets"', html, page)
+            self.assertIn('href="/routes"', html, page)
+
+    def test_routes_page_and_script_are_served(self) -> None:
+        app = build_observer_server_app(data_provider=_base_data_read_model, command_handler=None,
+                                        broker=InMemoryObserverSessionBroker(), auth=SharedAccessTokenAuth("secret-token"))
+        with TestClient(app) as client:
+            page = client.get("/routes")
+            script = client.get("/assets/routes.js")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn('src="/assets/routes.js"', page.text)
+        for element_id in ("route-table", "route-system", "route-laden", "routes-search"):
+            self.assertIn(f'id="{element_id}"', page.text)
+        for hook in ('"/api/eddn-routes"', '"/api/eddn-status"', "params.max_route_ly"):
+            self.assertIn(hook, script.text)
 
     def test_controls_endpoint_serves_button_board(self) -> None:
         broker = InMemoryObserverSessionBroker()

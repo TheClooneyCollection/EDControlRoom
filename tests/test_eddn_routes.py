@@ -1,0 +1,161 @@
+from __future__ import annotations
+
+import unittest
+import warnings
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+warnings.filterwarnings(
+    "ignore",
+    message=r"Using `httpx` with `starlette\.testclient` is deprecated; install `httpx2` instead\.",
+)
+
+from starlette.testclient import TestClient
+
+from edap.control_room.models import ShipState
+from edap.control_room.server.app import build_observer_server_app
+from edap.control_room.server.auth import SharedAccessTokenAuth
+from edap.control_room.server.broker import InMemoryObserverSessionBroker
+from edap.eddn.listener import apply_payload
+from edap.eddn.route_query import parse_route_query, run_route_query
+from edap.eddn.routes import RouteFilters, TimeModel, find_routes, load_route_markets
+from edap.eddn.store import EddnStore
+from tests.test_eddn import commodity_envelope, docked_envelope, frame, memory_store
+
+NOW = 1_794_319_200.0  # 2026-11-10T14:00:00Z, the fixture timestamp
+
+
+def price(name: str, *, buy: int = 0, sell: int = 0, stock: int = 0, demand: int = 0) -> dict[str, object]:
+    return {"name": name, "buyPrice": buy, "sellPrice": sell, "stock": stock, "demand": demand}
+
+
+def add_station(
+    store: EddnStore, market_id: int, station: str, system: str, x: float, station_type: str,
+    pads: dict[str, int], commodities: list[dict[str, object]], dist_ls: float = 500.0,
+) -> None:
+    apply_payload(store, frame(docked_envelope(
+        MarketID=market_id, StationName=station, StationType=station_type, StarSystem=system,
+        SystemAddress=1000 + int(x), StarPos=[x, 0.0, 0.0], DistFromStarLS=dist_ls, LandingPads=pads,
+    )))
+    envelope = commodity_envelope(market_id=market_id, station=station, commodities=commodities)
+    envelope["message"]["systemName"] = system  # type: ignore[index]
+    apply_payload(store, frame(envelope))
+
+
+LARGE = {"Small": 4, "Medium": 4, "Large": 2}
+
+
+def galaxy() -> EddnStore:
+    store = memory_store()
+    add_station(store, 1, "Galileo", "Sol", 0.0, "Ocellus", LARGE,
+                [price("gold", buy=9000, stock=5000), price("silver", sell=5200, demand=9000)])
+    add_station(store, 2, "Alpha Port", "Alpha", 10.0, "Coriolis", LARGE,
+                [price("gold", sell=12000, demand=8000), price("silver", buy=4000, stock=500)])
+    add_station(store, 3, "Alpha Outpost", "Alpha", 10.0, "Outpost", {"Small": 2, "Medium": 1, "Large": 0},
+                [price("gold", sell=20000, demand=8000)])
+    add_station(store, 4, "K7Q-BQL", "Sol", 0.0, "FleetCarrier", LARGE, [price("gold", buy=100, stock=9000)])
+    add_station(store, 5, "Far Hub", "Far", 100.0, "Orbis", LARGE, [price("gold", sell=50000, demand=8000)])
+    store.commit()
+    return store
+
+
+def routes(store: EddnStore, **options: object):
+    markets = load_route_markets(store._db, RouteFilters(), now=NOW)
+    defaults: dict[str, object] = dict(capacity=1137, max_route_ly=68.8, laden_jump_range_ly=17.2, time_model=TimeModel())
+    return find_routes(markets, **{**defaults, **options})
+
+
+class EddnRouteFinderTests(unittest.TestCase):
+    def test_round_trip_caps_hold_by_stock_and_skips_carriers_small_pads_and_far_stations(self) -> None:
+        [route] = routes(galaxy())
+
+        self.assertEqual((route.station_1.station, route.station_2.station, route.jumps), ("Galileo", "Alpha Port", 1))
+        self.assertEqual((route.outbound.commodity, route.outbound.tons, route.outbound.profit), ("gold", 1137, 3_411_000))
+        self.assertEqual((route.inbound.commodity, route.inbound.tons, route.inbound.profit), ("silver", 500, 600_000))
+        self.assertEqual(route.profit_per_trip, 4_011_000)
+        self.assertEqual(route.profit_per_hour, round(4_011_000 * 3600 / route.trip_s))
+
+    def test_more_jumps_rank_by_profit_per_hour_and_near_view_needs_station_1_close(self) -> None:
+        store = galaxy()
+        ranked = routes(store, max_route_ly=200.0)
+
+        self.assertEqual([(r.station_2.station, r.jumps) for r in ranked[:2]], [("Far Hub", 6), ("Alpha Port", 1)])
+        self.assertGreater(ranked[0].trip_s, ranked[1].trip_s)
+        near_far = routes(store, max_route_ly=200.0, origin=(100.0, 0.0, 0.0), origin_radius_ly=5.0)
+        self.assertEqual([(r.station_1.station, r.station_2.station) for r in near_far], [("Galileo", "Far Hub")])
+
+    def test_surface_stations_need_opting_in_and_add_landing_time(self) -> None:
+        store = galaxy()
+        add_station(store, 6, "Crater Dock", "Alpha", 10.0, "CraterOutpost", LARGE,
+                    [price("gold", sell=12000, demand=8000), price("silver", buy=4000, stock=500)])
+        store.commit()
+        self.assertNotIn("Crater Dock", [route.station_2.station for route in routes(store)])
+
+        markets = load_route_markets(store._db, RouteFilters(include_surface=True), now=NOW)
+        found = find_routes(markets, capacity=1137, max_route_ly=68.8, laden_jump_range_ly=17.2, time_model=TimeModel())
+        trips = {route.station_2.station: route.trip_s for route in found}
+        self.assertEqual(trips["Crater Dock"] - trips["Alpha Port"], TimeModel().surface_extra_s)
+
+    def test_query_defaults_come_from_haul_search_and_ship(self) -> None:
+        query = parse_route_query(
+            {"jumps": "2"},
+            search_defaults={"max_route_distance_ly": "17.2", "min_supply": "5000", "max_station_distance_ls": "any",
+                             "min_landing_pad": "large", "use_surface_stations": "no"},
+            current_system="Sol",
+            cargo_capacity=1137,
+        )
+
+        self.assertEqual((query.view, query.system, query.max_route_ly, query.capacity), ("near", "Sol", 34.4, 1137))
+        self.assertEqual((query.filters.min_supply, query.filters.min_pad, query.filters.max_station_distance_ls),
+                         (5000, "L", None))
+        with self.assertRaisesRegex(ValueError, "view"):
+            parse_route_query({"view": "x"}, search_defaults={}, current_system="", cargo_capacity=0)
+
+
+class EddnRoutesApiTests(unittest.TestCase):
+    def test_api_runs_near_search_from_the_database_file(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "eddn.sqlite3"
+            store = EddnStore.open(path)
+            source = galaxy()
+            source._db.backup(store._db)
+            store.close()
+
+            payload = run_route_query(
+                path,
+                parse_route_query({}, search_defaults={}, current_system="Sol", cargo_capacity=1137),
+                time_model=TimeModel(),
+                display_names={"gold": "Gold"},
+                now=NOW,
+            )
+            [route] = payload["routes"]
+            self.assertEqual((route["outbound"]["name"], route["inbound"]["name"]), ("Gold", "silver"))
+            self.assertIsNone(route["trade_route"])
+            named = run_route_query(path, parse_route_query({}, search_defaults={}, current_system="Sol", cargo_capacity=1137),
+                                    time_model=TimeModel(), display_names={"gold": "Gold", "silver": "Silver"}, now=NOW)
+            self.assertEqual(
+                {key: named["routes"][0]["trade_route"][key] for key in
+                 ("from_station", "to_station", "source_buy_commodity", "target_buy_commodity", "profit_per_trip")},
+                {"from_station": "Galileo", "to_station": "Alpha Port", "source_buy_commodity": "Gold",
+                 "target_buy_commodity": "Silver", "profit_per_trip": "4,011,000 Cr"},
+            )
+            self.assertFalse(named["routes"][0]["trade_route"]["to_manual_landing"])
+
+            app = build_observer_server_app(
+                data_provider=lambda: type("Data", (), {"ship": ShipState(system="Nowhere", cargo_capacity=1137)})(),
+                command_handler=None, broker=InMemoryObserverSessionBroker(),
+                auth=SharedAccessTokenAuth("secret-token"), eddn_database_file=path,
+            )
+            with patch("edap.control_room.server.app.load_haul_search_config", return_value={}), TestClient(app) as client:
+                self.assertEqual(client.get("/api/eddn-routes").status_code, 401)
+                unknown = client.get("/api/eddn-routes?access_token=secret-token")
+                self.assertEqual(unknown.status_code, 404)
+                self.assertIn("Nowhere", unknown.json()["detail"])
+                self.assertEqual(client.get("/api/eddn-routes?access_token=secret-token&view=global&max_age_hours=999999")
+                                 .json()["routes"][0]["station_2"]["station"], "Alpha Port")
+                self.assertEqual(client.get("/api/eddn-routes?access_token=secret-token&jumps=x").status_code, 400)
+
+
+if __name__ == "__main__":
+    unittest.main()

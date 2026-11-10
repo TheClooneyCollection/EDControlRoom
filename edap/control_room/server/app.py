@@ -6,6 +6,8 @@ from datetime import datetime
 import json
 import logging
 from pathlib import Path
+import sqlite3
+import time
 from typing import Any, Callable
 
 import httpx
@@ -19,6 +21,8 @@ from starlette.responses import HTMLResponse, JSONResponse, Response
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
+from edap.eddn.route_query import RouteQueryError, parse_route_query, run_route_query
+from edap.eddn.routes import TimeModel
 from edap.haul_history import load_runs, parse_window, summarize
 from edap.journal_trade_ledger import journal_trade_ledger
 from edap.market_compare import compare_markets
@@ -43,6 +47,7 @@ from edap.tts import AnnouncementId
 from edap.haul_search_config import (
     GENERATED_HAUL_SEARCH_FIELDS,
     HaulSearchConfigError,
+    load_haul_search_config,
     save_haul_search_config,
 )
 from edap.inara.trade_routes import (
@@ -69,6 +74,7 @@ HAUL_WEB_URL_PATH = "/haul"
 MULTI_HAUL_WEB_URL_PATH = "/multi-haul"
 CONTROLS_WEB_URL_PATH = "/controls"
 MARKETS_WEB_URL_PATH = "/markets"
+ROUTES_WEB_URL_PATH = "/routes"
 HAUL_WEB_ASSET_URL_PATH = "/assets/{asset_name:str}"
 _MESSAGE_SCHEMA_PATH = (
     Path(__file__).resolve().parents[3] / "docs" / "schemas" / "control_room_message.schema.json"
@@ -80,6 +86,7 @@ _HAUL_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "haul-v1.html"
 _MULTI_HAUL_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "multi-haul.html"
 _CONTROLS_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "controls.html"
 _MARKETS_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "markets.html"
+_ROUTES_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "routes.html"
 _HAUL_WEB_ASSET_DIR = Path(__file__).resolve().parents[3] / "web"
 CONTROL_ROOM_MESSAGE_SCHEMA = json.loads(_MESSAGE_SCHEMA_PATH.read_text(encoding="utf-8"))
 CONTROL_ROOM_BROWSER_PROBE_HTML = _BROWSER_PROBE_PATH.read_text(encoding="utf-8")
@@ -172,6 +179,7 @@ def build_observer_server_app(
     haul_runs_file: Path | None = None,
     recent_markets_file: Path | None = None,
     eddn_status: Callable[[], dict[str, Any]] | None = None,
+    eddn_database_file: Path | None = None,
     route_compare_navroute_wait_seconds: float = 6.0,
     route_compare_compare_retry_attempts: int = 3,
 ) -> Starlette:
@@ -289,6 +297,21 @@ def build_observer_server_app(
             headers={"Cache-Control": "no-store"},
         )
 
+    async def routes_web(request):
+        data = data_provider()
+        return HTMLResponse(
+            _render_web_html(
+                _ROUTES_WEB_PATH,
+                web_config=_haul_web_config(
+                    data,
+                    auth=auth,
+                    request=request,
+                    web_default_access_token=web_default_access_token,
+                ),
+            ),
+            headers={"Cache-Control": "no-store"},
+        )
+
     async def haul_web_asset(request):
         asset_name = request.path_params["asset_name"]
         allowed_assets = {
@@ -297,6 +320,7 @@ def build_observer_server_app(
             "multi-haul.js": "text/javascript; charset=utf-8",
             "controls.js": "text/javascript; charset=utf-8",
             "markets.js": "text/javascript; charset=utf-8",
+            "routes.js": "text/javascript; charset=utf-8",
             "route-compare.js": "text/javascript; charset=utf-8",
             "active-route.js": "text/javascript; charset=utf-8",
             "speech.js": "text/javascript; charset=utf-8",
@@ -444,6 +468,40 @@ def build_observer_server_app(
             return JSONResponse({"enabled": False})
         return JSONResponse({"enabled": True, **await asyncio.to_thread(eddn_status)})
 
+    async def eddn_routes_endpoint(request: Request) -> JSONResponse:
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        if eddn_database_file is None or not eddn_database_file.exists():
+            return JSONResponse({"detail": "EDDN is not enabled or has no data yet"}, status_code=404)
+        data = data_provider()
+        try:
+            search_defaults = await asyncio.to_thread(load_haul_search_config)
+        except (OSError, HaulSearchConfigError):
+            search_defaults = {}
+        try:
+            query = parse_route_query(
+                request.query_params,
+                search_defaults=search_defaults,
+                current_system=getattr(getattr(data, "ship", None), "system", None) or "",
+                cargo_capacity=_ship_cargo_capacity(data),
+            )
+        except ValueError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=400)
+        def search() -> dict[str, Any]:
+            names = {item.commodity: item.name for snapshot in read_recent_markets() for item in market_items(snapshot)}
+            return run_route_query(
+                eddn_database_file, query, time_model=TimeModel(), display_names=names, now=time.time()
+            )
+
+        try:
+            payload = await asyncio.to_thread(search)
+        except RouteQueryError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=404)
+        except sqlite3.Error as exc:
+            return JSONResponse({"detail": f"Cannot read the EDDN database: {exc}"}, status_code=503)
+        return JSONResponse(payload)
+
     async def spansh_route_endpoint(request: Request) -> JSONResponse:
         auth_failure = require_http_auth(request)
         if auth_failure is not None:
@@ -537,6 +595,7 @@ def build_observer_server_app(
             Route(MULTI_HAUL_WEB_URL_PATH, multi_haul_web),
             Route(CONTROLS_WEB_URL_PATH, controls_web),
             Route(MARKETS_WEB_URL_PATH, markets_web),
+            Route(ROUTES_WEB_URL_PATH, routes_web),
             Route("/api/route-compare", route_compare),
             Route("/api/route-compare/config", route_compare_config_endpoint),
             Route("/api/spansh-route", spansh_route_endpoint),
@@ -544,6 +603,7 @@ def build_observer_server_app(
             Route("/api/recent-markets", recent_markets_endpoint),
             Route("/api/market-compare", market_compare_endpoint),
             Route("/api/eddn-status", eddn_status_endpoint),
+            Route("/api/eddn-routes", eddn_routes_endpoint),
             Route(HAUL_WEB_ASSET_URL_PATH, haul_web_asset),
             WebSocketRoute("/session", session),
         ]
