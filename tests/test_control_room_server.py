@@ -717,6 +717,70 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertNotIn('src="/assets/haul-ui.js"', response.text)
         self.assertEqual(response.headers["cache-control"], "no-store")
 
+    def test_markets_page_lists_recent_markets_and_compares_two(self) -> None:
+        from edap.recent_markets import record_market_json
+
+        def market(market_id: int, station: str, timestamp: str, items: list[dict]) -> dict:
+            return {"MarketID": market_id, "StationName": station, "StarSystem": "Sol", "StationType": "Orbis",
+                    "timestamp": timestamp, "Items": items}
+
+        def data_provider() -> ControlRoomDataReadModel:
+            return replace(_base_data_read_model(), ship=ShipState(system="Sol", cargo_capacity=256))
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = Path(directory) / "recent.json"
+            record_market_json(store, market(1, "Galileo", "2026-11-10T10:00:00Z", [
+                {"Name": "$gold_name;", "Name_Localised": "Gold", "BuyPrice": 9000, "Stock": 100, "Demand": 0},
+                {"Name": "$tea_name;", "Name_Localised": "Tea", "SellPrice": 2000, "Demand": 40},
+            ]), lambda _: None)
+            record_market_json(store, market(2, "Abraham Lincoln", "2026-11-10T11:00:00Z", [
+                {"Name": "$gold_name;", "Name_Localised": "Gold", "SellPrice": 9600, "Demand": 500},
+                {"Name": "$tea_name;", "Name_Localised": "Tea", "BuyPrice": 1500, "Stock": 1000},
+            ]), lambda _: None)
+            app = build_observer_server_app(
+                data_provider=data_provider,
+                command_handler=None,
+                broker=InMemoryObserverSessionBroker(),
+                auth=SharedAccessTokenAuth("secret-token"),
+                recent_markets_file=store,
+            )
+            with TestClient(app) as client:
+                page = client.get("/markets")
+                script = client.get("/assets/markets.js")
+                self.assertEqual(client.get("/api/recent-markets").status_code, 401)
+                listing = client.get("/api/recent-markets?access_token=secret-token").json()
+                comparison = client.get("/api/market-compare?x=1&y=2&access_token=secret-token").json()
+                smaller = client.get("/api/market-compare?x=1&y=2&capacity=10&access_token=secret-token").json()
+                missing = client.get("/api/market-compare?x=1&y=99&access_token=secret-token")
+                invalid = client.get("/api/market-compare?x=one&y=2&access_token=secret-token")
+
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(page.headers["cache-control"], "no-store")
+        self.assertIn('src="/assets/markets.js"', page.text)
+        for element_id in ("market-list", "market-table", "show-empty", "deal-x", "deal-y", "deal-capacity"):
+            self.assertIn(f'id="{element_id}"', page.text)
+        self.assertEqual(script.status_code, 200)
+        self.assertEqual(script.headers["cache-control"], "no-store")
+        for hook in ('"/api/recent-markets"', '"/api/market-compare"', "ageLabel(market.timestamp)"):
+            self.assertIn(hook, script.text)
+        self.assertEqual(listing["cargo_capacity"], 256)
+        self.assertEqual([m["station"] for m in listing["markets"]], ["Abraham Lincoln", "Galileo"])
+        self.assertEqual(listing["markets"][1]["station_type"], "Orbis")
+        self.assertEqual(listing["markets"][1]["items"][0]["name"], "Gold")
+        self.assertEqual(listing["markets"][1]["items"][0]["buy_price"], 9000)
+        self.assertEqual(comparison["cargo_capacity"], 256)
+        self.assertEqual(comparison["outbound"][0]["hold_profit"], 600 * 100)
+        self.assertEqual(comparison["inbound"][0]["hold_profit"], 500 * 256)
+        self.assertEqual(comparison["round_trip"]["profit_per_ton"], 1100)
+        self.assertEqual(smaller["round_trip"]["hold_profit"], 1100 * 10)
+        self.assertEqual(missing.status_code, 404)
+        self.assertEqual(invalid.status_code, 400)
+
+    def test_every_page_links_to_markets(self) -> None:
+        for page in ("haul-v1.html", "multi-haul.html", "controls.html", "markets.html"):
+            html = (Path(server_app.__file__).resolve().parents[3] / "web" / page).read_text(encoding="utf-8")
+            self.assertIn('href="/markets"', html, page)
+
     def test_controls_endpoint_serves_button_board(self) -> None:
         broker = InMemoryObserverSessionBroker()
         app = build_observer_server_app(

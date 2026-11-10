@@ -21,6 +21,8 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from edap.haul_history import load_runs, parse_window, summarize
 from edap.journal_trade_ledger import journal_trade_ledger
+from edap.market_compare import compare_markets
+from edap.recent_markets import MarketSnapshot, load_recent_markets, market_items
 from edap.platform.local_time import SystemLocalTimezone
 from edap.control_room.server.auth import ObserverServerAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
@@ -65,6 +67,7 @@ HAUL_WEB_ENTRY_URL_PATH = "/"
 HAUL_WEB_URL_PATH = "/haul"
 MULTI_HAUL_WEB_URL_PATH = "/multi-haul"
 CONTROLS_WEB_URL_PATH = "/controls"
+MARKETS_WEB_URL_PATH = "/markets"
 HAUL_WEB_ASSET_URL_PATH = "/assets/{asset_name:str}"
 _MESSAGE_SCHEMA_PATH = (
     Path(__file__).resolve().parents[3] / "docs" / "schemas" / "control_room_message.schema.json"
@@ -75,6 +78,7 @@ _BROWSER_PROBE_PATH = (
 _HAUL_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "haul-v1.html"
 _MULTI_HAUL_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "multi-haul.html"
 _CONTROLS_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "controls.html"
+_MARKETS_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "markets.html"
 _HAUL_WEB_ASSET_DIR = Path(__file__).resolve().parents[3] / "web"
 CONTROL_ROOM_MESSAGE_SCHEMA = json.loads(_MESSAGE_SCHEMA_PATH.read_text(encoding="utf-8"))
 CONTROL_ROOM_BROWSER_PROBE_HTML = _BROWSER_PROBE_PATH.read_text(encoding="utf-8")
@@ -165,6 +169,7 @@ def build_observer_server_app(
     web_default_access_token: str = "",
     journal_dir: Path | None = None,
     haul_runs_file: Path | None = None,
+    recent_markets_file: Path | None = None,
     route_compare_navroute_wait_seconds: float = 6.0,
     route_compare_compare_retry_attempts: int = 3,
 ) -> Starlette:
@@ -267,6 +272,21 @@ def build_observer_server_app(
             headers={"Cache-Control": "no-store"},
         )
 
+    async def markets_web(request):
+        data = data_provider()
+        return HTMLResponse(
+            _render_web_html(
+                _MARKETS_WEB_PATH,
+                web_config=_haul_web_config(
+                    data,
+                    auth=auth,
+                    request=request,
+                    web_default_access_token=web_default_access_token,
+                ),
+            ),
+            headers={"Cache-Control": "no-store"},
+        )
+
     async def haul_web_asset(request):
         asset_name = request.path_params["asset_name"]
         allowed_assets = {
@@ -274,6 +294,7 @@ def build_observer_server_app(
             "haul-ui.js": "text/javascript; charset=utf-8",
             "multi-haul.js": "text/javascript; charset=utf-8",
             "controls.js": "text/javascript; charset=utf-8",
+            "markets.js": "text/javascript; charset=utf-8",
             "route-compare.js": "text/javascript; charset=utf-8",
             "active-route.js": "text/javascript; charset=utf-8",
             "speech.js": "text/javascript; charset=utf-8",
@@ -376,6 +397,43 @@ def build_observer_server_app(
         except (OSError, ValueError) as exc:
             return JSONResponse({"detail": f"Cannot read haul statistics: {exc}"}, status_code=503)
 
+    def read_recent_markets() -> tuple[MarketSnapshot, ...]:
+        return load_recent_markets(recent_markets_file) if recent_markets_file is not None else ()
+
+    async def recent_markets_endpoint(request: Request) -> JSONResponse:
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        snapshots = await asyncio.to_thread(read_recent_markets)
+        return JSONResponse(
+            {
+                "cargo_capacity": _ship_cargo_capacity(data_provider()),
+                "markets": [_market_snapshot_payload(snapshot) for snapshot in snapshots],
+            }
+        )
+
+    async def market_compare_endpoint(request: Request) -> JSONResponse:
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        params = request.query_params
+        try:
+            market_x_id = int(params.get("x", ""))
+            market_y_id = int(params.get("y", ""))
+            capacity_raw = (params.get("capacity") or "").strip()
+            cargo_capacity = int(capacity_raw) if capacity_raw else _ship_cargo_capacity(data_provider())
+        except ValueError:
+            return JSONResponse({"detail": "x and y must be market ids; capacity must be a whole number"}, status_code=400)
+        if cargo_capacity < 0:
+            return JSONResponse({"detail": "capacity must not be negative"}, status_code=400)
+        by_id = {snapshot.market_id: snapshot for snapshot in await asyncio.to_thread(read_recent_markets)}
+        market_x = by_id.get(market_x_id)
+        market_y = by_id.get(market_y_id)
+        if market_x is None or market_y is None:
+            return JSONResponse({"detail": "market is not in the recent markets list"}, status_code=404)
+        comparison = compare_markets(market_items(market_x), market_items(market_y), cargo_capacity)
+        return JSONResponse(asdict(comparison))
+
     async def spansh_route_endpoint(request: Request) -> JSONResponse:
         auth_failure = require_http_auth(request)
         if auth_failure is not None:
@@ -468,10 +526,13 @@ def build_observer_server_app(
             Route(HAUL_WEB_URL_PATH, haul_web),
             Route(MULTI_HAUL_WEB_URL_PATH, multi_haul_web),
             Route(CONTROLS_WEB_URL_PATH, controls_web),
+            Route(MARKETS_WEB_URL_PATH, markets_web),
             Route("/api/route-compare", route_compare),
             Route("/api/route-compare/config", route_compare_config_endpoint),
             Route("/api/spansh-route", spansh_route_endpoint),
             Route("/api/haul-stats", haul_stats_endpoint),
+            Route("/api/recent-markets", recent_markets_endpoint),
+            Route("/api/market-compare", market_compare_endpoint),
             Route(HAUL_WEB_ASSET_URL_PATH, haul_web_asset),
             WebSocketRoute("/session", session),
         ]
@@ -489,6 +550,22 @@ def build_observer_server_app(
 
     app.add_exception_handler(Exception, _log_unhandled_exception)
     return app
+
+
+def _ship_cargo_capacity(data: object) -> int:
+    cargo_capacity = getattr(getattr(data, "ship", None), "cargo_capacity", None)
+    return cargo_capacity if isinstance(cargo_capacity, int) and cargo_capacity > 0 else 0
+
+
+def _market_snapshot_payload(snapshot: MarketSnapshot) -> dict[str, Any]:
+    return {
+        "market_id": snapshot.market_id,
+        "station": snapshot.station,
+        "system": snapshot.system,
+        "station_type": snapshot.station_type,
+        "timestamp": snapshot.timestamp,
+        "items": [asdict(item) for item in market_items(snapshot)],
+    }
 
 
 class RouteCompareError(Exception):

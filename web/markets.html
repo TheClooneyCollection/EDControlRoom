@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ED Control Room - Markets</title>
+  <link rel="stylesheet" href="/assets/haul-ui.css">
+  <style>
+    .markets-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .market-list {
+      display: grid;
+      gap: 6px;
+    }
+    .market-pick {
+      display: grid;
+      gap: 2px;
+      width: 100%;
+      padding: 9px 11px;
+      text-align: left;
+      color: var(--text);
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+    }
+    .market-pick:hover {
+      background: var(--bg-3);
+    }
+    .market-pick[aria-pressed="true"] {
+      border-color: var(--amber);
+      background: var(--amber-dim);
+    }
+    .market-pick-name {
+      font-weight: 650;
+      overflow-wrap: anywhere;
+    }
+    .market-pick-sub {
+      font-size: 11px;
+      color: var(--text-2);
+      overflow-wrap: anywhere;
+    }
+    .market-tools {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      font-size: 12px;
+      color: var(--text-2);
+    }
+    .market-table-scroll {
+      max-width: 100%;
+      overflow-x: auto;
+    }
+    .market-table {
+      width: 100%;
+      min-width: 520px;
+      border-collapse: collapse;
+    }
+    .market-table th,
+    .market-table td {
+      padding: 7px 8px;
+      text-align: right;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .market-table th:first-child,
+    .market-table td:first-child {
+      text-align: left;
+      white-space: normal;
+    }
+    .market-table th {
+      color: var(--text-2);
+      font-weight: 500;
+    }
+    .market-table td {
+      font-family: var(--mono);
+    }
+    .market-table td:first-child {
+      font-family: inherit;
+    }
+    .market-table .sort {
+      padding: 0;
+      font: inherit;
+      color: inherit;
+      background: none;
+      border: 0;
+      cursor: pointer;
+    }
+    .market-table .sort[aria-pressed="true"] {
+      color: var(--amber);
+    }
+    .market-category {
+      display: block;
+      font-size: 11px;
+      color: var(--text-3);
+    }
+    .deal-form {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 140px);
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .deal-round-trip {
+      margin-bottom: 14px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-2);
+      overflow-wrap: anywhere;
+    }
+    .deal-panel h3 {
+      margin: 16px 0 6px;
+      font-size: 12px;
+      color: var(--text-2);
+      overflow-wrap: anywhere;
+    }
+    .profit {
+      color: var(--green);
+    }
+    .empty-note {
+      color: var(--text-2);
+    }
+    @media (max-width: 900px) {
+      .markets-layout,
+      .deal-form {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Navigation">
+      <div class="brand">
+        <div class="brand-mark">ED</div>
+        <div>
+          <div class="brand-name">Control Room</div>
+          <div class="brand-sub">haul control</div>
+        </div>
+      </div>
+
+      <div class="nav-label">Haul</div>
+      <a class="nav-item link" href="/haul">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 12h5l2 5 4-14 2 9h5"/></svg>
+        Two-way haul
+      </a>
+      <a class="nav-item link" href="/multi-haul">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 18h5l3-12 3 12h5"/><path d="M4 6h4m8 0h4"/></svg>
+        Multi-leg haul
+      </a>
+      <a class="nav-item link active" href="/markets" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 20V10m6 10V4m6 16v-7m4 7H2"/></svg>
+        Markets
+      </a>
+      <div class="nav-label">Ship</div>
+      <a class="nav-item link" href="/controls">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Controls
+      </a>
+
+      <div class="sidebar-foot">
+        <div class="status-row"><span><span class="dot"></span>Runtime</span><span id="status-runtime">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Journal</span><span id="status-journal">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Input target</span><span id="status-input-target">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Version</span><span id="status-version">-</span></div>
+      </div>
+    </aside>
+
+    <div>
+      <header class="topbar">
+        <div>
+          <div class="topbar-title">Markets</div>
+          <div class="topbar-sub">The last stations whose commodities market you opened, and the best deals between two of them.</div>
+        </div>
+        <div class="chips" aria-label="Session status">
+          <div class="chip">Host <strong id="host-label">-</strong></div>
+          <div class="chip">Cargo <strong id="cargo-label">-</strong></div>
+          <div class="token-control">
+            <input class="token-input" id="access-token" type="password" placeholder="Access token" autocomplete="off" aria-label="Access token">
+            <button class="token-button" id="save-token" type="button">Save</button>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <section class="markets-layout">
+          <section class="panel" aria-labelledby="recent-title">
+            <div class="panel-head">
+              <div class="panel-title" id="recent-title">Recent markets</div>
+              <div class="panel-action"><button class="btn" type="button" id="markets-refresh">Refresh</button></div>
+            </div>
+            <div class="panel-body">
+              <p class="field-hint" id="markets-status">Loading</p>
+              <div class="market-list" id="market-list"></div>
+            </div>
+          </section>
+
+          <section class="panel" aria-labelledby="market-title">
+            <div class="panel-head">
+              <div class="panel-title" id="market-title">Commodities</div>
+              <div class="panel-action field-hint" id="market-age">-</div>
+            </div>
+            <div class="panel-body">
+              <div class="market-tools">
+                <label><input type="checkbox" id="show-empty"> Show rows with no stock and no demand</label>
+              </div>
+              <div class="market-table-scroll" id="market-table">
+                <p class="empty-note">Select a market.</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel deal-panel history-panel" aria-labelledby="deal-title">
+            <div class="panel-head">
+              <div class="panel-title" id="deal-title">Best deal</div>
+              <div class="panel-action field-hint" id="deal-status">Pick two markets</div>
+            </div>
+            <div class="panel-body">
+              <div class="deal-form">
+                <label class="spansh-field">
+                  <span class="field-label">Station X</span>
+                  <select class="select" id="deal-x"></select>
+                </label>
+                <label class="spansh-field">
+                  <span class="field-label">Station Y</span>
+                  <select class="select" id="deal-y"></select>
+                </label>
+                <label class="spansh-field">
+                  <span class="field-label">Cargo capacity (t)</span>
+                  <input class="field mono" id="deal-capacity" inputmode="numeric" autocomplete="off">
+                </label>
+              </div>
+              <div id="deal-result"></div>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    window.EDCR_WEB_CONFIG = {};
+  </script>
+  <script src="/assets/markets.js" defer></script>
+</body>
+</html>
