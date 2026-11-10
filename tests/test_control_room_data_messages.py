@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 import unittest
 
+from edap.config import PiperVoiceConfig
 from edap.control_room.dependencies import LocalControlRoomDataSource
 from edap.control_room.models import HaulStats, MarketData, RuntimeUIState, ShipState
 from edap.control_room.protocol.data_messages import (
@@ -72,6 +74,15 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
             _trade_route_picker_state=SimpleNamespace(selected_route_index=3),
             _current_version="1.2.3",
             _current_commit="abc1234",
+            _tts=SimpleNamespace(
+                speech_on=True,
+                piper_voice=PiperVoiceConfig(
+                    executable=Path("piper"),
+                    model=Path("voices") / "cori" / "en_GB-cori-high.onnx",
+                    length_scale=0.9,
+                ),
+                phrase_presets=lambda: {"haul_paused": "Jameson, haul paused at station {station_index}."},
+            ),
             _ctx=SimpleNamespace(
                 journal=SimpleNamespace(cli_source_status=lambda: "configured"),
                 bindings=SimpleNamespace(cli_source_status=lambda: "configured"),
@@ -108,6 +119,10 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
             message["payload"]["activity_log"]["entries"][0]["message_text"],
             "Starting haul loop.",
         )
+        self.assertEqual(message["payload"]["voice"]["voice"], "en_GB-cori-high")
+        self.assertEqual(message["payload"]["voice"]["voices"], ("en_GB-cori-high",))
+        self.assertEqual(message["payload"]["voice"]["settings"]["length_scale"], 0.9)
+        self.assertEqual(message["payload"]["voice"]["settings"]["noise_scale"], 0.667)
         self.assertNotIn("prompt_state", message["payload"])
         self.assertNotIn("replay_browser", message["payload"])
 
@@ -134,3 +149,6 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
         self.assertEqual(parsed.selected_trade_route.to_demand, "96,431")
         self.assertTrue(parsed.selected_trade_route.from_on_land)
         self.assertFalse(parsed.selected_trade_route.to_on_land)
+        self.assertTrue(parsed.voice.piper)
+        self.assertEqual(parsed.voice.settings["volume"], 1.0)
+        self.assertEqual(parsed.voice.phrase_presets["haul_paused"], "Jameson, haul paused at station {station_index}.")

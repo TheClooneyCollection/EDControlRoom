@@ -93,6 +93,7 @@ class ControlRoomDependenciesTests(unittest.TestCase):
             _runtime_state=RuntimeUIState(routine_active=True, active_routine_name="haul"),
             _current_version="1.2.3",
             _current_commit="abc1234",
+            _tts=SimpleNamespace(speech_on=False, piper_voice=None, phrase_presets=dict),
             _ctx=SimpleNamespace(
                 journal=SimpleNamespace(cli_source_status=lambda: "configured"),
                 bindings=SimpleNamespace(cli_source_status=lambda: "configured"),
@@ -142,6 +143,7 @@ class ControlRoomDependenciesTests(unittest.TestCase):
             _runtime_state=RuntimeUIState(),
             _current_version="1.2.3",
             _current_commit="abc1234",
+            _tts=SimpleNamespace(speech_on=False, piper_voice=None, phrase_presets=dict),
             _ctx=SimpleNamespace(
                 journal=SimpleNamespace(cli_source_status=lambda: "configured"),
                 bindings=SimpleNamespace(cli_source_status=lambda: "configured"),

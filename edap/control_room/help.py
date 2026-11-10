@@ -134,6 +134,18 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
         detail="wine_helper authenticates or launches the configured helper in the CrossOver bottle. Failures abort input with no foreground fallback. foreground explicitly restores host input; pid auto-detects Elite or accepts a pid/process name. Configure input.wine_helper wine_path and bottle first.",
     ),
     CommandHelp(
+        name="say",
+        usage="say <text>",
+        summary="Speak any text through the host TTS voice.",
+        detail="Queues the text on the same voice as announcements, ignoring phrase settings and disabled messages. Does nothing when TTS is off.",
+    ),
+    CommandHelp(
+        name="voice",
+        usage="voice | voice set [model=<name>] [<setting>=<number>|default ...] | voice save",
+        summary="Show, tune or save the host Piper voice.",
+        detail="`voice set` switches the model to another voice installed beside the configured one and sets length_scale, noise_scale, noise_w_scale, sentence_silence or volume (`default` drops a setting). Changes apply from the next line spoken. `voice save` writes the running voice into [tts.piper] in the active config.",
+    ),
+    CommandHelp(
         name="reload_config",
         usage="reload_config",
         summary="Re-read config.toml without restarting Control Room.",

@@ -80,9 +80,7 @@
     if (!el("speech-enabled")) return;
     if (!("speechSynthesis" in window)) {
       setStatus("This browser cannot speak.");
-      for (const id of ["speech-enabled", "speech-voice", "speech-rate", "speech-test", "speech-say-text", "speech-say"]) {
-        if (el(id)) el(id).disabled = true;
-      }
+      for (const id of ["speech-enabled", "speech-voice", "speech-rate", "speech-test"]) el(id).disabled = true;
       return;
     }
     loadSettings();
@@ -114,20 +112,6 @@
       unlock();
       speak(TEST_TEXT);
     });
-    // Optional free-text control (/controls): speaks whatever is typed, even with announcements off.
-    if (el("speech-say")) {
-      const sayTyped = () => {
-        const text = el("speech-say-text").value.trim();
-        if (!text) return;
-        unlock();
-        window.speechSynthesis.cancel();
-        speak(text);
-      };
-      el("speech-say").addEventListener("click", sayTyped);
-      el("speech-say-text").addEventListener("keydown", (event) => {
-        if (event.key === "Enter") sayTyped();
-      });
-    }
     window.addEventListener("edcr:announcement", (event) => {
       const text = event.detail && event.detail.message_text;
       if (settings.enabled && unlocked && text) speak(text);

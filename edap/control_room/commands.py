@@ -11,6 +11,7 @@ from edap.control_room import error_text
 from edap.control_room.help import CONTROL_ROOM_COMMAND_INDEX, CONTROL_ROOM_COMMANDS
 from edap.control_room.history import now_iso
 from edap.control_room.interfaces import CommandHost
+from edap.control_room.voice import cmd_say, cmd_voice
 from edap.control_room_state import CommandHistoryEntry
 from edap.control_room.rendering import haul_history_summary_lines, journal_ledger_lines
 from edap.journal_trade_ledger import journal_trade_ledger
@@ -141,6 +142,12 @@ def dispatch(app: CommandHost, raw: str, *, skip_delay_override: bool | None = N
     elif verb in {"replay", "history"}:
         app._record_history_entry(CommandHistoryEntry(raw=raw, command="replay", timestamp=now_iso()))
         cmd_resume(app)
+    elif verb == "say":
+        app._record_history_entry(CommandHistoryEntry(raw=raw, command="say", timestamp=now_iso()))
+        cmd_say(app, raw_rest)
+    elif verb == "voice":
+        app._record_history_entry(CommandHistoryEntry(raw=raw, command="voice", params={"value": raw_rest}, timestamp=now_iso()))
+        cmd_voice(app, raw_rest)
     elif verb == "reload_config":
         app._record_history_entry(CommandHistoryEntry(raw=raw, command="reload_config", timestamp=now_iso()))
         app._cmd_reload_config()

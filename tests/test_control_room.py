@@ -5,6 +5,7 @@ from dataclasses import replace
 import io
 import json
 import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -27,6 +28,7 @@ from edap.config import (
     ControlsConfig,
     MarketBuyHoldSegmentConfig,
     PathsConfig,
+    PiperVoiceConfig,
     RuntimeConfig,
     ScreenConfig,
     TTSConfig,
@@ -52,7 +54,7 @@ from edap.control_room_state import CommandHistoryEntry
 from edap.routines import RoutineResult
 from edap.runtime import ResolvedPath, RuntimeContext
 from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler
-from edap.tts import AnnouncementId, NullSpeechBackend, TTSAnnouncer
+from edap.tts import AnnouncementId, NullSpeechBackend, PiperSpeechBackend, TTSAnnouncer
 from edap.control_room.workers import PendingRoutineCancelled, RoutineCancelled, run_routine_thread
 from edap.haul_config import DEFAULT_HAUL_CONFIG_PATH
 from edap.inara.trade_routes import TradeRoute, TradeRouteSearchResult
@@ -358,6 +360,7 @@ class _HarnessActivityLog(ActivityLog):
 class _FakeTTS:
     def __init__(self) -> None:
         self.calls: list[tuple[AnnouncementId, dict[str, object]]] = []
+        self.said: list[str] = []
         self.commander_name: str | None = None
 
     def announce(self, message_id: AnnouncementId, **values: object) -> None:
@@ -368,6 +371,10 @@ class _FakeTTS:
 
     def render_announcement(self, message_id: AnnouncementId, **values: object) -> str | None:
         return None
+
+    def say(self, text: str) -> bool:
+        self.said.append(text)
+        return True
 
     def close(self) -> None:
         return None
@@ -2981,6 +2988,78 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertIsNotNone(entry)
         self.assertEqual(entry.command, "home")
         self.assertEqual(entry.params, {"mode": "set", "system": "Shinrarta Dezhra"})
+
+    def _piper_app_voice(self) -> tuple[Path, Path, list[list[str]]]:
+        voices = Path(self.tmpdir.name) / "voices"
+        cori = voices / "cori" / "en_GB-cori-high.onnx"
+        jenny = voices / "jenny" / "en_GB-jenny_dioco-medium.onnx"
+        for model in (cori, jenny):
+            model.parent.mkdir(parents=True)
+            model.write_bytes(b"")
+        started: list[list[str]] = []
+        backend = PiperSpeechBackend(
+            PiperVoiceConfig(executable=Path("piper"), model=cori),
+            start_process=lambda args: started.append(args),
+            play=lambda wav_path: None,
+        )
+        self.addCleanup(shutil.rmtree, backend._output_dir, True)
+        self.app._tts = TTSAnnouncer(TTSConfig(enabled=False), platform_name="macos", backend=backend)
+        return cori, jenny, started
+
+    def test_voice_set_switches_model_and_tuning_then_save_writes_config(self) -> None:
+        cori, jenny, _ = self._piper_app_voice()
+        config_path = Path(self.tmpdir.name) / "config.toml"
+        config_path.write_text("[paths]\n\n[controls]\n\n[screen]\n\n[runtime]\n\n[tts.piper]\n# keep me\nmodel = 'old.onnx'\n", encoding="utf-8")
+        self.app._config_path = config_path
+
+        self.app._dispatch_command("voice set model=en_GB-jenny_dioco-medium length_scale=0.85 volume=1.4")
+        self.app._dispatch_command("voice set volume=default noise_scale=0.5")
+        self.app._dispatch_command("voice save")
+
+        voice = self.app._tts.piper_voice
+        self.assertEqual(voice.model, jenny)
+        self.assertEqual((voice.length_scale, voice.noise_scale, voice.volume), (0.85, 0.5, None))
+        self.assertEqual(self.app._config.tts.piper, voice)
+        saved = config_path.read_text(encoding="utf-8")
+        self.assertIn("# keep me", saved)
+        self.assertIn(f"model = {json.dumps(str(jenny))}", saved)
+        self.assertIn("length_scale = 0.85", saved)
+        self.assertIn("noise_scale = 0.5", saved)
+        self.assertNotIn("volume", saved)
+        self.assertIn("en_GB-cori-high", "\n".join(self.app.logged))
+
+    def test_voice_set_rejects_unknown_voice_and_bad_numbers(self) -> None:
+        cori, _, _ = self._piper_app_voice()
+
+        for command in ("voice set model=nope", "voice set length_scale=0", "voice set volume=loud", "voice set pitch=2", "voice set 0.9"):
+            self.app._dispatch_command(command)
+
+        self.assertEqual(self.app._tts.piper_voice, PiperVoiceConfig(executable=Path("piper"), model=cori))
+        output = "\n".join(self.app.logged)
+        self.assertIn("Unknown voice: nope", output)
+        self.assertIn("Bad value for length_scale: 0", output)
+        self.assertIn("Bad value for volume: loud", output)
+        self.assertIn("Unknown voice setting: pitch", output)
+        self.assertIn("Usage: voice", output)
+
+    def test_say_speaks_text_and_reports_when_tts_is_off(self) -> None:
+        self.app._tts = _FakeTTS()
+        self.app._dispatch_command("say Fly safe, Commander")
+        self.app._dispatch_command("say")
+        self.assertEqual(self.app._tts.said, ["Fly safe, Commander"])
+        self.assertIn("Usage: say <text>", "\n".join(self.app.logged))
+
+        self._piper_app_voice()
+        self.app._dispatch_command("say hello")
+        self.app._dispatch_command("voice")
+        output = "\n".join(self.app.logged)
+        self.assertIn("TTS is off, nothing spoken.", output)
+        self.assertIn("en_GB-jenny_dioco-medium", output)
+
+    def test_voice_without_piper_explains_restart(self) -> None:
+        self.app._tts = TTSAnnouncer(TTSConfig(enabled=False), platform_name="macos", backend=NullSpeechBackend())
+        self.app._dispatch_command("voice set volume=1")
+        self.assertIn("No Piper voice is running.", "\n".join(self.app.logged))
 
     def test_home_set_without_argument_uses_current_system(self) -> None:
         config_path = Path(self.tmpdir.name) / "config.toml"

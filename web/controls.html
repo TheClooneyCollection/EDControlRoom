@@ -52,10 +52,27 @@
       font-size: 13px;
       color: var(--text-2);
     }
-    .voice-rate {
+    .voice-say {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .voice-model {
+      margin-top: 10px;
+    }
+    .voice-sliders {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 8px 16px;
+      margin-top: 10px;
+    }
+    .voice-slider {
       display: grid;
       gap: 4px;
-      margin-top: 10px;
+    }
+    .voice-slider input {
+      width: 100%;
     }
     .nav-home {
       margin-top: 10px;
@@ -276,28 +293,48 @@
             <section class="panel" aria-labelledby="voice-title">
               <div class="panel-head">
                 <div class="panel-title" id="voice-title">Voice</div>
-                <div class="panel-action"><span class="field-hint">This device</span></div>
+                <div class="panel-action"><span class="field-hint" id="voice-current">-</span></div>
               </div>
               <div class="panel-body">
-                <div class="trade-form">
-                  <label class="spansh-field">
-                    <span class="field-label">Say</span>
-                    <input class="field" id="speech-say-text" placeholder="Type anything to speak" autocomplete="off">
+                <label class="spansh-field">
+                  <span class="field-label">Preset</span>
+                  <select class="select" id="voice-preset"><option value="">Prefill from a TTS line</option></select>
+                </label>
+                <div class="voice-say">
+                  <input class="field" id="voice-say-text" placeholder="Type anything to speak" autocomplete="off">
+                  <button class="btn primary" type="button" id="voice-say">Say</button>
+                </div>
+                <label class="spansh-field voice-model">
+                  <span class="field-label">Piper voice</span>
+                  <select class="select" id="voice-model" data-voice-setting="model"></select>
+                </label>
+                <div class="voice-sliders">
+                  <label class="voice-slider">
+                    <span class="field-label">Length <span class="field-hint">lower is faster</span> <strong class="mono" id="voice-length_scale-value">-</strong></span>
+                    <input type="range" id="voice-length_scale" data-voice-setting="length_scale" min="0.5" max="2" step="0.05">
                   </label>
-                  <label class="spansh-field">
-                    <span class="field-label">Voice</span>
-                    <select class="select" id="speech-voice"></select>
+                  <label class="voice-slider">
+                    <span class="field-label">Noise <span class="field-hint">intonation variation</span> <strong class="mono" id="voice-noise_scale-value">-</strong></span>
+                    <input type="range" id="voice-noise_scale" data-voice-setting="noise_scale" min="0" max="1.5" step="0.05">
+                  </label>
+                  <label class="voice-slider">
+                    <span class="field-label">Noise W <span class="field-hint">rhythm variation</span> <strong class="mono" id="voice-noise_w_scale-value">-</strong></span>
+                    <input type="range" id="voice-noise_w_scale" data-voice-setting="noise_w_scale" min="0" max="1.5" step="0.05">
+                  </label>
+                  <label class="voice-slider">
+                    <span class="field-label">Sentence pause <span class="field-hint">seconds</span> <strong class="mono" id="voice-sentence_silence-value">-</strong></span>
+                    <input type="range" id="voice-sentence_silence" data-voice-setting="sentence_silence" min="0" max="1.5" step="0.05">
+                  </label>
+                  <label class="voice-slider">
+                    <span class="field-label">Volume <span class="field-hint">multiplier</span> <strong class="mono" id="voice-volume-value">-</strong></span>
+                    <input type="range" id="voice-volume" data-voice-setting="volume" min="0" max="2" step="0.05">
                   </label>
                 </div>
                 <div class="btn-row">
-                  <button class="btn primary" type="button" id="speech-say">Say</button>
-                  <button class="btn ghost" type="button" id="speech-test">Test voice</button>
+                  <button class="btn ghost" type="button" id="voice-test">Test voice</button>
+                  <button class="btn ghost" type="button" id="voice-save">Save to config</button>
                 </div>
-                <label class="field-label voice-rate">Rate <span id="speech-rate-value" class="field-hint"></span>
-                  <input class="speech-rate" type="range" id="speech-rate" min="0.5" max="1.5" step="0.1" value="1">
-                </label>
-                <label class="surface-check"><input type="checkbox" id="speech-enabled"> Also speak routine announcements here</label>
-                <p class="field-hint" id="speech-status" role="status"></p>
+                <p class="nav-home" id="voice-status">Changes apply from the next line spoken. Save keeps them after a restart.</p>
               </div>
             </section>
 
@@ -366,6 +403,5 @@
     window.EDCR_WEB_CONFIG = {};
   </script>
   <script src="/assets/controls.js" defer></script>
-  <script src="/assets/speech.js" defer></script>
 </body>
 </html>

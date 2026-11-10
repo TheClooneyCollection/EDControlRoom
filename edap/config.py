@@ -221,6 +221,15 @@ class ControlRoomConfig:
 class PiperVoiceConfig:
     executable: Path
     model: Path
+    # Synthesis tweaks passed to piper; None leaves the model's (or piper's) own default.
+    length_scale: float | None = None
+    noise_scale: float | None = None
+    noise_w_scale: float | None = None
+    sentence_silence: float | None = None
+    volume: float | None = None
+
+
+PIPER_TUNING_KEYS = ("length_scale", "noise_scale", "noise_w_scale", "sentence_silence", "volume")
 
 
 @dataclass(frozen=True)
@@ -366,7 +375,19 @@ def _piper_voice(raw: dict[str, object]) -> PiperVoiceConfig | None:
     model = _optional_path(raw.get("model"))
     if executable is None or model is None:
         raise ConfigError("Config section `tts.piper` needs both `executable` and `model`.")
-    return PiperVoiceConfig(executable=executable, model=model)
+    tuning = {key: _piper_tuning_value(raw.get(key), key=key) for key in PIPER_TUNING_KEYS}
+    return PiperVoiceConfig(executable=executable, model=model, **tuning)
+
+
+def _piper_tuning_value(value: object, *, key: str) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ConfigError(f"Config value `tts.piper.{key}` must be a number.")
+    number = float(value)
+    if number < 0 or (key == "length_scale" and number == 0):
+        raise ConfigError(f"Config value `tts.piper.{key}` must be {'above' if key == 'length_scale' else 'at least'} 0.")
+    return number
 
 
 def _require_table(raw: dict[str, object], key: str) -> dict[str, object]:
@@ -804,6 +825,20 @@ def save_home_system(path: Path | str, system_name: str) -> Path:
     return config_path
 
 
+def save_piper_voice(path: Path | str, voice: PiperVoiceConfig) -> Path:
+    """Write the voice model and tuning into `[tts.piper]`; unset tuning keys are left as they are."""
+    config_path = Path(path)
+    content = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+    content = _upsert_toml_string(content, section="tts.piper", key="executable", value=str(voice.executable))
+    content = _upsert_toml_string(content, section="tts.piper", key="model", value=str(voice.model))
+    for key in PIPER_TUNING_KEYS:
+        value = getattr(voice, key)
+        if value is not None:
+            content = _upsert_toml_line(content, section="tts.piper", key=key, rendered_value=repr(float(value)))
+    config_path.write_text(content, encoding="utf-8")
+    return config_path
+
+
 def _minimal_config_text(home_system: str) -> str:
     return "\n".join((
         "[paths]",
@@ -821,6 +856,10 @@ def _minimal_config_text(home_system: str) -> str:
 
 
 def _upsert_toml_string(content: str, *, section: str, key: str, value: str) -> str:
+    return _upsert_toml_line(content, section=section, key=key, rendered_value=_toml_basic_string(value))
+
+
+def _upsert_toml_line(content: str, *, section: str, key: str, rendered_value: str) -> str:
     lines = content.splitlines(keepends=True)
     section_header = f"[{section}]"
     key_prefix = f"{key} = "
@@ -838,7 +877,7 @@ def _upsert_toml_string(content: str, *, section: str, key: str, value: str) -> 
             section_end = index
             break
 
-    rendered = f"{key_prefix}{_toml_basic_string(value)}\n"
+    rendered = f"{key_prefix}{rendered_value}\n"
 
     if section_start is None:
         suffix = "" if not content or content.endswith("\n") else "\n"

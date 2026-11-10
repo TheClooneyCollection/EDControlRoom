@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+import json
 from enum import Enum
 import logging
 import os
@@ -10,10 +11,10 @@ import re
 from shutil import which
 import subprocess
 import tempfile
-from threading import Condition, Thread
+from threading import Condition, Lock, Thread
 from typing import Callable, Mapping, Protocol
 
-from edap.config import PiperVoiceConfig, TTSConfig
+from edap.config import PIPER_TUNING_KEYS, PiperVoiceConfig, TTSConfig
 
 logger = logging.getLogger(__name__)
 
@@ -148,11 +149,28 @@ class PiperSpeechBackend:
         self._play = play
         self._output_dir = tempfile.mkdtemp(prefix="edcr-piper-")
         self._process: subprocess.Popen[str] | None = None
+        # Held while speaking so a voice change lands between utterances.
+        self._lock = Lock()
+
+    @property
+    def voice(self) -> PiperVoiceConfig:
+        return self._voice
+
+    def configure(self, voice: PiperVoiceConfig) -> None:
+        with self._lock:
+            self._voice = voice
+            if self._process is not None:
+                self._process.kill()
+                self._process = None
 
     def speak(self, text: str) -> None:
         line = " ".join(text.split())
         if not line:
             return
+        with self._lock:
+            self._speak_line(line)
+
+    def _speak_line(self, line: str) -> None:
         wav_path = self._synthesize(line) or self._synthesize(line)
         if not wav_path:
             return
@@ -163,13 +181,7 @@ class PiperSpeechBackend:
 
     def _synthesize(self, line: str) -> str:
         if self._process is None or self._process.poll() is not None:
-            self._process = self._start_process([
-                str(self._voice.executable),
-                "--model",
-                str(self._voice.model),
-                "--output_dir",
-                self._output_dir,
-            ])
+            self._process = self._start_process(piper_command(self._voice, output_dir=self._output_dir))
         # piper-tts reads one utterance per stdin line and logs `Wrote <path>` to stderr once the wav is complete.
         wav_path = ""
         try:
@@ -189,6 +201,49 @@ class PiperSpeechBackend:
             self._process.kill()
             self._process = None
         return wav_path
+
+
+def piper_command(voice: PiperVoiceConfig, *, output_dir: str) -> list[str]:
+    args = [str(voice.executable), "--model", str(voice.model)]
+    for key in PIPER_TUNING_KEYS:
+        value = getattr(voice, key)
+        if value is not None:
+            args += [f"--{key}", str(value)]
+    return [*args, "--output_dir", output_dir]
+
+
+# piper's own fallbacks when a model config or the command line leaves a value out.
+_PIPER_BASE_DEFAULTS = {
+    "length_scale": 1.0,
+    "noise_scale": 0.667,
+    "noise_w_scale": 0.8,
+    "sentence_silence": 0.0,
+    "volume": 1.0,
+}
+
+
+def piper_model_defaults(model: Path) -> dict[str, float]:
+    """The values piper uses for unset tuning keys: the model's `inference` block, then piper's fallbacks."""
+    defaults = dict(_PIPER_BASE_DEFAULTS)
+    try:
+        inference = json.loads(Path(f"{model}.json").read_text(encoding="utf-8")).get("inference", {})
+    except (OSError, ValueError, AttributeError):
+        return defaults
+    for key, model_key in (("length_scale", "length_scale"), ("noise_scale", "noise_scale"), ("noise_w_scale", "noise_w")):
+        value = inference.get(model_key) if isinstance(inference, dict) else None
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            defaults[key] = float(value)
+    return defaults
+
+
+def piper_voice_models(model: Path) -> tuple[Path, ...]:
+    """Voices installed beside the configured one: `<voices>/<name>/<model>.onnx`."""
+    voices_dir = model.parent.parent
+    try:
+        found = sorted(voices_dir.glob("*/*.onnx"))
+    except OSError:
+        found = []
+    return tuple(found) if model in found else (model, *found)
 
 
 _WAV_PLAYERS = {
@@ -328,8 +383,41 @@ class TTSAnnouncer:
         self._speaker: QueuedSpeaker | None = None
         self._last_text = ""
         selected_backend = backend if backend is not None else build_speech_backend(platform_name, config.piper)
+        self._backend = selected_backend
         if config.enabled and not isinstance(selected_backend, NullSpeechBackend):
             self._speaker = QueuedSpeaker(selected_backend)
+
+    @property
+    def speech_on(self) -> bool:
+        return self._speaker is not None
+
+    @property
+    def piper_voice(self) -> PiperVoiceConfig | None:
+        """The live Piper voice, or None when speech runs through another backend."""
+        return self._backend.voice if isinstance(self._backend, PiperSpeechBackend) else None
+
+    def configure_piper(self, voice: PiperVoiceConfig) -> bool:
+        if not isinstance(self._backend, PiperSpeechBackend):
+            return False
+        self._backend.configure(voice)
+        return True
+
+    def say(self, text: str) -> bool:
+        """Speak free text now, skipping phrases and the disabled list. False when speech is off."""
+        line = text.strip()
+        if self._speaker is None or not line:
+            return False
+        self._speaker.enqueue(line)
+        return True
+
+    def phrase_presets(self) -> dict[str, str]:
+        """Phrase templates with `{title}` filled in; other placeholders stay for the caller to fill."""
+        title = self._resolve_title()
+        return {
+            message_id.value: template.replace("{title}", title)
+            for message_id, template in self._phrases.items()
+            if template.strip()
+        }
 
     def apply_wording(self, config: TTSConfig) -> None:
         """Adopt title, phrase and disabled-message settings. The voice and on/off switch stay as built."""

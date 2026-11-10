@@ -40,6 +40,13 @@
 # [tts.piper]
 # executable = '~/.local/bin/piper'
 # model = '~/.local/share/EDControlRoom/piper/voices/cori/en_GB-cori-high.onnx'
+# Optional tuning; leave a key out to use the voice's own default. The
+# /controls Voice panel and `voice set` / `voice save` change these live.
+# length_scale = 1.0      # speaking pace, lower is faster
+# noise_scale = 0.667     # intonation variation
+# noise_w_scale = 0.8     # rhythm variation
+# sentence_silence = 0.0  # seconds of silence after each sentence
+# volume = 1.0            # loudness multiplier
 
 [tts.phrases]
 # destination_set = "Setting destination to {system_name}."

@@ -8,7 +8,9 @@ from edap.control_room.routine_stop import RoutineStopMode
 from edap.control_room_state import CommandHistoryEntry
 from edap.haul_search_config import HaulSearchConfigError, load_haul_search_config
 from edap.inara.trade_routes import TradeRoute, trade_route_search_defaults
+from edap.config import PIPER_TUNING_KEYS
 from edap.routing.types import Route
+from edap.tts import piper_model_defaults, piper_voice_models
 
 if TYPE_CHECKING:
     from edap.control_room.app import ControlRoomApp
@@ -73,6 +75,18 @@ class ServerStatusReadModel:
 
 
 @dataclass(frozen=True)
+class VoiceReadModel:
+    """Host speech state for the web Voice panel."""
+    speech_on: bool = False
+    piper: bool = False
+    voice: str = ""
+    voices: tuple[str, ...] = ()
+    # Effective tuning: the configured value, else what piper falls back to for this model.
+    settings: dict[str, float] = field(default_factory=dict)
+    phrase_presets: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ControlRoomDataReadModel:
     ship: ShipState
     market: MarketData
@@ -83,6 +97,7 @@ class ControlRoomDataReadModel:
     session: SessionReadModel
     server_status: ServerStatusReadModel
     home_system: str = ""
+    voice: VoiceReadModel = field(default_factory=VoiceReadModel)
     selected_trade_route: TradeRoute | None = None
     running_trade_route: TradeRoute | None = None
     active_spansh_route: dict[str, Any] | None = None
@@ -220,9 +235,30 @@ class LocalControlRoomDataSource:
                 web_form_defaults=_web_form_defaults(app),
             ),
             home_system=app._config.control_room.home_system,
+            voice=_voice_read_model(app),
             selected_trade_route=_selected_trade_route(app) or app._saved_state.selected_trade_route,
             running_trade_route=app._saved_state.running_trade_route,
         )
+
+
+def _voice_read_model(app: ControlRoomApp) -> VoiceReadModel:
+    tts = app._tts
+    piper_voice = tts.piper_voice
+    presets = tts.phrase_presets()
+    if piper_voice is None:
+        return VoiceReadModel(speech_on=tts.speech_on, phrase_presets=presets)
+    defaults = piper_model_defaults(piper_voice.model)
+    return VoiceReadModel(
+        speech_on=tts.speech_on,
+        piper=True,
+        voice=piper_voice.model.stem,
+        voices=tuple(model.stem for model in piper_voice_models(piper_voice.model)),
+        settings={
+            key: value if (value := getattr(piper_voice, key)) is not None else defaults[key]
+            for key in PIPER_TUNING_KEYS
+        },
+        phrase_presets=presets,
+    )
 
 
 def _input_target_summary(app: ControlRoomApp) -> str:

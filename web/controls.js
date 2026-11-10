@@ -14,6 +14,8 @@ let commandSequence = 1;
 let currentRoutine = {};
 let webDefaults = { galaxyMapSettle: "2.0", ...(WEB_CONFIG.webDefaults || {}) };
 let homeSystem = "";
+let voiceState = {};
+let currentShip = {};
 const pendingCommands = new Map();
 const activityEntries = new Map();
 
@@ -89,6 +91,13 @@ function updateButtons() {
   if (!homeSystem) {
     document.getElementById("nav-plot-home").disabled = true;
   }
+  const speechOn = Boolean(voiceState.speech_on);
+  ["voice-say", "voice-test"].forEach((id) => {
+    document.getElementById(id).disabled = !operator || !speechOn;
+  });
+  document.querySelectorAll("[data-voice-setting], #voice-save").forEach((element) => {
+    element.disabled = !operator || !voiceState.piper;
+  });
   const instant = document.getElementById("toggle-instant");
   instant.disabled = !operator;
   instant.setAttribute("aria-checked", currentRoutine.instant_mode ? "true" : "false");
@@ -160,6 +169,8 @@ function applyHydrate(payload) {
   webDefaults = { ...webDefaults, ...(serverStatus.web_form_defaults || {}) };
   homeSystem = String(payload.home_system || "").trim();
   setText("nav-home-system", homeSystem || "not set");
+  currentShip = ship;
+  applyVoice(payload.voice || {});
   currentRoutine = payload.routine || {};
   updateButtons();
   activityEntries.clear();
@@ -220,10 +231,6 @@ function connectWebsocket() {
       applyHydrate(message.payload || {});
       return;
     }
-    if (message.message_type === "event.announcement_emitted") {
-      window.dispatchEvent(new CustomEvent("edcr:announcement", { detail: message.payload || {} }));
-      return;
-    }
     if (message.message_type === "event.activity_log_appended") {
       addActivityEntry(message.payload.entry || {});
       renderActivityLog();
@@ -265,6 +272,43 @@ function tradeCommand(verb) {
     return;
   }
   submitInput(`${verb} ${commodity} ${amount}`);
+}
+
+function applyVoice(voice) {
+  voiceState = voice;
+  setText("voice-current", voice.piper ? voice.voice : (voice.speech_on ? "system voice" : "TTS off"));
+  const presetSelect = document.getElementById("voice-preset");
+  const presets = Object.entries(voice.phrase_presets || {});
+  if (presetSelect.options.length - 1 !== presets.length) {
+    presetSelect.length = 1;
+    presets.forEach(([id, text]) => presetSelect.add(new Option(`${id.replaceAll("_", " ")}: ${text}`, text)));
+  }
+  const modelSelect = document.getElementById("voice-model");
+  modelSelect.length = 0;
+  (voice.voices || []).forEach((name) => modelSelect.add(new Option(name, name)));
+  modelSelect.value = voice.voice || "";
+  // Leave a slider alone while the operator is dragging it.
+  document.querySelectorAll("input[data-voice-setting]").forEach((input) => {
+    const value = (voice.settings || {})[input.dataset.voiceSetting];
+    if (value === undefined || input === document.activeElement) return;
+    input.value = String(value);
+    setText(`${input.id}-value`, Number(value).toFixed(2));
+  });
+}
+
+function fillPreset(text) {
+  return text
+    .replaceAll("{system_name}", currentShip.system || "{system_name}")
+    .replaceAll("{station_name}", currentShip.station || "{station_name}");
+}
+
+function sayText(text) {
+  const line = text.trim();
+  if (line) submitInput(`say ${line}`, { skipDelay: true });
+}
+
+function setVoice(key, value) {
+  submitInput(`voice set ${key}=${value}`, { skipDelay: true });
 }
 
 function galaxyMapSettle() {
@@ -335,6 +379,26 @@ document.getElementById("nav-plot-home").addEventListener("click", () => plotDes
 document.getElementById("nav-set-home").addEventListener("click", () => {
   submitInput(`home set ${document.getElementById("nav-system").value.trim()}`.trim(), { skipDelay: true });
 });
+document.getElementById("voice-preset").addEventListener("change", (event) => {
+  if (!event.target.value) return;
+  document.getElementById("voice-say-text").value = fillPreset(event.target.value);
+  event.target.value = "";
+});
+document.getElementById("voice-say").addEventListener("click", () => {
+  sayText(document.getElementById("voice-say-text").value);
+});
+document.getElementById("voice-say-text").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") sayText(event.target.value);
+});
+document.getElementById("voice-model").addEventListener("change", (event) => setVoice("model", event.target.value));
+document.querySelectorAll("input[data-voice-setting]").forEach((input) => {
+  input.addEventListener("input", () => setText(`${input.id}-value`, Number(input.value).toFixed(2)));
+  input.addEventListener("change", () => setVoice(input.dataset.voiceSetting, input.value));
+});
+document.getElementById("voice-test").addEventListener("click", () => {
+  sayText("Voice check. Frame shift drive charging, commander.");
+});
+document.getElementById("voice-save").addEventListener("click", () => submitInput("voice save", { skipDelay: true }));
 document.getElementById("trade-buy").addEventListener("click", () => tradeCommand("buy"));
 document.getElementById("trade-sell").addEventListener("click", () => tradeCommand("sell"));
 document.getElementById("stop-after-run").addEventListener("click", () => stopRoutine("after_run"));

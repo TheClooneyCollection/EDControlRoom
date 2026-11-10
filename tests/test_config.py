@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
 from edap.capture import build_capture_layout
-from edap.config import ConfigError, default_runtime_platform, load_config, save_home_system
+from edap.config import ConfigError, default_runtime_platform, load_config, save_home_system, save_piper_voice
 
 
 def _write_config(path: Path, content: str) -> None:
@@ -590,6 +591,35 @@ title = ""
             config = load_config(config_path)
             self.assertEqual(config.tts.piper.executable, executable)
             self.assertEqual(config.tts.piper.model, model)
+
+    def test_tts_piper_tuning_loads_validates_and_saves(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            config_path = temp_path / "config.toml"
+            executable = temp_path / "piper"
+            model = temp_path / "voice.onnx"
+            executable.write_text("", encoding="utf-8")
+            model.write_text("", encoding="utf-8")
+            base = f"[paths]\n\n[controls]\n\n[screen]\n\n[runtime]\n\n[tts.piper]\nexecutable = '{executable}'\nmodel = '{model}'\n"
+
+            _write_config(config_path, base + "length_scale = 0\n")
+            with self.assertRaisesRegex(ConfigError, "tts.piper.length_scale"):
+                load_config(config_path)
+            _write_config(config_path, base + "volume = 'loud'\n")
+            with self.assertRaisesRegex(ConfigError, "tts.piper.volume"):
+                load_config(config_path)
+
+            _write_config(config_path, base + "# tuned by hand\nvolume = 2\n\n[tts.phrases]\narrival = 'Here.'\n")
+            voice = load_config(config_path).tts.piper
+            self.assertEqual((voice.volume, voice.length_scale), (2.0, None))
+
+            save_piper_voice(config_path, replace(voice, length_scale=0.85, noise_w_scale=0.6))
+
+            saved = config_path.read_text(encoding="utf-8")
+            self.assertIn("# tuned by hand", saved)
+            reloaded = load_config(config_path)
+            self.assertEqual(reloaded.tts.piper, replace(voice, length_scale=0.85, noise_w_scale=0.6))
+            self.assertEqual(reloaded.tts.phrases["arrival"], "Here.")
 
     def test_rejects_omitted_runtime_platform_on_unsupported_host(self) -> None:
         with TemporaryDirectory() as temp_dir:

@@ -13,6 +13,7 @@ from edap.control_room.dependencies import (
     RoutineReadModel,
     ServerStatusReadModel,
     SessionReadModel,
+    VoiceReadModel,
 )
 from edap.control_room.models import HaulStats, MarketData, ShipState
 from edap.control_room_state import CommandHistoryEntry
@@ -101,6 +102,7 @@ def data_read_model_from_payload(payload: dict[str, Any]) -> ControlRoomDataRead
         session=_session(_mapping(payload.get("session", {}))),
         server_status=_server_status(_mapping(payload.get("server_status", {}))),
         home_system=str(payload.get("home_system", "")),
+        voice=_voice(_mapping(payload.get("voice", {}))),
         selected_trade_route=_trade_route(payload.get("selected_trade_route")),
         running_trade_route=_trade_route(payload.get("running_trade_route")),
         active_spansh_route=_mapping(payload.get("active_spansh_route")) or None
@@ -262,6 +264,27 @@ def _server_status(payload: dict[str, Any]) -> ServerStatusReadModel:
         web_form_defaults={
             str(key): str(value)
             for key, value in _mapping(payload.get("web_form_defaults", {})).items()
+        },
+    )
+
+
+def _voice(payload: dict[str, Any]) -> VoiceReadModel:
+    voices = payload.get("voices", ())
+    settings: dict[str, float] = {}
+    for key, value in _mapping(payload.get("settings", {})).items():
+        try:
+            settings[str(key)] = float(value)
+        except (TypeError, ValueError):
+            continue
+    return VoiceReadModel(
+        speech_on=bool(payload.get("speech_on", False)),
+        piper=bool(payload.get("piper", False)),
+        voice=str(payload.get("voice", "")),
+        voices=tuple(str(item) for item in voices) if isinstance(voices, (list, tuple)) else (),
+        settings=settings,
+        phrase_presets={
+            str(key): str(value)
+            for key, value in _mapping(payload.get("phrase_presets", {})).items()
         },
     )
 

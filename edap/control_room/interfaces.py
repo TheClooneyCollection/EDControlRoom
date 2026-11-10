@@ -9,7 +9,7 @@ from edap.config import AppConfig
 from edap.control_room.models import MarketData, ShipState, TradeRoutesData
 from edap.control_room_state import CommandHistoryEntry, ControlRoomState
 from edap.progress_controls import ProgressShipControls
-from edap.tts import AnnouncementId
+from edap.tts import AnnouncementId, TTSAnnouncer
 
 
 class CommandHost(Protocol):
@@ -25,8 +25,10 @@ class CommandHost(Protocol):
     _market: MarketData
     _trade_routes: TradeRoutesData
     _saved_state: ControlRoomState
+    _tts: TTSAnnouncer
 
     def _log(self, msg: str) -> None: ...
+    def _publish_protocol_data_refresh(self) -> None: ...
     def _record_history_entry(self, entry: CommandHistoryEntry) -> None: ...
     def _save_saved_state(self) -> None: ...
     def _request_shutdown(self, source: str) -> None: ...

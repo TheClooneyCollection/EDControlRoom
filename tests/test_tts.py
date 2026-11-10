@@ -4,6 +4,7 @@ import io
 import os
 from pathlib import Path
 import shutil
+from tempfile import TemporaryDirectory
 from threading import Event
 import unittest
 
@@ -16,6 +17,8 @@ from edap.tts import (
     audio_env,
     format_credits_short,
     normalize_tts_value,
+    piper_model_defaults,
+    piper_voice_models,
 )
 
 
@@ -74,7 +77,7 @@ class _FakePiperProcess:
 
 
 class PiperSpeechBackendTests(unittest.TestCase):
-    def _backend(self, *, dies_after: int | None = None):
+    def _backend(self, *, dies_after: int | None = None, voice: PiperVoiceConfig | None = None):
         started: list[list[str]] = []
         processes: list[_FakePiperProcess] = []
         played: list[str] = []
@@ -90,7 +93,7 @@ class PiperSpeechBackendTests(unittest.TestCase):
             played.append(wav_path)
 
         backend = PiperSpeechBackend(
-            PiperVoiceConfig(executable=Path("piper"), model=Path("voice.onnx")),
+            voice or PiperVoiceConfig(executable=Path("piper"), model=Path("voice.onnx")),
             start_process=start_process,
             play=play,
         )
@@ -119,6 +122,41 @@ class PiperSpeechBackendTests(unittest.TestCase):
         self.assertTrue(processes[0].killed)
         self.assertEqual(processes[1].lines, ["Second.\n"])
         self.assertEqual(len(played), 2)
+
+
+    def test_passes_tuning_and_restarts_piper_with_a_new_voice(self) -> None:
+        backend, started, processes, played = self._backend(
+            voice=PiperVoiceConfig(executable=Path("piper"), model=Path("cori.onnx"), length_scale=0.9, volume=1.5),
+        )
+
+        backend.speak("First.")
+        backend.configure(PiperVoiceConfig(executable=Path("piper"), model=Path("jenny.onnx"), noise_w_scale=0.5))
+        backend.speak("Second.")
+
+        self.assertEqual(started[0][:7], ["piper", "--model", "cori.onnx", "--length_scale", "0.9", "--volume", "1.5"])
+        self.assertEqual(started[1][:5], ["piper", "--model", "jenny.onnx", "--noise_w_scale", "0.5"])
+        self.assertTrue(processes[0].killed)
+        self.assertEqual(backend.voice.model, Path("jenny.onnx"))
+        self.assertEqual(len(played), 2)
+
+
+class PiperVoiceFilesTests(unittest.TestCase):
+    def test_reads_model_inference_defaults_and_lists_sibling_voices(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            voices = Path(temp_dir)
+            cori = voices / "cori" / "en_GB-cori-high.onnx"
+            jenny = voices / "jenny" / "en_GB-jenny_dioco-medium.onnx"
+            for model in (cori, jenny):
+                model.parent.mkdir()
+                model.write_bytes(b"")
+            Path(f"{cori}.json").write_text('{"inference": {"noise_scale": 0.5, "length_scale": 1.1, "noise_w": 0.7}}')
+
+            self.assertEqual(
+                piper_model_defaults(cori),
+                {"length_scale": 1.1, "noise_scale": 0.5, "noise_w_scale": 0.7, "sentence_silence": 0.0, "volume": 1.0},
+            )
+            self.assertEqual(piper_model_defaults(jenny)["noise_scale"], 0.667)
+            self.assertEqual(piper_voice_models(cori), (cori, jenny))
 
 
 @unittest.skipUnless(hasattr(os, "getuid"), "XDG_RUNTIME_DIR is a POSIX session concept")
@@ -213,6 +251,32 @@ class TTSHelpersTests(unittest.TestCase):
         announcer.close()
 
         self.assertEqual(backend.spoken, ["Ready to jump, captain.", "Haul aborted."])
+
+    def test_announcer_says_free_text_and_offers_phrase_presets(self) -> None:
+        backend = _FakeBackend()
+        announcer = TTSAnnouncer(
+            TTSConfig(
+                title_mode="custom",
+                title="captain",
+                disabled_messages=("haul_aborted",),
+                phrases={"haul_aborted": "Haul aborted, {title}.", "arrival": "Arrived at {system_name}."},
+            ),
+            platform_name="macos",
+            backend=backend,
+        )
+        self.addCleanup(announcer.close)
+
+        self.assertTrue(announcer.say("  Fly safe, commander. "))
+        self.assertFalse(announcer.say("   "))
+        announcer.close()
+
+        self.assertEqual(backend.spoken, ["Fly safe, commander."])
+        self.assertEqual(
+            announcer.phrase_presets(),
+            {"haul_aborted": "Haul aborted, captain.", "arrival": "Arrived at {system_name}."},
+        )
+        self.assertIsNone(announcer.piper_voice)
+        self.assertFalse(announcer.configure_piper(PiperVoiceConfig(executable=Path("piper"), model=Path("v.onnx"))))
 
     def test_announcer_renders_market_level_low_phrase(self) -> None:
         backend = _FakeBackend()
