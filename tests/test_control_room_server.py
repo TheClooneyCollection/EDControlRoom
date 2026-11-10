@@ -745,7 +745,8 @@ class ControlRoomServerTests(unittest.TestCase):
             self.assertIn(f'id="{element_id}"', response.text)
         for hook in ('sendCommand("command.dispatch_destination"', 'sendCommand("command.dispatch_travel"',
                      'on_land: Boolean(station) && document.getElementById("nav-on-land").checked',
-                     "plotDestination(webDefaults.homeSystem)", "submitInput(`home set ",
+                     "plotDestination(homeSystem)",
+                     'homeSystem = String(payload.home_system || "").trim()', "submitInput(`home set ",
                      "serverStatus.web_form_defaults"):
             self.assertIn(hook, js_response.text)
 

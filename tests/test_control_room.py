@@ -2016,16 +2016,6 @@ on_land = true
         self.assertIn("near_system=Achenar", self.app._command_input.value)
         self.assertEqual(self.app._prompt_state.haul_prompt_raw_command, "haul search home")
 
-    def test_web_form_defaults_share_saved_home_system_for_web_nav(self) -> None:
-        from edap.control_room.dependencies import _web_form_defaults
-
-        self.app._config = replace(
-            self.app._config,
-            control_room=replace(self.app._config.control_room, home_system=" Achenar "),
-        )
-
-        self.assertEqual(_web_form_defaults(self.app)["homeSystem"], "Achenar")
-
     def test_haul_search_home_requires_saved_home_system(self) -> None:
         self.app._cmd_haul("search home", raw_command="haul search home")
 

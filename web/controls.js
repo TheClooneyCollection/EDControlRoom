@@ -12,7 +12,8 @@ let reconnectTimer = null;
 let clientRole = "observer";
 let commandSequence = 1;
 let currentRoutine = {};
-let webDefaults = { galaxyMapSettle: "2.0", homeSystem: "", ...(WEB_CONFIG.webDefaults || {}) };
+let webDefaults = { galaxyMapSettle: "2.0", ...(WEB_CONFIG.webDefaults || {}) };
+let homeSystem = "";
 const pendingCommands = new Map();
 const activityEntries = new Map();
 
@@ -85,7 +86,7 @@ function updateButtons() {
   document.querySelectorAll("button[data-needs-haul]").forEach((button) => {
     button.disabled = !operator || !haulActive;
   });
-  if (!webDefaults.homeSystem) {
+  if (!homeSystem) {
     document.getElementById("nav-plot-home").disabled = true;
   }
   const instant = document.getElementById("toggle-instant");
@@ -157,7 +158,8 @@ function applyHydrate(payload) {
   setText("summary-station", ship.station || "-");
   setText("summary-cargo", `${ship.cargo_count || 0} / ${ship.cargo_capacity || 0} t`);
   webDefaults = { ...webDefaults, ...(serverStatus.web_form_defaults || {}) };
-  setText("nav-home-system", webDefaults.homeSystem || "not set");
+  homeSystem = String(payload.home_system || "").trim();
+  setText("nav-home-system", homeSystem || "not set");
   currentRoutine = payload.routine || {};
   updateButtons();
   activityEntries.clear();
@@ -304,7 +306,6 @@ function stopRoutine(mode) {
 }
 
 applyWebConfigLabels();
-setText("nav-home-system", webDefaults.homeSystem || "not set");
 updateButtons();
 renderActivityLog();
 document.getElementById("access-token").value = accessToken;
@@ -326,7 +327,7 @@ document.getElementById("nav-plot").addEventListener("click", () => {
   plotDestination(document.getElementById("nav-system").value.trim());
 });
 document.getElementById("nav-travel").addEventListener("click", startTravel);
-document.getElementById("nav-plot-home").addEventListener("click", () => plotDestination(webDefaults.homeSystem));
+document.getElementById("nav-plot-home").addEventListener("click", () => plotDestination(homeSystem));
 document.getElementById("nav-set-home").addEventListener("click", () => {
   submitInput(`home set ${document.getElementById("nav-system").value.trim()}`.trim(), { skipDelay: true });
 });
