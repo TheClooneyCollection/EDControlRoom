@@ -158,6 +158,21 @@ def close_run(stats: HaulStats, status: str, reason: str, ended_at: str | None, 
     stats.current_run = None
 
 
+
+def abort_run(stats: HaulStats, reason: str, ended_at: str | None, now: float) -> None:
+    """Close the in-progress run as aborted, keeping its realized trades in the session profit.
+
+    A clean run tracks its trades in `current_run_profit`; a partial (resumed mid-run) row
+    does not, so its recorded profit is added instead.
+    """
+    row = stats.current_run
+    if row is not None and row.get("partial_start"):
+        stats.accumulated_profit += row["profit"]
+    else:
+        stats.accumulated_profit += stats.current_run_profit
+        stats.current_run_profit = 0
+    close_run(stats, "aborted", reason, ended_at, now)
+
 # Query records are immutable and can be serialized with dataclasses.asdict.
 @dataclass(frozen=True)
 class RunTotals:

@@ -2516,7 +2516,7 @@ on_land = true
         self.assertEqual(self.app._haul_stats.last_run_profit, 350_000)
         self.assertEqual(self.app._haul_stats.last_run_elapsed_s, 180.0)
 
-    def test_haul_stats_log_ignored_station_1_sell_before_clean_departure(self) -> None:
+    def test_haul_stats_count_station_1_sell_before_clean_departure_in_session_only(self) -> None:
         self.app._ship.status = "in_station"
         self.app._ship.station = "Pawelczyk Dock"
         self.app._time_fn = lambda: 100.0
@@ -2530,10 +2530,38 @@ on_land = true
         self.app._handle_haul_event({"event": "MarketSell", "TotalSale": 400_000}, station_before="Pawelczyk Dock")
 
         self.assertEqual(self.app._haul_stats.current_run_profit, 0)
+        self.assertEqual(self.app._haul_stats.accumulated_profit, 400_000)
+        self.assertEqual(self.app._haul_stats.completed_runs, 0)
         self.assertIn(
-            "Ignoring station 1 sale for haul stats (discarding profit from prior run).",
+            "Station 1 sale ends a resumed run: profit counts in the session, not as a completed run.",
             "\n".join(self.app.logged),
         )
+
+    def test_stopped_mid_run_trades_stay_in_session_profit_after_new_haul(self) -> None:
+        self.app._ship.status = "in_station"
+        self.app._ship.station = "Pawelczyk Dock"
+        self.app._haul_stats.accumulated_profit = 1_000_000
+        self.app._time_fn = lambda: 100.0
+        route = dict(
+            station_1_buying="Aluminium",
+            station_2_buying="Bertrandite",
+            station_1="Pawelczyk Dock",
+            station_2="Hutton Orbital",
+        )
+        self.app._start_haul_stats(**route)
+        self.app._handle_haul_event({"event": "Undocked"}, station_before="Pawelczyk Dock")
+        self.app._handle_haul_event(
+            {"event": "MarketSell", "TotalSale": 250_000}, station_before="Hutton Orbital"
+        )
+
+        self.app._stop_haul_stats()
+        self.assertEqual(self.app._haul_stats.accumulated_profit, 1_250_000)
+        self.assertEqual(self.app._haul_stats.current_run_profit, 0)
+        self.assertEqual(self.app._saved_state.session_profit, 1_250_000)
+
+        self.app._start_haul_stats(**route)
+        self.assertEqual(self.app._haul_stats.accumulated_profit, 1_250_000)
+        self.assertEqual(self.app._haul_stats.completed_runs, 0)
 
     def test_haul_stats_ignore_partial_resume_until_next_clean_departure(self) -> None:
         self.app._ship.status = "in_supercruise"

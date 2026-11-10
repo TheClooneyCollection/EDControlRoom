@@ -5,7 +5,7 @@ from typing import Any, Callable, Protocol
 
 from edap.control_room.models import HaulStats, RuntimeUIState, ShipState
 from edap.control_room_state import ControlRoomState
-from edap.haul_history import close_run, record_event, utc_timestamp
+from edap.haul_history import abort_run, close_run, record_event, utc_timestamp
 from edap.tts import AnnouncementId, format_credits_short
 
 _CREDIT_AMOUNT_RE = re.compile(
@@ -43,7 +43,7 @@ def start_haul_stats(
         and app._ship.station
         and app._ship.station.lower() == station_1.lower()
     )
-    close_run(app._haul_stats, "aborted", "new haul started over stale run", utc_timestamp(None), app._time_fn())
+    abort_run(app._haul_stats, "new haul started over stale run", utc_timestamp(None), app._time_fn())
     previous = app._haul_stats
     started_at = app._time_fn()
     expected_profit_per_trip = parse_credit_amount(expected_profit_per_trip_text)
@@ -87,7 +87,7 @@ def stop_haul_stats(app: HaulTrackingHost) -> None:
     if stats.current_run_started_at is not None and not stats.docked_back_at_station_1:
         stats.current_run_elapsed_s = max(0.0, now - stats.current_run_started_at)
     stats.current_run_started_at = None
-    close_run(stats, "aborted", "stats stopped", utc_timestamp(None), now)
+    abort_run(stats, "stats stopped", utc_timestamp(None), now)
     if not (app._haul_stats.station_1 or app._haul_stats.station_1_buying):
         return
     if app._haul_stats.completed_runs > 0:
@@ -240,7 +240,7 @@ def handle_haul_event(
     if (at_station_1 and stats.current_run is not None
             and stats.current_run.get("partial_start")
             and (event == "Undocked" or (event == "MarketBuy" and stats.waiting_for_station_1_departure))):
-        close_run(stats, "aborted", "resumed mid-run, not a clean run", None, app._time_fn())
+        abort_run(stats, "resumed mid-run, not a clean run", None, app._time_fn())
 
     if at_station_1 or at_station_2 or event in {"MarketBuy", "MarketSell"}:
         record_event(stats, ev, current_station or "", ev.get("StarSystem") or app._ship.system or "")
@@ -286,10 +286,10 @@ def handle_haul_event(
             if stats.docked_back_at_station_1:
                 finalize_completed_haul_run(app)
         elif at_station_1:
-            close_run(stats, "aborted", "resumed mid-run, not a clean run", None, app._time_fn())
+            abort_run(stats, "resumed mid-run, not a clean run", None, app._time_fn())
             app._log(
-                "[dim]Ignoring station 1 sale for haul stats "
-                "(discarding profit from prior run).[/]"
+                "[dim]Station 1 sale ends a resumed run: profit counts in the session, "
+                "not as a completed run.[/]"
             )
 
     app._refresh_haul_stats()

@@ -15,7 +15,7 @@ from edap.control_room_state import (
 )
 
 from edap.haul_stats_cache import TodayHaulCache
-from edap.haul_history import append_run, close_run, snapshot_duration, utc_timestamp
+from edap.haul_history import abort_run, append_run, snapshot_duration, utc_timestamp
 
 
 class PersistenceHost(Protocol):
@@ -49,7 +49,7 @@ def load_saved_state(app: PersistenceHost) -> None:
     _restore_persisted_session(app)
     app._haul_stats.current_run = app._saved_state.haul_current_run
     app._haul_stats.pending_runs = app._saved_state.haul_pending_runs
-    close_run(app._haul_stats, "aborted", "restart with stale in-progress run", None, app._time_fn())
+    abort_run(app._haul_stats, "restart with stale in-progress run", None, app._time_fn())
     if app._haul_stats.pending_runs:
         save_saved_state(app)
     if app._config.control_room.clear_session_on_launch:
@@ -100,7 +100,7 @@ def record_history_entry(app: PersistenceHost, entry: CommandHistoryEntry) -> No
 
 
 def clear_session_stats(app: PersistenceHost) -> None:
-    close_run(app._haul_stats, "aborted", "stats cleared / new session", utc_timestamp(None), app._time_fn())
+    abort_run(app._haul_stats, "stats cleared / new session", utc_timestamp(None), app._time_fn())
     stats = app._haul_stats
     now_fn = app._time_fn
     now = now_fn() if callable(now_fn) else 0.0
