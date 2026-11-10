@@ -1,8 +1,8 @@
 # CI and Release Status
 ## Current
-- Latest stable release is `v1.27.0` (web `/controls` button board, haul market nav delay fix, mobile route cards, haul page edits and supply/demand kept across hydrates, decimal TUI route distance). `v1.26.0` was Piper voices and haul safety; `v1.25.0` was Steam Deck setup.
-- The unittest timing budget now scales as `0.0006s` per executed test, so the current `988`-test suite budget is `0.5928s`; when a release-prep or CI run exceeds that computed ceiling, capture a timing report before wrapping up.
-- Latest timing check (v1.27.0 prep): `988` tests passed in `0.506s`, within the `0.5928s` budget.
+- Latest stable release is `v1.28.0` (opt-in EDDN listener and `/routes` trade route finder ranked by profit/hour, web `/markets` with best deal, haul search surface stations filter, `on_land` renamed `manual_landing`, per-haul session stats, web controls nav/voice). `v1.27.0` was the web `/controls` button board; `v1.26.0` was Piper voices and haul safety; `v1.25.0` was Steam Deck setup.
+- The unittest timing budget now scales as `0.0006s` per executed test, so the current `1037`-test suite budget is `0.6222s`; when a release-prep or CI run exceeds that computed ceiling, capture a timing report before wrapping up.
+- Latest timing check (v1.28.0 prep): `1037` tests passed in `0.637s`, over the `0.6222s` budget; `test_eddn.EddnServiceTests.test_service_fills_the_configured_database_reports_status_and_closes` alone takes ~0.095s (it waits on real status-thread ticks) and is the first thing to speed up.
 - The Discord workflow-failure notifier is now split into a checked-in Python script plus a thin workflow wrapper, so the same payload/fetch/post path can be dry-run locally against saved jobs JSON and exercised in CI without keeping the logic trapped inside inline workflow shell.
 - `main` is now the rolling-update branch, and stable features or releases are identified with tags instead of `dev -> main` promotion.
 - The legacy `.github/workflows/promote-dev-to-main.yml` automation has been removed; release/process automation now centers on `main`, semantic version tags, and manual GitHub release publishing.
