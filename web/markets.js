@@ -11,6 +11,9 @@ let selectedMarketId = null;
 let sortKey = "name";
 let sortDescending = false;
 let compareRequest = 0;
+let shownTradeRoute = null;
+let shownComparison = null;
+let chosenDeals = { outbound: null, inbound: null };
 
 const COMMODITY_COLUMNS = [
   { key: "name", label: "Commodity" },
@@ -174,12 +177,17 @@ function renderDealPickers() {
   });
 }
 
-function dealTable(deals) {
+const DEAL_CHOICES = 3;
+
+// Each leg offers its best few deals; the picked ones make the round trip and the /haul route.
+function legTable(leg, label, deals) {
   if (!deals.length) {
-    return '<p class="empty-note">No profitable commodity in this direction.</p>';
+    return `<h3>${label}</h3><p class="empty-note">Nothing profitable; fly empty.</p>`;
   }
-  const rows = deals.map((deal) => `
+  const rows = deals.slice(0, DEAL_CHOICES).map((deal) => `
     <tr>
+      <td><input type="radio" name="deal-${leg}" value="${escapeHtml(deal.commodity)}"
+        aria-label="${escapeHtml(deal.name)}" ${deal.commodity === chosenDeals[leg] ? "checked" : ""}></td>
       <td>${escapeHtml(deal.name)}</td>
       <td>${count(deal.buy_price)}</td>
       <td>${count(deal.stock)}</td>
@@ -188,20 +196,79 @@ function dealTable(deals) {
       <td class="profit">${count(deal.profit_per_ton)}</td>
       <td class="profit">${credits(deal.hold_profit)}${deal.hold_tons ? ` <span class="market-category">${count(deal.hold_tons)} t</span>` : ""}</td>
     </tr>`).join("");
-  return `<div class="market-table-scroll"><table class="market-table">
-    <thead><tr><th>Commodity</th><th>Buy</th><th>Stock</th><th>Sell</th><th>Demand</th><th>Profit/t</th><th>Full hold</th></tr></thead>
+  return `<h3>${label}</h3><div class="market-table-scroll"><table class="market-table">
+    <thead><tr><th></th><th>Commodity</th><th>Buy</th><th>Supply</th><th>Sell</th><th>Demand</th><th>Profit/t</th><th>Full hold</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 
-function roundTripLine(roundTrip) {
-  const out = roundTrip.outbound;
-  const back = roundTrip.inbound;
+function chosenDeal(leg) {
+  const deals = (shownComparison.payload[leg] || []).slice(0, DEAL_CHOICES);
+  return deals.find((deal) => deal.commodity === chosenDeals[leg]) || deals[0] || null;
+}
+
+// The picked round trip as a /haul route: X is the first station, Y the second.
+function tradeRoute(marketX, marketY, out, back) {
+  return {
+    index: 0,
+    from_station: marketX.station, from_system: marketX.system,
+    to_station: marketY.station, to_system: marketY.system,
+    source_buy_commodity: out ? out.name : null,
+    target_buy_commodity: back ? back.name : null,
+    profit_per_trip: credits((out ? out.hold_profit : 0) + (back ? back.hold_profit : 0)),
+    from_supply: out ? count(out.stock) : null,
+    to_demand: out ? count(out.demand) : null,
+    to_supply: back ? count(back.stock) : null,
+    from_demand: back ? count(back.demand) : null,
+    from_manual_landing: false, to_manual_landing: false
+  };
+}
+
+function renderComparison() {
+  const result = document.getElementById("deal-result");
+  const { payload, marketX, marketY } = shownComparison;
+  const out = chosenDeal("outbound");
+  const back = chosenDeal("inbound");
+  chosenDeals = { outbound: out ? out.commodity : null, inbound: back ? back.commodity : null };
+  const nameX = escapeHtml(marketX.station);
+  const nameY = escapeHtml(marketY.station);
+  const legs = legTable("outbound", `Buy at ${nameX} (X), sell at ${nameY} (Y)`, payload.outbound)
+    + legTable("inbound", `Buy at ${nameY} (Y), sell at ${nameX} (X)`, payload.inbound);
   if (!out && !back) {
-    return "No profitable round trip between these two markets.";
+    shownTradeRoute = null;
+    result.innerHTML = `<p class="empty-note">No profitable round trip between these two markets.</p>${legs}`;
+    return;
   }
-  const leg = (deal) => (deal ? `${escapeHtml(deal.name)} (${count(deal.profit_per_ton)} Cr/t)` : "nothing");
-  return `<strong>Best round trip:</strong> X → Y ${leg(out)}, Y → X ${leg(back)}. `
-    + `<span class="profit">${count(roundTrip.profit_per_ton)} Cr/t, ${credits(roundTrip.hold_profit)} per full-hold loop.</span>`;
+  shownTradeRoute = tradeRoute(marketX, marketY, out, back);
+  const perTon = (out ? out.profit_per_ton : 0) + (back ? back.profit_per_ton : 0);
+  // /haul imports a route from its #route= fragment once it connects.
+  const haulUrl = `/haul#route=${encodeURIComponent(JSON.stringify(shownTradeRoute))}`;
+  result.innerHTML = `
+    <div class="deal-round-trip"><strong>Round trip:</strong> X → Y ${out ? escapeHtml(out.name) : "nothing"},
+      Y → X ${back ? escapeHtml(back.name) : "nothing"}.
+      <span class="profit">${count(perTon)} Cr/t, ${shownTradeRoute.profit_per_trip} per full-hold loop.</span>
+      <div class="deal-actions">
+        <button class="btn" type="button" id="deal-copy">Copy route</button>
+        <a class="btn" href="${escapeHtml(haulUrl)}">Open in haul</a>
+      </div>
+    </div>
+    ${legs}`;
+}
+
+// Copies the route as JSON for the /haul "Copy / paste route" box.
+async function copyTradeRoute(button) {
+  const text = JSON.stringify(shownTradeRoute, null, 2);
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (error) {
+    // Plain-http LAN pages have no clipboard API; fall back to a selected textarea.
+    const area = document.createElement("textarea");
+    area.value = text;
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+  }
+  button.textContent = "Copied";
 }
 
 async function refreshComparison() {
@@ -209,6 +276,7 @@ async function refreshComparison() {
   const x = document.getElementById("deal-x").value;
   const y = document.getElementById("deal-y").value;
   const request = ++compareRequest;
+  shownTradeRoute = null;
   if (!x || !y) {
     setText("deal-status", "Pick two markets");
     result.innerHTML = "";
@@ -228,13 +296,15 @@ async function refreshComparison() {
     });
     if (request !== compareRequest) return;
     const byId = Object.fromEntries(markets.map((market) => [String(market.market_id), market]));
-    const nameX = escapeHtml(byId[x] ? byId[x].station : "X");
-    const nameY = escapeHtml(byId[y] ? byId[y].station : "Y");
+    // A new pair starts from the best deals; the periodic refresh of the same pair keeps the picks.
+    const pair = `${x}:${y}`;
+    if (!shownComparison || shownComparison.pair !== pair) {
+      chosenDeals = { outbound: null, inbound: null };
+    }
+    shownComparison = { pair, payload, marketX: byId[x] || { station: "X", system: "" },
+      marketY: byId[y] || { station: "Y", system: "" } };
     setText("deal-status", `${count(payload.cargo_capacity)} t hold`);
-    result.innerHTML = `
-      <div class="deal-round-trip">${roundTripLine(payload.round_trip)}</div>
-      <h3>Buy at ${nameX} (X), sell at ${nameY} (Y)</h3>${dealTable(payload.outbound)}
-      <h3>Buy at ${nameY} (Y), sell at ${nameX} (X)</h3>${dealTable(payload.inbound)}`;
+    renderComparison();
   } catch (error) {
     if (request !== compareRequest) return;
     setText("deal-status", `Comparison unavailable: ${error.message}`);
@@ -273,6 +343,16 @@ document.getElementById("market-table").addEventListener("click", (event) => {
   renderMarketTable();
 });
 document.getElementById("show-empty").addEventListener("change", renderMarketTable);
+document.getElementById("deal-result").addEventListener("click", (event) => {
+  const button = event.target.closest("#deal-copy");
+  if (button) copyTradeRoute(button);
+});
+document.getElementById("deal-result").addEventListener("change", (event) => {
+  const leg = event.target.name === "deal-outbound" ? "outbound" : event.target.name === "deal-inbound" ? "inbound" : null;
+  if (!leg) return;
+  chosenDeals[leg] = event.target.value;
+  renderComparison();
+});
 document.getElementById("deal-x").addEventListener("change", refreshComparison);
 document.getElementById("deal-y").addEventListener("change", refreshComparison);
 document.getElementById("deal-capacity").addEventListener("change", refreshComparison);

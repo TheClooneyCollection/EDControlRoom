@@ -409,6 +409,23 @@ let routes = [];
       appendActivity(`Imported route ${route.buySystem} -> ${route.sellSystem}.`, "Route", "success");
     }
 
+    // /markets "Open in haul" links here with the route in a #route= fragment. Importing it after a hydrate
+    // keeps the server's saved selection from replacing it, and lets the selection reach the server.
+    function importLinkedRoute() {
+      const match = window.location.hash.match(/^#route=(.+)$/);
+      if (!match) {
+        return;
+      }
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      try {
+        document.getElementById("route-transfer-text").value = decodeURIComponent(match[1]);
+      } catch (error) {
+        appendActivity("Linked route is not readable.", "Route", "warning");
+        return;
+      }
+      importPastedRoute();
+    }
+
     function profitHourLabel(route) {
       if (!route.profitHour || route.profitHour === "-") {
         return "-";
@@ -863,8 +880,13 @@ let routes = [];
           value.textContent = "Pending";
         }
       });
-      document.getElementById("routine-elapsed").textContent =
-        formatDuration(haulSession.session_elapsed_s || haulSession.current_run_elapsed_s || 0);
+      document.getElementById("routine-elapsed").textContent = formatDuration(haulSession.session_elapsed_s || 0);
+      const runs = Number(haulSession.completed_runs || 0);
+      const runTime = (seconds) => (seconds == null ? "-" : formatDuration(seconds));
+      document.getElementById("routine-run-elapsed").textContent = runTime(haulSession.current_run_elapsed_s);
+      document.getElementById("routine-last-run").textContent = runTime(haulSession.last_run_elapsed_s);
+      document.getElementById("routine-average-run").textContent =
+        runs ? formatDuration(Number(haulSession.total_run_elapsed_s || 0) / runs) : "-";
       document.getElementById("routine-current-run").textContent =
         `${formatCredits(haulSession.current_run_profit || 0)} / ${formatCredits(haulSession.accumulated_profit || 0)}`;
       document.getElementById("routine-cargo-moved").textContent =
@@ -1043,6 +1065,7 @@ let routes = [];
           renderSelected();
         }
       }
+      importLinkedRoute();
       document.getElementById("summary-profit").textContent = formatCredits(sessionProfit(haulSession));
       updateRoutinePanel(routine, haulSession, ship);
       updateOperatorState();

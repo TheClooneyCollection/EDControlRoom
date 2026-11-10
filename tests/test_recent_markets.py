@@ -130,7 +130,7 @@ class MarketCompareTests(unittest.TestCase):
             record_market_json(path, market_json(1, "Any", "2026-11-10T12:00:00Z", list(items)), lambda _: None)
             return market_items(load_recent_markets(path)[0])
 
-    def test_deals_in_both_directions_are_ranked_by_profit_and_cap_the_hold_at_stock(self) -> None:
+    def test_deals_rank_by_full_hold_profit_so_a_thin_market_does_not_win(self) -> None:
         market_x = self.snapshot_items(
             item("gold", "Gold", buy=9000, sell=8900, stock=1000),
             item("silver", "Silver", buy=4000, sell=3900, stock=100),
@@ -148,15 +148,15 @@ class MarketCompareTests(unittest.TestCase):
 
         comparison = compare_markets(market_x, market_y, 400)
 
-        self.assertEqual([deal.name for deal in comparison.outbound], ["Silver", "Gold"])
-        silver, gold = comparison.outbound
+        self.assertEqual([deal.name for deal in comparison.outbound], ["Gold", "Silver"])
+        gold, silver = comparison.outbound
         self.assertEqual((silver.profit_per_ton, silver.hold_tons, silver.hold_profit), (1500, 100, 150000))
         self.assertEqual((gold.buy_price, gold.stock, gold.sell_price, gold.demand), (9000, 1000, 10000, 300))
         self.assertEqual((gold.hold_tons, gold.hold_profit), (400, 400000))
         self.assertEqual([(deal.name, deal.profit_per_ton) for deal in comparison.inbound], [("Robotics", 1000)])
-        self.assertEqual(comparison.round_trip.outbound, silver)
-        self.assertEqual(comparison.round_trip.profit_per_ton, 2500)
-        self.assertEqual(comparison.round_trip.hold_profit, 150000 + 400000)
+        self.assertEqual(comparison.round_trip.outbound, gold)
+        self.assertEqual(comparison.round_trip.profit_per_ton, 1000 + 1000)
+        self.assertEqual(comparison.round_trip.hold_profit, 400000 + 1000 * 400)
 
     def test_a_one_way_market_pair_has_no_return_leg(self) -> None:
         market_x = self.snapshot_items(item("gold", "Gold", buy=9000, stock=10))

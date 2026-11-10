@@ -41,9 +41,10 @@ def trade_deals(
     destination: tuple[MarketItem, ...],
     cargo_capacity: int,
 ) -> tuple[TradeDeal, ...]:
-    """Commodities bought at source and sold at destination at a profit, best first.
+    """Commodities bought at source and sold at destination at a profit, best full hold first.
 
-    A full hold is capped by the source stock, so a thin market does not overstate profit.
+    A full hold is capped by the source stock, so a thin market ranks below a deeper one
+    that earns less per ton but fills the hold.
     """
     sell_by_commodity = {item.commodity: item for item in destination if item.sell_price > 0}
     deals = []
@@ -68,7 +69,7 @@ def trade_deals(
                 hold_profit=profit * hold_tons,
             )
         )
-    deals.sort(key=lambda deal: (-deal.profit_per_ton, -deal.hold_profit, deal.name))
+    deals.sort(key=lambda deal: (-deal.hold_profit, -deal.profit_per_ton, deal.name))
     return tuple(deals)
 
 

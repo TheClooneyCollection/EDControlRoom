@@ -61,7 +61,7 @@ _(Expand / click the following sections to see the screenshots.)_
 <summary><strong>Web dashboard</strong> — two-way haul control with live session stats and routine progress.</summary>
 
 - Quick stats strip: home system, current system, destination, cargo, routine, completed runs, session profit.
-- Active routine board with the five haul stages (Buy, Undock, Depart, Transit, Sell) plus elapsed, current / accumulated credits, and cargo moved.
+- Active routine board with the five haul stages (Buy, Undock, Depart, Transit, Sell) plus session elapsed, current / accumulated credits, cargo moved, and this run / last run / average run times.
 - Active route panel: jumps remaining, LY remaining, boosts remaining for the dispatched Spansh route.
 - Header controls: **Pause**, **Resume**, **Stop after run**, **Stop now**, **Save** the current haul as the default, **Reconnect**, and **Instant off** for the 5-second safety delay.
 

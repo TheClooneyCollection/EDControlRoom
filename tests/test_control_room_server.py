@@ -772,7 +772,8 @@ class ControlRoomServerTests(unittest.TestCase):
             self.assertIn(f'id="{element_id}"', page.text)
         self.assertEqual(script.status_code, 200)
         self.assertEqual(script.headers["cache-control"], "no-store")
-        for hook in ('"/api/recent-markets"', '"/api/market-compare"', "ageLabel(market.timestamp)"):
+        for hook in ('"/api/recent-markets"', '"/api/market-compare"', "ageLabel(market.timestamp)", "/haul#route=",
+                     "const DEAL_CHOICES = 3;", 'name="deal-${leg}"', "tradeRoute(marketX, marketY, out, back)"):
             self.assertIn(hook, script.text)
         self.assertEqual(listing["cargo_capacity"], 256)
         self.assertEqual([m["station"] for m in listing["markets"]], ["Abraham Lincoln", "Galileo"])

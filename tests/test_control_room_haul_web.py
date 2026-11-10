@@ -235,6 +235,25 @@ class ControlRoomHaulWebTests(unittest.TestCase):
                      "mergeHydratedRoute({ ...pasted, index })", "persistSelectedRoute(route)"):
             self.assertIn(hook, html)
 
+    def test_haul_web_shows_session_and_run_times_separately(self) -> None:
+        html = _haul_web_source()
+
+        for hook in ('<div class="metric-label">Session elapsed</div>', 'id="routine-run-elapsed"',
+                     'id="routine-last-run"', 'id="routine-average-run"',
+                     'formatDuration(haulSession.session_elapsed_s || 0)',
+                     "runTime(haulSession.current_run_elapsed_s)", "runTime(haulSession.last_run_elapsed_s)",
+                     "formatDuration(Number(haulSession.total_run_elapsed_s || 0) / runs)"):
+            self.assertIn(hook, html)
+
+    def test_haul_web_imports_a_route_linked_from_markets_after_hydrate(self) -> None:
+        html = _haul_web_source()
+        hydrate = html[html.index("function applyHydratePayload(payload) {"):]
+
+        self.assertIn("importLinkedRoute();", hydrate[:hydrate.index("updateRoutinePanel(")])
+        for hook in ("window.location.hash.match(/^#route=(.+)$/)", "window.history.replaceState(",
+                     "decodeURIComponent(match[1])"):
+            self.assertIn(hook, html)
+
     def test_haul_web_copied_route_leaves_out_local_and_stale_fields(self) -> None:
         html = _haul_web_source()
         start = html.index("const ROUTE_TRANSFER_FIELDS = [")

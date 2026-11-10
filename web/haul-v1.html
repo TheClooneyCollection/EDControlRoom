@@ -136,7 +136,7 @@
 
             <div class="mini-metrics">
               <div class="metric">
-                <div class="metric-label">Elapsed</div>
+                <div class="metric-label">Session elapsed</div>
                 <div class="metric-value mono" id="routine-elapsed">00:00:00</div>
               </div>
               <div class="metric">
@@ -146,6 +146,20 @@
               <div class="metric">
                 <div class="metric-label">Cargo moved</div>
                 <div class="metric-value mono" id="routine-cargo-moved">0 t</div>
+              </div>
+            </div>
+            <div class="mini-metrics run-times" aria-label="Run times">
+              <div class="metric">
+                <div class="metric-label">This run</div>
+                <div class="metric-value mono" id="routine-run-elapsed">-</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label">Last run</div>
+                <div class="metric-value mono" id="routine-last-run">-</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label">Avg run</div>
+                <div class="metric-value mono" id="routine-average-run">-</div>
               </div>
             </div>
             <div class="stats-controls" aria-label="Haul stats controls">
