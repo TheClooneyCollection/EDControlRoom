@@ -92,6 +92,7 @@ class ControlRoomDependenciesTests(unittest.TestCase):
             _protocol_activity_log=[build_activity_log_entry("Observer ready")],
             _runtime_state=RuntimeUIState(routine_active=True, active_routine_name="haul"),
             _current_version="1.2.3",
+            _current_commit="abc1234",
             _ctx=SimpleNamespace(
                 journal=SimpleNamespace(cli_source_status=lambda: "configured"),
                 bindings=SimpleNamespace(cli_source_status=lambda: "configured"),
@@ -140,6 +141,7 @@ class ControlRoomDependenciesTests(unittest.TestCase):
             _protocol_activity_log=[],
             _runtime_state=RuntimeUIState(),
             _current_version="1.2.3",
+            _current_commit="abc1234",
             _ctx=SimpleNamespace(
                 journal=SimpleNamespace(cli_source_status=lambda: "configured"),
                 bindings=SimpleNamespace(cli_source_status=lambda: "configured"),

@@ -199,6 +199,14 @@ let routes = [];
       return raw;
     }
 
+    function serverVersionLabel(version, commit) {
+      if (!version) {
+        return "-";
+      }
+      return commit ? `${version} (${commit})` : version;
+    }
+
+
     function applyWebConfigLabels() {
       setText("session-host", WEB_CONFIG.hostLabel || window.location.host || "-");
       setText("session-target", WEB_CONFIG.inputTargetSummary || "-");
@@ -206,6 +214,7 @@ let routes = [];
       setText("status-runtime", WEB_CONFIG.runtimePlatform || "-");
       setText("status-journal", WEB_CONFIG.journalStatus || "-");
       setText("status-input-target", WEB_CONFIG.inputTargetSummary || "-");
+      setText("status-version", serverVersionLabel(WEB_CONFIG.serverVersion, WEB_CONFIG.serverCommit));
     }
 
     function applySearchDefaults() {
@@ -989,6 +998,7 @@ let routes = [];
       setText("status-runtime", serverStatus.runtime_platform || WEB_CONFIG.runtimePlatform || "-");
       setText("status-journal", serverStatus.journal_source_status || WEB_CONFIG.journalStatus || "-");
       setText("status-input-target", serverStatus.input_target_summary || WEB_CONFIG.inputTargetSummary || "-");
+      setText("status-version", serverVersionLabel(serverStatus.server_version, serverStatus.server_commit));
       setText("session-target", serverStatus.input_target_summary || WEB_CONFIG.inputTargetSummary || "-");
       document.getElementById("summary-current").textContent = ship.system || "-";
       document.getElementById("summary-home").textContent = payload.home_system || "-";

@@ -212,6 +212,9 @@ class _FakeVersionSource:
     def get_current_version(self) -> str:
         return self.current_version
 
+    def get_current_commit(self) -> str:
+        return "abc1234"
+
     def fetch_latest_github_release(self) -> GitHubRelease | None:
         return self.latest_release
 

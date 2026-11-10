@@ -216,6 +216,7 @@ def _base_data_read_model() -> ControlRoomDataReadModel:
             journal_source_status="configured",
             bindings_source_status="configured",
             bindings_loaded=False,
+            server_commit="b2a65e4+dirty",
         ),
     )
 
@@ -449,6 +450,7 @@ class ControlRoomServerTests(unittest.TestCase):
             self.assertEqual(health.status_code, 200)
             self.assertEqual(health.json()["status"], "ok")
             self.assertTrue(health.json()["authentication_required"])
+            self.assertEqual(health.json()["server_commit"], "b2a65e4+dirty")
 
             capabilities = client.get(
                 "/capabilities",
@@ -736,6 +738,8 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(js_response.status_code, 200)
         self.assertIn("command.submit_input", js_response.text)
         self.assertIn("command.cancel_active_routine", js_response.text)
+        self.assertIn('"serverCommit": "b2a65e4+dirty"', response.text)
+        self.assertIn('id="status-version"', response.text)
         for element_id in ("nav-system", "nav-station", "nav-on-land", "nav-plot", "nav-travel",
                            "nav-plot-home", "nav-set-home"):
             self.assertIn(f'id="{element_id}"', response.text)

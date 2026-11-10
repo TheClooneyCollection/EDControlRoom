@@ -146,6 +146,7 @@ def _haul_web_config(
         "hostLabel": request.url.netloc,
         "serverName": getattr(server_status, "server_name", "ED Control Room"),
         "serverVersion": getattr(server_status, "server_version", ""),
+        "serverCommit": getattr(server_status, "server_commit", ""),
         "runtimePlatform": getattr(server_status, "runtime_platform", ""),
         "journalStatus": getattr(server_status, "journal_source_status", ""),
         "bindingsStatus": getattr(server_status, "bindings_source_status", ""),
@@ -187,6 +188,7 @@ def build_observer_server_app(
                 "status": "ok",
                 "server_name": data.server_status.server_name,
                 "server_version": data.server_status.server_version,
+                "server_commit": data.server_status.server_commit,
                 "observer_mode": True,
                 "authentication_required": auth_description.authentication_required,
             }

@@ -194,12 +194,17 @@ def _cargo_summary_lines(inventory: list[dict[str, Any]], *, limit: int = 3) -> 
 class VersionSource(Protocol):
     def get_current_version(self) -> str: ...
 
+    def get_current_commit(self) -> str: ...
+
     def fetch_latest_github_release(self) -> _version.GitHubRelease | None: ...
 
 
 class DefaultVersionSource:
     def get_current_version(self) -> str:
         return _version.get_current_version()
+
+    def get_current_commit(self) -> str:
+        return _version.get_startup_commit()
 
     def fetch_latest_github_release(self) -> _version.GitHubRelease | None:
         return _version.fetch_latest_github_release()
@@ -454,6 +459,7 @@ class ControlRoomApp(App[None]):
         self._tts = TTSAnnouncer(self._config.tts, platform_name=self._config.runtime.platform)
         self._version_source = version_source or DefaultVersionSource()
         self._current_version = self._version_source.get_current_version()
+        self._current_commit = self._version_source.get_current_commit()
         self._facade = _facade.ControlRoomFacade(
             self,
             default_placeholder=_DEFAULT_COMMAND_PLACEHOLDER,

@@ -71,6 +71,7 @@ class ControlRoomDataMessagesTests(unittest.TestCase):
             ),
             _trade_route_picker_state=SimpleNamespace(selected_route_index=3),
             _current_version="1.2.3",
+            _current_commit="abc1234",
             _ctx=SimpleNamespace(
                 journal=SimpleNamespace(cli_source_status=lambda: "configured"),
                 bindings=SimpleNamespace(cli_source_status=lambda: "configured"),

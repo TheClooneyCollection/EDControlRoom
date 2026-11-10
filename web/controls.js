@@ -41,6 +41,13 @@ function roleLabel(role) {
   return String(role || "observer").replace(/_/g, " ");
 }
 
+function serverVersionLabel(version, commit) {
+  if (!version) {
+    return "-";
+  }
+  return commit ? `${version} (${commit})` : version;
+}
+
 function applyWebConfigLabels() {
   setText("host-label", WEB_CONFIG.hostLabel || window.location.host || "-");
   setText("target-label", WEB_CONFIG.inputTargetSummary || "-");
@@ -48,6 +55,7 @@ function applyWebConfigLabels() {
   setText("status-runtime", WEB_CONFIG.runtimePlatform || "-");
   setText("status-journal", WEB_CONFIG.journalStatus || "-");
   setText("status-input-target", WEB_CONFIG.inputTargetSummary || "-");
+  setText("status-version", serverVersionLabel(WEB_CONFIG.serverVersion, WEB_CONFIG.serverCommit));
 }
 
 function routineLabel(routine) {
@@ -143,6 +151,7 @@ function applyHydrate(payload) {
   setText("status-runtime", serverStatus.runtime_platform || WEB_CONFIG.runtimePlatform || "-");
   setText("status-journal", serverStatus.journal_source_status || WEB_CONFIG.journalStatus || "-");
   setText("status-input-target", serverStatus.input_target_summary || WEB_CONFIG.inputTargetSummary || "-");
+  setText("status-version", serverVersionLabel(serverStatus.server_version, serverStatus.server_commit));
   setText("target-label", serverStatus.input_target_summary || WEB_CONFIG.inputTargetSummary || "-");
   setText("summary-system", ship.system || "-");
   setText("summary-station", ship.station || "-");

@@ -249,6 +249,7 @@ def _server_status(payload: dict[str, Any]) -> ServerStatusReadModel:
     return ServerStatusReadModel(
         server_name=str(payload.get("server_name", "")),
         server_version=str(payload.get("server_version", "")),
+        server_commit=str(payload.get("server_commit", "")),
         runtime_platform=str(payload.get("runtime_platform", "")),
         journal_source_status=str(payload.get("journal_source_status", "")),
         bindings_source_status=str(payload.get("bindings_source_status", "")),

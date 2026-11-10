@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import cache
 from importlib import metadata
 import json
 from pathlib import Path
 import re
+import subprocess
 import tomllib
+from typing import Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -84,6 +87,33 @@ def get_current_version() -> str:
         return metadata.version(PACKAGE_NAME)
     except metadata.PackageNotFoundError:
         return _load_version_from_pyproject()
+
+
+def run_git(args: list[str]) -> str:
+    return subprocess.run(
+        ["git", *args],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=2,
+        check=True,
+    ).stdout.strip()
+
+
+def get_current_commit(git: Callable[[list[str]], str]) -> str:
+    """Short HEAD commit of the checkout, with +dirty when tracked files have uncommitted edits."""
+    try:
+        commit = git(["rev-parse", "--short", "HEAD"])
+        dirty = git(["status", "--porcelain", "--untracked-files=no"])
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return f"{commit}+dirty" if commit and dirty else commit
+
+
+@cache
+def get_startup_commit() -> str:
+    """The checkout commit when this process first asked, so a running server keeps reporting what it loaded."""
+    return get_current_commit(run_git)
 
 
 def fetch_latest_github_release(*, timeout: float = 1.5) -> GitHubRelease | None:

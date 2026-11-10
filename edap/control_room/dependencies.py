@@ -69,6 +69,7 @@ class ServerStatusReadModel:
     operator_mode: str = "embedded_local"
     input_target_summary: str = "foreground window"
     web_form_defaults: dict[str, str] = field(default_factory=dict)
+    server_commit: str = ""
 
 
 @dataclass(frozen=True)
@@ -210,6 +211,7 @@ class LocalControlRoomDataSource:
             server_status=ServerStatusReadModel(
                 server_name="ED Control Room",
                 server_version=app._current_version,
+                server_commit=app._current_commit,
                 runtime_platform=app._config.runtime.platform,
                 journal_source_status=app._ctx.journal.cli_source_status(),
                 bindings_source_status=app._ctx.bindings.cli_source_status(),

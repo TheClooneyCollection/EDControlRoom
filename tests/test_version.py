@@ -53,3 +53,21 @@ class VersionTests(unittest.TestCase):
             release = version.fetch_latest_github_release()
 
         self.assertIsNone(release)
+
+class CurrentCommitTests(unittest.TestCase):
+    def test_clean_checkout_reports_short_commit(self) -> None:
+        outputs = {"rev-parse": "b2a65e4", "status": ""}
+
+        self.assertEqual(version.get_current_commit(lambda args: outputs[args[0]]), "b2a65e4")
+
+    def test_uncommitted_tracked_edits_mark_the_commit_dirty(self) -> None:
+        outputs = {"rev-parse": "b2a65e4", "status": " M web/haul-ui.js"}
+
+        self.assertEqual(version.get_current_commit(lambda args: outputs[args[0]]), "b2a65e4+dirty")
+
+    def test_missing_git_reports_no_commit(self) -> None:
+        def no_git(args: list[str]) -> str:
+            raise FileNotFoundError("git")
+
+        self.assertEqual(version.get_current_commit(no_git), "")
+

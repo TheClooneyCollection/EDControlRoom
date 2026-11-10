@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `299`
-- Latest generated iteration number: `432`
+- Generated iteration count: `300`
+- Latest generated iteration number: `433`
 
 ## Iteration 134
 
@@ -8492,3 +8492,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Full suite runs about 0.61-0.63 s for 990 tests on a busy machine, above the 0.594 s budget even without this change; recheck on an idle machine.
+
+## Iteration 433
+
+- When: `2026-11-10 13:27`
+- Area: `control-room`
+- Title: `server-version-commit`
+- Source: [2026-11-10-13-27_control-room_server-version-commit.md](iteration-logs/2026-11-10-13-27_control-room_server-version-commit.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `server-version-commit`
+- Started: `2026-11-10 13:27`
+
+## Summary
+
+- A LAN server could not show which code it was running. The Mac server reported `1.26.0` on `/health` after v1.27.0 shipped, and the version alone cannot tell commits after a release apart.
+
+## Changes
+
+- `edap/version.py`: `get_current_commit(git)` returns the short HEAD, with `+dirty` for uncommitted tracked edits, or `""` without git; `get_startup_commit()` caches it once per process so a running server keeps reporting what it loaded.
+- `VersionSource.get_current_commit` feeds `ServerStatusReadModel.server_commit`; `/health` returns `server_commit`, and pages get `serverCommit` in their injected config.
+- `/haul`, `/multi-haul` and `/controls` show a sidebar Version row such as `1.27.0 (b2a65e4)`, refreshed from each hydrate.
+- Calling git per app construction pushed the suite to 1.6 s; the per-process cache brings it back to baseline.
+
+## Follow-ups
+
+- Optional: flag when the server's startup commit differs from the checkout's current HEAD (restart needed).
