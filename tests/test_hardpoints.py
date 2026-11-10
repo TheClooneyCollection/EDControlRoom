@@ -123,6 +123,11 @@ class HardpointFlowTests(unittest.TestCase):
                         status_path.write_text('{"Flags": 0}', encoding="utf-8")
                     return ActionDispatchResult(action="DeployHardpointToggle", status="ok")
                 controls.deploy_hardpoint_toggle = toggle
+                jump_result = controls.hyper_super_combination
+                def hyper_super_combination():
+                    status_path.write_text('{"Flags": 131072}', encoding="utf-8")
+                    return jump_result()
+                controls.hyper_super_combination = hyper_super_combination
                 runtime = _runtime(journal_dir, controls=controls)
                 result = engage_hyperspace_after_escape(runtime, progress_message="engage")
                 actions = [c["action"] for c in controls.calls]

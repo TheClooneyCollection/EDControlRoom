@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `316`
-- Latest generated iteration number: `449`
+- Generated iteration count: `317`
+- Latest generated iteration number: `450`
 
 ## Iteration 134
 
@@ -8964,3 +8964,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Not yet tried in a browser. Station distances and profit per hour are not in `Market.json`, so the linked route leaves them empty.
+
+## Iteration 450
+
+- When: `2026-11-10 20:59`
+- Area: `travel`
+- Title: `fsd-charge-confirm-supercruise-fallback`
+- Source: [2026-11-10-20-59____travel____fsd-charge-confirm-supercruise-fallback.md](iteration-logs/2026-11-10-20-59____travel____fsd-charge-confirm-supercruise-fallback.md)
+
+# Iteration Log
+
+- Area: `travel`
+- Title: `fsd-charge-confirm-supercruise-fallback`
+- Started: `2026-11-10 20:59`
+
+## Summary
+
+- Leaving Chauhan Dock, `HyperSuperCombination` does nothing when the station obscures the jump target (it only shows "Destination Target Obscured"; verified it never falls back to supercruise), yet TTS already said "Ready to jump". The auto engage now confirms the FSD is charging before saying that, and falls back to supercruise when it is not.
+
+## Changes
+
+- `engage_fsd_and_confirm_charging` in `edap/routines/transit.py`: say `fsd_engage_trying`, press `HyperSuperCombination`, poll Status.json `FsdCharging` (or `FsdJump`) for `FSD_CHARGE_CONFIRM_TIMEOUT_S = 4.0`. Charging: say `station_cleared`. Not charging from normal space (depart / undock paths): say `supercruise_fallback` and press `Supercruise`. Not charging from supercruise (`travel` supercruise start): say `fsd_jump_blocked` only, since `Supercruise` would drop the ship out. Unreadable Status.json: progress warning, no further TTS.
+- Status.json is polled instead of waiting for the `StartJump` journal event so the wait does not consume journal events that the later arrival wait needs.
+- New `AnnouncementId`s and `defaults/tts.toml` phrases: `fsd_engage_trying`, `supercruise_fallback`, `fsd_jump_blocked`. The `station_cleared` wording is unchanged.
+- Tests: `tests/test_fsd_engage.py`; the hardpoint transit test now sets `FsdCharging` on the jump press.
+
+## Follow-ups
+
+- Live-validate at Chauhan Dock: the 4s window, that `FsdCharging` shows up promptly under CrossOver, and the target swap after the supercruise fallback.

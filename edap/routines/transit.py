@@ -88,6 +88,7 @@ class ShipPosition:
 MANUAL_LANDING_REASON = "manual landing required"
 # Mass-lock boosting is done before the FSD press, so this only covers the charge.
 SUPERCRUISE_ESCAPE_TIMEOUT_S = 45.0
+FSD_CHARGE_CONFIRM_TIMEOUT_S = 4.0
 
 
 def read_latest_journal_events(journal_dir: Path) -> list[dict]:
@@ -289,8 +290,56 @@ def engage_hyperspace_after_escape(runtime: TransitRuntime, *, progress_message:
     if failure is not None:
         return failure
     runtime.progress_fn(progress_message)
-    runtime.announce_fn(AnnouncementId.STATION_CLEARED)
+    engage_fsd_and_confirm_charging(runtime, supercruise_fallback=True)
+
+
+def engage_fsd_and_confirm_charging(runtime: TransitRuntime, *, supercruise_fallback: bool) -> None:
+    """Press HyperSuperCombination and announce the jump only once Status.json shows the FSD charging.
+
+    An obscured jump target makes HyperSuperCombination do nothing. From normal space the
+    fallback presses Supercruise so the player can align with the escape vector and jump;
+    in supercruise that press would drop the ship out, so it only warns the player.
+    """
+    runtime.announce_fn(AnnouncementId.FSD_ENGAGE_TRYING)
     runtime.controls.hyper_super_combination()
+    charging = _wait_for_fsd_charging(runtime)
+    if charging is None:
+        runtime.progress_fn("Warning: cannot read FSD charging from Status.json; assuming the jump started.")
+        return
+    if charging:
+        runtime.announce_fn(AnnouncementId.STATION_CLEARED)
+        return
+    if not supercruise_fallback:
+        runtime.progress_fn("FSD did not charge (jump target obscured?). Align with the target and jump manually.")
+        runtime.announce_fn(AnnouncementId.FSD_JUMP_BLOCKED)
+        return
+    runtime.progress_fn(
+        "FSD did not charge (jump target obscured?). Engaging supercruise; "
+        "align with the escape vector and jump manually."
+    )
+    runtime.announce_fn(AnnouncementId.SUPERCRUISE_FALLBACK)
+    dispatch = runtime.controls.supercruise()
+    if dispatch.status != "ok":
+        runtime.progress_fn(f"Warning: Supercruise dispatch failed ({dispatch.reason or dispatch.status}).")
+
+
+def _wait_for_fsd_charging(runtime: TransitRuntime) -> bool | None:
+    """True once the FSD charges, False if it did not within the timeout, None if Status.json is unreadable."""
+    deadline = runtime.time_fn() + FSD_CHARGE_CONFIRM_TIMEOUT_S
+    seen_status = False
+    while True:
+        try:
+            status = read_status(runtime.journal_dir, require_flags=True)
+        except (OSError, ValueError, TypeError, KeyError, AttributeError, IndexError):
+            # Status.json may be briefly empty or incomplete while Elite writes it.
+            status = None
+        if status is not None:
+            seen_status = True
+            if status.flags.fsd_charging or status.flags.fsd_jump:
+                return True
+        if runtime.time_fn() >= deadline:
+            return False if seen_status else None
+        runtime.sleeper(0.1)
 
 
 def escape_attack_into_supercruise(runtime: TransitRuntime, *, routine_name: str) -> RoutineResult:

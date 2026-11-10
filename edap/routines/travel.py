@@ -7,6 +7,7 @@ from edap.routines._base import RoutineResult
 from edap.routines.runtime import RoutineRuntime
 from edap.routines.transit import (
     depart_system_to_route,
+    engage_fsd_and_confirm_charging,
     guard_hardpoints,
     is_manual_landing_result,
     read_ship_position,
@@ -95,8 +96,7 @@ def travel_to_station(runtime: RoutineRuntime, *, destination: TravelDestination
                 if failure is not None:
                     return failure
                 runtime.progress_fn("Route confirmed from supercruise - engaging hyperspace...")
-                runtime.announce_fn(AnnouncementId.STATION_CLEARED)
-                runtime.controls.hyper_super_combination()
+                engage_fsd_and_confirm_charging(runtime, supercruise_fallback=False)
             else:
                 runtime.progress_fn("Skipping automatic FSD engage because the galaxy-map route is unconfirmed.")
         if not destination.station.strip():
