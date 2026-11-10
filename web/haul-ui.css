@@ -411,7 +411,14 @@
       border-radius: var(--radius);
       background: var(--amber-dim);
       padding: 11px 12px;
-      margin-bottom: 16px;
+      /* Float over the page so it stays reachable while scrolled down to the activity log. */
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      z-index: 20;
+      width: min(440px, calc(100vw - 32px));
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(6px);
     }
 
     .connection-banner.hidden {
@@ -1334,6 +1341,12 @@
       .panel-head {
         flex-direction: column;
         align-items: stretch;
+      }
+
+      .connection-banner {
+        right: 12px;
+        bottom: 12px;
+        width: calc(100vw - 24px);
       }
 
       h1 {
