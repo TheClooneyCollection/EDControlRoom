@@ -12,6 +12,7 @@ let reconnectTimer = null;
 let clientRole = "observer";
 let commandSequence = 1;
 let currentRoutine = {};
+let webDefaults = { galaxyMapSettle: "2.0", homeSystem: "", ...(WEB_CONFIG.webDefaults || {}) };
 const pendingCommands = new Map();
 const activityEntries = new Map();
 
@@ -76,6 +77,9 @@ function updateButtons() {
   document.querySelectorAll("button[data-needs-haul]").forEach((button) => {
     button.disabled = !operator || !haulActive;
   });
+  if (!webDefaults.homeSystem) {
+    document.getElementById("nav-plot-home").disabled = true;
+  }
   const instant = document.getElementById("toggle-instant");
   instant.disabled = !operator;
   instant.setAttribute("aria-checked", currentRoutine.instant_mode ? "true" : "false");
@@ -143,6 +147,8 @@ function applyHydrate(payload) {
   setText("summary-system", ship.system || "-");
   setText("summary-station", ship.station || "-");
   setText("summary-cargo", `${ship.cargo_count || 0} / ${ship.cargo_capacity || 0} t`);
+  webDefaults = { ...webDefaults, ...(serverStatus.web_form_defaults || {}) };
+  setText("nav-home-system", webDefaults.homeSystem || "not set");
   currentRoutine = payload.routine || {};
   updateButtons();
   activityEntries.clear();
@@ -246,12 +252,50 @@ function tradeCommand(verb) {
   submitInput(`${verb} ${commodity} ${amount}`);
 }
 
+function galaxyMapSettle() {
+  const value = Number(webDefaults.galaxyMapSettle);
+  return Number.isFinite(value) && value > 0 ? value : 2;
+}
+
+function plotDestination(destination) {
+  if (!destination) {
+    addLocalActivity("Enter a system to plot a route to.", "warning");
+    return;
+  }
+  sendCommand("command.dispatch_destination", {
+    destination,
+    galaxy_map_settle: galaxyMapSettle(),
+    skip_delay: false,
+    raw_command: `web dest ${destination}`
+  })
+    .then(() => addLocalActivity(`Plotting route to ${destination}.`, "success"))
+    .catch((error) => addLocalActivity(error.message, "warning"));
+}
+
+function startTravel() {
+  const system = document.getElementById("nav-system").value.trim();
+  const station = document.getElementById("nav-station").value.trim();
+  if (!system) {
+    addLocalActivity("Enter a system to travel to.", "warning");
+    return;
+  }
+  sendCommand("command.dispatch_travel", {
+    system,
+    station,
+    on_land: Boolean(station) && document.getElementById("nav-on-land").checked,
+    raw_command: station ? `web travel ${system} / ${station}` : `web travel ${system}`
+  })
+    .then(() => addLocalActivity(station ? `Travel accepted for ${station}.` : `Travel accepted for ${system}.`, "success"))
+    .catch((error) => addLocalActivity(error.message, "warning"));
+}
+
 function stopRoutine(mode) {
   sendCommand("command.cancel_active_routine", { mode })
     .catch((error) => addLocalActivity(error.message, "warning"));
 }
 
 applyWebConfigLabels();
+setText("nav-home-system", webDefaults.homeSystem || "not set");
 updateButtons();
 renderActivityLog();
 document.getElementById("access-token").value = accessToken;
@@ -268,6 +312,14 @@ document.querySelectorAll("button[data-command]").forEach((button) => {
   // Routine controls act on the running routine, so they skip the launch delay.
   const skipDelay = !button.hasAttribute("data-needs-idle");
   button.addEventListener("click", () => submitInput(button.dataset.command, { skipDelay }));
+});
+document.getElementById("nav-plot").addEventListener("click", () => {
+  plotDestination(document.getElementById("nav-system").value.trim());
+});
+document.getElementById("nav-travel").addEventListener("click", startTravel);
+document.getElementById("nav-plot-home").addEventListener("click", () => plotDestination(webDefaults.homeSystem));
+document.getElementById("nav-set-home").addEventListener("click", () => {
+  submitInput(`home set ${document.getElementById("nav-system").value.trim()}`.trim(), { skipDelay: true });
 });
 document.getElementById("trade-buy").addEventListener("click", () => tradeCommand("buy"));
 document.getElementById("trade-sell").addEventListener("click", () => tradeCommand("sell"));

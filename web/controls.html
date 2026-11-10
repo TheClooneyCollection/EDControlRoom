@@ -39,6 +39,24 @@
       grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
       gap: 10px;
     }
+    .nav-form {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 10px;
+    }
+    .surface-check {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--text-2);
+    }
+    .nav-home {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--text-2);
+    }
     .busy-state {
       display: inline-flex;
       align-items: center;
@@ -170,7 +188,7 @@
       <header class="topbar">
         <div>
           <div class="topbar-title">Controls</div>
-          <div class="topbar-sub">Fire single ship routines and routine controls without the haul page.</div>
+          <div class="topbar-sub">Fire single ship routines, navigation and routine controls without the haul page.</div>
         </div>
         <div class="chips" aria-label="Session status">
           <div class="chip">Host <strong id="host-label">-</strong></div>
@@ -219,6 +237,33 @@
                   <button class="btn ghost control-button" type="button" data-command="boost" data-needs-idle>Boost x3<span class="control-sub">No mass-lock check</span></button>
                 </div>
                 <button class="btn big-stop" type="button" data-stop-now data-needs-active>STOP NOW</button>
+              </div>
+            </section>
+
+            <section class="panel" aria-labelledby="nav-title">
+              <div class="panel-head">
+                <div class="panel-title" id="nav-title">Nav</div>
+                <div class="panel-action"><span class="busy-state">Idle</span></div>
+              </div>
+              <div class="panel-body">
+                <div class="nav-form">
+                  <label class="spansh-field">
+                    <span class="field-label">System</span>
+                    <input class="field" id="nav-system" placeholder="e.g. Sol" autocomplete="off">
+                  </label>
+                  <label class="spansh-field">
+                    <span class="field-label">Station (travel only)</span>
+                    <input class="field" id="nav-station" placeholder="optional" autocomplete="off">
+                  </label>
+                </div>
+                <label class="surface-check"><input type="checkbox" id="nav-on-land"> Surface port (hand off for manual landing)</label>
+                <div class="btn-row">
+                  <button class="btn primary" type="button" id="nav-plot" data-needs-idle>Plot route</button>
+                  <button class="btn primary" type="button" id="nav-travel" data-needs-idle>Travel</button>
+                  <button class="btn ghost" type="button" id="nav-plot-home" data-needs-idle>Plot home</button>
+                  <button class="btn ghost" type="button" id="nav-set-home" data-needs-idle>Set home</button>
+                </div>
+                <div class="nav-home">Home <strong id="nav-home-system">-</strong>. Set home uses the System field, or the current system when it is empty.</div>
               </div>
             </section>
 

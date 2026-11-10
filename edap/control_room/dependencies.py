@@ -245,7 +245,9 @@ def _web_form_defaults(app: ControlRoomApp) -> dict[str, str]:
     min_landing_pad = search_defaults.get("min_landing_pad", "").strip().lower()
     use_surface_stations = search_defaults.get("use_surface_stations", "").strip().lower()
     order_by = search_defaults.get("order_by", "").strip()
-    controls = getattr(getattr(app, "_config", None), "controls", None)
+    config = getattr(app, "_config", None)
+    controls = getattr(config, "controls", None)
+    home_system = getattr(getattr(config, "control_room", None), "home_system", "") or ""
     return {
         "startingCapital": str(app._ship.credits or ""),
         "cargoCapacity": search_defaults.get("cargo_capacity", ""),
@@ -259,6 +261,7 @@ def _web_form_defaults(app: ControlRoomApp) -> dict[str, str]:
         "metric": "Profit / trip" if order_by == "best_profit" else "Profit / hour",
         "galaxyMapSettle": _format_web_number(getattr(controls, "galaxy_map_settle_seconds", "")),
         "dockTimeout": _format_web_number(getattr(controls, "haul_dock_timeout_seconds", "")),
+        "homeSystem": home_system.strip(),
     }
 
 

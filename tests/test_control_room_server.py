@@ -736,6 +736,14 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(js_response.status_code, 200)
         self.assertIn("command.submit_input", js_response.text)
         self.assertIn("command.cancel_active_routine", js_response.text)
+        for element_id in ("nav-system", "nav-station", "nav-on-land", "nav-plot", "nav-travel",
+                           "nav-plot-home", "nav-set-home"):
+            self.assertIn(f'id="{element_id}"', response.text)
+        for hook in ('sendCommand("command.dispatch_destination"', 'sendCommand("command.dispatch_travel"',
+                     'on_land: Boolean(station) && document.getElementById("nav-on-land").checked',
+                     "plotDestination(webDefaults.homeSystem)", "submitInput(`home set ",
+                     "serverStatus.web_form_defaults"):
+            self.assertIn(hook, js_response.text)
 
     def test_haul_web_endpoint_can_inject_implicit_serve_token(self) -> None:
         broker = InMemoryObserverSessionBroker()
