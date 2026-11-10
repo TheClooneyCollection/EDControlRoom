@@ -1682,7 +1682,7 @@ class ControlRoomApp(App[None]):
         if event in {"Cargo", "MarketBuy", "MarketSell"}:
             _bootstrap.sync_cargo_manifest(self)
 
-        if event == "Docked":
+        if event in {"Docked", "Market"}:
             self._load_market_json()
 
         msg = self._activity_line(ev)

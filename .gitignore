@@ -21,6 +21,8 @@ haul_search.toml
 
 .control_room_haul_runs.jsonl
 
+.control_room_recent_markets.json
+
 .wine_input_helper.token
 
 .eddn_markets.sqlite3*

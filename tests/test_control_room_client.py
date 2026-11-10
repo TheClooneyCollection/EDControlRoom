@@ -228,6 +228,7 @@ def _make_observer_context() -> RuntimeContext:
             control_room=ControlRoomConfig(
                 state_file=Path("/tmp/control-room-state.json"),
                 haul_runs_file=Path("/tmp/control-room-runs.jsonl"),
+                recent_markets_file=Path("/tmp/control-room-recent-markets.json"),
                 history_limit=20,
                 activity_log_max_lines=2000,
                 command_delay_seconds=0.0,

@@ -89,6 +89,7 @@ def _make_config(journal_dir: Path) -> AppConfig:
         control_room=ControlRoomConfig(
             state_file=journal_dir / ".control_room_state.json",
             haul_runs_file=journal_dir / ".control_room_haul_runs.jsonl",
+            recent_markets_file=journal_dir / ".control_room_recent_markets.json",
             history_limit=20,
             activity_log_max_lines=2000,
             command_delay_seconds=0.0,

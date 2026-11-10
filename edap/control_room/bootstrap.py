@@ -5,8 +5,10 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from edap.cargo_manifest import read_cargo_inventory
+from edap.config import AppConfig
 from edap.control_room import rendering as _rendering
 from edap.control_room.models import MarketData, ShipState
+from edap.recent_markets import record_market_json
 from edap.status import read_status
 from edap.state import get_latest_journal_log, read_ship_state
 
@@ -17,8 +19,10 @@ class BootstrapHost(Protocol):
     _market_mtime: float | None
     _market: MarketData
     _ship: ShipState
+    _config: AppConfig
 
     def _refresh_market(self) -> None: ...
+    def _log(self, msg: str) -> None: ...
 
 
 def sync_cargo_manifest(app: BootstrapHost, *, update_count: bool = True) -> bool:
@@ -85,6 +89,7 @@ def load_market_json(app: BootstrapHost) -> None:
             data: dict[str, Any] = json.load(fh)
     except Exception:
         return
+    record_market_json(app._config.control_room.recent_markets_file, data, app._log)
 
     station = data.get("StationName", "?")
     system = data.get("StarSystem", "?")

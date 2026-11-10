@@ -207,6 +207,7 @@ class RuntimeConfig:
 class ControlRoomConfig:
     state_file: Path
     haul_runs_file: Path
+    recent_markets_file: Path
     history_limit: int
     activity_log_max_lines: int
     command_delay_seconds: float
@@ -1158,6 +1159,13 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             ).expanduser(),
             state_file=Path(
                 _string(control_room, "state_file", _string(default_control_room, "state_file", ""))
+            ).expanduser(),
+            recent_markets_file=Path(
+                _string(
+                    control_room,
+                    "recent_markets_file",
+                    _string(default_control_room, "recent_markets_file", ""),
+                )
             ).expanduser(),
             history_limit=_integer(control_room, "history_limit", _integer(default_control_room, "history_limit", 0)),
             activity_log_max_lines=_integer(

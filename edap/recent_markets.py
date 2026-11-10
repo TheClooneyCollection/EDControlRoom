@@ -1,0 +1,185 @@
+"""Recently visited station markets, captured from Elite's Market.json."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+import json
+import os
+from pathlib import Path
+import tempfile
+from typing import Any, Callable
+
+RECENT_MARKETS_LIMIT = 10
+_SCHEMA = 1
+
+
+@dataclass(frozen=True)
+class MarketSnapshot:
+    market_id: int
+    station: str
+    system: str
+    station_type: str
+    timestamp: str
+    items: tuple[dict[str, Any], ...]
+
+
+@dataclass(frozen=True)
+class MarketItem:
+    commodity: str
+    name: str
+    category: str
+    buy_price: int
+    sell_price: int
+    mean_price: int
+    stock: int
+    demand: int
+    stock_bracket: int
+    demand_bracket: int
+
+
+def commodity_key(name: str) -> str:
+    """Normalise `$hazardousenvironmentsuits_name;` to `hazardousenvironmentsuits`."""
+    key = name.strip().lower()
+    if key.startswith("$"):
+        key = key[1:]
+    if key.endswith(";"):
+        key = key[:-1]
+    if key.endswith("_name"):
+        key = key[: -len("_name")]
+    return key
+
+
+def snapshot_from_market_json(data: dict[str, Any]) -> MarketSnapshot | None:
+    market_id = data.get("MarketID")
+    items = data.get("Items")
+    if isinstance(market_id, bool) or not isinstance(market_id, int) or not isinstance(items, list):
+        return None
+    return MarketSnapshot(
+        market_id=market_id,
+        station=str(data.get("StationName") or ""),
+        system=str(data.get("StarSystem") or ""),
+        station_type=str(data.get("StationType") or ""),
+        timestamp=str(data.get("timestamp") or ""),
+        items=tuple(item for item in items if isinstance(item, dict)),
+    )
+
+
+def record_snapshot(
+    snapshots: tuple[MarketSnapshot, ...],
+    snapshot: MarketSnapshot,
+    *,
+    limit: int = RECENT_MARKETS_LIMIT,
+) -> tuple[MarketSnapshot, ...]:
+    """Return snapshots newest first, one per station; a stale snapshot changes nothing."""
+    existing = next((s for s in snapshots if s.market_id == snapshot.market_id), None)
+    if existing is not None and existing.timestamp >= snapshot.timestamp:
+        return snapshots
+    others = [s for s in snapshots if s.market_id != snapshot.market_id]
+    ordered = sorted([snapshot, *others], key=lambda s: s.timestamp, reverse=True)
+    return tuple(ordered[:limit])
+
+
+def market_items(snapshot: MarketSnapshot) -> tuple[MarketItem, ...]:
+    rows = []
+    for item in snapshot.items:
+        raw_name = str(item.get("Name") or "")
+        key = commodity_key(raw_name)
+        if not key:
+            continue
+        rows.append(
+            MarketItem(
+                commodity=key,
+                name=str(item.get("Name_Localised") or key),
+                category=str(item.get("Category_Localised") or ""),
+                buy_price=_int(item.get("BuyPrice")),
+                sell_price=_int(item.get("SellPrice")),
+                mean_price=_int(item.get("MeanPrice")),
+                stock=_int(item.get("Stock")),
+                demand=_int(item.get("Demand")),
+                stock_bracket=_int(item.get("StockBracket")),
+                demand_bracket=_int(item.get("DemandBracket")),
+            )
+        )
+    return tuple(rows)
+
+
+def load_recent_markets(path: Path) -> tuple[MarketSnapshot, ...]:
+    """Read the store; a missing or unreadable file is an empty history."""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ()
+    markets = payload.get("markets") if isinstance(payload, dict) else None
+    if not isinstance(markets, list):
+        return ()
+    snapshots = []
+    for entry in markets:
+        if not isinstance(entry, dict):
+            continue
+        snapshot = snapshot_from_market_json(
+            {
+                "MarketID": entry.get("market_id"),
+                "StationName": entry.get("station"),
+                "StarSystem": entry.get("system"),
+                "StationType": entry.get("station_type"),
+                "timestamp": entry.get("timestamp"),
+                "Items": entry.get("items"),
+            }
+        )
+        if snapshot is not None:
+            snapshots.append(snapshot)
+    return tuple(snapshots)
+
+
+def save_recent_markets(path: Path, snapshots: tuple[MarketSnapshot, ...]) -> None:
+    payload = {
+        "schema": _SCHEMA,
+        "markets": [
+            {
+                "market_id": s.market_id,
+                "station": s.station,
+                "system": s.system,
+                "station_type": s.station_type,
+                "timestamp": s.timestamp,
+                "items": list(s.items),
+            }
+            for s in snapshots
+        ],
+    }
+    directory = path.parent if str(path.parent) else Path(".")
+    directory.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_name, path)
+    except BaseException:
+        Path(temp_name).unlink(missing_ok=True)
+        raise
+
+
+def record_market_json(path: Path, data: dict[str, Any], log: Callable[[str], None]) -> bool:
+    """Store a Market.json payload; True when the store changed."""
+    snapshot = snapshot_from_market_json(data)
+    if snapshot is None:
+        return False
+    current = load_recent_markets(path)
+    updated = record_snapshot(current, snapshot)
+    if updated == current:
+        return False
+    try:
+        save_recent_markets(path, updated)
+    except OSError as exc:
+        log(f"Warning: failed to save recent markets to {path}: {exc}")
+        return False
+    return True
+
+
+def _int(value: Any) -> int:
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, (int, float)):
+        return int(value)
+    return 0

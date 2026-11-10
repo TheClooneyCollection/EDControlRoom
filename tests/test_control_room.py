@@ -119,6 +119,7 @@ def _make_config(journal_dir: Path, *, activity_log_max_lines: int = 2000) -> Ap
         control_room=ControlRoomConfig(
             state_file=journal_dir / ".control_room_state.json",
             haul_runs_file=journal_dir / ".control_room_haul_runs.jsonl",
+            recent_markets_file=journal_dir / ".control_room_recent_markets.json",
             history_limit=20,
             activity_log_max_lines=activity_log_max_lines,
             command_delay_seconds=0.0,
@@ -1336,6 +1337,29 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertEqual(self.app._market.station, "Pawelczyk Dock")
         self.assertEqual(self.app._market.system, "Col 285 Sector HD-F b13-1")
 
+    def test_opening_a_market_records_it_in_recent_markets(self) -> None:
+        from edap.recent_markets import load_recent_markets
+
+        journal_dir = Path(self.tmpdir.name)
+        (journal_dir / "Market.json").write_text(
+            json.dumps({
+                "MarketID": 3228,
+                "StationName": "Pawelczyk Dock",
+                "StationType": "Coriolis",
+                "StarSystem": "HIP 58412",
+                "timestamp": "2026-06-07T21:10:39Z",
+                "Items": [{"Name": "$gold_name;", "Name_Localised": "Gold", "BuyPrice": 9000}],
+            }),
+            encoding="utf-8",
+        )
+
+        self.app._handle_event({"event": "Market", "MarketID": 3228, "timestamp": "2026-06-07T21:10:39Z"})
+
+        markets = load_recent_markets(self.app._config.control_room.recent_markets_file)
+        self.assertEqual([(m.market_id, m.station, m.station_type) for m in markets],
+                         [(3228, "Pawelczyk Dock", "Coriolis")])
+        self.assertEqual(markets[0].items[0]["Name_Localised"], "Gold")
+
     def test_load_market_json_does_not_seed_when_not_in_station(self) -> None:
         journal_dir = Path(self.tmpdir.name)
         (journal_dir / "Journal.240101000000.01.log").write_text(
@@ -2213,6 +2237,7 @@ on_land = true
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 haul_runs_file=self.app._config.control_room.haul_runs_file,
+                recent_markets_file=self.app._config.control_room.recent_markets_file,
                 history_limit=2,
                 activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=self.app._config.control_room.command_delay_seconds,
@@ -3644,6 +3669,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 haul_runs_file=self.app._config.control_room.haul_runs_file,
+                recent_markets_file=self.app._config.control_room.recent_markets_file,
                 history_limit=self.app._config.control_room.history_limit,
                 activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=self.app._config.control_room.command_delay_seconds,
@@ -4009,6 +4035,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 haul_runs_file=self.app._config.control_room.haul_runs_file,
+                recent_markets_file=self.app._config.control_room.recent_markets_file,
                 history_limit=self.app._config.control_room.history_limit,
                 activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
@@ -4046,6 +4073,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 haul_runs_file=self.app._config.control_room.haul_runs_file,
+                recent_markets_file=self.app._config.control_room.recent_markets_file,
                 history_limit=self.app._config.control_room.history_limit,
                 activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
@@ -4084,6 +4112,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 haul_runs_file=self.app._config.control_room.haul_runs_file,
+                recent_markets_file=self.app._config.control_room.recent_markets_file,
                 history_limit=self.app._config.control_room.history_limit,
                 activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
@@ -4120,6 +4149,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 haul_runs_file=self.app._config.control_room.haul_runs_file,
+                recent_markets_file=self.app._config.control_room.recent_markets_file,
                 history_limit=self.app._config.control_room.history_limit,
                 activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
@@ -4158,6 +4188,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 haul_runs_file=self.app._config.control_room.haul_runs_file,
+                recent_markets_file=self.app._config.control_room.recent_markets_file,
                 history_limit=self.app._config.control_room.history_limit,
                 activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
@@ -4198,6 +4229,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 haul_runs_file=self.app._config.control_room.haul_runs_file,
+                recent_markets_file=self.app._config.control_room.recent_markets_file,
                 history_limit=self.app._config.control_room.history_limit,
                 activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
@@ -4254,6 +4286,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 haul_runs_file=self.app._config.control_room.haul_runs_file,
+                recent_markets_file=self.app._config.control_room.recent_markets_file,
                 history_limit=self.app._config.control_room.history_limit,
                 activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
@@ -4279,6 +4312,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 haul_runs_file=self.app._config.control_room.haul_runs_file,
+                recent_markets_file=self.app._config.control_room.recent_markets_file,
                 history_limit=self.app._config.control_room.history_limit,
                 activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
