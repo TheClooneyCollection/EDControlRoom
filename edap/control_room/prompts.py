@@ -1091,7 +1091,7 @@ def advance_haul_search_prompt(
     )
     if cargo_capacity is None:
         return HaulSearchPromptTransition()
-    max_route_distance = parse_optional_nonnegative_int(
+    max_route_distance = parse_optional_nonnegative_number_text(
         app,
         parsed.get("max_route_distance_ly", ""),
         default=defaults.get("max_route_distance_ly", ""),
@@ -1221,6 +1221,22 @@ def parse_optional_nonnegative_float(
         )
         return None
     return parsed
+
+
+def parse_optional_nonnegative_number_text(
+    app: PromptHost,
+    raw: str,
+    *,
+    default: str,
+    label: str,
+) -> str | None:
+    # Keep the text as typed so `20` stays `20`; the web page saves decimals such as a 17.2 Ly jump range.
+    value = raw.strip()
+    if not value:
+        return default
+    if parse_optional_nonnegative_float(app, value, default=0.0, label=label) is None:
+        return None
+    return value
 
 
 def parse_optional_nonnegative_int(
