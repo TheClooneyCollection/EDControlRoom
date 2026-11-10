@@ -26,6 +26,7 @@ class AnnouncementId(str, Enum):
     FSD_ENGAGE_TRYING = "fsd_engage_trying"
     STATION_CLEARED = "station_cleared"
     SUPERCRUISE_FALLBACK = "supercruise_fallback"
+    SUPERCRUISE_COUNTDOWN = "supercruise_countdown"
     FSD_JUMP_BLOCKED = "fsd_jump_blocked"
     UNDER_ATTACK = "under_attack"
     SUPERCRUISE_ESCAPE_ALIGN = "supercruise_escape_align"

@@ -42,7 +42,10 @@ class FsdEngageTests(unittest.TestCase):
     def test_obscured_jump_in_normal_space_falls_back_to_supercruise_and_warns(self):
         actions, announced, _ = self.engage(flags_after_press=0, supercruise_fallback=True)
         self.assertEqual(actions, ["HyperSuperCombination", "Supercruise"])
-        self.assertEqual(announced, [AnnouncementId.FSD_ENGAGE_TRYING, AnnouncementId.SUPERCRUISE_FALLBACK])
+        self.assertEqual(
+            announced,
+            [AnnouncementId.FSD_ENGAGE_TRYING, AnnouncementId.SUPERCRUISE_FALLBACK, AnnouncementId.SUPERCRUISE_COUNTDOWN],
+        )
 
     def test_obscured_jump_in_supercruise_only_warns_so_the_ship_does_not_drop_out(self):
         actions, announced, _ = self.engage(flags_after_press=0, supercruise_fallback=False)

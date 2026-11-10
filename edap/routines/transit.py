@@ -89,6 +89,7 @@ MANUAL_LANDING_REASON = "manual landing required"
 # Mass-lock boosting is done before the FSD press, so this only covers the charge.
 SUPERCRUISE_ESCAPE_TIMEOUT_S = 45.0
 FSD_CHARGE_CONFIRM_TIMEOUT_S = 4.0
+SUPERCRUISE_FALLBACK_COUNTDOWN_S = 8.0
 
 
 def read_latest_journal_events(journal_dir: Path) -> list[dict]:
@@ -297,7 +298,7 @@ def engage_fsd_and_confirm_charging(runtime: TransitRuntime, *, supercruise_fall
     """Press HyperSuperCombination and announce the jump only once Status.json shows the FSD charging.
 
     An obscured jump target makes HyperSuperCombination do nothing. From normal space the
-    fallback presses Supercruise so the player can align with the escape vector and jump;
+    fallback counts down and presses Supercruise so the player can align with the escape vector and jump;
     in supercruise that press would drop the ship out, so it only warns the player.
     """
     runtime.announce_fn(AnnouncementId.FSD_ENGAGE_TRYING)
@@ -318,6 +319,9 @@ def engage_fsd_and_confirm_charging(runtime: TransitRuntime, *, supercruise_fall
         "align with the escape vector and jump manually."
     )
     runtime.announce_fn(AnnouncementId.SUPERCRUISE_FALLBACK)
+    runtime.announce_fn(AnnouncementId.SUPERCRUISE_COUNTDOWN)
+    # TTS is queued without a completion signal, so wait roughly as long as both lines take to speak.
+    runtime.sleeper(SUPERCRUISE_FALLBACK_COUNTDOWN_S)
     dispatch = runtime.controls.supercruise()
     if dispatch.status != "ok":
         runtime.progress_fn(f"Warning: Supercruise dispatch failed ({dispatch.reason or dispatch.status}).")
