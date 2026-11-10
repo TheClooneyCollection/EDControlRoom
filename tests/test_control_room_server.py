@@ -1027,6 +1027,38 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(save_defaults.call_args.args[0]["max_station_distance_ls"], "any")
         self.assertEqual(save_defaults.call_args.kwargs["exclude"], ("cargo_capacity",))
 
+    def test_search_haul_routes_passes_the_surface_station_choice_to_inara(self) -> None:
+        broker = InMemoryObserverSessionBroker()
+        observer = broker.register_observer("bridge-ipad")
+        result = TradeRouteSearchResult(system_name="Sol", query_url="", searched_at="", routes=())
+
+        def search(surface: str) -> dict[str, object]:
+            return _handle_session_message(
+                {
+                    "message_type": "command.search_haul_routes",
+                    "message_id": "message-search",
+                    "payload": {"origin": "Sol", "use_surface_stations": surface},
+                },
+                session_id=observer.session_id,
+                client_role="active_operator",
+                command_handler=None,
+                broker=broker,
+                data_provider=_base_data_read_model,
+            )
+
+        with (
+            patch("edap.control_room.server.app.search_trade_routes", return_value=result) as inara,
+            patch("edap.control_room.server.app.save_haul_search_config"),
+        ):
+            response = search("yes_exclude_odyssey")
+            invalid = search("sometimes")
+
+        self.assertEqual(inara.call_args.kwargs["query_params"]["use_surface_stations"], "yes_exclude_odyssey")
+        self.assertFalse(response["payload"]["result"]["station_carrier_only"])
+        self.assertEqual(response["payload"]["result"]["use_surface_stations"], "yes_exclude_odyssey")
+        self.assertEqual(invalid["message_type"], "response.error")
+        self.assertEqual(inara.call_count, 1)
+
     def test_connected_observer_search_haul_routes_is_allowed(self) -> None:
         broker = InMemoryObserverSessionBroker()
         observer = broker.register_observer("bridge-ipad")

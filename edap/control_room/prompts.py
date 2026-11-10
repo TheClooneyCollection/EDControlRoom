@@ -13,7 +13,7 @@ from edap.control_room import error_text
 from edap.control_room.models import PromptState, ShipState
 from edap.control_room_state import ControlRoomState
 from edap.haul_search_config import HaulSearchConfigError, load_haul_search_config
-from edap.inara.trade_routes import trade_route_search_defaults
+from edap.inara.trade_routes import parse_surface_stations, trade_route_search_defaults
 
 
 @dataclass(frozen=True)
@@ -399,25 +399,6 @@ def _parse_search_landing_pad(value: str, *, default: str) -> str | None:
         "medium": "medium",
         "l": "large",
         "large": "large",
-    }
-    return aliases.get(raw)
-
-
-def _parse_surface_stations(value: str, *, default: str) -> str | None:
-    raw = value.strip().lower().replace(" ", "_").replace("-", "_")
-    if not raw:
-        return default
-    aliases = {
-        "no": "no",
-        "n": "no",
-        "yes": "yes_with_odyssey",
-        "y": "yes_with_odyssey",
-        "yes_with_odyssey": "yes_with_odyssey",
-        "with_odyssey": "yes_with_odyssey",
-        "odyssey": "yes_with_odyssey",
-        "yes_exclude_odyssey": "yes_exclude_odyssey",
-        "exclude_odyssey": "yes_exclude_odyssey",
-        "without_odyssey": "yes_exclude_odyssey",
     }
     return aliases.get(raw)
 
@@ -1140,7 +1121,7 @@ def advance_haul_search_prompt(
         return HaulSearchPromptTransition(
             log_lines=("[red]Min. landing pad must be small, medium, or large.[/]",),
         )
-    surface_stations = _parse_surface_stations(
+    surface_stations = parse_surface_stations(
         parsed.get("use_surface_stations", ""),
         default=defaults.get("use_surface_stations", "no"),
     )

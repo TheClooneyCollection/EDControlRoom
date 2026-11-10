@@ -48,6 +48,7 @@ from edap.haul_search_config import (
 from edap.inara.trade_routes import (
     TradeRoute,
     TradeRouteSearchResult,
+    parse_surface_stations,
     search_trade_routes,
 )
 from edap.control_room.protocol import (
@@ -831,7 +832,15 @@ async def _handle_search_haul_routes_message_async(
             retryable=True,
             correlation_message_id=correlation_message_id,
         )
-    query_params = _haul_search_query_params(payload, data=data)
+    try:
+        query_params = _haul_search_query_params(payload, data=data)
+    except ValueError as exc:
+        return _response_error(
+            "invalid_search",
+            str(exc),
+            retryable=True,
+            correlation_message_id=correlation_message_id,
+        )
     await asyncio.to_thread(_save_haul_search_defaults, query_params)
     destination_filter = (
         _payload_string(payload, "destination")
@@ -869,6 +878,7 @@ async def _handle_search_haul_routes_message_async(
                 result,
                 routes=routes,
                 unfiltered_count=unfiltered_count,
+                use_surface_stations=query_params["use_surface_stations"],
             ),
         },
         correlation_message_id=correlation_message_id,
@@ -1070,8 +1080,11 @@ def _haul_search_query_params(
         metric = _payload_string(payload, "metric").lower()
         order_by = "best_profit" if "trip" in metric else "best_profit_per_hour_estimate"
 
+    surface_stations = parse_surface_stations(_payload_string(payload, "use_surface_stations"), default="no")
+    if surface_stations is None:
+        raise ValueError("Surface stations must be no, yes_with_odyssey or yes_exclude_odyssey.")
     params: dict[str, str] = {
-        "use_surface_stations": "no",
+        "use_surface_stations": surface_stations,
     }
     if cargo_capacity:
         params["cargo_capacity"] = cargo_capacity
@@ -1130,6 +1143,7 @@ def _haul_search_response(
     *,
     routes: list[TradeRoute],
     unfiltered_count: int,
+    use_surface_stations: str,
 ) -> dict[str, Any]:
     return {
         "system_name": result.system_name,
@@ -1137,7 +1151,8 @@ def _haul_search_response(
         "searched_at": result.searched_at,
         "route_count": len(routes),
         "unfiltered_route_count": unfiltered_count,
-        "station_carrier_only": True,
+        "station_carrier_only": use_surface_stations == "no",
+        "use_surface_stations": use_surface_stations,
         "routes": [_trade_route_to_payload(route) for route in routes],
     }
 
@@ -1573,7 +1588,15 @@ def _handle_session_message(
                 retryable=True,
                 correlation_message_id=correlation_message_id,
             )
-        query_params = _haul_search_query_params(payload, data=data)
+        try:
+            query_params = _haul_search_query_params(payload, data=data)
+        except ValueError as exc:
+            return _response_error(
+                "invalid_search",
+                str(exc),
+                retryable=True,
+                correlation_message_id=correlation_message_id,
+            )
         _save_haul_search_defaults(query_params)
         destination_filter = (
             _payload_string(payload, "destination")
@@ -1610,6 +1633,7 @@ def _handle_session_message(
                     result,
                     routes=routes,
                     unfiltered_count=unfiltered_count,
+                    use_surface_stations=query_params["use_surface_stations"],
                 ),
             },
             correlation_message_id=correlation_message_id,

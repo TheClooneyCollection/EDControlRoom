@@ -108,6 +108,15 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         )
         self.assertIn('formatCredits(sessionProfit(haulSession))', html)
 
+    def test_haul_web_search_sends_inara_surface_station_choice(self) -> None:
+        html = _haul_web_source()
+
+        # Inara pi4: 1 = No, 2 = Yes (exclude Odyssey stations), 0 = Yes (with Odyssey stations).
+        for value in ("no", "yes_exclude_odyssey", "yes_with_odyssey"):
+            self.assertIn(f'<option value="{value}"', html)
+        self.assertIn('use_surface_stations: document.getElementById("surface-stations").value', html)
+        self.assertIn('setSelectValue("surface-stations", WEB_DEFAULTS.surfaceStations)', html)
+
     def test_haul_web_route_distance_matches_inara_defaults_and_allows_custom_input(self) -> None:
         html = _haul_web_source()
 

@@ -38,6 +38,26 @@ _SURFACE_STATIONS_TO_QUERY = {
 _SURFACE_STATIONS_FROM_QUERY = {
     value: key for key, value in _SURFACE_STATIONS_TO_QUERY.items()
 }
+_SURFACE_STATIONS_ALIASES = {
+    "no": "no",
+    "n": "no",
+    "yes": "yes_with_odyssey",
+    "y": "yes_with_odyssey",
+    "yes_with_odyssey": "yes_with_odyssey",
+    "with_odyssey": "yes_with_odyssey",
+    "odyssey": "yes_with_odyssey",
+    "yes_exclude_odyssey": "yes_exclude_odyssey",
+    "exclude_odyssey": "yes_exclude_odyssey",
+    "without_odyssey": "yes_exclude_odyssey",
+}
+
+
+def parse_surface_stations(value: str, *, default: str) -> str | None:
+    """Inara's surface station choice (`no`, `yes_with_odyssey`, `yes_exclude_odyssey`), or None if unknown."""
+    raw = value.strip().lower().replace(" ", "_").replace("-", "_")
+    if not raw:
+        return default
+    return _SURFACE_STATIONS_ALIASES.get(raw)
 
 _ORDER_BY_TO_QUERY = {
     "best_profit": "0",

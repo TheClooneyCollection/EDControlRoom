@@ -7,7 +7,7 @@ from edap.control_room.models import HaulStats, MarketData, ShipState
 from edap.control_room.routine_stop import RoutineStopMode
 from edap.control_room_state import CommandHistoryEntry
 from edap.haul_search_config import HaulSearchConfigError, load_haul_search_config
-from edap.inara.trade_routes import TradeRoute, trade_route_search_defaults
+from edap.inara.trade_routes import TradeRoute, parse_surface_stations, trade_route_search_defaults
 from edap.config import PIPER_TUNING_KEYS
 from edap.routing.types import Route
 from edap.tts import piper_model_defaults, piper_voice_models
@@ -281,7 +281,7 @@ def _web_form_defaults(app: ControlRoomApp) -> dict[str, str]:
         search_defaults["cargo_capacity"] = str(app._ship.cargo_capacity)
 
     min_landing_pad = search_defaults.get("min_landing_pad", "").strip().lower()
-    use_surface_stations = search_defaults.get("use_surface_stations", "").strip().lower()
+    use_surface_stations = parse_surface_stations(search_defaults.get("use_surface_stations", ""), default="no") or "no"
     order_by = search_defaults.get("order_by", "").strip()
     controls = getattr(getattr(app, "_config", None), "controls", None)
     return {
@@ -293,7 +293,8 @@ def _web_form_defaults(app: ControlRoomApp) -> dict[str, str]:
         "minDemand": search_defaults.get("min_demand", ""),
         "maxMarketAge": "",
         "requiresLargePad": "true" if min_landing_pad == "large" else "false",
-        "allowPlanetary": "true" if use_surface_stations in {"yes", "true", "1"} else "false",
+        "allowPlanetary": "false" if use_surface_stations == "no" else "true",
+        "surfaceStations": use_surface_stations,
         "metric": "Profit / trip" if order_by == "best_profit" else "Profit / hour",
         "galaxyMapSettle": _format_web_number(getattr(controls, "galaxy_map_settle_seconds", "")),
         "dockTimeout": _format_web_number(getattr(controls, "haul_dock_timeout_seconds", "")),

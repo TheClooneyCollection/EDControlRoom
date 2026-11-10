@@ -36,6 +36,7 @@ let routes = [];
       minSupply: "",
       minDemand: "",
       metric: "Profit / hour",
+      surfaceStations: "no",
       galaxyMapSettle: "2.0",
       dockTimeout: "1200",
       ...(WEB_CONFIG.webDefaults || {})
@@ -227,6 +228,11 @@ let routes = [];
       setElementValue("min-supply", WEB_DEFAULTS.minSupply);
       setElementValue("min-demand", WEB_DEFAULTS.minDemand);
       setSelectValue("metric", WEB_DEFAULTS.metric);
+      setSelectValue("surface-stations", WEB_DEFAULTS.surfaceStations);
+    }
+
+    function searchScopeLabel() {
+      return document.getElementById("surface-stations").value === "no" ? "station/carrier routes" : "routes";
     }
 
     function applyHaulDefaults() {
@@ -518,7 +524,7 @@ let routes = [];
       } else if (!active) {
         setResultCount("Operator connection required");
       } else if (routes.length) {
-        setResultCount(`Found ${routes.length} station/carrier routes`);
+        setResultCount(`Found ${routes.length} ${searchScopeLabel()}`);
       }
     }
 
@@ -875,8 +881,8 @@ let routes = [];
       const tbody = document.getElementById("route-rows");
       if (!routes.length) {
         const message = hasSearchedRoutes
-          ? "No station/carrier routes found."
-          : "Search routes to load station/carrier results.";
+          ? `No ${searchScopeLabel()} found.`
+          : `Search routes to load ${searchScopeLabel()}.`;
         tbody.innerHTML = `<tr><td colspan="8" class="route-sub empty-route-message">${message}</td></tr>`;
         routePage = 1;
         updateRoutePager(0, 0, 0, 1);
@@ -1071,7 +1077,7 @@ let routes = [];
         appendActivity("Connect to the backend before searching routes.", "Search", "warning");
         return;
       }
-      setResultCount("Searching station/carrier routes...");
+      setResultCount(`Searching ${searchScopeLabel()}...`);
       const body = {
         origin: document.getElementById("origin").value,
         destination: document.getElementById("destination").value,
@@ -1080,7 +1086,8 @@ let routes = [];
         max_station_distance_ls: document.getElementById("station-distance").value,
         min_supply: document.getElementById("min-supply").value,
         min_demand: document.getElementById("min-demand").value,
-        metric: document.getElementById("metric").value
+        metric: document.getElementById("metric").value,
+        use_surface_stations: document.getElementById("surface-stations").value
       };
       sendCommand("command.search_haul_routes", body)
         .then((payload) => {
@@ -1092,7 +1099,7 @@ let routes = [];
           renderRows();
           renderSelected();
           persistSelectedRoute(routeByIndex(selectedRouteIndex));
-          setResultCount(`Found ${result.route_count || 0} station/carrier routes`);
+          setResultCount(`Found ${result.route_count || 0} ${searchScopeLabel()}`);
           appendActivity(`Route search returned ${result.route_count || 0} result(s).`, "Search", "success");
         })
         .catch((error) => {
