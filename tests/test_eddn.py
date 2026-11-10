@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
+import time
 import unittest
 import zlib
 from pathlib import Path
@@ -233,9 +234,15 @@ class EddnServiceTests(unittest.TestCase):
                 if message.startswith("EDDN connected") and "1 market updates" in message:
                     reported.set()
 
+            def idle() -> None:
+                # A real socket blocks for the poll timeout; returning at once spins the listener
+                # and starves the status thread of the GIL for ~0.1s.
+                done.set()
+                time.sleep(0.001)
+
             service = start_eddn_service(
                 EddnConfig(enabled=True, database_file=path, status_every_s=0.01),
-                open_socket=lambda: FakeSocket([frame(commodity_envelope())], on_empty=done.set),
+                open_socket=lambda: FakeSocket([frame(commodity_envelope())], on_empty=idle),
                 time_fn=lambda: 1000.0,
                 log=log,
             )

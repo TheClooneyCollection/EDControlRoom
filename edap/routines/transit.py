@@ -89,6 +89,7 @@ MANUAL_LANDING_REASON = "manual landing required"
 # Mass-lock boosting is done before the FSD press, so this only covers the charge.
 SUPERCRUISE_ESCAPE_TIMEOUT_S = 45.0
 FSD_CHARGE_CONFIRM_TIMEOUT_S = 4.0
+FSD_CHARGE_POLL_S = 0.1
 SUPERCRUISE_FALLBACK_COUNTDOWN_S = 8.0
 
 
@@ -345,9 +346,9 @@ def _escape_mass_lock(runtime: TransitRuntime) -> None:
 
 def _wait_for_fsd_charging(runtime: TransitRuntime) -> bool | None:
     """True once the FSD charges, False if it did not within the timeout, None if Status.json is unreadable."""
-    deadline = runtime.time_fn() + FSD_CHARGE_CONFIRM_TIMEOUT_S
+    # Count polls instead of reading the clock so a fast test clock does not multiply the Status.json reads.
     seen_status = False
-    while True:
+    for _ in range(round(FSD_CHARGE_CONFIRM_TIMEOUT_S / FSD_CHARGE_POLL_S)):
         try:
             status = read_status(runtime.journal_dir, require_flags=True)
         except (OSError, ValueError, TypeError, KeyError, AttributeError, IndexError):
@@ -357,9 +358,8 @@ def _wait_for_fsd_charging(runtime: TransitRuntime) -> bool | None:
             seen_status = True
             if status.flags.fsd_charging or status.flags.fsd_jump:
                 return True
-        if runtime.time_fn() >= deadline:
-            return False if seen_status else None
-        runtime.sleeper(0.1)
+        runtime.sleeper(FSD_CHARGE_POLL_S)
+    return False if seen_status else None
 
 
 def escape_attack_into_supercruise(runtime: TransitRuntime, *, routine_name: str) -> RoutineResult:
