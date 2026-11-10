@@ -6,6 +6,21 @@
   <title>ED Control Room - Controls</title>
   <link rel="stylesheet" href="/assets/haul-ui.css">
   <style>
+    /* One rule for color: every action is neutral, red only means stop. */
+    .btn:not(:disabled):hover {
+      background: var(--bg-3);
+    }
+    .btn.danger:not(:disabled):hover {
+      filter: brightness(1.2);
+    }
+    .btn.danger:disabled {
+      color: var(--text-3);
+      border-color: var(--border-strong);
+    }
+    .panel-body .btn-row {
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
     .control-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -59,7 +74,7 @@
       margin-top: 10px;
     }
     .voice-model {
-      margin-top: 10px;
+      margin-top: 14px;
     }
     .voice-sliders {
       display: grid;
@@ -107,8 +122,12 @@
       background: var(--red);
       border-color: var(--red);
     }
+    /* Red only while there is something to stop. */
     .big-stop:disabled {
-      opacity: 0.35;
+      opacity: 1;
+      color: var(--text-3);
+      background: transparent;
+      border-color: var(--border-strong);
       cursor: not-allowed;
     }
     .switch-row {
@@ -253,11 +272,11 @@
               </div>
               <div class="panel-body">
                 <div class="control-grid">
-                  <button class="btn primary control-button" type="button" data-command="undock" data-needs-idle>Undock<span class="control-sub">Launch and clear the station</span></button>
-                  <button class="btn primary control-button" type="button" data-command="dock" data-needs-idle>Dock<span class="control-sub">Request, land, refuel, repair</span></button>
-                  <button class="btn primary control-button" type="button" data-command="jump" data-needs-idle>Jump<span class="control-sub">Engage FSD to the plotted route</span></button>
-                  <button class="btn danger control-button" type="button" data-command="escape" data-needs-idle>Escape<span class="control-sub">Full throttle, boost out of mass lock</span></button>
-                  <button class="btn ghost control-button" type="button" data-command="boost" data-needs-idle>Boost x3<span class="control-sub">No mass-lock check</span></button>
+                  <button class="btn control-button" type="button" data-command="undock" data-needs-idle>Undock<span class="control-sub">Launch and clear the station</span></button>
+                  <button class="btn control-button" type="button" data-command="dock" data-needs-idle>Dock<span class="control-sub">Request, land, refuel, repair</span></button>
+                  <button class="btn control-button" type="button" data-command="jump" data-needs-idle>Jump<span class="control-sub">Engage FSD to the plotted route</span></button>
+                  <button class="btn control-button" type="button" data-command="escape" data-needs-idle>Escape<span class="control-sub">Full throttle, boost out of mass lock</span></button>
+                  <button class="btn control-button" type="button" data-command="boost" data-needs-idle>Boost x3<span class="control-sub">No mass-lock check</span></button>
                 </div>
                 <button class="btn big-stop" type="button" data-stop-now data-needs-active>STOP NOW</button>
               </div>
@@ -281,10 +300,10 @@
                 </div>
                 <label class="surface-check"><input type="checkbox" id="nav-on-land"> Surface port (hand off for manual landing)</label>
                 <div class="btn-row">
-                  <button class="btn primary" type="button" id="nav-plot" data-needs-idle>Plot route</button>
-                  <button class="btn primary" type="button" id="nav-travel" data-needs-idle>Travel</button>
-                  <button class="btn ghost" type="button" id="nav-plot-home" data-needs-idle>Plot home</button>
-                  <button class="btn ghost" type="button" id="nav-set-home" data-needs-idle>Set home</button>
+                  <button class="btn" type="button" id="nav-plot" data-needs-idle>Plot route</button>
+                  <button class="btn" type="button" id="nav-travel" data-needs-idle>Travel</button>
+                  <button class="btn" type="button" id="nav-plot-home" data-needs-idle>Plot home</button>
+                  <button class="btn" type="button" id="nav-set-home" data-needs-idle>Set home</button>
                 </div>
                 <div class="nav-home">Home <strong id="nav-home-system">-</strong>. Set home uses the System field, or the current system when it is empty.</div>
               </div>
@@ -302,7 +321,7 @@
                 </label>
                 <div class="voice-say">
                   <input class="field" id="voice-say-text" placeholder="Type anything to speak" autocomplete="off">
-                  <button class="btn primary" type="button" id="voice-say">Say</button>
+                  <button class="btn" type="button" id="voice-say">Say</button>
                 </div>
                 <label class="spansh-field voice-model">
                   <span class="field-label">Piper voice</span>
@@ -331,8 +350,8 @@
                   </label>
                 </div>
                 <div class="btn-row">
-                  <button class="btn ghost" type="button" id="voice-test">Test voice</button>
-                  <button class="btn ghost" type="button" id="voice-save">Save to config</button>
+                  <button class="btn" type="button" id="voice-test">Test voice</button>
+                  <button class="btn" type="button" id="voice-save">Save to config</button>
                 </div>
                 <p class="nav-home" id="voice-status">Changes apply from the next line spoken. Save keeps them after a restart.</p>
               </div>
@@ -355,9 +374,9 @@
                   </label>
                 </div>
                 <div class="btn-row">
-                  <button class="btn success" type="button" id="trade-buy" data-needs-idle>Buy</button>
-                  <button class="btn ghost" type="button" id="trade-sell" data-needs-idle>Sell</button>
-                  <button class="btn ghost" type="button" data-command="sell" data-needs-idle>Sell all cargo</button>
+                  <button class="btn" type="button" id="trade-buy" data-needs-idle>Buy</button>
+                  <button class="btn" type="button" id="trade-sell" data-needs-idle>Sell</button>
+                  <button class="btn" type="button" data-command="sell" data-needs-idle>Sell all cargo</button>
                 </div>
               </div>
             </section>
@@ -369,12 +388,12 @@
               </div>
               <div class="panel-body">
                 <div class="control-grid">
-                  <button class="btn ghost control-button" type="button" data-command="pause" data-needs-haul>Pause haul<span class="control-sub">At the next station</span></button>
-                  <button class="btn ghost control-button" type="button" data-command="resume" data-needs-haul>Resume haul<span class="control-sub">Or cancel a pending pause</span></button>
-                  <button class="btn ghost control-button" type="button" id="stop-after-run" data-needs-active>Stop after run<span class="control-sub">Finish the current loop</span></button>
+                  <button class="btn control-button" type="button" data-command="pause" data-needs-haul>Pause haul<span class="control-sub">At the next station</span></button>
+                  <button class="btn control-button" type="button" data-command="resume" data-needs-haul>Resume haul<span class="control-sub">Or cancel a pending pause</span></button>
+                  <button class="btn control-button" type="button" id="stop-after-run" data-needs-active>Stop after run<span class="control-sub">Finish the current loop</span></button>
                   <button class="btn danger control-button" type="button" data-stop-now data-needs-active>Stop now<span class="control-sub">Cancel immediately</span></button>
-                  <button class="btn ghost control-button" type="button" data-command="reload_config" data-needs-idle>Reload config<span class="control-sub">Re-read config.toml</span></button>
-                  <button class="btn ghost control-button" type="button" data-command="reload_keymap" data-needs-idle>Reload keymap<span class="control-sub">Re-read Elite bindings</span></button>
+                  <button class="btn control-button" type="button" data-command="reload_config" data-needs-idle>Reload config<span class="control-sub">Re-read config.toml</span></button>
+                  <button class="btn control-button" type="button" data-command="reload_keymap" data-needs-idle>Reload keymap<span class="control-sub">Re-read Elite bindings</span></button>
                 </div>
                 <div class="switch-row">
                   <div class="switch-text">
