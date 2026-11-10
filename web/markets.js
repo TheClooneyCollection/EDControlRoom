@@ -252,8 +252,6 @@ document.getElementById("save-token").addEventListener("click", () => {
     window.localStorage.removeItem(TOKEN_STORAGE_KEY);
   }
   refreshMarkets();
-// New market visits and ages stay current without a manual refresh.
-window.setInterval(refreshMarkets, 30000);
 });
 document.getElementById("markets-refresh").addEventListener("click", refreshMarkets);
 document.getElementById("market-list").addEventListener("click", (event) => {

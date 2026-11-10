@@ -190,6 +190,29 @@
 
       <main>
         <section class="markets-layout">
+          <section class="panel deal-panel history-panel" aria-labelledby="deal-title">
+            <div class="panel-head">
+              <div class="panel-title" id="deal-title">Best deal</div>
+              <div class="panel-action field-hint" id="deal-status">Pick two markets</div>
+            </div>
+            <div class="panel-body">
+              <div class="deal-form">
+                <label class="spansh-field">
+                  <span class="field-label">Station X</span>
+                  <select class="select" id="deal-x"></select>
+                </label>
+                <label class="spansh-field">
+                  <span class="field-label">Station Y</span>
+                  <select class="select" id="deal-y"></select>
+                </label>
+                <label class="spansh-field">
+                  <span class="field-label">Cargo capacity (t)</span>
+                  <input class="field mono" id="deal-capacity" inputmode="numeric" autocomplete="off">
+                </label>
+              </div>
+              <div id="deal-result"></div>
+            </div>
+          </section>
           <section class="panel" aria-labelledby="recent-title">
             <div class="panel-head">
               <div class="panel-title" id="recent-title">Recent markets</div>
@@ -216,29 +239,6 @@
             </div>
           </section>
 
-          <section class="panel deal-panel history-panel" aria-labelledby="deal-title">
-            <div class="panel-head">
-              <div class="panel-title" id="deal-title">Best deal</div>
-              <div class="panel-action field-hint" id="deal-status">Pick two markets</div>
-            </div>
-            <div class="panel-body">
-              <div class="deal-form">
-                <label class="spansh-field">
-                  <span class="field-label">Station X</span>
-                  <select class="select" id="deal-x"></select>
-                </label>
-                <label class="spansh-field">
-                  <span class="field-label">Station Y</span>
-                  <select class="select" id="deal-y"></select>
-                </label>
-                <label class="spansh-field">
-                  <span class="field-label">Cargo capacity (t)</span>
-                  <input class="field mono" id="deal-capacity" inputmode="numeric" autocomplete="off">
-                </label>
-              </div>
-              <div id="deal-result"></div>
-            </div>
-          </section>
         </section>
       </main>
     </div>
