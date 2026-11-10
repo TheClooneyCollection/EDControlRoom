@@ -2,7 +2,7 @@
 
 ## Status
 
-In progress: slices 1 and 2 (listener, store, `tools/eddn_listen.py`) are built. Phase 1 below; "Good Deals / Exceptional Routes" alerts are a later phase.
+In progress: slices 1 and 2 (listener, store, `tools/eddn_listen.py`) are built, and the server runs the listener when `eddn.enabled` (`GET /api/eddn-status`). Phase 1 below; "Good Deals / Exceptional Routes" alerts are a later phase.
 
 ## Why
 

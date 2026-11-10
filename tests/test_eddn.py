@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 import unittest
 import zlib
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from edap.config import ConfigError, load_config
+from edap.config import ConfigError, EddnConfig, load_config
 from edap.eddn.listener import EddnListener, apply_payload
+from edap.eddn.service import start_eddn_service
 from edap.eddn.messages import COMMODITY_SCHEMA, JOURNAL_SCHEMA, parse_eddn_message
 from edap.eddn.store import EddnStore
 
@@ -216,6 +218,26 @@ class EddnListenerTests(unittest.TestCase):
         self.assertTrue(all(socket.closed for socket in sockets))
         self.assertEqual(logs, ["EDDN relay silent; reconnecting."])
         self.assertEqual(len(prices(store)), 2)
+
+
+class EddnServiceTests(unittest.TestCase):
+    def test_service_fills_the_configured_database_reports_status_and_closes(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "eddn.sqlite3"
+            done = threading.Event()
+            service = start_eddn_service(
+                EddnConfig(enabled=True, database_file=path),
+                open_socket=lambda: FakeSocket([frame(commodity_envelope())], on_empty=done.set),
+                time_fn=lambda: 1000.0,
+                log=lambda message: None,
+            )
+            self.assertTrue(done.wait(2.0))
+            status = service.status()
+            service.close()
+
+            self.assertEqual(status["listener"]["markets"], 1)
+            self.assertEqual(status["store"]["prices"], 2)
+            self.assertFalse(service.listener._thread.is_alive())
 
 
 class EddnConfigTests(unittest.TestCase):

@@ -170,6 +170,7 @@ def build_observer_server_app(
     journal_dir: Path | None = None,
     haul_runs_file: Path | None = None,
     recent_markets_file: Path | None = None,
+    eddn_status: Callable[[], dict[str, Any]] | None = None,
     route_compare_navroute_wait_seconds: float = 6.0,
     route_compare_compare_retry_attempts: int = 3,
 ) -> Starlette:
@@ -434,6 +435,14 @@ def build_observer_server_app(
         comparison = compare_markets(market_items(market_x), market_items(market_y), cargo_capacity)
         return JSONResponse(asdict(comparison))
 
+    async def eddn_status_endpoint(request: Request) -> JSONResponse:
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        if eddn_status is None:
+            return JSONResponse({"enabled": False})
+        return JSONResponse({"enabled": True, **await asyncio.to_thread(eddn_status)})
+
     async def spansh_route_endpoint(request: Request) -> JSONResponse:
         auth_failure = require_http_auth(request)
         if auth_failure is not None:
@@ -533,6 +542,7 @@ def build_observer_server_app(
             Route("/api/haul-stats", haul_stats_endpoint),
             Route("/api/recent-markets", recent_markets_endpoint),
             Route("/api/market-compare", market_compare_endpoint),
+            Route("/api/eddn-status", eddn_status_endpoint),
             Route(HAUL_WEB_ASSET_URL_PATH, haul_web_asset),
             WebSocketRoute("/session", session),
         ]

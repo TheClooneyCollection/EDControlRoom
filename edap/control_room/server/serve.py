@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import time
 
 import uvicorn
 
@@ -16,6 +17,8 @@ from edap.control_room.server.sink import (
     FanoutControlRoomEventSink,
     ServerActivityLogSink,
 )
+from edap.eddn.listener import open_zmq_socket
+from edap.eddn.service import EddnService, start_eddn_service
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.tts import NullSpeechBackend, build_speech_backend
 
@@ -77,6 +80,22 @@ def serve_observer_mode(
         ]
     )
     runtime_host.start()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        stream=sys.stderr,
+    )
+    eddn_config = loaded.config.eddn
+    eddn: EddnService | None = None
+    if eddn_config.enabled:
+        eddn_logger = logging.getLogger("edap.eddn")
+        eddn = start_eddn_service(
+            eddn_config,
+            open_socket=lambda: open_zmq_socket(eddn_config.relay),
+            time_fn=time.time,
+            log=eddn_logger.info,
+        )
+        eddn_logger.info("EDDN listener started: %s -> %s", eddn_config.relay, eddn_config.database_file)
     broker.server_state.set_selected_trade_route(runtime_host._saved_state.selected_trade_route)
     broker.server_state.set_running_trade_route(runtime_host._saved_state.running_trade_route)
     app = build_observer_server_app(
@@ -88,15 +107,13 @@ def serve_observer_mode(
         journal_dir=journal_dir,
         haul_runs_file=loaded.config.control_room.haul_runs_file,
         recent_markets_file=loaded.config.control_room.recent_markets_file,
+        eddn_status=eddn.status if eddn is not None else None,
         route_compare_navroute_wait_seconds=loaded.config.control_room.route_compare_navroute_wait_seconds,
         route_compare_compare_retry_attempts=loaded.config.control_room.route_compare_compare_retry_attempts,
-    )
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        stream=sys.stderr,
     )
     try:
         uvicorn.run(app, host=host, port=port, log_level="info")
     finally:
+        if eddn is not None:
+            eddn.close()
         runtime_host.close()

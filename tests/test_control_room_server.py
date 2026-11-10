@@ -592,6 +592,17 @@ class ControlRoomServerTests(unittest.TestCase):
             self.assertEqual(bad.status_code, 400)
             self.assertIn("Usage: stats", bad.json()["detail"])
 
+    def test_eddn_status_api_reports_disabled_or_service_status(self) -> None:
+        for status, expected in ((None, {"enabled": False}),
+                                 (lambda: {"listener": {"messages": 3}}, {"enabled": True, "listener": {"messages": 3}})):
+            app = build_observer_server_app(data_provider=_base_data_read_model, command_handler=None,
+                                            broker=InMemoryObserverSessionBroker(), auth=SharedAccessTokenAuth("secret-token"),
+                                            eddn_status=status)
+            with TestClient(app) as client:
+                self.assertEqual(client.get("/api/eddn-status").status_code, 401)
+                response = client.get("/api/eddn-status?access_token=secret-token")
+                self.assertEqual(response.json(), expected)
+
     def test_haul_stats_api_reads_configured_files_and_optional_journal(self) -> None:
         import json
         with tempfile.TemporaryDirectory() as directory:
