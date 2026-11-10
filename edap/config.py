@@ -26,6 +26,7 @@ DEFAULT_SCREEN_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults"
 DEFAULT_CONTROL_ROOM_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "control_room.toml"
 DEFAULT_TIMING_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "timing.toml"
 DEFAULT_TTS_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "tts.toml"
+DEFAULT_EDDN_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "eddn.toml"
 DEFAULT_ERROR_MESSAGES_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "error_messages.yaml"
 DEFAULT_MESSAGES_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "messages.yaml"
 
@@ -244,6 +245,14 @@ class TTSConfig:
 
 
 @dataclass(frozen=True)
+class EddnConfig:
+    enabled: bool = False
+    relay: str = "tcp://eddn.edcd.io:9500"
+    database_file: Path = Path(".eddn_markets.sqlite3")
+    max_age_days: float = 7.0
+
+
+@dataclass(frozen=True)
 class ErrorMessagesConfig:
     templates: dict[str, str] = field(default_factory=dict)
 
@@ -271,6 +280,7 @@ class AppConfig:
     control_room: ControlRoomConfig
     input: InputConfig = field(default_factory=InputConfig)
     tts: TTSConfig = field(default_factory=TTSConfig)
+    eddn: EddnConfig = field(default_factory=EddnConfig)
     messages: MessagesConfig = field(default_factory=default_messages_config)
     error_messages: ErrorMessagesConfig = field(default_factory=default_error_messages_config)
 
@@ -323,6 +333,11 @@ def _load_default_control_room_table() -> dict[str, object]:
 @lru_cache(maxsize=1)
 def _load_default_tts_table() -> dict[str, object]:
     return _load_default_toml_section(DEFAULT_TTS_CONFIG_PATH, "tts", "TTS")
+
+
+@lru_cache(maxsize=1)
+def _load_default_eddn_table() -> dict[str, object]:
+    return _load_default_toml_section(DEFAULT_EDDN_CONFIG_PATH, "eddn", "EDDN")
 
 
 @lru_cache(maxsize=1)
@@ -425,6 +440,7 @@ def _default_app_config_table() -> dict[str, object]:
         "control_room": _load_default_control_room_table(),
         "timing": _load_default_timing_table(),
         "tts": _load_default_tts_table(),
+        "eddn": _load_default_eddn_table(),
     }
 
 
@@ -655,6 +671,10 @@ def _timing_channel(
 
 
 def validate_config(config: AppConfig) -> AppConfig:
+    if not config.eddn.relay.strip():
+        raise ConfigError("Config value `eddn.relay` cannot be empty.")
+    if not math.isfinite(config.eddn.max_age_days) or config.eddn.max_age_days <= 0:
+        raise ConfigError("Config value `eddn.max_age_days` must be positive and finite.")
     if not config.controls.start_hotkey.strip():
         raise ConfigError("Config value `controls.start_hotkey` cannot be empty.")
     if not config.controls.stop_hotkey.strip():
@@ -935,6 +955,8 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     default_runtime = _load_default_runtime_table()
     default_tts = _load_default_tts_table()
     default_control_room = _load_default_control_room_table()
+    eddn = _optional_table(raw, "eddn")
+    default_eddn = _load_default_eddn_table()
     default_timing = _load_default_timing_table()
     default_timing_delay = _optional_table(default_timing, "delay")
     default_timing_hold = _optional_table(default_timing, "hold")
@@ -1189,6 +1211,14 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
                 **_string_dict(tts, "phrases"),
             },
             piper=_piper_voice(_optional_table(tts, "piper")),
+        ),
+        eddn=EddnConfig(
+            enabled=_boolean(eddn, "enabled", _boolean(default_eddn, "enabled", False)),
+            relay=_string(eddn, "relay", _string(default_eddn, "relay", "")),
+            database_file=Path(
+                _string(eddn, "database_file", _string(default_eddn, "database_file", ""))
+            ).expanduser(),
+            max_age_days=_float(eddn, "max_age_days", _float(default_eddn, "max_age_days", 7.0)),
         ),
         messages=MessagesConfig(
             templates={

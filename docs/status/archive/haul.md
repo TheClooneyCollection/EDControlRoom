@@ -4,6 +4,10 @@ Prepend displaced older status blocks from `docs/status/haul.md` here.
 
 Legacy pre-split global status history remains in `../../status-archive.md`.
 
+## Archived 2026-11-10
+
+- Two-way and multi-leg haul transit now announce the next station immediately after hyperspace arrival before opening the nav panel, and abort/TTS `haul_aborted` instead of requesting docking if an `Interdicted` event precedes the transit `SupercruiseExit`.
+
 ## Archived 2026-11-09
 
 - Shared station transit mechanics now live in neutral `edap.routines.transit` helpers reused by two-way haul, multi-leg haul, and `travel`; haul cargo/runtime support remains in `edap.routines.haul_support`, and two-way `haul` remains the primary operator path while standalone `multi_leg_haul` / `mult` handles finite external JSON or Spansh-driven routes.

@@ -1,0 +1,7 @@
+[eddn]
+# Listen to the EDDN relay for live market prices (used by trade route search).
+enabled = false
+relay = "tcp://eddn.edcd.io:9500"
+database_file = ".eddn_markets.sqlite3"
+# Markets not updated for this many days are dropped.
+max_age_days = 7.0

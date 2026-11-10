@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `302`
-- Latest generated iteration number: `435`
+- Generated iteration count: `304`
+- Latest generated iteration number: `437`
 
 ## Iteration 134
 
@@ -8577,3 +8577,57 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Needs a LAN server restart before the panel works; not yet tried in a real browser.
+
+## Iteration 436
+
+- When: `2026-11-10 14:26`
+- Area: `haul`
+- Title: `eddn-trade-routes-plan`
+- Source: [2026-11-10-14-26_____haul_____eddn-trade-routes-plan.md](iteration-logs/2026-11-10-14-26_____haul_____eddn-trade-routes-plan.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `eddn-trade-routes-plan`
+- Started: `2026-11-10 14:26`
+
+## Summary
+
+- Planned an EDDN-based trade route finder to replace the Inara scrape: [plan 0014](../plans/0014-eddn-trade-routes.md).
+
+## Decisions
+
+- Runs on the Mac, latest snapshot only (no price history), SQLite; Ardent lookups on demand; fleet carriers excluded by default.
+- Near view (default) plus a global view of the best routes anywhere.
+- Ranked by estimated profit per hour; multi-jump routes are allowed and rank high only when the profit pays for the extra jumps.
+- Range presets in laden jumps (1, 2, 4 default) plus wide 100 ly+ presets. Current Panther Mk II laden range computes to 17.19 ly from `Loadout`, matching `max_route_distance_ly = 17.2`.
+- Anomaly alerts named "Good Deals / Exceptional Routes", deferred to a later phase.
+
+## Iteration 437
+
+- When: `2026-11-10 14:34`
+- Area: `haul`
+- Title: `eddn-listener-store`
+- Source: [2026-11-10-14-34_____haul_____eddn-listener-store.md](iteration-logs/2026-11-10-14-34_____haul_____eddn-listener-store.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `eddn-listener-store`
+- Started: `2026-11-10 14:34`
+
+## Summary
+
+- Plan 0014 slices 1 and 2: an EDDN relay listener and a latest-snapshot SQLite price store, runnable standalone with `uv run python3 tools/eddn_listen.py`.
+
+## Changes
+
+- `edap/eddn/messages.py`: parses live `commodity/3` and `journal/1` Docked/CarrierJump/FSDJump/Location; drops `/test` schemas, legacy-galaxy uploads (`CAPI-Legacy`, game 2.x/3.x) and price rows the station neither sells nor wants. Carriers are flagged by `FleetCarrier` type or `XXX-XXX` callsign; market ids cannot tell them apart (colonisation stations also exceed 3.7 billion).
+- `edap/eddn/store.py`: `system`, `station`, `market`, `price` (WITHOUT ROWID) tables in WAL mode; a newer snapshot replaces a market's prices, older ones are ignored; station updates keep known distance/pad when a message omits them; `prune` drops markets older than `eddn.max_age_days`.
+- `edap/eddn/listener.py`: background thread, commits about once a second, prunes hourly, reconnects after 60s of silence, counts messages/updates/errors.
+- New `[eddn]` config (`defaults/eddn.toml`): `enabled` (not used yet), `relay`, `database_file` (default git-ignored `.eddn_markets.sqlite3`), `max_age_days`. New dependency `pyzmq`.
+- Live check: about 11 relay messages a second overall, about one market snapshot every 2 seconds.
+
+## Follow-ups
+
+- Run the listener inside the Control Room server when `eddn.enabled`, then slices 3 to 6 (Ardent lookups, route finder, profit-per-hour model, `/routes`).

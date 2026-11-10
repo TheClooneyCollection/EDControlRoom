@@ -17,6 +17,11 @@
 # home_system = "Sol"
 # command_delay_seconds = 5.0
 
+[eddn]
+# Live market prices for trade route search; run `uv run python3 tools/eddn_listen.py`.
+# database_file = ".eddn_markets.sqlite3"
+# max_age_days = 7.0
+
 [controls]
 # start_hotkey = "home"
 # stop_hotkey = "end"
