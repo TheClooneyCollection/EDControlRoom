@@ -38,6 +38,7 @@ Every command you can type in the TUI or web command bar. For the haul flow spec
 - `haul load [path]` — load `haul.toml` from the repo root by default, or a custom path.
 - `haul search home` — search Inara using the saved home system as origin.
 - `multi_leg_haul <route.json | spansh-url>` (alias `mult`) — finite multi-leg route.
+- `stats [today|48h|week|month|all|since YYYY-MM-DD]` — summarise saved haul runs for a window. Same summary from a shell: `uv run python3 tools/haul_stats.py [window] [--json]`.
 
 ## Market
 

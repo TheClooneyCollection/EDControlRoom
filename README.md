@@ -43,7 +43,7 @@ That makes it a direct fit for high-volume A↔B cargo work like community goal 
 
 <table>
   <tr>
-    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/two-way-haul.png"><img src="docs/assets/screenshots/two-way-haul.png" alt="Two-way haul page"></a><br><sub>New and updated two-way haul</sub></td>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/two-way-haul.png"><img src="docs/assets/screenshots/two-way-haul.png" alt="Two-way haul page"></a><br><sub>Two-way haul with live stats and history</sub></td>
     <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/copy-paste-route-wide.png"><img src="docs/assets/screenshots/copy-paste-route-wide.png" alt="Copy and paste route panel"></a><br><sub>Copy and paste routes to fly and earn credits with friends</sub></td>
     <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/markets-best-deal.png"><img src="docs/assets/screenshots/markets-best-deal.png" alt="Markets page with best deal"></a><br><sub>Recent markets and best deals</sub></td>
   </tr>
@@ -56,9 +56,9 @@ That makes it a direct fit for high-volume A↔B cargo work like community goal 
 
 ## What You Get
 
-A terminal Control Room with TTS callouts, a LAN web frontend for haul dashboard / search / EDDN trade routes / Spansh routing, and journal-driven `dock`, `undock`, `jump`, `buy`, `sell`, `dest`, `home`.
+A terminal Control Room with TTS callouts, a LAN web frontend (two-way haul, haul search, markets, EDDN trade routes, one-tap controls, Spansh travel), haul history, and journal-driven `dock`, `undock`, `jump`, `buy`, `sell`, `dest`, `home`.
 
-_(Expand / click the following sections to see the screenshots.)_
+_(Expand a section for details.)_
 
 <details>
 <summary><strong>Terminal Control Room (TUI)</strong> — ship status, activity log, market, and haul session, with TTS callouts.</summary>
@@ -66,6 +66,8 @@ _(Expand / click the following sections to see the screenshots.)_
 - Live panels: SHIP STATUS (commander, system, station, fuel, cargo, FSD target), ACTIVITY log, and MARKET table from `Market.json`.
 - Full command bar for `dock`, `undock`, `jump`, `buy`, `sell`, `dest`, `home`, `travel`, `market ...`.
 - Start haul work from the command bar: `haul [commodity]`, `haul start`, `haul load`, `haul search [system]`, `haul search url <inara-url>`, `haul route <n>`, `multi_leg_haul <route>`.
+- `stats [today|48h|week|month|all|since YYYY-MM-DD]` summarises saved haul runs: total profit, profit per hour, time, and per-route and per-commodity totals.
+- `reload_config` and `reload_keymap` reread `config.toml` and the bindings file without a restart.
 - `pause` / `resume` an active two-way haul. Session stats (timer, profit, runs, average run time) cover one haul: they stay on screen after it stops and start from zero on the next haul; `new_session` zeroes them mid-haul.
 - `Ctrl-R` reopens replay / command history; `Ctrl-C` interrupts (haul-aware safe stop first, cancel on second).
 - Speaks TTS callouts locally, e.g. "commander, ship ready to jump" at the end of a leg.
@@ -74,13 +76,15 @@ _(Expand / click the following sections to see the screenshots.)_
 </details>
 
 <details>
-<summary><strong>Web dashboard</strong> — two-way haul control with live session stats and routine progress.</summary>
+<summary><strong>Web dashboard</strong> — two-way haul control with live session stats, routine progress and haul history.</summary>
 
 - Quick stats strip: home system, current system, destination, cargo, routine, completed runs, session profit.
 - Active routine board with the five haul stages (Buy, Undock, Depart, Transit, Sell) plus session elapsed, current / accumulated credits, cargo moved, and this run / last run / average run times.
+- **History** panel: every run is saved, completed or aborted. Today / 48h / Week / Month / All tabs show total profit, profit per hour, time and runs, with routes, commodities and a journal trade ledger under Details.
 - Header controls: **Pause**, **Resume**, **Stop after run**, **Stop now**, **Save** the current haul as the default, **Reconnect**, and **Instant off** for the 5-second safety delay.
+- **Copy / paste route** moves a route between Control Rooms, for example from a machine that can run the Inara search to a Steam Deck, or to a friend.
 
-<img src="docs/assets/quick-stats.png" alt="Web dashboard with haul session stats" width="50%">
+<img src="docs/assets/screenshots/two-way-haul.png" alt="Web dashboard with haul session stats and history" width="50%">
 </details>
 
 <details>
@@ -91,8 +95,16 @@ _(Expand / click the following sections to see the screenshots.)_
 - **Start route** hands the selected pair to the two-way haul routine; **Set destination** just routes there; **Travel assist** flies to an arbitrary system + station without hauling.
 - Same search is reachable from the TUI via `haul search [system]` and `haul search url <inara-url>`; `haul route <n>` picks a numbered result.
 - **Surface stations** picks Inara's planetary filter: No (default), Yes excluding Odyssey settlements, or Yes with them.
+</details>
 
-<img src="docs/assets/haul-search.png" alt="Web haul search with Inara route results" width="50%">
+<details>
+<summary><strong>Markets</strong> — the last markets you opened, and the best deal between any two of them.</summary>
+
+- `/markets` lists the last 10 stations whose commodities market you opened, with the full market table for each.
+- **Best deal** compares two of them for your hold: the top 3 commodities each way, ranked by full-hold profit, with profit per ton, per trip and per hour.
+- **Copy route** or **Open in haul** runs the picked round trip as a two-way haul.
+
+<img src="docs/assets/screenshots/markets-best-deal.png" alt="Markets page with best deal" width="50%">
 </details>
 
 <details>
@@ -101,8 +113,29 @@ _(Expand / click the following sections to see the screenshots.)_
 - With `[eddn] enabled = true` the `lan` server listens to EDDN and keeps a local price database; the server log prints a status line every 30 s.
 - `/routes` ranks round trips by profit / hour: **Near** (from your system) or **Global**, sized by 1 / 2 / 4 jumps or 100 / 250 Ly, with supply, station distance and data age filters (demand is not filtered: any listed sell price counts).
 - **Copy** a route and paste it into the haul page's **Copy / paste route** box to run it.
+- **Open in haul** loads a route straight into `/haul`. Markets you open in game go into the same database, so stations nobody uploaded still count.
 - Details and how to turn it off: [docs/user/trade-routes.md](docs/user/trade-routes.md).
-- With several machines, one Control Room can be the hub: one set of pages shows and drives every machine, with one market database and one haul history ([docs/user/hub.md](docs/user/hub.md)).
+
+<img src="docs/assets/screenshots/eddn-routes.png" alt="EDDN routes page" width="50%">
+</details>
+
+<details>
+<summary><strong>Controls</strong> — one-tap ship routines without the haul page.</summary>
+
+- `/controls` has buttons for undock, dock, jump, escape and boost, buy / sell by commodity, sell all cargo, and a big red **STOP NOW**.
+- Nav panel: plot a route, travel to a system and station, plot or set home.
+- Voice panel: say any line, pick a Piper voice and tune it live.
+- Each panel shows `Idle` or `Busy: <routine>`, and routine buttons disable while something runs.
+
+<img src="docs/assets/screenshots/quick-controls.png" alt="Controls page" width="50%">
+</details>
+
+<details>
+<summary><strong>Hub</strong> — one Control Room for every machine you play on.</summary>
+
+- With several machines (a desktop, another PC, a Steam Deck), make one Control Room the hub with `[hub] role`. Its pages show and drive whichever machine is playing.
+- The hub keeps one market database and every machine's haul history. Peers find it on the LAN, send up what they learn, and run the commands it sends down.
+- Setup: [docs/user/hub.md](docs/user/hub.md).
 </details>
 
 <details>
@@ -184,13 +217,14 @@ Use the repo `uv` environment for tests:
 uv run python3 -m unittest discover -s tests
 ```
 
-`main` is the active rolling-update branch; stable features and releases are marked with semantic version tags like `v1.22.0`. Commits use Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`).
+`main` is the active rolling-update branch; stable features and releases are marked with semantic version tags (`vX.Y.Z`). Commits use Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`).
 
 ## Repo Layout
 
 - `control_room.py`: primary operator surface at the repo root.
 - `tools/`: supported auxiliary CLIs (`run_routine.py`, `diagnostics.py`, `ship_controls.py`, bindings helpers).
 - `edap/`: active runtime code.
+- `web/`: the web frontend pages (`/haul`, `/markets`, `/routes`, `/controls`, `/travel`, `/multi-haul`).
 - `tools/scratch/`: exploratory probes and one-off validation helpers.
 - `archive/legacy-windows/`: historical Windows-era reference code.
 
