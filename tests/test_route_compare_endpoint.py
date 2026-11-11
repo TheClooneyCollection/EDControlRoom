@@ -13,11 +13,10 @@ warnings.filterwarnings(
     message=r"Using `httpx` with `starlette\.testclient` is deprecated; install `httpx2` instead\.",
 )
 
-from starlette.testclient import TestClient
-
 from edap.control_room.server.app import build_observer_server_app
 from edap.control_room.server.auth import SharedAccessTokenAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
+from tests.shared_loop import TestClient
 
 
 def _stub_data():

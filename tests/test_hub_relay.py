@@ -10,7 +10,6 @@ from tempfile import TemporaryDirectory
 from typing import Any
 from unittest.mock import patch
 
-from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from edap.control_room.protocol import ActivityLogEntry
@@ -20,6 +19,7 @@ from edap.eddn.store import EddnStore
 from edap.hub.relay import HubRelay, NodeOffline, PeerRelay, node_state
 from edap.hub.voice import HubVoice
 from edap.recent_markets import save_recent_markets
+from tests.shared_loop import TestClient
 from tests.test_control_room_server import _base_data_read_model, _CommandHandlerRecorder
 from tests.test_hub import GALILEO, HUB_TOKEN, PEER_NODE, SOL, TOKEN, market, rig, server
 

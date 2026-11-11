@@ -11,8 +11,6 @@ warnings.filterwarnings(
     message=r"Using `httpx` with `starlette\.testclient` is deprecated; install `httpx2` instead\.",
 )
 
-from starlette.testclient import TestClient
-
 from edap.control_room.models import ShipState
 from edap.control_room.server.app import build_observer_server_app
 from edap.control_room.server.auth import SharedAccessTokenAuth
@@ -21,6 +19,7 @@ from edap.eddn.listener import apply_payload
 from edap.eddn.route_query import parse_route_query, run_route_query
 from edap.eddn.routes import RouteFilters, TimeModel, find_routes, load_route_markets
 from edap.eddn.store import EddnStore
+from tests.shared_loop import TestClient
 from tests.test_eddn import commodity_envelope, docked_envelope, frame, memory_store
 
 NOW = 1_794_319_200.0  # 2026-11-10T14:00:00Z, the fixture timestamp

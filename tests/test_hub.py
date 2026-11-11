@@ -17,7 +17,6 @@ warnings.filterwarnings(
     message=r"Using `httpx` with `starlette\.testclient` is deprecated; install `httpx2` instead\.",
 )
 
-from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from edap.config import ConfigError, load_config
@@ -39,6 +38,7 @@ from edap.hub.protocol import (
 )
 from edap.inara.trade_routes import TradeRoute, TradeRouteSearchResult
 from edap.recent_markets import MarketSnapshot, save_recent_markets, snapshot_entry, snapshot_from_market_json
+from tests.shared_loop import TestClient
 from tests.test_eddn import memory_store, prices
 
 TOKEN = "page-token"

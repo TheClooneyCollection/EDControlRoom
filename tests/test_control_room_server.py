@@ -15,7 +15,6 @@ warnings.filterwarnings(
     message=r"Using `httpx` with `starlette\.testclient` is deprecated; install `httpx2` instead\.",
 )
 
-from starlette.testclient import TestClient
 
 from edap.config import (
     AppConfig,
@@ -60,6 +59,7 @@ from edap.control_room.server.auth import SharedAccessTokenAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
 from edap.control_room.server.commands import ObserverSessionCommandHandler
 from edap.control_room.server.host import HeadlessControlRoomHost
+from tests.shared_loop import TestClient
 from tests.test_control_room import _FakeVersionSource
 from edap.control_room.server.sink import DataHydrateFanoutSink, ServerActivityLogSink
 from edap.control_room.server.state import ControlRoomServerState
