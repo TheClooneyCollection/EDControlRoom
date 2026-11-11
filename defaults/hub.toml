@@ -8,3 +8,5 @@ token = ""
 timeout_s = 10.0
 # Seconds to wait for an Inara haul search, which drives a browser on the hub.
 search_timeout_s = 180.0
+# Seconds between hub reachability checks (logged on change, shown in the sidebar Hub chip).
+heartbeat_s = 30.0

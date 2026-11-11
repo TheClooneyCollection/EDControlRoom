@@ -263,6 +263,7 @@ class HubConfig:
     token: str = ""
     timeout_s: float = 10.0
     search_timeout_s: float = 180.0
+    heartbeat_s: float = 30.0
 
     @property
     def enabled(self) -> bool:
@@ -703,7 +704,11 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `eddn.status_every_s` must be zero or positive.")
     if config.hub.url and not config.hub.url.startswith(("http://", "https://")):
         raise ConfigError("Config value `hub.url` must start with http:// or https://.")
-    for key, value in (("timeout_s", config.hub.timeout_s), ("search_timeout_s", config.hub.search_timeout_s)):
+    for key, value in (
+        ("timeout_s", config.hub.timeout_s),
+        ("search_timeout_s", config.hub.search_timeout_s),
+        ("heartbeat_s", config.hub.heartbeat_s),
+    ):
         if not math.isfinite(value) or value <= 0:
             raise ConfigError(f"Config value `hub.{key}` must be positive and finite.")
     if not config.controls.start_hotkey.strip():
@@ -1266,6 +1271,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             token=_string(hub, "token", _string(default_hub, "token", "")),
             timeout_s=_float(hub, "timeout_s", _float(default_hub, "timeout_s", 10.0)),
             search_timeout_s=_float(hub, "search_timeout_s", _float(default_hub, "search_timeout_s", 180.0)),
+            heartbeat_s=_float(hub, "heartbeat_s", _float(default_hub, "heartbeat_s", 30.0)),
         ),
         messages=MessagesConfig(
             templates={

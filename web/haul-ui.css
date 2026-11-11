@@ -1706,3 +1706,51 @@
   .history-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .history-panel .panel-head { flex-wrap: wrap; gap: 6px; }
 }
+
+/* Sidebar Hub chip (hub-status.js): green reachable, red unreachable, grey before the first check. */
+.hub-chip {
+  align-self: flex-start;
+  flex-shrink: 0;
+  margin: auto 6px 0;
+}
+
+.hub-chip:not([hidden]) + .sidebar-foot {
+  margin-top: 10px;
+}
+
+.hub-chip[hidden] {
+  display: none;
+}
+
+.hub-chip::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+
+.hub-chip[data-state="ok"] {
+  border-color: rgba(79, 174, 124, 0.55);
+}
+
+.hub-chip[data-state="ok"]::before {
+  background: var(--green);
+}
+
+.hub-chip[data-state="down"] {
+  border-color: rgba(214, 91, 91, 0.65);
+  color: var(--red);
+  background: var(--red-dim);
+}
+
+.hub-chip[data-state="down"]::before {
+  background: var(--red);
+}
+
+@media (max-width: 760px) {
+  .hub-chip {
+    align-self: center;
+    margin: 0;
+  }
+}

@@ -27,7 +27,7 @@ from edap.eddn.routes import TimeModel
 from edap.haul_history import load_runs, parse_window, summarize
 from edap.journal_trade_ledger import journal_trade_ledger
 from edap.market_compare import compare_markets
-from edap.hub import HubClient, HubUnreachable, hub_unreachable_detail, with_hub_source
+from edap.hub import HubClient, HubStatus, HubUnreachable, hub_unreachable_detail, with_hub_source
 from edap.recent_markets import MarketSnapshot, load_recent_markets, market_items, snapshot_from_entry
 from edap.platform.local_time import SystemLocalTimezone
 from edap.control_room.server.auth import ObserverServerAuth
@@ -184,6 +184,7 @@ def build_observer_server_app(
     eddn_database_file: Path | None = None,
     import_markets: Callable[[tuple[MarketSnapshot, ...]], list[GameMarketImport]] | None = None,
     hub: HubClient | None = None,
+    hub_status: HubStatus | None = None,
     route_compare_navroute_wait_seconds: float = 6.0,
     route_compare_compare_retry_attempts: int = 3,
 ) -> Starlette:
@@ -328,6 +329,7 @@ def build_observer_server_app(
             "route-compare.js": "text/javascript; charset=utf-8",
             "active-route.js": "text/javascript; charset=utf-8",
             "speech.js": "text/javascript; charset=utf-8",
+            "hub-status.js": "text/javascript; charset=utf-8",
         }
         media_type = allowed_assets.get(asset_name)
         if media_type is None:
@@ -473,6 +475,21 @@ def build_observer_server_app(
         if eddn_status is None:
             return JSONResponse({"enabled": False})
         return JSONResponse({"enabled": True, **await asyncio.to_thread(eddn_status)})
+
+    async def hub_ping_endpoint(request: Request) -> JSONResponse:
+        # A peer's heartbeat: proves the hub answers and accepts the peer's token.
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        return JSONResponse({"status": "ok"})
+
+    async def hub_status_endpoint(request: Request) -> JSONResponse:
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        if hub_status is None:
+            return JSONResponse({"configured": False})
+        return JSONResponse(hub_status.snapshot())
 
     async def eddn_routes_endpoint(request: Request) -> JSONResponse:
         auth_failure = require_http_auth(request)
@@ -738,6 +755,8 @@ def build_observer_server_app(
             Route("/api/market-compare", market_compare_endpoint),
             Route("/api/eddn-status", eddn_status_endpoint),
             Route("/api/eddn-routes", eddn_routes_endpoint),
+            Route("/api/hub-ping", hub_ping_endpoint),
+            Route("/api/hub-status", hub_status_endpoint),
             Route("/api/command", command_endpoint, methods=["POST"]),
             Route("/api/stop", stop_endpoint, methods=["POST"]),
             Route("/api/haul-search", haul_search_endpoint, methods=["POST"]),

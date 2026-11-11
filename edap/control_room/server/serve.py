@@ -21,7 +21,7 @@ from edap.control_room.server.sink import (
 from edap.eddn.game_markets import import_markets
 from edap.eddn.listener import open_zmq_socket
 from edap.eddn.service import EddnService, start_eddn_service
-from edap.hub import HubClient, HubMarketPusher, httpx_transport, watch_recent_markets
+from edap.hub import HubClient, HubMarketPusher, HubStatus, httpx_transport, run_hub_heartbeat, watch_recent_markets
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.tts import NullSpeechBackend, build_speech_backend
 
@@ -102,16 +102,25 @@ def serve_observer_mode(
     recent_markets_file = loaded.config.control_room.recent_markets_file
     hub_config = loaded.config.hub
     hub = HubClient(hub_config, httpx_transport) if hub_config.enabled else None
+    hub_status: HubStatus | None = None
     stop_hub_push = threading.Event()
     # Recent markets are recorded by the Control Room whenever Market.json changes; with a hub
     # they go only to the hub's DB.
     if hub is not None:
         hub_logger = logging.getLogger("edap.hub")
         hub_logger.info("Hub: searches and market pushes go to %s", hub_config.url)
-        pusher = HubMarketPusher(client=hub, log=hub_logger.info)
+        hub_status = HubStatus(hub, time.time)
+        pusher = HubMarketPusher(client=hub, log=hub_logger.info, status=hub_status)
         watch_recent_markets(
             recent_markets_file, 5.0, pusher.push_changes, stop=stop_hub_push, log=hub_logger.warning, name="hub-markets"
         )
+        threading.Thread(
+            target=lambda: run_hub_heartbeat(
+                hub_status, perf_counter=time.perf_counter, wait=stop_hub_push.wait, log=hub_logger.info
+            ),
+            name="hub-heartbeat",
+            daemon=True,
+        ).start()
     elif eddn is not None:
         eddn.import_game_markets_every(recent_markets_file, 5.0, logging.getLogger("edap.eddn").info)
     broker.server_state.set_selected_trade_route(runtime_host._saved_state.selected_trade_route)
@@ -129,6 +138,7 @@ def serve_observer_mode(
         eddn_database_file=eddn_config.database_file if eddn is not None else None,
         import_markets=(lambda markets: import_markets(eddn.store, markets)) if eddn is not None else None,
         hub=hub,
+        hub_status=hub_status,
         route_compare_navroute_wait_seconds=loaded.config.control_room.route_compare_navroute_wait_seconds,
         route_compare_compare_retry_attempts=loaded.config.control_room.route_compare_compare_retry_attempts,
     )

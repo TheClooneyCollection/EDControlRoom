@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping
 from urllib.parse import urlparse
@@ -97,6 +98,126 @@ def hub_unreachable_detail(host: str, exc: Exception) -> str:
     return f"Hub {host} is unreachable: {exc}"
 
 
+def _iso_utc(seconds: float | None) -> str | None:
+    if seconds is None:
+        return None
+    return datetime.fromtimestamp(seconds, timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+@dataclass(frozen=True)
+class HubPush:
+    at: float
+    stations: tuple[str, ...]
+    written: int
+    kept: int
+    # Empty when the hub took the markets.
+    error: str
+
+
+class HubStatus:
+    """What this peer last heard from its hub; the heartbeat and the market pusher report here.
+
+    `reachable` is None until the first ping or push. Thread-safe: the heartbeat and watcher
+    threads write, the server's request handlers read.
+    """
+
+    def __init__(self, client: HubClient, now: Callable[[], float]) -> None:
+        self.client = client
+        self._now = now
+        self._lock = threading.Lock()
+        self._reachable: bool | None = None
+        self._checked_at: float | None = None
+        self._last_ok_at: float | None = None
+        self._last_error = ""
+        self._latency_ms: float | None = None
+        self._last_push: HubPush | None = None
+        self._resend_pending = False
+
+    def record_contact(self, latency_ms: float | None) -> bool:
+        """The hub answered; returns True when that changes the known state."""
+        with self._lock:
+            changed = self._reachable is not True
+            self._reachable = True
+            self._checked_at = self._last_ok_at = self._now()
+            if latency_ms is not None:
+                self._latency_ms = latency_ms
+            return changed
+
+    def record_failure(self, error: str) -> bool:
+        """The hub did not answer usefully; returns True when that changes the known state."""
+        with self._lock:
+            changed = self._reachable is not False
+            self._reachable = False
+            self._checked_at = self._now()
+            self._last_error = error
+            return changed
+
+    def record_push(self, stations: tuple[str, ...], *, written: int, kept: int, error: str, resend_pending: bool) -> None:
+        with self._lock:
+            self._last_push = HubPush(self._now(), stations, written, kept, error)
+            self._resend_pending = resend_pending
+
+    def snapshot(self) -> dict[str, Any]:
+        with self._lock:
+            push = self._last_push
+            return {
+                "configured": True,
+                "host": self.client.host,
+                "url": self.client.config.url,
+                "heartbeat_s": self.client.config.heartbeat_s,
+                "reachable": self._reachable,
+                "checked_at": _iso_utc(self._checked_at),
+                "last_ok_at": _iso_utc(self._last_ok_at),
+                "last_error": self._last_error or None,
+                "latency_ms": self._latency_ms,
+                "last_push": None if push is None else {
+                    "at": _iso_utc(push.at),
+                    "stations": list(push.stations),
+                    "written": push.written,
+                    "kept": push.kept,
+                    "error": push.error or None,
+                },
+                "resend_pending": self._resend_pending,
+            }
+
+
+def ping_hub(status: HubStatus, *, perf_counter: Callable[[], float], log: Callable[[str], None]) -> None:
+    """One heartbeat: ask the hub's ping endpoint and log only when reachability changes."""
+    client = status.client
+    started = perf_counter()
+    try:
+        response = client.get("/api/hub-ping", {})
+    except HubUnreachable as exc:
+        error = str(exc) or type(exc).__name__
+    else:
+        if response.status_code == 200:
+            latency_ms = round((perf_counter() - started) * 1000, 1)
+            if status.record_contact(latency_ms):
+                log(f"Hub {client.host} reachable ({latency_ms:.0f} ms)")
+            return
+        detail = response.payload.get("detail") if isinstance(response.payload, dict) else response.payload
+        error = f"HTTP {response.status_code}: {detail}"
+    if status.record_failure(error):
+        log(f"Hub {client.host} unreachable: {error}")
+
+
+def run_hub_heartbeat(
+    status: HubStatus,
+    *,
+    perf_counter: Callable[[], float],
+    wait: Callable[[float], bool],
+    log: Callable[[str], None],
+) -> None:
+    """Ping now, then every `heartbeat_s` until `wait` returns True (a stop event's `wait`)."""
+    while True:
+        try:
+            ping_hub(status, perf_counter=perf_counter, log=log)
+        except Exception as exc:  # A bad answer must not end the heartbeat.
+            log(f"Hub heartbeat error: {exc}")
+        if wait(status.client.config.heartbeat_s):
+            return
+
+
 @dataclass
 class HubMarketPusher:
     """Push newly visited markets to the hub instead of writing a local DB.
@@ -107,6 +228,7 @@ class HubMarketPusher:
 
     client: HubClient
     log: Callable[[str], None]
+    status: HubStatus
     unsent: bool = True
     _seen: frozenset[tuple[int, str]] = field(default_factory=frozenset)
 
@@ -123,7 +245,13 @@ class HubMarketPusher:
         self.unsent = not self._push(batch)
 
     def _push(self, markets: tuple[MarketSnapshot, ...]) -> bool:
-        names = ", ".join(market.station for market in markets)
+        stations = tuple(market.station for market in markets)
+        names = ", ".join(stations)
+
+        def failed(error: str) -> bool:
+            self.status.record_push(stations, written=0, kept=0, error=error, resend_pending=True)
+            return False
+
         try:
             response = self.client.post(
                 "/api/markets",
@@ -132,14 +260,19 @@ class HubMarketPusher:
             )
         except HubUnreachable as exc:
             self.log(f"Hub market push failed, will resend all recent markets: {hub_unreachable_detail(self.client.host, exc)}")
-            return False
+            error = str(exc) or type(exc).__name__
+            self.status.record_failure(error)
+            return failed(error)
         if response.status_code != 200:
+            # The hub answered, so leave reachability to the heartbeat.
             detail = response.payload.get("detail") if isinstance(response.payload, dict) else response.payload
             self.log(f"Hub {self.client.host} refused the market push ({response.status_code}: {detail}); will resend")
-            return False
+            return failed(f"HTTP {response.status_code}: {detail}")
         results = response.payload.get("results", []) if isinstance(response.payload, dict) else []
         written = sum(1 for result in results if isinstance(result, dict) and result.get("written"))
         self.log(f"Hub {self.client.host}: pushed {names} ({written} written, {len(results) - written} already newer)")
+        self.status.record_contact(None)
+        self.status.record_push(stations, written=written, kept=len(results) - written, error="", resend_pending=False)
         return True
 
 

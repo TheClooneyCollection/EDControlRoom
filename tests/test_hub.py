@@ -22,13 +22,33 @@ from edap.control_room.server.auth import SharedAccessTokenAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
 from edap.eddn.game_markets import import_markets
 from edap.eddn.route_query import parse_route_query, resolve_route_params
-from edap.hub import HubClient, HubMarketPusher, HubRequest, HubResponse, HubUnreachable
+from edap.hub import (
+    HubClient, HubMarketPusher, HubRequest, HubResponse, HubStatus, HubUnreachable, ping_hub, run_hub_heartbeat,
+)
 from edap.inara.trade_routes import TradeRoute, TradeRouteSearchResult
 from edap.recent_markets import load_recent_markets, snapshot_entry
 from tests.test_eddn import memory_store, prices, save_game_markets
 
 TOKEN = "hub-token"
 HUB = HubConfig(url="http://hub.local:8765", token=TOKEN)
+NOW = 1794387600.0  # 2026-11-11T09:00:00Z
+
+
+class FakeClock:
+    """Wall-clock seconds that move only when a test calls `advance`."""
+
+    def __init__(self, now: float = NOW) -> None:
+        self.now = now
+
+    def __call__(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
+
+
+def pusher_for(client: HubClient, logs: list[str], clock: FakeClock | None = None) -> HubMarketPusher:
+    return HubMarketPusher(client=client, log=logs.append, status=HubStatus(client, clock or FakeClock()))
 
 
 def ship_data(system: str = "Sol", cargo_capacity: int = 784) -> object:
@@ -77,7 +97,7 @@ class HubConfigTests(unittest.TestCase):
             path.write_text("", encoding="utf-8")
             hub = load_config(path).hub
             self.assertFalse(hub.enabled)
-            self.assertEqual((hub.timeout_s, hub.search_timeout_s), (10.0, 180.0))
+            self.assertEqual((hub.timeout_s, hub.search_timeout_s, hub.heartbeat_s), (10.0, 180.0, 30.0))
 
             path.write_text('[hub]\nurl = "http://192.168.1.20:8765/"\ntoken = "t"\n', encoding="utf-8")
             hub = load_config(path).hub
@@ -89,6 +109,11 @@ class HubConfigTests(unittest.TestCase):
             path.write_text("[hub]\ntimeout_s = 0\n", encoding="utf-8")
             with self.assertRaisesRegex(ConfigError, "hub.timeout_s"):
                 load_config(path)
+            path.write_text("[hub]\nheartbeat_s = -1\n", encoding="utf-8")
+            with self.assertRaisesRegex(ConfigError, "hub.heartbeat_s"):
+                load_config(path)
+            path.write_text("[hub]\nheartbeat_s = 5\n", encoding="utf-8")
+            self.assertEqual(load_config(path).hub.heartbeat_s, 5.0)
 
 
 class HubMarketPusherTests(unittest.TestCase):
@@ -96,7 +121,7 @@ class HubMarketPusherTests(unittest.TestCase):
         ok = HubResponse(200, {"results": [{"written": True}]})
         hub = FakeHub(ok, ok, HubUnreachable("timed out"), ok)
         logs: list[str] = []
-        pusher = HubMarketPusher(client=HubClient(HUB, hub), log=logs.append)
+        pusher = pusher_for(HubClient(HUB, hub), logs)
         stations = lambda request: [entry["station"] for entry in request.body["markets"]]  # noqa: E731
 
         with TemporaryDirectory() as tmp:
@@ -110,6 +135,7 @@ class HubMarketPusherTests(unittest.TestCase):
                               "2026-11-10T16:00:00Z")
             pusher.push_changes(path)
             self.assertTrue(pusher.unsent)
+            down = pusher.status.snapshot()
             save_game_markets(path, "2026-11-10T14:00:00Z", "2026-11-10T13:00:00Z", "2026-11-10T15:00:00Z",
                               "2026-11-10T16:00:00Z", "2026-11-10T17:00:00Z")
             pusher.push_changes(path)
@@ -123,15 +149,25 @@ class HubMarketPusherTests(unittest.TestCase):
         self.assertEqual((request.method, request.url, request.headers["Authorization"], request.timeout_s),
                          ("POST", "http://hub.local:8765/api/markets", f"Bearer {TOKEN}", 10.0))
         self.assertIn("Hub hub.local:8765 is unreachable: timed out", logs[2])
+        self.assertEqual((down["reachable"], down["last_error"], down["resend_pending"]), (False, "timed out", True))
+        self.assertEqual(down["last_push"], {"at": "2026-11-11T09:00:00Z", "stations": ["Galileo 3"], "written": 0,
+                                             "kept": 0, "error": "timed out"})
+        up = pusher.status.snapshot()
+        self.assertEqual((up["reachable"], up["last_ok_at"], up["resend_pending"]), (True, "2026-11-11T09:00:00Z", False))
+        self.assertEqual((up["last_push"]["written"], up["last_push"]["kept"], up["last_push"]["error"]), (1, 0, None))
 
     def test_a_refused_push_is_resent(self) -> None:
         hub = FakeHub(HubResponse(503, {"detail": "no EDDN market DB"}), HubResponse(200, {"results": []}))
         logs: list[str] = []
-        pusher = HubMarketPusher(client=HubClient(HUB, hub), log=logs.append)
+        pusher = pusher_for(HubClient(HUB, hub), logs)
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "recent_markets.json"
             save_game_markets(path, "2026-11-10T14:00:00Z")
             pusher.push_changes(path)
+            refused = pusher.status.snapshot()
+            # The hub answered, so a refusal does not decide reachability; the heartbeat does.
+            self.assertEqual((refused["reachable"], refused["resend_pending"]), (None, True))
+            self.assertEqual(refused["last_push"]["error"], "HTTP 503: no EDDN market DB")
             save_game_markets(path, "2026-11-10T14:00:00Z", "2026-11-10T15:00:00Z")
             pusher.push_changes(path)
         self.assertIn("503: no EDDN market DB", logs[0])
@@ -261,7 +297,7 @@ class PeerServerTests(unittest.TestCase):
                                                             return_value=result) as inara:
             path = Path(tmp) / "recent_markets.json"
             save_game_markets(path, "2026-11-10T14:00:00Z")
-            HubMarketPusher(client=peer_hub, log=logs.append).push_changes(path)
+            pusher_for(peer_hub, logs).push_changes(path)
             with TestClient(server(hub=peer_hub)) as peer:
                 response = peer.post("/api/haul-search", headers={"Authorization": f"Bearer {TOKEN}"}, json={})
 
@@ -269,6 +305,82 @@ class PeerServerTests(unittest.TestCase):
         self.assertEqual(store.counts().markets, 1)
         self.assertEqual(response.json()["result"]["hub"], "hub.local:8765")
         self.assertEqual(inara.call_args.kwargs["query_params"]["cargo_capacity"], "784")
+
+
+class HubHeartbeatTests(unittest.TestCase):
+    def test_heartbeat_pings_every_interval_and_logs_only_when_reachability_changes(self) -> None:
+        ok = HubResponse(200, {"status": "ok"})
+        hub = FakeHub(ok, ok, HubUnreachable("connection refused"), HubUnreachable("timed out"),
+                      HubResponse(401, {"detail": "authentication required"}), ok, ValueError("bad answer"))
+        clock = FakeClock()
+        status = HubStatus(HubClient(HubConfig(url=HUB.url, token=TOKEN, heartbeat_s=15.0), hub), clock)
+        # perf_counter is read before each ping and again only after a 200.
+        ticks = iter(float(tick) / 1000 for tick in (0, 42, 100, 112, 200, 300, 400, 500, 507, 600))
+        waits: list[float] = []
+        logs: list[str] = []
+        snapshots: list[dict] = []
+
+        def wait(seconds: float) -> bool:
+            waits.append(seconds)
+            snapshots.append(status.snapshot())
+            clock.advance(seconds)
+            return len(waits) == 7
+
+        run_hub_heartbeat(status, perf_counter=lambda: next(ticks), wait=wait, log=logs.append)
+
+        self.assertEqual(logs, [
+            "Hub hub.local:8765 reachable (42 ms)",
+            "Hub hub.local:8765 unreachable: connection refused",
+            "Hub hub.local:8765 reachable (7 ms)",
+            "Hub heartbeat error: bad answer",
+        ])
+        self.assertEqual(waits, [15.0] * 7)
+        self.assertEqual([request.url for request in hub.requests], ["http://hub.local:8765/api/hub-ping"] * 7)
+        self.assertEqual((hub.requests[0].headers["Authorization"], hub.requests[0].timeout_s), (f"Bearer {TOKEN}", 10.0))
+        first, second, down, wrong_token = snapshots[0], snapshots[1], snapshots[3], snapshots[4]
+        self.assertEqual((first["reachable"], first["latency_ms"], first["last_ok_at"]), (True, 42.0, "2026-11-11T09:00:00Z"))
+        self.assertEqual((second["latency_ms"], second["checked_at"]), (12.0, "2026-11-11T09:00:15Z"))
+        self.assertEqual((down["reachable"], down["last_error"], down["last_ok_at"], down["checked_at"]),
+                         (False, "timed out", "2026-11-11T09:00:15Z", "2026-11-11T09:00:45Z"))
+        self.assertEqual(wrong_token["last_error"], "HTTP 401: authentication required")
+        self.assertEqual(snapshots[5]["reachable"], True)
+
+    def test_status_before_the_first_check_is_unknown(self) -> None:
+        status = HubStatus(HubClient(HUB, FakeHub()), FakeClock())
+        self.assertEqual(status.snapshot(), {
+            "configured": True, "host": "hub.local:8765", "url": "http://hub.local:8765", "heartbeat_s": 30.0,
+            "reachable": None, "checked_at": None, "last_ok_at": None, "last_error": None, "latency_ms": None,
+            "last_push": None, "resend_pending": False,
+        })
+
+    def test_hub_status_endpoint_reports_the_peers_view_of_its_hub(self) -> None:
+        hub_app_client, transport = client_into(server())
+        status = HubStatus(HubClient(HUB, transport), FakeClock())
+        logs: list[str] = []
+        with hub_app_client, TestClient(server(hub_status=status)) as peer, TestClient(server()) as local:
+            ping_hub(status, perf_counter=lambda: 0.0, log=logs.append)
+            wrong = HubStatus(HubClient(HubConfig(url=HUB.url, token="nope"), transport), FakeClock())
+            ping_hub(wrong, perf_counter=lambda: 0.0, log=logs.append)
+            reported = peer.get("/api/hub-status", params={"access_token": TOKEN})
+            unauthorized = peer.get("/api/hub-status")
+            no_hub = local.get("/api/hub-status", params={"access_token": TOKEN})
+
+        self.assertEqual(logs, ["Hub hub.local:8765 reachable (0 ms)",
+                                "Hub hub.local:8765 unreachable: HTTP 401: authentication required"])
+        self.assertEqual((reported.json()["reachable"], reported.json()["host"]), (True, "hub.local:8765"))
+        self.assertEqual(unauthorized.status_code, 401)
+        self.assertEqual(no_hub.json(), {"configured": False})
+
+    def test_every_page_with_a_sidebar_loads_the_hub_chip(self) -> None:
+        with TestClient(server()) as client:
+            script = client.get("/assets/hub-status.js")
+            pages = {path: client.get(path, params={"access_token": TOKEN}).text
+                     for path in ("/haul", "/multi-haul", "/controls", "/markets", "/routes")}
+        self.assertIn("/api/hub-status", script.text)
+        for path, page in pages.items():
+            with self.subTest(path=path):
+                self.assertIn('id="hub-chip" hidden', page)
+                self.assertIn('src="/assets/hub-status.js"', page)
 
 
 if __name__ == "__main__":
