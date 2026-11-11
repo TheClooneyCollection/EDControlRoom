@@ -179,16 +179,19 @@ class HeadlessControlRoomHost(ControlRoomApp):
         if self._ctx.input_controller is not None:
             self._ctx.input_controller.close()
 
-    def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None:
+    def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> bool:
+        """Run one command; returns False when it was refused because a routine was already running."""
         resolved = raw_input
         if skip_delay is True and not raw_input.startswith("!"):
             resolved = f"!{raw_input}"
         if self._is_client_local_remote_command(resolved):
             self._record_unknown_remote_command(resolved)
             self._publish_data_refresh()
-            return
+            return True
+        refusals_before = self._runtime_state.busy_refusals
         self._backend.submit_input(resolved)
         self._publish_data_refresh()
+        return self._runtime_state.busy_refusals == refusals_before
 
     def dispatch_destination(
         self,

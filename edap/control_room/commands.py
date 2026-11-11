@@ -354,7 +354,7 @@ def cmd_stop_session(app: CommandHost) -> None:
     try:
         app._stop_session_stats()
     except ValueError as exc:
-        app._log(f"[yellow]{escape(str(exc))}[/]")
+        app._refuse_busy(f"[yellow]{escape(str(exc))}[/]")
         return
     app._log("[dim]Stopped the persisted haul session.[/]")
 

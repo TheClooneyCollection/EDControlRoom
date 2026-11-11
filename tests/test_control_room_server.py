@@ -241,6 +241,7 @@ class _EventSinkRecorder(ControlRoomEventSink):
 class _CommandHandlerRecorder(ObserverSessionCommandHandler):
     def __init__(self) -> None:
         self.submitted_inputs: list[tuple[str, bool | None]] = []
+        self.accept_inputs = True
         self.dispatched_destinations: list[tuple[str, float, bool, str | None]] = []
         self.dispatched_hauls: list[tuple[dict[str, str] | None, bool, str | None]] = []
         self.dispatched_travels: list[tuple[str, str, bool, bool, str | None]] = []
@@ -250,8 +251,9 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
         self.persisted_selected_trade_route = None
         self.persisted_running_trade_route = None
 
-    def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None:
+    def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> bool:
         self.submitted_inputs.append((raw_input, skip_delay))
+        return self.accept_inputs
 
     def dispatch_destination(
         self,
@@ -591,6 +593,76 @@ class ControlRoomServerTests(unittest.TestCase):
             bad = client.get("/api/haul-stats?window=invalid&access_token=secret-token")
             self.assertEqual(bad.status_code, 400)
             self.assertIn("Usage: stats", bad.json()["detail"])
+
+    def test_command_api_runs_command_text_and_rejects_bad_requests(self) -> None:
+        recorder = _CommandHandlerRecorder()
+        app = build_observer_server_app(data_provider=_base_data_read_model, command_handler=recorder,
+                                        broker=InMemoryObserverSessionBroker(), auth=SharedAccessTokenAuth("secret-token"))
+        auth = {"Authorization": "Bearer secret-token"}
+        with TestClient(app) as client:
+            self.assertEqual(client.post("/api/command", json={"raw_input": "undock"}).status_code, 401)
+            response = client.post("/api/command", json={"raw_input": " undock ", "skip_delay": True}, headers=auth)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json(), {"accepted": True, "raw_input": "undock",
+                                               "routine_active": False, "active_routine_name": None})
+            client.post("/api/command?access_token=secret-token", json={"raw_input": "dock"})
+            for bad in ({"content": "not json"}, {"json": {}}, {"json": {"raw_input": "  "}},
+                        {"json": ["undock"]}, {"json": {"raw_input": "dock", "skip_delay": "yes"}}):
+                self.assertEqual(client.post("/api/command", headers=auth, **bad).status_code, 400, bad)
+            self.assertEqual(client.get("/api/command", headers=auth).status_code, 405)
+        self.assertEqual(recorder.submitted_inputs, [("undock", True), ("dock", None)])
+
+    def test_command_api_reports_unavailable_handler(self) -> None:
+        app = build_observer_server_app(data_provider=_base_data_read_model, command_handler=None,
+                                        broker=InMemoryObserverSessionBroker(), auth=SharedAccessTokenAuth("secret-token"))
+        with TestClient(app) as client:
+            response = client.post("/api/command?access_token=secret-token", json={"raw_input": "undock"})
+        self.assertEqual(response.status_code, 503)
+
+    def test_command_api_refuses_routine_command_while_busy(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend())
+            host._controls = object()
+            host._routine_active = True
+            host._active_routine_name = "haul"
+            app = build_observer_server_app(data_provider=host.dependencies.data_source.current, command_handler=host,
+                                            broker=InMemoryObserverSessionBroker(), auth=SharedAccessTokenAuth("secret-token"))
+            with TestClient(app) as client:
+                refused = client.post("/api/command?access_token=secret-token", json={"raw_input": "undock"})
+                allowed = client.post("/api/command?access_token=secret-token", json={"raw_input": "stats all"})
+        self.assertEqual(refused.status_code, 409)
+        self.assertFalse(refused.json()["accepted"])
+        self.assertTrue(refused.json()["routine_active"])
+        self.assertEqual(refused.json()["active_routine_name"], "haul")
+        self.assertIn("haul is already running", refused.json()["detail"])
+        self.assertEqual(allowed.status_code, 200)
+        self.assertTrue(allowed.json()["accepted"])
+
+    def test_stop_api_cancels_running_routine_and_refuses_when_idle(self) -> None:
+        recorder = _CommandHandlerRecorder()
+        busy = lambda: replace(_base_data_read_model(), routine=replace(_base_data_read_model().routine,
+                                                                       routine_active=True, active_routine_name="haul"))
+        for provider, body, status, modes in ((busy, None, 200, ["now"]), (busy, {"mode": "after_run"}, 200, ["after_run"]),
+                                              (busy, {"mode": "toggle"}, 400, []), (_base_data_read_model, None, 409, [])):
+            recorder.cancel_modes.clear()
+            app = build_observer_server_app(data_provider=provider, command_handler=recorder,
+                                            broker=InMemoryObserverSessionBroker(), auth=SharedAccessTokenAuth("secret-token"))
+            with TestClient(app) as client:
+                self.assertEqual(client.post("/api/stop").status_code, 401)
+                response = client.post("/api/stop?access_token=secret-token", json=body)
+            self.assertEqual(response.status_code, status, body)
+            self.assertEqual(recorder.cancel_modes, modes)
+        self.assertFalse(response.json()["accepted"])
+        self.assertEqual(response.json()["detail"], "No routine is running.")
+
+    def test_headless_host_submit_input_reports_busy_refusals(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend())
+            host._controls = object()
+            host._routine_active = True
+            host._haul_stats.active = True
+            results = [host.submit_input(command) for command in ("jump", "reload_config", "reload_keymap", "stop", "stats all")]
+        self.assertEqual(results, [False, False, False, False, True])
 
     def test_eddn_status_api_reports_disabled_or_service_status(self) -> None:
         for status, expected in ((None, {"enabled": False}),

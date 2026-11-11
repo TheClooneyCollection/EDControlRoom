@@ -50,6 +50,7 @@ class WorkerHost(Protocol):
     _shutdown_requested: bool
 
     def _log(self, msg: str) -> None: ...
+    def _refuse_busy(self, msg: str) -> None: ...
     def _handle_event(self, ev: dict[str, Any]) -> None: ...
     def _load_market_json(self) -> None: ...
     def _sync_status_state(self) -> None: ...
@@ -89,7 +90,7 @@ def check_routine_ready(app: WorkerHost) -> bool:
         app._log(f"[red]{escape(error_text.render(app._config, 'controls_unavailable'))}[/]")
         return False
     if app._routine_active:
-        app._log("[yellow]A routine is already running — wait for it to finish[/]")
+        app._refuse_busy("[yellow]A routine is already running — wait for it to finish[/]")
         return False
     return True
 

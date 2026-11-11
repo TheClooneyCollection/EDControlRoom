@@ -671,6 +671,10 @@ class ControlRoomApp(App[None]):
     def _routine_active(self) -> bool:
         return self._runtime_state.routine_active
 
+    def _refuse_busy(self, msg: str) -> None:
+        self._runtime_state.busy_refusals += 1
+        self._log(msg)
+
     @_routine_active.setter
     def _routine_active(self, value: bool) -> None:
         self._runtime_state.routine_active = value
@@ -976,7 +980,7 @@ class ControlRoomApp(App[None]):
     def _cmd_reload_keymap(self) -> None:
         # A running routine keeps the controls it started with, so swapping keys mid-run would mislead.
         if self._routine_active:
-            self._log("[yellow]Stop the running routine before reload_keymap.[/]")
+            self._refuse_busy("[yellow]Stop the running routine before reload_keymap.[/]")
             return
         bindings_path = self._ctx.bindings.effective_path
         if bindings_path is None or not bindings_path.exists():
@@ -995,7 +999,7 @@ class ControlRoomApp(App[None]):
     def _cmd_reload_config(self) -> None:
         # Routines read their settings when they start, so a mid-run swap would only apply to some steps.
         if self._routine_active:
-            self._log("[yellow]Stop the running routine before reload_config.[/]")
+            self._refuse_busy("[yellow]Stop the running routine before reload_config.[/]")
             return
         try:
             config = load_config(self._config_path)
@@ -1375,7 +1379,7 @@ class ControlRoomApp(App[None]):
                 self._log("[yellow]Observer session is read-only.[/]")
                 return False
             if self._routine_active:
-                self._log("[yellow]A routine is already running — wait for it to finish[/]")
+                self._refuse_busy("[yellow]A routine is already running — wait for it to finish[/]")
                 return False
             return True
         return _workers.check_routine_ready(self)

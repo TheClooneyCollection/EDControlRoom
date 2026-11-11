@@ -535,6 +535,76 @@ def build_observer_server_app(
             return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
         return JSONResponse(payload)
 
+    async def command_endpoint(request: Request) -> JSONResponse:
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        try:
+            body = await request.json()
+        except ValueError:
+            return JSONResponse({"detail": "body must be JSON"}, status_code=400)
+        raw_input = body.get("raw_input") if isinstance(body, dict) else None
+        if not isinstance(raw_input, str) or not raw_input.strip():
+            return JSONResponse({"detail": "raw_input must be a non-empty command string"}, status_code=400)
+        skip_delay = body.get("skip_delay")
+        if skip_delay is not None and not isinstance(skip_delay, bool):
+            return JSONResponse({"detail": "skip_delay must be true or false"}, status_code=400)
+        if command_handler is None:
+            return JSONResponse({"detail": "command execution is not available on this server"}, status_code=503)
+        raw_input = raw_input.strip()
+        try:
+            # Same synchronous call as the websocket command.submit_input path.
+            accepted = command_handler.submit_input(raw_input, skip_delay=skip_delay)
+        except Exception as exc:
+            logger.exception("submit_input dispatch failed")
+            return JSONResponse({"detail": str(exc) or "command execution failed"}, status_code=500)
+        routine = data_provider().routine
+        payload = {
+            "accepted": accepted,
+            "raw_input": raw_input,
+            "routine_active": routine.routine_active,
+            "active_routine_name": routine.active_routine_name,
+        }
+        if not accepted:
+            busy_name = routine.active_routine_name or "a routine"
+            payload["detail"] = f"Refused: {busy_name} is already running. Stop it or wait for it to finish."
+            return JSONResponse(payload, status_code=409)
+        return JSONResponse(payload)
+
+    async def stop_endpoint(request: Request) -> JSONResponse:
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        body: object = {}
+        if await request.body():
+            try:
+                body = await request.json()
+            except ValueError:
+                return JSONResponse({"detail": "body must be JSON"}, status_code=400)
+        mode = body.get("mode", "now") if isinstance(body, dict) else None
+        if mode not in {"now", "after_run"}:
+            return JSONResponse({"detail": "mode must be now or after_run"}, status_code=400)
+        if command_handler is None:
+            return JSONResponse({"detail": "command execution is not available on this server"}, status_code=503)
+        routine = data_provider().routine
+        if not routine.routine_active:
+            return JSONResponse(
+                {"accepted": False, "routine_active": False, "active_routine_name": None,
+                 "detail": "No routine is running."},
+                status_code=409,
+            )
+        command_handler.cancel_active_routine(stop_mode=mode)
+        after = data_provider().routine
+        return JSONResponse(
+            {
+                "accepted": True,
+                "mode": mode,
+                "stopped_routine_name": routine.active_routine_name,
+                "routine_active": after.routine_active,
+                "active_routine_name": after.active_routine_name,
+            }
+        )
+
     async def session(websocket: WebSocket) -> None:
         if not auth.is_websocket_authorized(websocket):
             await websocket.close(code=4401, reason="authentication required")
@@ -604,6 +674,8 @@ def build_observer_server_app(
             Route("/api/market-compare", market_compare_endpoint),
             Route("/api/eddn-status", eddn_status_endpoint),
             Route("/api/eddn-routes", eddn_routes_endpoint),
+            Route("/api/command", command_endpoint, methods=["POST"]),
+            Route("/api/stop", stop_endpoint, methods=["POST"]),
             Route(HAUL_WEB_ASSET_URL_PATH, haul_web_asset),
             WebSocketRoute("/session", session),
         ]

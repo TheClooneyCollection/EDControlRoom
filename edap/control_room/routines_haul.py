@@ -141,7 +141,7 @@ def cmd_haul(
         return
     if parts and parts[0].lower() == "search":
         if app._routine_active:
-            app._log("[yellow]A routine is already running — wait for it to finish[/]")
+            app._refuse_busy("[yellow]A routine is already running — wait for it to finish[/]")
             return
         search_rest = parts[1].strip() if len(parts) > 1 else ""
         if search_rest.lower().startswith("url "):

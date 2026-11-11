@@ -145,6 +145,8 @@ class ReplayBrowserState:
 class RuntimeUIState:
     routine_active: bool = False
     active_routine_name: str | None = None
+    # Counts commands refused because a routine was already running, so callers can tell a refusal apart.
+    busy_refusals: int = 0
     haul_stop_requested: bool = False
     haul_pause_requested: bool = False
     haul_paused: bool = False

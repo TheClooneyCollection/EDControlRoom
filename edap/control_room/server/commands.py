@@ -8,7 +8,7 @@ from edap.routing.types import Route
 
 
 class ObserverSessionCommandHandler(Protocol):
-    def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> None: ...
+    def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> bool: ...
 
     def dispatch_destination(
         self,
