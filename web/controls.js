@@ -30,7 +30,7 @@ function escapeHtml(value) {
 }
 
 function stripMarkup(value) {
-  return String(value || "").replace(/\[\/?[a-zA-Z0-9_#= .-]+\]/g, "");
+  return String(value || "").replace(/\[\/?[a-zA-Z0-9_#= .-]*\]/g, "");
 }
 
 function setText(id, value) {

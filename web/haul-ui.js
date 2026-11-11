@@ -832,7 +832,7 @@ let routes = [];
     }
 
     function stripMarkup(value) {
-      return String(value || "").replace(/\[\/?[a-zA-Z0-9_#= .-]+\]/g, "");
+      return String(value || "").replace(/\[\/?[a-zA-Z0-9_#= .-]*\]/g, "");
     }
 
     function formatDuration(seconds) {

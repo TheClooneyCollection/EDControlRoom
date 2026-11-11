@@ -242,6 +242,17 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         for rule in ("position: sticky;", "top: 0;", "height: 100vh;", "overflow-y: auto;"):
             self.assertIn(rule, sidebar)
 
+    def test_activity_text_strips_markup_including_empty_closing_tags(self) -> None:
+        web_dir = Path(__file__).resolve().parents[1] / "web"
+        for name in ("haul-ui.js", "controls.js"):
+            with self.subTest(script=name):
+                source = (web_dir / name).read_text(encoding="utf-8")
+                pattern = re.search(r'function stripMarkup\(value\) \{\s*return String\(value \|\| ""\)\.replace\(/(.+?)/g, ""\);',
+                                    source).group(1)
+                strip = lambda text: re.sub(pattern, "", text)
+                self.assertEqual(strip("[bold]Docked[/] at [green]Jameson[/green]"), "Docked at Jameson")
+                self.assertEqual(strip("Cargo [/]full"), "Cargo full")
+
     def test_haul_web_treats_connected_clients_as_operators(self) -> None:
         html = _haul_web_source()
 
