@@ -437,6 +437,17 @@ let routes = [];
       document.getElementById("result-count").textContent = text;
     }
 
+    // The search's Inara URL, so the operator can check results against Inara's own page.
+    function setInaraSearchLink(url) {
+      const link = document.getElementById("inara-search-link");
+      if (url) {
+        link.href = url;
+      } else {
+        link.removeAttribute("href");
+      }
+      link.hidden = !url;
+    }
+
     function isSocketReady() {
       return socket && socket.readyState === WebSocket.OPEN;
     }
@@ -1101,6 +1112,7 @@ let routes = [];
         return;
       }
       setResultCount(`Searching ${searchScopeLabel()}...`);
+      setInaraSearchLink("");
       const body = {
         origin: document.getElementById("origin").value,
         destination: document.getElementById("destination").value,
@@ -1123,10 +1135,12 @@ let routes = [];
           renderSelected();
           persistSelectedRoute(routeByIndex(selectedRouteIndex));
           setResultCount(`Found ${result.route_count || 0} ${searchScopeLabel()}`);
+          setInaraSearchLink(result.query_url || "");
           appendActivity(`Route search returned ${result.route_count || 0} result(s).`, "Search", "success");
         })
         .catch((error) => {
           setResultCount("Search failed");
+          setInaraSearchLink("");
           appendActivity(error.message, "Search", "warning");
         });
     });

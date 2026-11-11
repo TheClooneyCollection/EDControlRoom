@@ -559,6 +559,17 @@
       font-size: 11px;
     }
 
+    .panel-head-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .panel-link {
+      color: var(--text-2);
+      text-decoration: underline;
+    }
+
     .panel-body {
       padding: 14px 16px;
     }

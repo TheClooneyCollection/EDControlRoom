@@ -117,6 +117,14 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn('use_surface_stations: document.getElementById("surface-stations").value', html)
         self.assertIn('setSelectValue("surface-stations", WEB_DEFAULTS.surfaceStations)', html)
 
+    def test_haul_web_links_the_inara_search_next_to_the_result_count(self) -> None:
+        html = _haul_web_source()
+
+        self.assertIn('id="inara-search-link" target="_blank" rel="noopener" hidden>Open in Inara</a>', html)
+        self.assertIn('setInaraSearchLink(result.query_url || "");', html)
+        self.assertIn('setResultCount("Search failed");\n          setInaraSearchLink("");', html)
+        self.assertIn("link.hidden = !url;", html)
+
     def test_haul_web_route_distance_matches_inara_defaults_and_allows_custom_input(self) -> None:
         html = _haul_web_source()
 
