@@ -212,6 +212,36 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn('`${entries.length} entries`', html)
         self.assertNotIn("slice(-8)", html)
 
+    def test_activity_log_docks_as_a_collapsible_bar_on_every_page_with_one(self) -> None:
+        web_dir = Path(__file__).resolve().parents[1] / "web"
+        css = (web_dir / "haul-ui.css").read_text(encoding="utf-8")
+        dock = (web_dir / "activity-dock.js").read_text(encoding="utf-8")
+
+        for page in ("haul-v1.html", "controls.html"):
+            with self.subTest(page=page):
+                html = (web_dir / page).read_text(encoding="utf-8")
+                self.assertIn('<button class="panel-head activity-toggle" type="button" id="activity-toggle" '
+                              'aria-expanded="false" aria-controls="activity-list">', html)
+                self.assertIn('id="activity-latest"', html)
+                self.assertIn('src="/assets/activity-dock.js"', html)
+        # Collapsed state is remembered per viewer, but storage failures must not break the page.
+        self.assertIn('"edcr.activityDock.expanded"', dock)
+        self.assertEqual(dock.count("try {"), 2)
+        self.assertIn('toggle.setAttribute("aria-expanded", String(open))', dock)
+        self.assertIn('window.matchMedia("(min-width: 761px)")', dock)
+        self.assertIn("--activity-dock-height", dock)
+        # Docked over the main column only, with main padded so the bar never hides content.
+        self.assertIn("@media (min-width: 761px)", css)
+        self.assertIn("left: var(--sidebar-width);", css)
+        self.assertIn("padding-bottom: calc(var(--activity-dock-height, 0px) + 34px);", css)
+
+    def test_sidebar_sticks_to_the_viewport_on_desktop(self) -> None:
+        css = (Path(__file__).resolve().parents[1] / "web" / "haul-ui.css").read_text(encoding="utf-8")
+
+        sidebar = css[css.index("    .sidebar {"):css.index("    .brand {")]
+        for rule in ("position: sticky;", "top: 0;", "height: 100vh;", "overflow-y: auto;"):
+            self.assertIn(rule, sidebar)
+
     def test_haul_web_treats_connected_clients_as_operators(self) -> None:
         html = _haul_web_source()
 

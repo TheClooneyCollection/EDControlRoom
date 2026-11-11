@@ -512,11 +512,13 @@
             </div>
           </section>
 
-          <section class="panel activity-panel" aria-labelledby="activity-title">
-            <div class="panel-head">
-              <div class="panel-title" id="activity-title">Activity</div>
-              <div class="panel-action" id="activity-status">Live</div>
-            </div>
+          <section class="panel activity-panel" id="activity-panel" aria-labelledby="activity-title">
+            <button class="panel-head activity-toggle" type="button" id="activity-toggle" aria-expanded="false" aria-controls="activity-list">
+              <span class="panel-title" id="activity-title">Activity</span>
+              <span class="panel-action" id="activity-status">Live</span>
+              <span class="activity-latest" id="activity-latest" aria-hidden="true"><span class="activity-time mono">--:--:--</span><span class="activity-text">Waiting for backend activity.</span></span>
+              <svg class="activity-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
             <div class="panel-body activity-list" id="activity-list" role="log" aria-live="polite" tabindex="0"></div>
           </section>
         </section>
@@ -544,6 +546,7 @@
   <script src="/assets/active-route.js" defer></script>
   <script src="/assets/speech.js" defer></script>
   <script src="/assets/hub-status.js" defer></script>
+  <script src="/assets/activity-dock.js" defer></script>
 
 </body>
 </html>

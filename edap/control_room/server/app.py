@@ -330,6 +330,7 @@ def build_observer_server_app(
             "active-route.js": "text/javascript; charset=utf-8",
             "speech.js": "text/javascript; charset=utf-8",
             "hub-status.js": "text/javascript; charset=utf-8",
+            "activity-dock.js": "text/javascript; charset=utf-8",
         }
         media_type = allowed_assets.get(asset_name)
         if media_type is None:
