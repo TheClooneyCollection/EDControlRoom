@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `334`
-- Latest generated iteration number: `467`
+- Generated iteration count: `335`
+- Latest generated iteration number: `468`
 
 ## Iteration 134
 
@@ -9496,7 +9496,7 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Hub peers push only markets to the hub, not journal places; Best deal reads the local store anyway.
 
-## Iteration 467
+## Iteration 468
 
 - When: `2026-11-11 11:57`
 - Area: `markets`
