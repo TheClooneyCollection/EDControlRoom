@@ -270,7 +270,7 @@ class HubMarketPusher:
             return failed(f"HTTP {response.status_code}: {detail}")
         results = response.payload.get("results", []) if isinstance(response.payload, dict) else []
         written = sum(1 for result in results if isinstance(result, dict) and result.get("written"))
-        self.log(f"Hub {self.client.host}: pushed {names} ({written} written, {len(results) - written} already newer)")
+        self.log(f"Hub {self.client.host}: pushed {names} ({written} written, {len(results) - written} already in the DB)")
         self.status.record_contact(None)
         self.status.record_push(stations, written=written, kept=len(results) - written, error="", resend_pending=False)
         return True

@@ -79,7 +79,7 @@ class EddnStore:
         return cls(connection)
 
     def apply(self, update: EddnUpdate) -> bool:
-        """Apply one update; False when the stored data is already newer."""
+        """Apply one update; False when the stored data is already as new or newer."""
         with self._lock:
             return self._apply(update)
 
@@ -130,7 +130,7 @@ class EddnStore:
         row = self._db.execute(
             "SELECT updated_at FROM market WHERE market_id = ?", (snapshot.market_id,)
         ).fetchone()
-        if row is not None and row[0] > snapshot.timestamp:
+        if row is not None and row[0] >= snapshot.timestamp:
             return False
         self._db.execute(
             "INSERT OR REPLACE INTO market (market_id, system_name, station_name, is_carrier, updated_at)"

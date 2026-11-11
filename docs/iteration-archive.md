@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `328`
-- Latest generated iteration number: `461`
+- Generated iteration count: `329`
+- Latest generated iteration number: `462`
 
 ## Iteration 134
 
@@ -9316,3 +9316,26 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Try a hub and a peer live: a peer pushes a market and `/routes` works through the hub.
+
+## Iteration 462
+
+- When: `2026-11-11 11:09`
+- Area: `eddn`
+- Title: `keep-same-timestamp-markets`
+- Source: [2026-11-11-11-09_____eddn_____keep-same-timestamp-markets.md](iteration-logs/2026-11-11-11-09_____eddn_____keep-same-timestamp-markets.md)
+
+# Iteration Log
+
+- Area: `eddn`
+- Title: `keep-same-timestamp-markets`
+- Started: `2026-11-11 11:20`
+
+## Summary
+
+- A market snapshot with the same timestamp as the stored one is now kept, not rewritten. A peer restart resends its recent markets, and the hub used to log those as `written` though nothing changed.
+
+## Changes
+
+- `edap/eddn/store.py`: `_apply_market` skips when the stored `updated_at >= snapshot.timestamp` (was `>`).
+- Logs say `already in the DB` instead of `already newer`, in `edap/hub.py` and `edap/eddn/game_markets.py`.
+- Tests: a resent equal-timestamp snapshot is kept; the file-change import now writes only the new market.

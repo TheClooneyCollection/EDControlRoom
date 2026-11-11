@@ -301,7 +301,7 @@ class PeerServerTests(unittest.TestCase):
             with TestClient(server(hub=peer_hub)) as peer:
                 response = peer.post("/api/haul-search", headers={"Authorization": f"Bearer {TOKEN}"}, json={})
 
-        self.assertEqual(logs, ["Hub hub.local:8765: pushed Galileo (1 written, 0 already newer)"])
+        self.assertEqual(logs, ["Hub hub.local:8765: pushed Galileo (1 written, 0 already in the DB)"])
         self.assertEqual(store.counts().markets, 1)
         self.assertEqual(response.json()["result"]["hub"], "hub.local:8765")
         self.assertEqual(inara.call_args.kwargs["query_params"]["cargo_capacity"], "784")

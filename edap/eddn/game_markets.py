@@ -41,4 +41,4 @@ def import_markets(store: EddnStore, markets: tuple[MarketSnapshot, ...]) -> lis
 def import_summary(results: list[GameMarketImport]) -> str:
     written = [f"{result.station} ({result.timestamp})" for result in results if result.written]
     kept = len(results) - len(written)
-    return f"our markets: {len(written)} written{': ' + ', '.join(written) if written else ''}; {kept} already newer in the DB"
+    return f"our markets: {len(written)} written{': ' + ', '.join(written) if written else ''}; {kept} already in the DB"

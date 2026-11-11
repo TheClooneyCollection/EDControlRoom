@@ -137,6 +137,15 @@ class EddnStoreTests(unittest.TestCase):
         self.assertEqual(applied, [])
         self.assertEqual(len(prices(store)), 2)
 
+    def test_resent_snapshot_with_the_same_timestamp_is_kept_not_rewritten(self) -> None:
+        store = memory_store()
+        apply_payload(store, frame(commodity_envelope(timestamp="2026-11-10T15:00:00Z")))
+
+        applied = apply_payload(store, frame(commodity_envelope(timestamp="2026-11-10T15:00:00Z")))
+
+        self.assertEqual(applied, [])
+        self.assertEqual(len(prices(store)), 2)
+
     def test_station_update_keeps_known_details_and_flags_carrier_market(self) -> None:
         store = memory_store()
         apply_payload(store, frame(commodity_envelope(station="Q2W-3ER", market_id=99)))
@@ -281,9 +290,9 @@ class GameMarketImportTests(unittest.TestCase):
                 self.assertTrue(imported.wait_for(lambda: len(logs) == 2, 2.0))
             service._stop_status.set()
 
-        self.assertEqual(logs[0], "EDDN our markets: 1 written: Galileo (2026-11-10T14:00:00Z); 0 already newer in the DB")
-        # Every recorded market is offered again; an equal timestamp rewrites the same rows.
-        self.assertIn("2 written: Galileo (2026-11-10T14:00:00Z), Galileo 1 (2026-11-10T14:05:00Z)", logs[1])
+        self.assertEqual(logs[0], "EDDN our markets: 1 written: Galileo (2026-11-10T14:00:00Z); 0 already in the DB")
+        # Every recorded market is offered again; one already stored with the same timestamp is kept.
+        self.assertEqual(logs[1], "EDDN our markets: 1 written: Galileo 1 (2026-11-10T14:05:00Z); 1 already in the DB")
         self.assertEqual(store.counts().markets, 2)
 
 
