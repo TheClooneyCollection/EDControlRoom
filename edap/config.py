@@ -261,11 +261,17 @@ class EddnConfig:
 class HubConfig:
     # "hub" and "standalone" own the market and station database; a "peer" owns none.
     role: str = "standalone"
-    # Peer only: the hub to send searches and markets to.
+    # Peer only: the hub this peer keeps its link open to.
     url: str = ""
+    # Hub: what peers must present on the link. Peer: sent to the hub.
     token: str = ""
+    # This node's name on the hub; empty means the host name.
+    name: str = ""
+    # Peer only: markets and station facts wait here until the hub acknowledges them.
+    outbox_file: Path = Path(".control_room_hub_outbox.sqlite3")
     timeout_s: float = 10.0
     search_timeout_s: float = 180.0
+    # Seconds of quiet on the link before the peer pings the hub; twice that without an answer redials.
     heartbeat_s: float = 30.0
 
     @property
@@ -274,7 +280,7 @@ class HubConfig:
 
     @property
     def enabled(self) -> bool:
-        """A peer with a hub address: searches and markets go to the hub."""
+        """A peer with a hub address: it keeps a link to the hub."""
         return self.role == "peer" and bool(self.url)
 
 
@@ -721,6 +727,8 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `hub.url` is only used with `hub.role = \"peer\"`.")
     if config.hub.url and not config.hub.url.startswith(("http://", "https://")):
         raise ConfigError("Config value `hub.url` must start with http:// or https://.")
+    if (config.hub.role == "hub" or config.hub.enabled) and not config.hub.token:
+        raise ConfigError("Config value `hub.token` is required on a hub and on a peer with `hub.url`.")
     for key, value in (
         ("timeout_s", config.hub.timeout_s),
         ("search_timeout_s", config.hub.search_timeout_s),
@@ -1287,6 +1295,10 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             role=_string(hub, "role", _string(default_hub, "role", "standalone")).strip().lower(),
             url=_string(hub, "url", _string(default_hub, "url", "")).strip().rstrip("/"),
             token=_string(hub, "token", _string(default_hub, "token", "")),
+            name=_string(hub, "name", _string(default_hub, "name", "")).strip(),
+            outbox_file=Path(
+                _string(hub, "outbox_file", _string(default_hub, "outbox_file", ".control_room_hub_outbox.sqlite3"))
+            ),
             timeout_s=_float(hub, "timeout_s", _float(default_hub, "timeout_s", 10.0)),
             search_timeout_s=_float(hub, "search_timeout_s", _float(default_hub, "search_timeout_s", 180.0)),
             heartbeat_s=_float(hub, "heartbeat_s", _float(default_hub, "heartbeat_s", 30.0)),

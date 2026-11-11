@@ -21,7 +21,6 @@ from starlette.responses import HTMLResponse, JSONResponse, Response
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from edap.eddn.game_markets import GameMarketImport
 from edap.eddn.route_query import (
     RouteQueryError,
     laden_jump_range,
@@ -33,16 +32,25 @@ from edap.eddn.routes import TimeModel
 from edap.haul_history import load_runs, parse_window, summarize
 from edap.journal_trade_ledger import journal_trade_ledger
 from edap.market_compare import compare_markets
-from edap.hub import HubClient, HubStatus, HubUnreachable, hub_unreachable_detail, with_hub_source
+from edap.hub.nodes import HubLinkSession, HubSide, RequestHandler
+from edap.hub.peer import PeerLink, hub_unreachable_detail, with_hub_source
+from edap.hub.protocol import (
+    PEER_LINK_PATH,
+    REQUEST_EDDN_ROUTES,
+    REQUEST_EDDN_STATUS,
+    REQUEST_HAUL_SEARCH,
+    REQUEST_STATION_FACTS,
+    HubUnreachable,
+    LinkReply,
+)
 from edap.recent_markets import (
     MarketSnapshot,
     load_recent_markets,
     market_items,
-    snapshot_from_entry,
 )
-from edap.trade_trip import FactLookup, estimate_trip, gather_facts, measured_route, store_lookup
+from edap.trade_trip import FactLookup, StationFacts, estimate_trip, gather_facts, measured_route, store_lookup
 from edap.platform.local_time import SystemLocalTimezone
-from edap.control_room.server.auth import ObserverServerAuth
+from edap.control_room.server.auth import ObserverServerAuth, SharedAccessTokenAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
 from edap.control_room.server.commands import ObserverSessionCommandHandler, trade_route_from_payload
 from edap.routing.comparison import RouteComparison
@@ -196,10 +204,11 @@ def build_observer_server_app(
     recent_markets_file: Path | None = None,
     eddn_status: Callable[[], dict[str, Any]] | None = None,
     market_database_file: Path | None = None,
-    import_markets: Callable[[tuple[MarketSnapshot, ...]], list[GameMarketImport]] | None = None,
     ardent_lookup: FactLookup | None = None,
-    hub: HubClient | None = None,
-    hub_status: HubStatus | None = None,
+    # Peer role: the link to the hub, which answers searches, routes and station facts.
+    peer_link: PeerLink | None = None,
+    # Hub role: the nodes that said hello, where their outbox items go and the token they present.
+    hub_side: HubSide | None = None,
     route_compare_navroute_wait_seconds: float = 6.0,
     route_compare_compare_retry_attempts: int = 3,
 ) -> Starlette:
@@ -521,7 +530,42 @@ def build_observer_server_app(
     def read_trip(
         market_x: MarketSnapshot, market_y: MarketSnapshot, laden: float
     ) -> dict[str, Any]:
-        """Estimated trip time (market store, then Ardent) and measured haul profit per hour."""
+        """Estimated trip time (station facts, here or from the hub) and measured haul profit per hour."""
+        stations = [{"market_id": m.market_id, "station": m.station, "system": m.system} for m in (market_x, market_y)]
+        hint = None
+        if peer_link is not None:
+            try:
+                reply = peer_link.request(REQUEST_STATION_FACTS, {"stations": stations},
+                                          timeout_s=peer_link.request_timeout_s)
+                facts = [StationFacts(**{**entry, "coords": _coords(entry.get("coords"))})
+                         for entry in reply.body["stations"]]
+            except (HubUnreachable, KeyError, TypeError) as exc:
+                hint = hub_unreachable_detail(peer_link.hub_label, exc)
+                facts = [gather_facts(m.market_id, m.station, m.system, []) for m in (market_x, market_y)]
+        else:
+            facts = station_facts(stations)
+            # A peer without a hub address yet (discovery comes later) owns no station facts.
+            hint = "Station facts come from the hub." if market_database_file is None else None
+        estimate = estimate_trip(facts[0], facts[1], laden_jump_range_ly=laden, time_model=TimeModel())
+        measured = None
+        if haul_runs_file is not None:
+            try:
+                rows, skipped = load_runs(haul_runs_file)
+                summary = summarize(rows, None, datetime.now(timezone.utc), skipped_lines=skipped)
+                measured = measured_route(summary.routes, market_x, market_y)
+            except (OSError, ValueError):
+                measured = None
+        trip: dict[str, Any] = {
+            **asdict(estimate),
+            "stations": {"x": asdict(facts[0]), "y": asdict(facts[1])},
+            "hint": hint,
+        }
+        if peer_link is not None:
+            trip["hub"] = peer_link.hub_label
+        return {"trip": trip, "measured": asdict(measured) if measured is not None else None}
+
+    def station_facts(stations: list[dict[str, Any]]) -> list[StationFacts]:
+        """Facts from this server's store, then Ardent for what it lacks; a peer's requests land here too."""
         store = None
         if market_database_file is not None and market_database_file.exists():
             try:
@@ -535,146 +579,167 @@ def build_observer_server_app(
             if ardent_lookup is not None:
                 # Asked only for what the store lacks; a failed lookup just leaves "-".
                 sources.append(("ardent", ardent_lookup))
-            facts = [gather_facts(m.market_id, m.station, m.system, sources) for m in (market_x, market_y)]
+            return [gather_facts(int(s["market_id"]), str(s["station"]), str(s["system"]), sources) for s in stations]
         finally:
             if store is not None:
                 store.close()
-        estimate = estimate_trip(facts[0], facts[1], laden_jump_range_ly=laden, time_model=TimeModel())
-        measured = None
-        if haul_runs_file is not None:
-            try:
-                rows, skipped = load_runs(haul_runs_file)
-                summary = summarize(rows, None, datetime.now(timezone.utc), skipped_lines=skipped)
-                measured = measured_route(summary.routes, market_x, market_y)
-            except (OSError, ValueError):
-                measured = None
-        return {
-            "trip": {
-                **asdict(estimate),
-                "stations": {"x": asdict(facts[0]), "y": asdict(facts[1])},
-                # A peer owns no station facts; the hub supplies them once the hub link exists.
-                "hint": "Station facts come from the hub." if market_database_file is None else None,
-            },
-            "measured": asdict(measured) if measured is not None else None,
-        }
+
+    def answer_station_facts(body: Any) -> LinkReply:
+        entries = body.get("stations") if isinstance(body, dict) else None
+        if not isinstance(entries, list) or not all(
+            isinstance(entry, dict) and {"market_id", "station", "system"} <= entry.keys() for entry in entries
+        ):
+            return LinkReply(400, {"detail": "body must be {\"stations\": [{market_id, station, system}, ...]}"})
+        return LinkReply(200, {"stations": [asdict(facts) for facts in station_facts(entries)]})
+
+    def answer_eddn_status(_body: Any) -> LinkReply:
+        if eddn_status is None:
+            return LinkReply(200, {"enabled": False})
+        return LinkReply(200, {"enabled": True, **eddn_status()})
 
     async def eddn_status_endpoint(request: Request) -> JSONResponse:
         auth_failure = require_http_auth(request)
         if auth_failure is not None:
             return auth_failure
-        if hub is not None:
-            return await forward_to_hub("/api/eddn-status", {})
-        if eddn_status is None:
-            return JSONResponse({"enabled": False})
-        return JSONResponse({"enabled": True, **await asyncio.to_thread(eddn_status)})
-
-    async def hub_ping_endpoint(request: Request) -> JSONResponse:
-        # A peer's heartbeat: proves the hub answers and accepts the peer's token.
-        auth_failure = require_http_auth(request)
-        if auth_failure is not None:
-            return auth_failure
-        return JSONResponse({"status": "ok"})
+        if peer_link is not None:
+            return await ask_hub(REQUEST_EDDN_STATUS, {})
+        return link_reply_response(await asyncio.to_thread(answer_eddn_status, {}))
 
     async def hub_status_endpoint(request: Request) -> JSONResponse:
         auth_failure = require_http_auth(request)
         if auth_failure is not None:
             return auth_failure
-        if hub_status is None:
-            return JSONResponse({"configured": False})
-        return JSONResponse(hub_status.snapshot())
+        if peer_link is not None:
+            return JSONResponse(await asyncio.to_thread(peer_link.status))
+        if hub_side is not None:
+            local = hub_side.registry.local
+            return JSONResponse({"configured": True, "role": "hub", "node_id": local.node_id,
+                                 "node_name": local.name, "peers_connected": hub_side.registry.connected_peers()})
+        return JSONResponse({"configured": False, "role": "standalone"})
+
+    async def nodes_endpoint(request: Request) -> JSONResponse:
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        if hub_side is None:
+            return JSONResponse({"detail": "Only a hub lists nodes"}, status_code=404)
+        return JSONResponse({"nodes": hub_side.registry.nodes()})
+
+    def route_ship_inputs() -> dict[str, Any]:
+        data = data_provider()
+        try:
+            search_defaults = load_haul_search_config()
+        except (OSError, HaulSearchConfigError):
+            search_defaults = {}
+        return {
+            "search_defaults": search_defaults,
+            "current_system": getattr(getattr(data, "ship", None), "system", None) or "",
+            "cargo_capacity": _ship_cargo_capacity(data),
+        }
+
+    def answer_eddn_routes(params: Any) -> LinkReply:
+        """Routes from this server's market store; a peer's params arrive already resolved for its ship."""
+        if not isinstance(params, dict):
+            return LinkReply(400, {"detail": "route params must be an object"})
+        if market_database_file is None:
+            return LinkReply(404, {"detail": "This peer has no market database; the hub serves routes"})
+        if not market_database_file.exists():
+            return LinkReply(404, {"detail": "The market database has no data yet"})
+        try:
+            query = parse_route_query({str(k): str(v) for k, v in params.items()}, **route_ship_inputs())
+        except ValueError as exc:
+            return LinkReply(400, {"detail": str(exc)})
+        names = {item.commodity: item.name for snapshot in read_recent_markets() for item in market_items(snapshot)}
+        try:
+            return LinkReply(200, run_route_query(
+                market_database_file, query, time_model=TimeModel(), display_names=names, now=time.time()
+            ))
+        except RouteQueryError as exc:
+            return LinkReply(404, {"detail": str(exc)})
+        except sqlite3.Error as exc:
+            return LinkReply(503, {"detail": f"Cannot read the market database: {exc}"})
 
     async def eddn_routes_endpoint(request: Request) -> JSONResponse:
         auth_failure = require_http_auth(request)
         if auth_failure is not None:
             return auth_failure
-        data = data_provider()
-        try:
-            search_defaults = await asyncio.to_thread(load_haul_search_config)
-        except (OSError, HaulSearchConfigError):
-            search_defaults = {}
-        ship_inputs = {
-            "search_defaults": search_defaults,
-            "current_system": getattr(getattr(data, "ship", None), "system", None) or "",
-            "cargo_capacity": _ship_cargo_capacity(data),
-        }
-        if hub is not None:
+        params = dict(request.query_params)
+        if peer_link is not None:
             # The hub answers for this ship and this server's search settings, not its own.
-            return await forward_to_hub("/api/eddn-routes", resolve_route_params(request.query_params, **ship_inputs))
-        if market_database_file is None:
-            return JSONResponse({"detail": "This peer has no market database; the hub serves routes"}, status_code=404)
-        if not market_database_file.exists():
-            return JSONResponse({"detail": "The market database has no data yet"}, status_code=404)
-        try:
-            query = parse_route_query(request.query_params, **ship_inputs)
-        except ValueError as exc:
-            return JSONResponse({"detail": str(exc)}, status_code=400)
-        def search() -> dict[str, Any]:
-            names = {item.commodity: item.name for snapshot in read_recent_markets() for item in market_items(snapshot)}
-            return run_route_query(
-                market_database_file, query, time_model=TimeModel(), display_names=names, now=time.time()
-            )
+            ship_inputs = await asyncio.to_thread(route_ship_inputs)
+            return await ask_hub(REQUEST_EDDN_ROUTES, resolve_route_params(params, **ship_inputs))
+        return link_reply_response(await asyncio.to_thread(answer_eddn_routes, params))
 
-        try:
-            payload = await asyncio.to_thread(search)
-        except RouteQueryError as exc:
-            return JSONResponse({"detail": str(exc)}, status_code=404)
-        except sqlite3.Error as exc:
-            return JSONResponse({"detail": f"Cannot read the market database: {exc}"}, status_code=503)
-        return JSONResponse(payload)
+    def link_reply_response(reply: LinkReply) -> JSONResponse:
+        return JSONResponse(reply.body, status_code=reply.status)
 
-    async def forward_to_hub(path: str, params: dict[str, str]) -> JSONResponse:
-        assert hub is not None
+    async def ask_hub(kind: str, body: Any) -> JSONResponse:
+        assert peer_link is not None
         try:
-            response = await asyncio.to_thread(hub.get, path, params)
+            reply = await asyncio.to_thread(peer_link.request, kind, body, timeout_s=peer_link.request_timeout_s)
         except HubUnreachable as exc:
-            return JSONResponse({"detail": hub_unreachable_detail(hub.host, exc), "hub": hub.host}, status_code=502)
-        return JSONResponse(with_hub_source(response.payload, hub.host), status_code=response.status_code)
+            label = peer_link.hub_label
+            return JSONResponse({"detail": hub_unreachable_detail(label, exc), "hub": label}, status_code=502)
+        return JSONResponse(with_hub_source(reply.body, peer_link.hub_label), status_code=reply.status)
 
-    async def haul_search_endpoint(request: Request) -> JSONResponse:
-        """REST twin of `command.search_haul_routes`, used by peers; it leaves `haul_search.toml` alone."""
-        auth_failure = require_http_auth(request)
-        if auth_failure is not None:
-            return auth_failure
+    def answer_haul_search(body: Any) -> LinkReply:
+        """A peer's Inara search; it runs here and leaves this server's `haul_search.toml` alone."""
+        if not isinstance(body, dict):
+            return LinkReply(400, {"detail": "body must be a JSON object", "error_code": "invalid_search"})
         try:
-            payload = await request.json()
-        except ValueError:
-            return JSONResponse({"detail": "body must be a JSON object", "error_code": "invalid_search"}, status_code=400)
-        if not isinstance(payload, dict):
-            return JSONResponse({"detail": "body must be a JSON object", "error_code": "invalid_search"}, status_code=400)
-        try:
-            search = _haul_search_from_payload(payload, data=data_provider())
-            result = await asyncio.to_thread(_run_haul_search, search, hub=hub)
+            search = _haul_search_from_payload(body, data=data_provider())
+            result = _run_haul_search(search, peer_link=None)
         except _HaulSearchError as exc:
             status_code = 400 if exc.error_code == "invalid_search" else 502
-            return JSONResponse({"detail": exc.message, "error_code": exc.error_code}, status_code=status_code)
-        return JSONResponse({"result": result})
+            return LinkReply(status_code, {"detail": exc.message, "error_code": exc.error_code})
+        return LinkReply(200, {"result": result})
 
-    async def markets_endpoint(request: Request) -> JSONResponse:
-        """Write markets a peer captured into this server's EDDN store, newest timestamp wins."""
-        auth_failure = require_http_auth(request)
-        if auth_failure is not None:
-            return auth_failure
-        if import_markets is None:
-            return JSONResponse({"detail": "This Control Room has no market database (a peer)"},
-                                status_code=503)
+    link_handlers: dict[str, RequestHandler] = {
+        REQUEST_HAUL_SEARCH: answer_haul_search,
+        REQUEST_EDDN_ROUTES: answer_eddn_routes,
+        REQUEST_EDDN_STATUS: answer_eddn_status,
+        REQUEST_STATION_FACTS: answer_station_facts,
+    }
+
+    async def peer_link_endpoint(websocket: WebSocket) -> None:
+        """A peer's link (plan 0015): hub only, hub token required."""
+        if hub_side is None:
+            await websocket.close(code=4404, reason="not a hub")
+            return
+        if not SharedAccessTokenAuth(hub_side.token).is_websocket_authorized(websocket):
+            await websocket.close(code=4401, reason="hub token required")
+            return
+        await websocket.accept()
+        session = HubLinkSession(registry=hub_side.registry, store_item=hub_side.store_item, handlers=link_handlers,
+                                 log=logging.getLogger("edap.hub").info)
+        send_lock = asyncio.Lock()
+        requests: set[asyncio.Task[None]] = set()
+
+        async def send(frames: list[dict[str, Any]]) -> None:
+            async with send_lock:
+                for frame in frames:
+                    await websocket.send_json(frame)
+
+        async def answer(frame: dict[str, Any]) -> None:
+            await send(await asyncio.to_thread(session.receive, frame))
+
         try:
-            body = await request.json()
-        except ValueError:
-            body = None
-        entries = body.get("markets") if isinstance(body, dict) else None
-        if not isinstance(entries, list) or not entries:
-            return JSONResponse({"detail": "body must be {\"markets\": [<recent market entry>, ...]}"}, status_code=400)
-        snapshots = tuple(snapshot_from_entry(entry) for entry in entries)
-        bad = [index for index, snapshot in enumerate(snapshots) if snapshot is None]
-        if bad:
-            return JSONResponse({"detail": f"markets {bad} are not recent market entries"}, status_code=400)
-        try:
-            results = await asyncio.to_thread(import_markets, snapshots)
-        except sqlite3.Error as exc:
-            return JSONResponse({"detail": f"Cannot write the market database: {exc}"}, status_code=503)
-        logger.info("EDDN pushed markets: %s", ", ".join(
-            f"{result.station} {'written' if result.written else 'kept'}" for result in results))
-        return JSONResponse({"results": [asdict(result) for result in results]})
+            while not session.closed:
+                frame = await websocket.receive_json()
+                if session.hello is not None and isinstance(frame, dict) and frame.get("type") == "request":
+                    # Searches take minutes; answer them alongside acks and pings.
+                    task = asyncio.create_task(answer(frame))
+                    requests.add(task)
+                    task.add_done_callback(requests.discard)
+                    continue
+                await send(await asyncio.to_thread(session.receive, frame))
+            await websocket.close(code=4400)
+        except (WebSocketDisconnect, ValueError, RuntimeError):
+            pass
+        finally:
+            for task in requests:
+                task.cancel()
+            session.close()
 
     async def spansh_route_endpoint(request: Request) -> JSONResponse:
         auth_failure = require_http_auth(request)
@@ -810,7 +875,7 @@ def build_observer_server_app(
                     broker=broker,
                     data_provider=data_provider,
                     journal_dir=journal_dir,
-                    hub=hub,
+                    peer_link=peer_link,
                     route_compare_navroute_wait_seconds=route_compare_navroute_wait_seconds,
                     route_compare_compare_retry_attempts=route_compare_compare_retry_attempts,
                 )
@@ -850,16 +915,17 @@ def build_observer_server_app(
             Route("/api/market-compare", market_compare_endpoint),
             Route("/api/eddn-status", eddn_status_endpoint),
             Route("/api/eddn-routes", eddn_routes_endpoint),
-            Route("/api/hub-ping", hub_ping_endpoint),
             Route("/api/hub-status", hub_status_endpoint),
+            Route("/api/nodes", nodes_endpoint),
             Route("/api/command", command_endpoint, methods=["POST"]),
             Route("/api/stop", stop_endpoint, methods=["POST"]),
-            Route("/api/haul-search", haul_search_endpoint, methods=["POST"]),
-            Route("/api/markets", markets_endpoint, methods=["POST"]),
             Route(HAUL_WEB_ASSET_URL_PATH, haul_web_asset),
             WebSocketRoute("/session", session),
+            WebSocketRoute(PEER_LINK_PATH, peer_link_endpoint),
         ]
     )
+    # The hub's answers to peer requests, so tests drive a link session without a socket.
+    app.state.link_handlers = link_handlers
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -1126,7 +1192,7 @@ async def _handle_search_haul_routes_message_async(
     *,
     client_role: str,
     data_provider: Callable[[], object] | None,
-    hub: HubClient | None,
+    peer_link: PeerLink | None,
 ) -> dict[str, object]:
     message_id_value = message.get("message_id")
     correlation_message_id = message_id_value if isinstance(message_id_value, str) else None
@@ -1137,7 +1203,7 @@ async def _handle_search_haul_routes_message_async(
     try:
         search = _haul_search_from_payload(payload, data=data_provider())
         await asyncio.to_thread(_save_haul_search_defaults, search.query_params)
-        result = await asyncio.to_thread(_run_haul_search, search, hub=hub)
+        result = await asyncio.to_thread(_run_haul_search, search, peer_link=peer_link)
     except _HaulSearchError as exc:
         return _haul_search_error_response(exc, correlation_message_id)
     return _haul_search_success_response(result, correlation_message_id)
@@ -1343,10 +1409,17 @@ def _haul_search_from_payload(payload: dict[str, Any], *, data: object) -> _Haul
     return _HaulSearch(system_name, query_params, destination_filter)
 
 
-def _run_haul_search(search: _HaulSearch, *, hub: HubClient | None) -> dict[str, Any]:
-    """Search Inara here, or on the hub when one is configured; blocks, so run it off the event loop."""
-    if hub is not None:
-        return _run_hub_haul_search(search, hub)
+def _coords(value: object) -> tuple[float, float, float] | None:
+    """Coordinates from JSON, where tuples arrive as lists."""
+    if isinstance(value, (list, tuple)) and len(value) == 3:
+        return (float(value[0]), float(value[1]), float(value[2]))
+    return None
+
+
+def _run_haul_search(search: _HaulSearch, *, peer_link: PeerLink | None) -> dict[str, Any]:
+    """Search Inara here, or ask the hub on a peer; blocks, so run it off the event loop."""
+    if peer_link is not None:
+        return _run_hub_haul_search(search, peer_link)
     try:
         result = search_trade_routes(search.system_name, query_params=search.query_params)
     except Exception as exc:
@@ -1364,19 +1437,20 @@ def _run_haul_search(search: _HaulSearch, *, hub: HubClient | None) -> dict[str,
     )
 
 
-def _run_hub_haul_search(search: _HaulSearch, hub: HubClient) -> dict[str, Any]:
+def _run_hub_haul_search(search: _HaulSearch, peer_link: PeerLink) -> dict[str, Any]:
     # The query params use the payload's own keys, so the hub reads them back unchanged.
     body = {**search.query_params, "system_name": search.system_name, "destination": search.destination_filter}
+    label = peer_link.hub_label
     try:
-        response = hub.post("/api/haul-search", body, timeout_s=hub.config.search_timeout_s)
+        reply = peer_link.request(REQUEST_HAUL_SEARCH, body, timeout_s=peer_link.search_timeout_s)
     except HubUnreachable as exc:
-        raise _HaulSearchError("hub_unreachable", hub_unreachable_detail(hub.host, exc)) from exc
-    payload = response.payload if isinstance(response.payload, dict) else {}
+        raise _HaulSearchError("hub_unreachable", hub_unreachable_detail(label, exc)) from exc
+    payload = reply.body if isinstance(reply.body, dict) else {}
     result = payload.get("result")
-    if response.status_code != 200 or not isinstance(result, dict):
-        detail = payload.get("detail") or f"HTTP {response.status_code}"
-        raise _HaulSearchError(str(payload.get("error_code") or "haul_search_failed"), f"Hub {hub.host}: {detail}")
-    return with_hub_source(result, hub.host)
+    if reply.status != 200 or not isinstance(result, dict):
+        detail = payload.get("detail") or f"status {reply.status}"
+        raise _HaulSearchError(str(payload.get("error_code") or "haul_search_failed"), f"Hub {label}: {detail}")
+    return with_hub_source(result, label)
 
 
 def _haul_search_error_response(exc: _HaulSearchError, correlation_message_id: str | None) -> dict[str, object]:
@@ -1513,7 +1587,7 @@ async def _receive_session_messages(
     broker: InMemoryObserverSessionBroker,
     data_provider: Callable[[], object],
     journal_dir: Path | None,
-    hub: HubClient | None,
+    peer_link: PeerLink | None,
     route_compare_navroute_wait_seconds: float,
     route_compare_compare_retry_attempts: int,
 ) -> None:
@@ -1527,7 +1601,7 @@ async def _receive_session_messages(
             broker=broker,
             data_provider=data_provider,
             journal_dir=journal_dir,
-            hub=hub,
+            peer_link=peer_link,
             route_compare_navroute_wait_seconds=route_compare_navroute_wait_seconds,
             route_compare_compare_retry_attempts=route_compare_compare_retry_attempts,
         )
@@ -1545,7 +1619,7 @@ async def _handle_session_message_async(
     broker: InMemoryObserverSessionBroker,
     data_provider: Callable[[], object] | None = None,
     journal_dir: Path | None = None,
-    hub: HubClient | None = None,
+    peer_link: PeerLink | None = None,
     route_compare_navroute_wait_seconds: float = 6.0,
     route_compare_compare_retry_attempts: int = 3,
 ) -> dict[str, object] | None:
@@ -1554,7 +1628,7 @@ async def _handle_session_message_async(
             message,
             client_role=client_role,
             data_provider=data_provider,
-            hub=hub,
+            peer_link=peer_link,
         )
     if message.get("message_type") == "command.dispatch_route_all_in_one":
         return await _handle_dispatch_route_all_in_one_async(
@@ -1919,7 +1993,7 @@ def _handle_session_message(
         try:
             search = _haul_search_from_payload(payload, data=data_provider())
             _save_haul_search_defaults(search.query_params)
-            result = _run_haul_search(search, hub=None)
+            result = _run_haul_search(search, peer_link=None)
         except _HaulSearchError as exc:
             return _haul_search_error_response(exc, correlation_message_id)
         return _haul_search_success_response(result, correlation_message_id)

@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import threading
 from typing import Any, Callable
 
 RECENT_MARKETS_LIMIT = 10
@@ -196,3 +197,35 @@ def _int(value: Any) -> int:
     if isinstance(value, (int, float)):
         return int(value)
     return 0
+
+
+def watch_recent_markets(
+    recent_markets_file: Path,
+    interval_s: float,
+    on_change: Callable[[Path], None],
+    *,
+    stop: threading.Event,
+    log: Callable[[str], None],
+    name: str,
+) -> threading.Thread:
+    """Call `on_change` at start and whenever the file's mtime changes, until `stop` is set."""
+
+    def watch() -> None:
+        last_mtime: float | None = None
+        while True:
+            try:
+                mtime: float | None = recent_markets_file.stat().st_mtime
+            except OSError:
+                mtime = None
+            if mtime is not None and mtime != last_mtime:
+                last_mtime = mtime
+                try:
+                    on_change(recent_markets_file)
+                except Exception as exc:  # A bad push or import must not end the watcher.
+                    log(f"Recent markets watcher error: {exc}")
+            if stop.wait(interval_s):
+                return
+
+    thread = threading.Thread(target=watch, name=name, daemon=True)
+    thread.start()
+    return thread

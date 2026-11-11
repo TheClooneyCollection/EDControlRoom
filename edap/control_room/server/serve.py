@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
+import socket
 import sys
 import threading
 import time
@@ -19,10 +21,13 @@ from edap.control_room.server.sink import (
     ServerActivityLogSink,
 )
 from edap.ardent import ArdentLookup, httpx_fetch_json
-from edap.eddn.game_markets import import_game_markets_every, import_markets
+from edap.eddn.game_markets import import_game_markets_every
 from edap.eddn.listener import open_zmq_socket
 from edap.eddn.service import EddnService, start_eddn_service
-from edap.hub import HubClient, HubMarketPusher, HubStatus, httpx_transport, run_hub_heartbeat, watch_recent_markets
+from edap.hub.nodes import HubSide, NodeRegistry, store_link_item
+from edap.hub.outbox import Outbox
+from edap.hub.peer import NODE_ID_FILE_NAME, NodeHello, PeerLink, load_node_id, new_node_id, websocket_connector
+from edap.recent_markets import load_recent_markets, watch_recent_markets
 from edap.market_db import open_market_store, station_facts_writer
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.tts import NullSpeechBackend, build_speech_backend
@@ -68,13 +73,39 @@ def serve_observer_mode(
         else NullSpeechBackend()
     )
     hub_config = loaded.config.hub
+    hub_logger = logging.getLogger("edap.hub")
     # Hub and standalone own the market and station database, with or without the EDDN listener.
     store = open_market_store(loaded.config)
+    node: NodeHello | None = None
+    if hub_config.role != "standalone":
+        node = NodeHello(
+            node_id=load_node_id(Path(loaded.config_path).parent / NODE_ID_FILE_NAME, new_node_id),
+            name=hub_config.name or socket.gethostname(),
+            version=get_current_version(),
+        )
+    peer_link: PeerLink | None = None
+    if node is not None and hub_config.enabled:
+        peer_link = PeerLink(
+            hello=node,
+            hub_url=hub_config.url,
+            outbox=Outbox.open(hub_config.outbox_file, now=time.time()),
+            connect=websocket_connector(hub_config.url, hub_config.token, timeout_s=hub_config.timeout_s),
+            now=time.time,
+            log=hub_logger.info,
+            heartbeat_s=hub_config.heartbeat_s,
+            request_timeout_s=hub_config.timeout_s,
+            search_timeout_s=hub_config.search_timeout_s,
+        )
+    # A peer sends its journal's station facts up the link; a hub or standalone keeps them.
+    record_station_facts = (
+        peer_link.enqueue_station_facts if peer_link is not None
+        else station_facts_writer(store, logging.getLogger("edap.market_db").warning)
+    )
     runtime_host = HeadlessControlRoomHost(
         ctx,
         speech_backend=speech_backend,
         version_source=DefaultVersionSource(),
-        record_station_facts=station_facts_writer(store, logging.getLogger("edap.market_db").warning),
+        record_station_facts=record_station_facts,
     )
 
     def data_provider():
@@ -119,27 +150,23 @@ def serve_observer_mode(
     elif eddn_config.enabled:
         logging.getLogger("edap.eddn").info("EDDN listener off: a peer never listens; the hub does")
     recent_markets_file = loaded.config.control_room.recent_markets_file
-    hub = HubClient(hub_config, httpx_transport) if hub_config.enabled else None
-    hub_status: HubStatus | None = None
     stop_background = threading.Event()
-    # Recent markets are recorded by the Control Room whenever Market.json changes; a peer sends
-    # them only to the hub, a hub or standalone writes them into its own database.
-    if hub is not None:
-        hub_logger = logging.getLogger("edap.hub")
-        hub_logger.info("Hub: searches and market pushes go to %s", hub_config.url)
-        hub_status = HubStatus(hub, time.time)
-        pusher = HubMarketPusher(client=hub, log=hub_logger.info, status=hub_status)
+    # Recent markets are recorded by the Control Room whenever Market.json changes; a peer queues
+    # them for the hub, a hub or standalone writes them into its own database.
+    if peer_link is not None:
+        hub_logger.info("Hub link: %s as %s (node %s)", hub_config.url, node.name, node.node_id)
         watch_recent_markets(
-            recent_markets_file, 5.0, pusher.push_changes, stop=stop_background, log=hub_logger.warning,
-            name="hub-markets",
+            recent_markets_file, 5.0, lambda path: peer_link.enqueue_markets(load_recent_markets(path)),
+            stop=stop_background, log=hub_logger.warning, name="hub-markets",
         )
-        threading.Thread(
-            target=lambda: run_hub_heartbeat(
-                hub_status, perf_counter=time.perf_counter, wait=stop_background.wait, log=hub_logger.info
-            ),
-            name="hub-heartbeat",
-            daemon=True,
-        ).start()
+        threading.Thread(target=lambda: peer_link.run(stop_background.wait), name="hub-link", daemon=True).start()
+    elif hub_config.role == "peer":
+        hub_logger.info("Hub link: none, `[hub] url` is empty")
+    hub_side: HubSide | None = None
+    if store is not None and node is not None:
+        hub_logger.info("Hub %s (node %s): peers link at /api/peer-link", node.name, node.node_id)
+        hub_side = HubSide(registry=NodeRegistry(node, time.time), store_item=store_link_item(store, db_logger.info),
+                           token=hub_config.token)
     if store is not None:
         import_game_markets_every(store, recent_markets_file, 5.0, db_logger.info, stop=stop_background)
     ardent_lookup: ArdentLookup | None = None
@@ -164,10 +191,9 @@ def serve_observer_mode(
         recent_markets_file=recent_markets_file,
         eddn_status=eddn.status if eddn is not None else None,
         market_database_file=eddn_config.database_file if store is not None else None,
-        import_markets=(lambda markets: import_markets(store, markets)) if store is not None else None,
         ardent_lookup=ardent_lookup,
-        hub=hub,
-        hub_status=hub_status,
+        peer_link=peer_link,
+        hub_side=hub_side,
         route_compare_navroute_wait_seconds=loaded.config.control_room.route_compare_navroute_wait_seconds,
         route_compare_compare_retry_attempts=loaded.config.control_room.route_compare_compare_retry_attempts,
     )

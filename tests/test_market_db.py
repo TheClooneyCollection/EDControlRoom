@@ -18,7 +18,7 @@ class MarketDbTests(unittest.TestCase):
             path = Path(tmp) / "config.toml"
             database = Path(tmp) / "db" / "markets.sqlite3"
             for role, opens in (("standalone", True), ("hub", True), ("peer", False)):
-                path.write_text(f"[eddn]\nenabled = false\ndatabase_file = '{database}'\n[hub]\nrole = \"{role}\"\n",
+                path.write_text(f"[eddn]\nenabled = false\ndatabase_file = '{database}'\n[hub]\nrole = \"{role}\"\ntoken = \"t\"\n",
                                 encoding="utf-8")
                 store = open_market_store(load_config(path))
                 self.assertEqual(store is not None, opens, role)

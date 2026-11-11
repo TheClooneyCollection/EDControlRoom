@@ -17,11 +17,14 @@ def open_market_store(config: AppConfig) -> EddnStore | None:
 
 
 def station_facts_writer(store: EddnStore | None, log: Callable[[str], None]) -> Callable[[list[EddnUpdate]], None]:
-    """Where the local node's journal facts go: the store, newest wins; a peer keeps none for now."""
+    """Where the local node's journal facts go: the store, newest wins.
+
+    A peer with a hub link queues them for the hub instead (`PeerLink.enqueue_station_facts`); one
+    without (the TUI-only mode, or no `[hub] url`) keeps none.
+    """
 
     def write(updates: list[EddnUpdate]) -> None:
         if store is None:
-            # A peer owns no data; the hub link (plan 0015 step 2) sends these up.
             return
         try:
             store.save(updates)

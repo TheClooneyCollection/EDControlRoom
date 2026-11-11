@@ -26,3 +26,7 @@ haul_search.toml
 .wine_input_helper.token
 
 .eddn_markets.sqlite3*
+
+.control_room_hub_outbox.sqlite3*
+
+.control_room_node_id

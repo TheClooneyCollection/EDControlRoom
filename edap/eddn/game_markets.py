@@ -8,8 +8,7 @@ from typing import Callable
 
 from edap.eddn.messages import market_snapshot_from_game, station_type_from_game
 from edap.eddn.store import EddnStore
-from edap.hub import watch_recent_markets
-from edap.recent_markets import MarketSnapshot, load_recent_markets
+from edap.recent_markets import MarketSnapshot, load_recent_markets, watch_recent_markets
 
 
 @dataclass(frozen=True)

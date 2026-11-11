@@ -1,4 +1,4 @@
-// Sidebar "Hub" chip, shared by every page: shown only when this server has a [hub] configured.
+// Sidebar "Hub" chip, shared by every page: a peer shows its hub link, a hub its connected peers.
 (() => {
   const WEB_CONFIG = window.EDCR_WEB_CONFIG || {};
   const PARAM = WEB_CONFIG.authQueryParameterName || "access_token";
@@ -13,11 +13,25 @@
     return iso ? new Date(iso).toLocaleString([], { hour12: false }) : "never";
   }
 
-  function pushSummary(push) {
-    if (!push) return "none yet";
-    const stations = push.stations.join(", ");
-    const result = push.error ? `failed: ${push.error}` : `${push.written} written, ${push.kept} already newer`;
-    return `${localTime(push.at)} ${stations} (${result})`;
+  function peerView(status) {
+    const state = status.connected ? "ok" : status.last_error ? "down" : "unknown";
+    const lines = [
+      status.connected ? `Linked since ${localTime(status.connected_since)}` :
+        status.last_error ? `Not linked: ${status.last_error}` : "Not linked yet",
+      `Hub address: ${status.host}`,
+      `Last contact: ${localTime(status.last_contact_at)}`,
+      `Outbox: ${status.outbox_pending} waiting for the hub`
+    ];
+    return { state, label: status.hub_name || status.host, lines };
+  }
+
+  function hubView(status) {
+    const peers = status.peers_connected;
+    return {
+      state: "ok",
+      label: `${peers} peer${peers === 1 ? "" : "s"}`,
+      lines: [`This Control Room is the hub (${status.node_name})`, `${peers} peer(s) linked`]
+    };
   }
 
   async function refresh() {
@@ -36,17 +50,10 @@
     }
     chip.hidden = !status.configured;
     if (!status.configured) return;
-    const state = status.reachable === true ? "ok" : status.reachable === false ? "down" : "unknown";
-    chip.dataset.state = state;
-    chip.querySelector("strong").textContent = status.host;
-    const lines = [
-      state === "ok" ? `Reachable (${Math.round(status.latency_ms ?? 0)} ms)` :
-        state === "down" ? `Unreachable: ${status.last_error}` : "Not checked yet",
-      `Last ok: ${localTime(status.last_ok_at)}`,
-      `Last push: ${pushSummary(status.last_push)}`
-    ];
-    if (status.resend_pending) lines.push("Resend of recent markets pending");
-    chip.title = lines.join("\n");
+    const view = status.role === "hub" ? hubView(status) : peerView(status);
+    chip.dataset.state = view.state;
+    chip.querySelector("strong").textContent = view.label;
+    chip.title = view.lines.join("\n");
   }
 
   refresh();

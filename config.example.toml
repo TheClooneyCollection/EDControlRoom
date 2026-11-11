@@ -25,11 +25,13 @@
 # status_every_s = 30.0
 
 [hub]
-# "standalone" (default), "hub" or "peer" (docs/user/hub.md). Standalone and hub keep the
-# market DB; a peer keeps none and sends searches and markets to the hub at `url`.
+# "standalone" (default), "hub" or "peer" (docs/plans/0015-hub-command-centre.md). Standalone
+# and hub keep the market DB; a peer keeps none and keeps a link open to the hub at `url`,
+# sending markets and station facts up and asking it for searches, routes and Best deal facts.
 # role = "peer"
 # url = "http://192.168.1.20:8765"
-# token = "the hub's --token"
+# token = "the hub's [hub] token"
+# name = "deck"
 
 [controls]
 # start_hotkey = "home"

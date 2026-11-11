@@ -1,14 +1,18 @@
 [hub]
 # "standalone" (one machine, the default), "hub" (the home Control Room that owns the market
-# and station database) or "peer" (owns no data; asks the hub).
+# and station database) or "peer" (owns no data; keeps a link open to the hub).
 role = "standalone"
 # Peer only: base URL of the hub, such as "http://192.168.1.20:8765".
 url = ""
-# The hub's access token (its `--token`).
+# Hub: the token peers must present on the link. Peer: the hub's token. Required for both.
 token = ""
-# Seconds to wait for the hub on route lookups and market pushes.
+# This node's name on the hub; empty means the host name.
+name = ""
+# Peer only: markets and station facts wait here until the hub acknowledges them.
+outbox_file = ".control_room_hub_outbox.sqlite3"
+# Seconds to wait for the hub on route, status and station fact requests.
 timeout_s = 10.0
 # Seconds to wait for an Inara haul search, which drives a browser on the hub.
 search_timeout_s = 180.0
-# Seconds between hub reachability checks (logged on change, shown in the sidebar Hub chip).
+# Seconds of quiet on the link before the peer pings the hub; twice that without an answer redials.
 heartbeat_s = 30.0
