@@ -68,7 +68,9 @@ def routes(store: EddnStore, **options: object):
 
 class EddnRouteFinderTests(unittest.TestCase):
     def test_round_trip_caps_hold_by_stock_and_skips_carriers_small_pads_and_far_stations(self) -> None:
-        [route] = routes(galaxy())
+        store = galaxy()
+        self.addCleanup(store.close)
+        [route] = routes(store)
 
         self.assertEqual((route.station_1.station, route.station_2.station, route.jumps), ("Galileo", "Alpha Port", 1))
         self.assertEqual((route.outbound.commodity, route.outbound.tons, route.outbound.profit), ("gold", 1137, 3_411_000))
@@ -78,6 +80,7 @@ class EddnRouteFinderTests(unittest.TestCase):
 
     def test_more_jumps_rank_by_profit_per_hour_and_near_view_needs_station_1_close(self) -> None:
         store = galaxy()
+        self.addCleanup(store.close)
         ranked = routes(store, max_route_ly=200.0)
 
         self.assertEqual([(r.station_2.station, r.jumps) for r in ranked[:2]], [("Far Hub", 6), ("Alpha Port", 1)])
@@ -87,6 +90,7 @@ class EddnRouteFinderTests(unittest.TestCase):
 
     def test_surface_stations_need_opting_in_and_add_landing_time(self) -> None:
         store = galaxy()
+        self.addCleanup(store.close)
         add_station(store, 6, "Crater Dock", "Alpha", 10.0, "CraterOutpost", LARGE,
                     [price("gold", sell=12000, demand=8000), price("silver", buy=4000, stock=500)])
         store.commit()
@@ -99,6 +103,7 @@ class EddnRouteFinderTests(unittest.TestCase):
 
     def test_a_listed_sell_price_counts_whatever_the_demand(self) -> None:
         store = galaxy()
+        self.addCleanup(store.close)
         # A producer still buys its own export: EDDN shows demand 1 (Sitterly Enterprise beryllium).
         add_station(store, 6, "Producer", "Alpha", 10.0, "Orbis", LARGE, [price("gold", sell=30000, demand=1)])
         store.commit()
@@ -148,6 +153,7 @@ class EddnRoutesApiTests(unittest.TestCase):
             path = Path(tmp) / "eddn.sqlite3"
             store = EddnStore.open(path)
             source = galaxy()
+            self.addCleanup(source.close)
             source._db.backup(store._db)
             store.close()
 

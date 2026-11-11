@@ -364,6 +364,10 @@ def _load_default_hub_table() -> dict[str, object]:
     return _load_default_toml_section(DEFAULT_HUB_CONFIG_PATH, "hub", "hub")
 
 
+# libyaml parses the bundled message tables several times faster than the pure-Python loader.
+_YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
+
 @lru_cache(maxsize=1)
 def _load_default_timing_table() -> dict[str, object]:
     return _load_default_toml_section(DEFAULT_TIMING_CONFIG_PATH, "timing", "timing")
@@ -393,7 +397,7 @@ def _load_default_messages_table() -> dict[str, object]:
 
 def _load_yaml_table(path: Path) -> dict[str, object]:
     with path.open("r", encoding="utf-8") as handle:
-        raw = yaml.safe_load(handle)
+        raw = yaml.load(handle, Loader=_YAML_LOADER)
     if raw is None:
         return {}
     if not isinstance(raw, dict):

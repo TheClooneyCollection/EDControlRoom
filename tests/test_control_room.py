@@ -2835,7 +2835,8 @@ class ActivityLogTests(unittest.TestCase):
 
     def test_control_room_defaults_activity_log_max_lines_from_config(self) -> None:
         app = ControlRoomApp(
-            _make_context(Path(self.tmpdir.name), activity_log_max_lines=17)
+            _make_context(Path(self.tmpdir.name), activity_log_max_lines=17),
+            version_source=_FakeVersionSource(),
         )
 
         self.assertEqual(app._activity_log_max_lines, 17)
@@ -2844,6 +2845,7 @@ class ActivityLogTests(unittest.TestCase):
         app = ControlRoomApp(
             _make_context(Path(self.tmpdir.name), activity_log_max_lines=17),
             activity_log_max_lines=5,
+            version_source=_FakeVersionSource(),
         )
 
         self.assertEqual(app._activity_log_max_lines, 5)

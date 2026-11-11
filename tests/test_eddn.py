@@ -108,6 +108,7 @@ class EddnMessageTests(unittest.TestCase):
 class EddnStoreTests(unittest.TestCase):
     def test_new_snapshot_replaces_market_prices(self) -> None:
         store = memory_store()
+        self.addCleanup(store.close)
         apply_payload(store, frame(commodity_envelope()))
         apply_payload(
             store,
@@ -123,6 +124,7 @@ class EddnStoreTests(unittest.TestCase):
 
     def test_older_snapshot_does_not_overwrite_newer_one(self) -> None:
         store = memory_store()
+        self.addCleanup(store.close)
         apply_payload(store, frame(commodity_envelope(timestamp="2026-11-10T15:00:00Z")))
 
         applied = apply_payload(
@@ -139,6 +141,7 @@ class EddnStoreTests(unittest.TestCase):
 
     def test_resent_snapshot_with_the_same_timestamp_is_kept_not_rewritten(self) -> None:
         store = memory_store()
+        self.addCleanup(store.close)
         apply_payload(store, frame(commodity_envelope(timestamp="2026-11-10T15:00:00Z")))
 
         applied = apply_payload(store, frame(commodity_envelope(timestamp="2026-11-10T15:00:00Z")))
@@ -148,6 +151,7 @@ class EddnStoreTests(unittest.TestCase):
 
     def test_station_update_keeps_known_details_and_flags_carrier_market(self) -> None:
         store = memory_store()
+        self.addCleanup(store.close)
         apply_payload(store, frame(commodity_envelope(station="Q2W-3ER", market_id=99)))
         apply_payload(store, frame(docked_envelope(MarketID=99, StationName="Q2W-3ER", StationType="FleetCarrier")))
         apply_payload(
@@ -171,6 +175,7 @@ class EddnStoreTests(unittest.TestCase):
 
     def test_prune_drops_stale_markets_and_counts_report_the_rest(self) -> None:
         store = memory_store()
+        self.addCleanup(store.close)
         apply_payload(store, frame(commodity_envelope(market_id=1, timestamp="2026-11-01T00:00:00Z")))
         apply_payload(store, frame(commodity_envelope(market_id=2, timestamp="2026-11-10T00:00:00Z")))
         apply_payload(store, frame(docked_envelope()))
@@ -201,6 +206,7 @@ class FakeSocket:
 class EddnListenerTests(unittest.TestCase):
     def test_listener_applies_frames_counts_errors_and_reconnects_after_silence(self) -> None:
         store = memory_store()
+        self.addCleanup(store.close)
         clock = [1000.0]
         sockets: list[FakeSocket] = []
         logs: list[str] = []
@@ -251,6 +257,7 @@ def save_game_markets(path: Path, *timestamps: str) -> None:
 class GameMarketImportTests(unittest.TestCase):
     def test_our_market_uses_eddn_names_and_replaces_only_older_data(self) -> None:
         store = memory_store()
+        self.addCleanup(store.close)
         apply_payload(store, frame(commodity_envelope(timestamp="2026-11-10T15:00:00Z")))
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "recent_markets.json"
@@ -270,6 +277,7 @@ class GameMarketImportTests(unittest.TestCase):
 
     def test_service_imports_our_markets_at_start_and_when_the_file_changes(self) -> None:
         store = memory_store()
+        self.addCleanup(store.close)
         service = EddnService(store=store, listener=None)  # type: ignore[arg-type]
         logs: list[str] = []
         imported = threading.Condition()
@@ -282,7 +290,7 @@ class GameMarketImportTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "recent_markets.json"
             save_game_markets(path, "2026-11-10T14:00:00Z")
-            service.import_game_markets_every(path, 0.005, log)
+            service.import_game_markets_every(path, 0.001, log)
             with imported:
                 self.assertTrue(imported.wait_for(lambda: len(logs) == 1, 2.0))
             save_game_markets(path, "2026-11-10T14:00:00Z", "2026-11-10T14:05:00Z")
@@ -316,7 +324,7 @@ class EddnServiceTests(unittest.TestCase):
                 time.sleep(0.001)
 
             service = start_eddn_service(
-                EddnConfig(enabled=True, database_file=path, status_every_s=0.01),
+                EddnConfig(enabled=True, database_file=path, status_every_s=0.001),
                 open_socket=lambda: FakeSocket([frame(commodity_envelope())], on_empty=idle),
                 time_fn=lambda: 1000.0,
                 log=log,

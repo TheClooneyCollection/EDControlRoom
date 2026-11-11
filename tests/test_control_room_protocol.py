@@ -19,6 +19,7 @@ from edap.config import (
 )
 from edap.control_room.backend import ControlRoomBackend, LocalControlRoomBackend
 from edap.control_room.app import ControlRoomApp
+from tests.test_control_room import _FakeVersionSource
 from edap.control_room.dependencies import LocalControlRoomDataSource
 from edap.control_room.models import ReplaySelection
 from edap.control_room.protocol import (
@@ -126,7 +127,7 @@ def _make_context(journal_dir: Path) -> RuntimeContext:
 
 class _ProtocolHarnessApp(ControlRoomApp):
     def __init__(self, ctx: RuntimeContext) -> None:
-        super().__init__(ctx)
+        super().__init__(ctx, version_source=_FakeVersionSource())
         self._current_version = "1.2.3"
         self._activity_widget = _ActivityLogStub()
 
@@ -211,7 +212,10 @@ class _RenderHarnessApp(_ProtocolHarnessApp):
         self._trade_route_picker_widget = _ContainerStub()
         self._main_widget = _ContainerStub()
         self._command_input_widget = _InputStub()
-        super().__init__(ctx) if backend is None else ControlRoomApp.__init__(self, ctx, backend=backend)
+        if backend is None:
+            super().__init__(ctx)
+        else:
+            ControlRoomApp.__init__(self, ctx, backend=backend, version_source=_FakeVersionSource())
         self._activity_widget = _ActivityLogStub()
 
     def query_one(self, selector: str, widget_type=None):  # type: ignore[override]

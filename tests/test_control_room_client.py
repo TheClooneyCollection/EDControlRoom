@@ -19,6 +19,7 @@ from edap.config import (
     TTSConfig,
 )
 from edap.control_room.app import ControlRoomApp
+from tests.test_control_room import _FakeVersionSource
 from edap.control_room.client.backend import (
     RemoteObserverBackend,
     RemoteObserverDataSource,
@@ -340,6 +341,7 @@ class ControlRoomClientTests(unittest.TestCase):
                 execution=execution,
             ),
             title_override="ED Control Room Observer - bridge.local:8765",
+            version_source=_FakeVersionSource(),
         )
         execution.bind_app(app)
         return app

@@ -8,7 +8,7 @@ from typing import Any
 from rich.markup import escape
 
 from edap.control_room import bootstrap as _bootstrap
-from edap.control_room.app import ControlRoomApp
+from edap.control_room.app import ControlRoomApp, VersionSource
 from edap.control_room.history import now_iso
 from edap.control_room.routine_stop import RoutineStopMode
 from edap.control_room_state import CommandHistoryEntry
@@ -94,6 +94,7 @@ class HeadlessControlRoomHost(ControlRoomApp):
         ctx: RuntimeContext,
         *,
         speech_backend: SpeechBackend,
+        version_source: VersionSource,
         market_filter: str | None = None,
     ) -> None:
         self._activity_widget = _ActivityWidgetStub()
@@ -107,7 +108,7 @@ class HeadlessControlRoomHost(ControlRoomApp):
         self._trade_route_list_widget = _OptionListWidgetStub()
         self._trade_route_picker_widget = _ContainerWidgetStub()
         self._main_widget = _ContainerWidgetStub()
-        super().__init__(ctx, market_filter=market_filter)
+        super().__init__(ctx, market_filter=market_filter, version_source=version_source)
         self._tts = TTSAnnouncer(
             self._config.tts,
             platform_name=self._config.runtime.platform,

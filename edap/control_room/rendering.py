@@ -62,7 +62,7 @@ def is_recent(ev: dict[str, Any], threshold_s: float = 120.0) -> bool:
         return True
     try:
         ev_time = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ")
-        return (datetime.utcnow() - ev_time).total_seconds() < threshold_s
+        return (datetime.now(UTC).replace(tzinfo=None) - ev_time).total_seconds() < threshold_s
     except ValueError:
         return True
 

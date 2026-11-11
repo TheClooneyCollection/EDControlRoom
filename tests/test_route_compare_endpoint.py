@@ -228,9 +228,10 @@ class SpanshRouteEndpointTests(unittest.TestCase):
             raise RuntimeError("spansh down")
 
         with patch("edap.control_room.server.app.plot_route", side_effect=boom):
-            with self._client() as client:
+            with self._client() as client, self.assertLogs("edap.control_room.server.app", "ERROR") as logs:
                 response = self._get(client, "/api/spansh-route?from=A&to=B&range=60")
         self.assertEqual(response.status_code, 502)
+        self.assertIn("spansh route fetch failed", logs.output[0])
 
     def test_spansh_missing_target_returns_actionable_400(self) -> None:
         request = httpx.Request("POST", "https://spansh.co.uk/api/route")
@@ -244,10 +245,11 @@ class SpanshRouteEndpointTests(unittest.TestCase):
             "edap.control_room.server.app.plot_route",
             side_effect=httpx.HTTPStatusError("400 Bad Request", request=request, response=response),
         ):
-            with self._client() as client:
+            with self._client() as client, self.assertLogs("edap.control_room.server.app", "ERROR") as logs:
                 result = self._get(client, "/api/spansh-route?from=A&to=B&range=60")
 
         self.assertEqual(result.status_code, 400)
+        self.assertIn("Could not find finishing system", logs.output[0])
         self.assertEqual(result.json()["detail"], "Spansh says could not find target system")
 
     def test_auth_required(self) -> None:

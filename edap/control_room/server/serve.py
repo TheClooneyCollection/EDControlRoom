@@ -8,7 +8,7 @@ import time
 import uvicorn
 
 from edap.control_room import error_text
-from edap.control_room.app import _ALL_ROUTINE_ACTIONS
+from edap.control_room.app import _ALL_ROUTINE_ACTIONS, DefaultVersionSource
 from edap.control_room.server.app import build_observer_server_app, _server_hydrate_data
 from edap.control_room.server.auth import SharedAccessTokenAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
@@ -64,7 +64,11 @@ def serve_observer_mode(
         if speak_tts
         else NullSpeechBackend()
     )
-    runtime_host = HeadlessControlRoomHost(ctx, speech_backend=speech_backend)
+    runtime_host = HeadlessControlRoomHost(
+        ctx,
+        speech_backend=speech_backend,
+        version_source=DefaultVersionSource(),
+    )
 
     def data_provider():
         return _server_hydrate_data(
