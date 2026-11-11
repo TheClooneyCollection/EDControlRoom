@@ -2,7 +2,7 @@
 
 ## Status
 
-Designed (2026-11-11). Built: step 1 (roles and data ownership, 2026-11-11), step 2 (peer link and outbox, 2026-11-11), step 3 (ship on every run, 2026-11-11), step 4 (central history, 2026-11-11), step 5 (see a node, 2026-11-11), step 6 (drive a node, 2026-11-11), step 7 (TTS on the hub, 2026-11-11), step 8 (discovery and docs, 2026-11-11). All build steps are done; the live run with two machines (Validation) is pending and is done by the user before the branch lands. One feature: it replaces today's hub mode (`docs/user/hub.md`) as a whole and is released only when every build step below is done. The end state is designed here at once; no step keeps the old hub mode working alongside it.
+Designed (2026-11-11). Built: step 1 (roles and data ownership, 2026-11-11), step 2 (peer link and outbox, 2026-11-11), step 3 (ship on every run, 2026-11-11), step 4 (central history, 2026-11-11), step 5 (see a node, 2026-11-11), step 6 (drive a node, 2026-11-11), step 7 (TTS on the hub, 2026-11-11), step 8 (discovery and docs, 2026-11-11). All build steps are done. Live run (2026-11-11, a Mac hub and a Windows peer): discovery, driving a node and the hub voice worked; it found and fixed a hidden node picker, observer-only controls on a peer, a stop held behind the routine it stopped, and a Windows-only test cleanup. A hub restart mid-haul was not exercised live (covered by the outbox tests). One feature: it replaces today's hub mode (`docs/user/hub.md`) as a whole and is released only when every build step below is done. The end state is designed here at once; no step keeps the old hub mode working alongside it.
 
 ## Why
 
