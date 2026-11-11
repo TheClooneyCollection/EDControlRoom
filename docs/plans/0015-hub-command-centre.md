@@ -92,6 +92,8 @@ The node keeps speaking its callouts. It also sends each callout's text up the l
 - **Hub speakers**: the hub speaks the text with its own voice (platform voice or `[tts.piper]`).
 - **Listen in the browser**: the hub synthesizes the text with Piper and sends the WAV to hub pages that opted in. Piper already writes one WAV per line (`edap/tts.py`), so this is per-callout audio with a delay of about one synthesis. Without Piper on the hub, the page uses browser speech (`web/speech.js`).
 
+As built: the voiced node is the node picked in the node picker (picking saves it hub-wide; none picked is the hub's own game), with no separate voice dropdown. A third switch mutes the voiced node (a `voice_mute` link frame, or directly for the hub's own game): its `TTSAnnouncer` skips callouts and its broker marks announcements `muted`, so its pages and TUIs stay quiet while the text still goes up. The mute holds only while the callouts play on the hub (hub speakers for a peer, or a listening page); the hub unmutes on a node change or when nothing plays, and the peer unmutes itself when its link drops.
+
 ### Discovery
 
 The hub advertises `_edcr._tcp.local` over mDNS with its port and a TXT record (`role=hub`, version, hub name). A peer with no `url` browses for it and connects. The token still has to match. The peer remembers the hub it first connected to and logs loudly if a different one appears, so a stray advertiser on the LAN cannot quietly take over. New dependency: `zeroconf`.
@@ -113,7 +115,7 @@ Built on a feature branch `feat/hub-command-centre`, one agent per step in order
 
 ## Open points
 
-- Whether the node should mute itself while the hub voices its callouts.
+- Resolved: the node mutes itself only when asked from the hub voice panel, and only while its callouts play on the hub (see TTS on the hub).
 
 ## Validation
 

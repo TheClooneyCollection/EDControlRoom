@@ -83,7 +83,7 @@ All under `[hub]`; defaults in `defaults/hub.toml`.
 | `url` | peer | optional hub address; empty means discovery |
 | `outbox_file` | peer | markets, station facts and haul runs waiting for the hub (`.control_room_hub_outbox.sqlite3`) |
 | `runs_file` | hub | every peer's haul runs, tagged with their node (`.control_room_hub_runs.jsonl`); the hub's own stay in `control_room.haul_runs_file` |
-| `voice_file` | hub | which node the hub voices and the hub speaker switch (`.control_room_hub_voice.json`) |
+| `voice_file` | hub | the voiced node, the hub speaker switch and the mute (`.control_room_hub_voice.json`) |
 | `timeout_s` | peer | seconds to wait for the hub on routes, status and station facts (10) |
 | `search_timeout_s` | peer | seconds to wait for an Inara search on the hub (180) |
 | `heartbeat_s` | peer | seconds of quiet before the peer pings the hub; twice that without an answer redials (30) |
@@ -98,13 +98,15 @@ Open only the hub's pages. Every page has a **node picker** in the sidebar (on p
 
 ## TTS on the hub
 
-Every machine keeps speaking its own callouts and also sends their text up the link. Under the node picker the hub pages show a voice panel:
+Every machine speaks its own callouts and also sends their text up the link. The hub can play one machine's callouts too: the node picked in the node picker. Picking a node on any hub page makes it the voiced node for the whole hub, so two machines never talk over each other; with nothing picked it is the hub's own game. Under the node picker the hub pages show:
 
-- **Voice**: Off (default) or one node. One node at a time, for the whole hub, so two machines never talk over each other.
-- **Hub speakers**: the hub speaks that node's callouts on its own speakers, queued behind its own callouts. Its own game is never spoken twice.
-- **Listen here** (per browser): the page plays the callouts, as Piper audio when the hub has `[tts.piper]`, otherwise with the browser's own voice. While listening, the haul page's own browser speech stays quiet.
+- **Play on hub speakers**: the hub speaks the picked node's callouts on its own speakers, queued behind its own callouts. Hidden when the hub's own game is picked: it already speaks there.
+- **Play in this browser** (per browser): the page plays the picked node's callouts, as Piper audio when the hub has `[tts.piper]`, otherwise with the browser's own voice. While it plays, the page's own browser speech stays quiet.
+- **Mute <node>**: the picked node stops speaking its own callouts, so they play only on the hub; it still sends them up. Its own pages and `connect` TUIs stay quiet too. It can be ticked only while one of the two play boxes is on. The node speaks again on its own when nothing plays its callouts on the hub (hub speakers off and no browser playing), when another node is picked (which also clears the box) or when its hub link drops, so callouts are never silently lost. When the link comes back, the hub mutes it again.
 
-Messages in a node's `[tts] disabled_messages` are never sent up, so the hub and listening pages skip them too. A node does not mute itself while the hub voices it; start it with `--no-tts` to keep its own speakers silent (it still sends its callouts up).
+If another browser picked a different node since, the panel says so and offers to voice this page's node instead.
+
+Messages in a node's `[tts] disabled_messages` are never sent up, so the hub and listening pages skip them too. To keep a node silent for good, start it with `--no-tts` (it still sends its callouts up).
 
 ## Offline behaviour
 
