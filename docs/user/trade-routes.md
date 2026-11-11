@@ -4,9 +4,9 @@ The web **Routes** page (`/routes`) finds two-way trade routes from live market 
 
 ## Where the prices come from
 
-The `lan` server listens to [EDDN](https://github.com/EDCD/EDDN), the feed other commanders' tools upload market data to. Every market update goes into a local SQLite file, `.eddn_markets.sqlite3` in the repo folder (about 3.5 KB per market). Markets not updated for 7 days are dropped.
+A standalone or hub Control Room always keeps a local SQLite market database, `.eddn_markets.sqlite3` in the repo folder (about 3.5 KB per market); a peer keeps none and asks the hub. Your own visited markets and the systems and stations in your journal always go into it. With `[eddn]` on, the `lan` server also listens to [EDDN](https://github.com/EDCD/EDDN), the feed other commanders' tools upload market data to, and every market update goes into the same file. Markets not updated for 7 days are dropped.
 
-This is off by default; turn it on with `enabled = true` under `[eddn]` (see Settings below). The database starts empty, so give it a while: after an hour or so the busy parts of the bubble are covered, and coverage keeps growing while the server runs.
+The EDDN listener is off by default; turn it on with `enabled = true` under `[eddn]` (see Settings below). The database starts empty, so give it a while: after an hour or so the busy parts of the bubble are covered, and coverage keeps growing while the server runs.
 
 ## Checking it works
 
@@ -35,7 +35,7 @@ The **Best deal** panel on `/markets` compares two stations whose market you ope
 - **Profit per hour**: profit per trip over the estimated round-trip time, from the same time model as the Routes page, with the trip time, jumps and distance under it. **Laden jump range** works as on the Routes page (empty falls back to `haul_search.toml`).
 - **Measured per hour**: profit per hour of your completed haul runs between the two stations, either direction.
 
-The estimate needs each system's coordinates and each station's distance from the star and type. They come from the EDDN database when it is on, then from your journal (a station you docked at, a system you jumped to), then from the [Ardent Insight](https://ardent-insight.com) API. Ardent answers are kept in the EDDN database, which helps the Routes page too. If Ardent is slow or down (3 second limit, tried again after 10 minutes) or one is still unknown, the panel shows "-" and names what is missing; it never guesses.
+The estimate needs each system's coordinates and each station's distance from the star and type. They come from the market database (EDDN messages, your journal: a station you docked at, a system you jumped to, and your Market.json station types; newest wins), then from the [Ardent Insight](https://ardent-insight.com) API for what is still missing. Ardent answers are kept in the same database, which helps the Routes page too. On a peer the panel shows "-" and says the hub supplies station facts. If Ardent is slow or down (3 second limit, tried again after 10 minutes) or one is still unknown, the panel shows "-" and names what is missing; it never guesses.
 
 ## Settings
 

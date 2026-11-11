@@ -16,9 +16,12 @@ A peer sends its current system, cargo capacity and filled-in search settings wi
 
 ## Set up the hub
 
-1. Turn on the market database in the hub's `config.toml`:
+1. Make it the hub and turn on the EDDN listener in its `config.toml` (the market database is always open on a hub):
 
    ```toml
+   [hub]
+   role = "hub"
+
    [eddn]
    enabled = true
    ```
@@ -39,6 +42,7 @@ In the peer's `config.toml`:
 
 ```toml
 [hub]
+role = "peer"
 url = "http://192.168.1.20:8765"   # the address the hub's lan server printed
 token = "<hub-token>"   # "edcr" when the hub runs without --token
 ```
@@ -47,7 +51,7 @@ Give the hub a fixed LAN address (a DHCP reservation on the router) so this URL 
 
 Restart the peer. Its log says `Hub: searches and market pushes go to ...`. The peer's own `--token` still protects the peer; `[hub].token` is only for talking to the hub.
 
-Peers usually leave `[eddn]` off: the hub listens to EDDN for everyone. `[eddn]` stays independent, so a peer that turns it on keeps a local EDDN listener, but its own visited markets still go only to the hub.
+A peer keeps no market database and never runs the EDDN listener, even with `[eddn]` on: the hub listens to EDDN for everyone. Set `role = "hub"` on the hub (the default `"standalone"` works the same for now).
 
 Optional settings: `timeout_s` (default 10 s, routes, market pushes and heartbeats), `search_timeout_s` (default 180 s, Inara searches) and `heartbeat_s` (default 30 s between reachability checks).
 
@@ -80,7 +84,7 @@ A successful market push also counts as contact, so the chip can turn green befo
 
 - `POST /api/haul-search`: JSON body like the websocket `command.search_haul_routes` payload (`system_name`, `cargo_capacity`, `max_route_distance_ly`, ...). Returns `{"result": ...}`; 400 for a bad search, 502 when Inara or the hub fails. It does not save `haul_search.toml`.
 - `GET /api/eddn-routes`: `system`, `capacity` and `laden_jump_range_ly` (and the other filters) override the hub's own ship and settings.
-- `POST /api/markets`: `{"markets": [<recent markets entry>, ...]}`, the shape of `.control_room_recent_markets.json`. Returns `{"results": [{"station", "system", "timestamp", "written"}]}`; 400 for a bad body, 503 when the hub has no EDDN database.
+- `POST /api/markets`: `{"markets": [<recent markets entry>, ...]}`, the shape of `.control_room_recent_markets.json`. Returns `{"results": [{"station", "system", "timestamp", "written"}]}`; 400 for a bad body, 503 when the server has no market database (a peer).
 
 - `GET /api/hub-ping`: `{"status": "ok"}`; what a peer's heartbeat asks for.
 - `GET /api/hub-status`: on any server. `{"configured": false}` without `[hub]`; otherwise `host`, `url`, `heartbeat_s`, `reachable` (`null` before the first check), `checked_at`, `last_ok_at`, `last_error`, `latency_ms`, `last_push` (`at`, `stations`, `written`, `kept`, `error`) and `resend_pending`. Times are ISO UTC. Takes the peer's own token.
