@@ -15,6 +15,7 @@ from edap.eddn.store import EddnStore
 from edap.hub.history import CentralHistory, HubRuns
 from edap.hub.peer import NodeHello, iso_utc
 from edap.hub.protocol import ITEM_HAUL_RUN, ITEM_MARKET, ITEM_STATION_FACTS, LinkReply, decode_update, response_frame
+from edap.hub.relay import RELAY_FRAMES, HubRelay
 from edap.recent_markets import snapshot_from_entry
 
 
@@ -37,6 +38,8 @@ class _Node:
     last_contact: float | None
     # Bumped on every connection, so a replaced connection's close does not mark the node offline.
     generation: int = 0
+    # Ship and running routine, as the peer last reported them (`edap.hub.relay.node_state`).
+    state: dict[str, Any] | None = None
 
 
 class NodeRegistry:
@@ -58,6 +61,12 @@ class NodeRegistry:
             self._nodes[hello.node_id] = _Node(hello, local=False, connected=True, connected_since=at,
                                                last_contact=at, generation=generation)
             return generation
+
+    def set_state(self, node_id: str, state: dict[str, Any]) -> None:
+        with self._lock:
+            node = self._nodes.get(node_id)
+            if node is not None:
+                node.state = state
 
     def touch(self, node_id: str) -> None:
         with self._lock:
@@ -89,6 +98,7 @@ class NodeRegistry:
                     "connected_since": iso_utc(node.connected_since),
                     # The local node is this process, so it is always in contact.
                     "last_contact_at": iso_utc(now if node.local else node.last_contact),
+                    "state": node.state if node.connected else None,
                 }
                 for node in nodes
             ]
@@ -100,13 +110,14 @@ class NodeRegistry:
 
 @dataclass(frozen=True)
 class HubSide:
-    """What a hub needs to take peer links: its registry, where items go, the token peers present
-    and the central haul history its views read."""
+    """What a hub needs to take peer links: its registry, where items go, the token peers present,
+    the central haul history its views read and the relay for pages looking at a peer."""
 
     registry: NodeRegistry
     store_item: ItemSink
     token: str
     history: CentralHistory
+    relay: HubRelay
 
 
 class HubLinkSession:
@@ -119,9 +130,14 @@ class HubLinkSession:
         registry: NodeRegistry,
         store_item: ItemSink,
         handlers: Mapping[str, RequestHandler],
+        relay: HubRelay,
+        send: Callable[[dict[str, Any]], None],
         log: Callable[[str], None],
     ) -> None:
         self._registry = registry
+        self._relay = relay
+        # Sends a frame to this peer outside an answer: the relay's channel and read frames.
+        self._send = send
         self._store_item = store_item
         self._handlers = handlers
         self._log = log
@@ -147,10 +163,19 @@ class HubLinkSession:
             return [self._item(frame)]
         if kind == "request":
             return [self._request(frame)]
+        if kind == "node_state":
+            if isinstance(frame.get("state"), dict):
+                self._registry.set_state(self.hello.node_id, frame["state"])
+            return []
+        if kind in RELAY_FRAMES:
+            self._relay.on_frame(self.hello.node_id, frame)
         return []
 
     def close(self) -> None:
-        if self.hello is not None and self._registry.disconnect(self.hello.node_id, self._generation):
+        if self.hello is None:
+            return
+        self._relay.detach(self.hello.node_id, self._generation)
+        if self._registry.disconnect(self.hello.node_id, self._generation):
             self._log(f"Peer {self.label} disconnected")
 
     def _hello(self, frame: dict[str, Any]) -> list[dict[str, Any]]:
@@ -164,6 +189,7 @@ class HubLinkSession:
                                version=str(frame.get("version") or ""))
         self._generation = self._registry.connect(self.hello)
         self._log(f"Peer {self.label} connected (node {node_id}, version {self.hello.version or '?'})")
+        self._relay.attach(self.hello, self._generation, self._send)
         return [{"type": "welcome", "node_id": local.node_id, "name": local.name, "version": local.version}]
 
     def _refuse(self, detail: str) -> list[dict[str, Any]]:

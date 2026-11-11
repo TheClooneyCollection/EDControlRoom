@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 import sqlite3
 import time
-from typing import Any, Callable
+from typing import Any, Awaitable, Callable, Mapping
 
 import httpx
 
@@ -35,6 +35,7 @@ from edap.market_compare import compare_markets
 from edap.hub.history import ALL, filter_runs, history_options, parse_node_filter, parse_ship_filter
 from edap.hub.nodes import HubLinkSession, HubSide, RequestHandler
 from edap.hub.peer import PeerLink, hub_unreachable_detail, with_hub_source
+from edap.hub.relay import NODE_READS, NodeOffline, node_state
 from edap.hub.protocol import (
     PEER_LINK_PATH,
     REQUEST_EDDN_ROUTES,
@@ -84,6 +85,7 @@ from edap.inara.trade_routes import (
     search_trade_routes,
 )
 from edap.control_room.protocol import (
+    ACCESS_TOKEN_QUERY_PARAMETER,
     SUPPORTED_COMMAND_MESSAGE_TYPES,
     SUPPORTED_EVENT_MESSAGE_TYPES,
     SUPPORTED_MESSAGE_TYPES,
@@ -390,11 +392,7 @@ def build_observer_server_app(
             headers={"Cache-Control": "no-store"},
         )
 
-    async def route_compare(request: Request) -> JSONResponse:
-        auth_failure = require_http_auth(request)
-        if auth_failure is not None:
-            return auth_failure
-        params = request.query_params
+    async def route_compare(params: Mapping[str, str]) -> JSONResponse:
         fixture_name = params.get("fixture")
         if fixture_name:
             try:
@@ -439,10 +437,7 @@ def build_observer_server_app(
             return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
         return JSONResponse(payload)
 
-    async def route_compare_config_endpoint(request: Request) -> JSONResponse:
-        auth_failure = require_http_auth(request)
-        if auth_failure is not None:
-            return auth_failure
+    async def route_compare_config(_params: Mapping[str, str]) -> JSONResponse:
         return JSONResponse(
             {
                 "navroute_wait_seconds": route_compare_navroute_wait_seconds,
@@ -528,10 +523,7 @@ def build_observer_server_app(
     def read_recent_markets() -> tuple[MarketSnapshot, ...]:
         return load_recent_markets(recent_markets_file) if recent_markets_file is not None else ()
 
-    async def recent_markets_endpoint(request: Request) -> JSONResponse:
-        auth_failure = require_http_auth(request)
-        if auth_failure is not None:
-            return auth_failure
+    async def recent_markets(_params: Mapping[str, str]) -> JSONResponse:
         snapshots = await asyncio.to_thread(read_recent_markets)
         return JSONResponse(
             {
@@ -542,11 +534,7 @@ def build_observer_server_app(
             }
         )
 
-    async def market_compare_endpoint(request: Request) -> JSONResponse:
-        auth_failure = require_http_auth(request)
-        if auth_failure is not None:
-            return auth_failure
-        params = request.query_params
+    async def market_compare(params: Mapping[str, str]) -> JSONResponse:
         try:
             market_x_id = int(params.get("x", ""))
             market_y_id = int(params.get("y", ""))
@@ -738,7 +726,9 @@ def build_observer_server_app(
             return auth_failure
         if hub_side is None:
             return JSONResponse({"detail": "Only a hub lists nodes"}, status_code=404)
-        return JSONResponse({"nodes": hub_side.registry.nodes()})
+        nodes = hub_side.registry.nodes()
+        local_state = await asyncio.to_thread(lambda: node_state(data_provider()))
+        return JSONResponse({"nodes": [{**node, "state": local_state} if node["local"] else node for node in nodes]})
 
     def route_ship_inputs() -> dict[str, Any]:
         data = data_provider()
@@ -774,11 +764,8 @@ def build_observer_server_app(
         except sqlite3.Error as exc:
             return LinkReply(503, {"detail": f"Cannot read the market database: {exc}"})
 
-    async def eddn_routes_endpoint(request: Request) -> JSONResponse:
-        auth_failure = require_http_auth(request)
-        if auth_failure is not None:
-            return auth_failure
-        params = dict(request.query_params)
+    async def eddn_routes(query: Mapping[str, str]) -> JSONResponse:
+        params = dict(query)
         if peer_link is not None:
             # The hub answers for this ship and this server's search settings, not its own.
             ship_inputs = await asyncio.to_thread(route_ship_inputs)
@@ -827,8 +814,7 @@ def build_observer_server_app(
             await websocket.close(code=4401, reason="hub token required")
             return
         await websocket.accept()
-        session = HubLinkSession(registry=hub_side.registry, store_item=hub_side.store_item, handlers=link_handlers,
-                                 log=logging.getLogger("edap.hub").info)
+        loop = asyncio.get_running_loop()
         send_lock = asyncio.Lock()
         requests: set[asyncio.Task[None]] = set()
 
@@ -836,6 +822,14 @@ def build_observer_server_app(
             async with send_lock:
                 for frame in frames:
                     await websocket.send_json(frame)
+
+        def send_soon(frame: dict[str, Any]) -> None:
+            """Queue a relay frame (channel or read) from any thread; a closed socket just drops it."""
+            future = asyncio.run_coroutine_threadsafe(send([frame]), loop)
+            future.add_done_callback(lambda done: done.cancelled() or done.exception())
+
+        session = HubLinkSession(registry=hub_side.registry, store_item=hub_side.store_item, handlers=link_handlers,
+                                 relay=hub_side.relay, send=send_soon, log=logging.getLogger("edap.hub").info)
 
         async def answer(frame: dict[str, Any]) -> None:
             await send(await asyncio.to_thread(session.receive, frame))
@@ -858,11 +852,7 @@ def build_observer_server_app(
                 task.cancel()
             session.close()
 
-    async def spansh_route_endpoint(request: Request) -> JSONResponse:
-        auth_failure = require_http_auth(request)
-        if auth_failure is not None:
-            return auth_failure
-        params = request.query_params
+    async def spansh_route(params: Mapping[str, str]) -> JSONResponse:
         source_system = (params.get("from") or "").strip()
         destination_system = (params.get("to") or "").strip()
         range_raw = params.get("range")
@@ -892,7 +882,7 @@ def build_observer_server_app(
         return JSONResponse(payload)
 
     async def command_endpoint(request: Request) -> JSONResponse:
-        auth_failure = require_http_auth(request)
+        auth_failure = require_http_auth(request) or refuse_node_command(request.query_params)
         if auth_failure is not None:
             return auth_failure
         try:
@@ -928,7 +918,7 @@ def build_observer_server_app(
         return JSONResponse(payload)
 
     async def stop_endpoint(request: Request) -> JSONResponse:
-        auth_failure = require_http_auth(request)
+        auth_failure = require_http_auth(request) or refuse_node_command(request.query_params)
         if auth_failure is not None:
             return auth_failure
         body: object = {}
@@ -966,23 +956,16 @@ def build_observer_server_app(
             await websocket.close(code=4401, reason="authentication required")
             return
         client_name = websocket.query_params.get("client_name", "observer-client")
+        node_id = viewed_node(websocket.query_params)
+        if node_id is not None:
+            await relayed_session(websocket, node_id, client_name)
+            return
         await websocket.accept()
         observer = broker.register_observer(client_name)
-        data = data_provider()
         try:
-            await websocket.send_json(
-                protocol_message(
-                    "event.connection_ready",
-                    {
-                        "session_id": observer.session_id,
-                        "server_name": data.server_status.server_name,
-                        "server_version": data.server_status.server_version,
-                        "client_role": broker.current_session_role(observer.session_id),
-                        "capability_names": data.server_status.capability_names,
-                    },
-                )
-            )
-            await websocket.send_json(hydrate_message(_server_hydrate_data(data_provider(), broker=broker)))
+            for message in session_start_messages(observer.session_id, data_provider, broker,
+                                                  client_role=broker.current_session_role(observer.session_id)):
+                await websocket.send_json(message)
             sender = asyncio.create_task(_send_session_messages(websocket, observer))
             receiver = asyncio.create_task(
                 _receive_session_messages(
@@ -1010,6 +993,137 @@ def build_observer_server_app(
         finally:
             broker.unregister(observer.session_id)
 
+    # Plan 0015 step 5: a hub page looks at one node with `?node=<node_id>`; the hub's own game needs none.
+    relay = hub_side.relay if hub_side is not None else None
+
+    def viewed_node(params: Mapping[str, str]) -> str | None:
+        """The peer a hub page looks at, or None for this server's own game (always on a peer or standalone)."""
+        node_id = (params.get("node") or "").strip()
+        if hub_side is None or not node_id or node_id == hub_side.registry.local.node_id:
+            return None
+        return node_id
+
+    def refuse_node_command(params: Mapping[str, str]) -> JSONResponse | None:
+        node_id = viewed_node(params)
+        if node_id is None:
+            return None
+        assert relay is not None
+        return JSONResponse({"detail": view_only_detail(relay.name(node_id)), "node": node_id}, status_code=403)
+
+    # Page reads that answer for the node a page looks at; a hub relays them to a peer, and the peer
+    # answers them here too. Hub-owned data (history, EDDN status, hub status) is not among them.
+    node_reads: dict[str, Callable[[Mapping[str, str]], Awaitable[JSONResponse]]] = {
+        "/api/route-compare": route_compare,
+        "/api/route-compare/config": route_compare_config,
+        "/api/spansh-route": spansh_route,
+        "/api/recent-markets": recent_markets,
+        "/api/market-compare": market_compare,
+        "/api/eddn-routes": eddn_routes,
+    }
+    assert node_reads.keys() == NODE_READS
+
+    def node_read_endpoint(path: str) -> Callable[[Request], Awaitable[JSONResponse]]:
+        read = node_reads[path]
+
+        async def endpoint(request: Request) -> JSONResponse:
+            auth_failure = require_http_auth(request)
+            if auth_failure is not None:
+                return auth_failure
+            node_id = viewed_node(request.query_params)
+            if node_id is None:
+                return await read(request.query_params)
+            assert relay is not None
+            params = {key: value for key, value in request.query_params.items()
+                      if key not in {"node", ACCESS_TOKEN_QUERY_PARAMETER}}
+            try:
+                reply = await asyncio.to_thread(relay.read, node_id, path, params)
+            except NodeOffline as exc:
+                name = relay.name(node_id)
+                return JSONResponse({"detail": f"Node {name} is unreachable: {exc}", "node": node_id}, status_code=502)
+            return link_reply_response(reply)
+
+        return endpoint
+
+    def answer_node_read(path: str, params: dict[str, str]) -> LinkReply:
+        """A hub page's read on this peer, on a thread of its own (it may ask the hub in turn)."""
+        response = asyncio.run(node_reads[path](params))
+        return LinkReply(response.status_code, json.loads(bytes(response.body)))
+
+    def open_node_session(session_id: str) -> list[dict[str, Any]]:
+        """The first messages of a hub page's channel on this peer, as a local page gets them."""
+        return session_start_messages(session_id, data_provider, broker, client_role="observer")
+
+    async def relayed_session(websocket: WebSocket, node_id: str, client_name: str) -> None:
+        """Stream a peer's session to a hub page. While the peer is away the page stays connected, is
+        told so once, and gets a fresh hydrate when the peer links again."""
+        assert relay is not None
+        await websocket.accept()
+        loop = asyncio.get_running_loop()
+        # Session messages, or the reason the channel ended (a str).
+        queue: asyncio.Queue[dict[str, Any] | str] = asyncio.Queue()
+
+        def deliver(message: dict[str, Any]) -> None:
+            loop.call_soon_threadsafe(queue.put_nowait, message)
+
+        def end(detail: str) -> None:
+            loop.call_soon_threadsafe(queue.put_nowait, detail)
+
+        channel_id: str | None = None
+
+        async def pump() -> None:
+            nonlocal channel_id
+            told_offline = False
+            while True:
+                try:
+                    channel_id = relay.open_channel(node_id, client_name, deliver, end)
+                except NodeOffline as exc:
+                    if not told_offline:
+                        await websocket.send_json(node_offline_message(relay.name(node_id), str(exc)))
+                        told_offline = True
+                    await asyncio.sleep(NODE_RETRY_S)
+                    continue
+                told_offline = False
+                while True:
+                    item = await queue.get()
+                    if isinstance(item, str):
+                        channel_id = None
+                        await websocket.send_json(node_offline_message(relay.name(node_id), item))
+                        told_offline = True
+                        break
+                    await websocket.send_json(item)
+                await asyncio.sleep(NODE_RETRY_S)
+
+        async def refuse_commands() -> None:
+            while True:
+                message = await websocket.receive_json()
+                if isinstance(message, dict) and str(message.get("message_type", "")).startswith("command."):
+                    message_id = message.get("message_id")
+                    await websocket.send_json(protocol_message(
+                        "response.error",
+                        {
+                            "error_code": "node_view_only",
+                            "error_message": view_only_detail(relay.name(node_id)),
+                            "recommended_action": "Pick this hub's own node, or open the node's own pages.",
+                            "retryable": False,
+                        },
+                        correlation_message_id=str(message_id) if message_id is not None else None,
+                    ))
+
+        tasks = {asyncio.create_task(pump()), asyncio.create_task(refuse_commands())}
+        try:
+            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            for task in pending:
+                task.cancel()
+            for task in done:
+                task.result()
+        except (WebSocketDisconnect, RuntimeError):
+            pass
+        finally:
+            for task in tasks:
+                task.cancel()
+            if channel_id is not None:
+                relay.close_channel(channel_id)
+
     app = Starlette(
         routes=[
             Route("/health", health),
@@ -1024,14 +1138,14 @@ def build_observer_server_app(
             Route(MARKETS_WEB_URL_PATH, markets_web),
             Route(ROUTES_WEB_URL_PATH, routes_web),
             Route(TRAVEL_WEB_URL_PATH, travel_web),
-            Route("/api/route-compare", route_compare),
-            Route("/api/route-compare/config", route_compare_config_endpoint),
-            Route("/api/spansh-route", spansh_route_endpoint),
+            Route("/api/route-compare", node_read_endpoint("/api/route-compare")),
+            Route("/api/route-compare/config", node_read_endpoint("/api/route-compare/config")),
+            Route("/api/spansh-route", node_read_endpoint("/api/spansh-route")),
             Route("/api/haul-stats", haul_stats_endpoint),
-            Route("/api/recent-markets", recent_markets_endpoint),
-            Route("/api/market-compare", market_compare_endpoint),
+            Route("/api/recent-markets", node_read_endpoint("/api/recent-markets")),
+            Route("/api/market-compare", node_read_endpoint("/api/market-compare")),
             Route("/api/eddn-status", eddn_status_endpoint),
-            Route("/api/eddn-routes", eddn_routes_endpoint),
+            Route("/api/eddn-routes", node_read_endpoint("/api/eddn-routes")),
             Route("/api/hub-status", hub_status_endpoint),
             Route("/api/nodes", nodes_endpoint),
             Route("/api/command", command_endpoint, methods=["POST"]),
@@ -1043,6 +1157,9 @@ def build_observer_server_app(
     )
     # The hub's answers to peer requests, so tests drive a link session without a socket.
     app.state.link_handlers = link_handlers
+    # A peer answers hub pages' channels and reads with these (`edap.hub.relay.PeerRelay`).
+    app.state.answer_node_read = answer_node_read
+    app.state.open_node_session = open_node_session
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -1056,6 +1173,44 @@ def build_observer_server_app(
 
     app.add_exception_handler(Exception, _log_unhandled_exception)
     return app
+
+
+# Seconds between a hub page's tries to reach a node that is offline.
+NODE_RETRY_S = 2.0
+
+
+def view_only_detail(node_name: str) -> str:
+    return f"{node_name} is view-only from the hub for now: run commands on its own pages."
+
+
+def node_offline_message(node_name: str, detail: str) -> dict[str, Any]:
+    """Tells a hub page the node it looks at went away, as an activity log line."""
+    stamp = datetime.now(SystemLocalTimezone()).isoformat(timespec="seconds")
+    return protocol_message("event.activity_log_appended", {"entry": {
+        "entry_id": f"node-offline-{time.time_ns()}", "timestamp": stamp,
+        "message_text": f"Node {node_name} is offline ({detail}); showing it again when it links.",
+        "severity": "error",
+    }})
+
+
+def session_start_messages(
+    session_id: str, data_provider: Callable[[], object], broker: InMemoryObserverSessionBroker, *, client_role: str,
+) -> list[dict[str, Any]]:
+    """What a session gets first: connection ready, then the hydrate."""
+    data = data_provider()
+    return [
+        protocol_message(
+            "event.connection_ready",
+            {
+                "session_id": session_id,
+                "server_name": data.server_status.server_name,
+                "server_version": data.server_status.server_version,
+                "client_role": client_role,
+                "capability_names": data.server_status.capability_names,
+            },
+        ),
+        hydrate_message(_server_hydrate_data(data_provider(), broker=broker)),
+    ]
 
 
 # Best deal's measured profit per hour window choices (haul_history.parse_window labels).

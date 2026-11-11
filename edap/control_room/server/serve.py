@@ -29,6 +29,7 @@ from edap.hub.history import CentralHistory, HubRuns
 from edap.hub.nodes import HubSide, NodeRegistry, store_link_item
 from edap.hub.outbox import Outbox
 from edap.hub.peer import NODE_ID_FILE_NAME, NodeHello, PeerLink, load_node_id, new_node_id, websocket_connector
+from edap.hub.relay import HubRelay, PeerRelay, node_state
 from edap.recent_markets import load_recent_markets, watch_file
 from edap.market_db import open_market_store, station_facts_writer
 from edap.runtime import build_runtime_context, load_config_with_fallback
@@ -87,10 +88,20 @@ def serve_observer_mode(
         )
     peer_link: PeerLink | None = None
     if node is not None and hub_config.enabled:
+        # Hub pages looking at this peer. The app is built further down; these run only once the link is up.
+        peer_relay = PeerRelay(
+            open_session=lambda channel_id: app.state.open_node_session(channel_id),
+            add_listener=broker.add_listener,
+            answer_read=lambda path, params: app.state.answer_node_read(path, params),
+            state=lambda: node_state(data_provider()),
+            run_in_background=lambda work: threading.Thread(target=work, name="hub-read", daemon=True).start(),
+            log=hub_logger.info,
+        )
         peer_link = PeerLink(
             hello=node,
             hub_url=hub_config.url,
             outbox=Outbox.open(hub_config.outbox_file, now=time.time()),
+            relay=peer_relay,
             connect=websocket_connector(hub_config.url, hub_config.token, timeout_s=hub_config.timeout_s),
             now=time.time,
             log=hub_logger.info,
@@ -167,7 +178,6 @@ def serve_observer_mode(
             haul_runs_file, 5.0, lambda path: peer_link.enqueue_runs(load_runs(path)[0]),
             stop=stop_background, log=hub_logger.warning, name="hub-runs",
         )
-        threading.Thread(target=lambda: peer_link.run(stop_background.wait), name="hub-link", daemon=True).start()
     elif hub_config.role == "peer":
         hub_logger.info("Hub link: none, `[hub] url` is empty")
     hub_side: HubSide | None = None
@@ -178,7 +188,9 @@ def serve_observer_mode(
         hub_side = HubSide(registry=NodeRegistry(node, time.time),
                            store_item=store_link_item(store, hub_runs, hub_logger.info),
                            token=hub_config.token,
-                           history=CentralHistory(local=node, local_file=haul_runs_file, runs=hub_runs))
+                           history=CentralHistory(local=node, local_file=haul_runs_file, runs=hub_runs),
+                           relay=HubRelay(log=hub_logger.info, read_timeout_s=hub_config.timeout_s,
+                                          slow_read_timeout_s=hub_config.search_timeout_s))
     if store is not None:
         import_game_markets_every(store, recent_markets_file, 5.0, db_logger.info, stop=stop_background)
     ardent_lookup: ArdentLookup | None = None
@@ -209,6 +221,9 @@ def serve_observer_mode(
         route_compare_navroute_wait_seconds=loaded.config.control_room.route_compare_navroute_wait_seconds,
         route_compare_compare_retry_attempts=loaded.config.control_room.route_compare_compare_retry_attempts,
     )
+    if peer_link is not None:
+        # Started once the app exists: hub page channels and reads answer through it.
+        threading.Thread(target=lambda: peer_link.run(stop_background.wait), name="hub-link", daemon=True).start()
     try:
         uvicorn.run(app, host=host, port=port, log_level="info")
     finally:

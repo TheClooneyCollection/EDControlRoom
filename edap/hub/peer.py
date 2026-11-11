@@ -13,7 +13,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Protocol
 from urllib.parse import urlparse
 
 from edap.eddn.messages import EddnUpdate
@@ -29,6 +29,17 @@ from edap.recent_markets import MarketSnapshot, snapshot_entry
 RECONNECT_DELAYS_S = (1.0, 2.0, 5.0, 10.0, 30.0)
 # The node id lives next to the config file, so it survives restarts and reinstalls of the code.
 NODE_ID_FILE_NAME = ".control_room_node_id"
+
+
+class LinkRelay(Protocol):
+    """Hub pages looking at this peer (`edap.hub.relay.PeerRelay`): told when the link comes and goes,
+    handed every frame the link itself does not handle."""
+
+    def link_up(self, send: Callable[[dict[str, Any]], None]) -> None: ...
+
+    def link_down(self) -> None: ...
+
+    def on_frame(self, frame: dict[str, Any]) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -77,6 +88,7 @@ class PeerLink:
         hello: NodeHello,
         hub_url: str,
         outbox: Outbox,
+        relay: LinkRelay,
         connect: Callable[[], LinkConnection],
         now: Callable[[], float],
         log: Callable[[str], None],
@@ -90,6 +102,7 @@ class PeerLink:
         self.search_timeout_s = search_timeout_s
         self.hub_url = hub_url
         self.outbox = outbox
+        self._relay = relay
         self._connect = connect
         self._now = now
         self._log = log
@@ -186,6 +199,8 @@ class PeerLink:
             self._connected_since = None
             self._last_error = error
             waiters, self._waiters = self._waiters, {}
+        # Outside the lock: the relay sends through this link from other threads too.
+        self._relay.link_down()
         for waiter in waiters.values():
             waiter.error = f"the hub link closed: {error}"
             waiter.done.set()
@@ -193,8 +208,20 @@ class PeerLink:
             self._log(f"Hub link to {self.hub_label} lost: {error}; redialling")
         return was_up
 
+    def send_frame(self, frame: dict[str, Any]) -> None:
+        """Send one frame on the current connection; raises LinkClosed when there is none."""
+        with self._lock:
+            if self._conn is None or not self._welcomed:
+                raise LinkClosed("not connected to the hub")
+            self._conn.send(frame)
+
     def on_frame(self, frame: dict[str, Any]) -> None:
         kind = frame.get("type")
+        if kind in {"channel_open", "channel_close", "read"}:
+            with self._lock:
+                self._last_contact = self._now()
+            self._relay.on_frame(frame)
+            return
         with self._lock:
             self._last_contact = self._now()
             if kind == "welcome":
@@ -221,6 +248,8 @@ class PeerLink:
                 self._last_error = str(frame.get("detail") or "refused by the hub")
                 self._log(f"Hub {self.host} refused the link: {self._last_error}")
                 raise LinkClosed(self._last_error)
+        if kind == "welcome":
+            self._relay.link_up(self.send_frame)
         if kind == "response":
             waiter = self._waiters.pop(str(frame.get("id")), None)
             if waiter is not None:

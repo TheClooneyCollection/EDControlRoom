@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 from uuid import uuid4
 
 from edap.control_room.protocol.events import AnnouncementEvent
 from edap.control_room.protocol.sink import ControlRoomEventSink
 from edap.control_room.protocol import ActivityLogEntry
+from edap.control_room.server.messages import protocol_message
 from edap.control_room.server.state import ControlRoomServerState
 
 
@@ -36,6 +37,8 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
         self._queue_size = queue_size
         self._sessions: dict[str, ObserverSession] = {}
         self._active_operator_session_id: str | None = None
+        # Callbacks that get every broadcast as a protocol message: a peer streams them to hub pages.
+        self._listeners: dict[str, Callable[[dict[str, Any]], None]] = {}
         self._server_state = server_state or ControlRoomServerState()
 
     def register_observer(self, client_name: str) -> ObserverSession:
@@ -62,6 +65,16 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
                     replacement,
                     reason="active_operator_disconnected",
                 )
+
+    def add_listener(self, deliver: Callable[[dict[str, Any]], None]) -> Callable[[], None]:
+        """Call `deliver` with every broadcast, on the publishing thread; returns the remover."""
+        listener_id = uuid4().hex
+        self._listeners[listener_id] = deliver
+
+        def remove() -> None:
+            self._listeners.pop(listener_id, None)
+
+        return remove
 
     def connected_clients(self) -> list[ConnectedClient]:
         return [
@@ -122,6 +135,10 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
     def _broadcast(self, message: dict[str, Any]) -> None:
         for session in list(self._sessions.values()):
             self._queue_message(session, message)
+        if self._listeners:
+            framed = message if "schema" in message else protocol_message(message["message_type"], message["payload"])
+            for deliver in list(self._listeners.values()):
+                deliver(framed)
 
     def _broadcast_active_operator_changed(
         self,

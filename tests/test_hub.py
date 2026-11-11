@@ -32,6 +32,7 @@ from edap.hub.history import CentralHistory, HubRuns
 from edap.hub.nodes import BadItem, HubLinkSession, HubSide, NodeRegistry, store_link_item
 from edap.hub.outbox import Outbox
 from edap.hub.peer import NodeHello, PeerLink, load_node_id, peer_link_url
+from edap.hub.relay import HubRelay
 from edap.hub.protocol import (
     REQUEST_EDDN_STATUS, HubUnreachable, LinkClosed, LinkReply, decode_update, encode_update,
 )
@@ -108,9 +109,8 @@ def ship_data(system: str = "Sol", cargo_capacity: int = 784) -> object:
 
 def server(**options: object):
     options.setdefault("data_provider", ship_data)
-    return build_observer_server_app(
-        command_handler=None, broker=InMemoryObserverSessionBroker(), auth=SharedAccessTokenAuth(TOKEN), **options
-    )
+    options.setdefault("broker", InMemoryObserverSessionBroker())
+    return build_observer_server_app(command_handler=None, auth=SharedAccessTokenAuth(TOKEN), **options)
 
 
 def roundtrip(frame: Any) -> Any:
@@ -118,12 +118,25 @@ def roundtrip(frame: Any) -> Any:
     return json.loads(json.dumps(frame))
 
 
+class QuietRelay:
+    """A peer relay for tests that do not look at hub pages."""
+
+    def link_up(self, send: Callable[[dict[str, Any]], None]) -> None:
+        pass
+
+    def link_down(self) -> None:
+        pass
+
+    def on_frame(self, frame: dict[str, Any]) -> None:
+        pass
+
+
 class Loopback:
     """An in-memory link: the hub session answers inside `send`, straight into the peer."""
 
-    def __init__(self, session: HubLinkSession, peer: PeerLink) -> None:
-        self.session = session
+    def __init__(self, peer: PeerLink) -> None:
         self.peer = peer
+        self.session: HubLinkSession
         self.sent: list[dict[str, Any]] = []
         self.up = True
         self.closed = False
@@ -136,6 +149,12 @@ class Loopback:
         self.sent.append(roundtrip(frame))
         for reply in self.session.receive(roundtrip(frame)):
             self.peer.on_frame(roundtrip(reply))
+
+    def down(self, frame: dict[str, Any]) -> None:
+        """The hub sends a frame of its own (a relay frame) down to the peer."""
+        if not self.up:
+            raise LinkClosed("cable pulled")
+        self.peer.on_frame(roundtrip(frame))
 
     def receive(self, timeout_s: float) -> dict[str, Any] | None:
         if self.incoming:
@@ -150,7 +169,7 @@ class Rig:
     """A hub (registry, store, link session) and a peer, joined by `Loopback` links."""
 
     def __init__(self, *, handlers: dict[str, Callable[[Any], LinkReply]] | None = None,
-                 store_item: Callable[[NodeHello, str, Any], None] | None = None) -> None:
+                 store_item: Callable[[NodeHello, str, Any], None] | None = None, peer_relay: Any = None) -> None:
         self.clock = FakeClock()
         self.store = memory_store()
         self.hub_logs: list[str] = []
@@ -164,15 +183,17 @@ class Rig:
         self.store_item = store_item or store_link_item(self.store, self.hub_runs, self.hub_logs.append)
         self.handlers = handlers or {}
         self.outbox = memory_outbox()
-        self.peer = PeerLink(hello=PEER_NODE, hub_url=HUB_URL, outbox=self.outbox, connect=self.connect,
+        self.relay = HubRelay(log=self.hub_logs.append, read_timeout_s=10.0, slow_read_timeout_s=60.0)
+        self.peer = PeerLink(hello=PEER_NODE, hub_url=HUB_URL, outbox=self.outbox,
+                             relay=peer_relay or QuietRelay(), connect=self.connect,
                              now=self.clock, log=self.peer_logs.append, heartbeat_s=30.0,
                              request_timeout_s=10.0, search_timeout_s=180.0)
         self.links: list[Loopback] = []
 
     def connect(self) -> Loopback:
-        session = HubLinkSession(registry=self.registry, store_item=self.store_item, handlers=self.handlers,
-                                 log=self.hub_logs.append)
-        link = Loopback(session, self.peer)
+        link = Loopback(self.peer)
+        link.session = HubLinkSession(registry=self.registry, store_item=self.store_item, handlers=self.handlers,
+                                      relay=self.relay, send=link.down, log=self.hub_logs.append)
         self.links.append(link)
         return link
 
@@ -519,7 +540,8 @@ class LinkedServerTests(unittest.TestCase):
         save_recent_markets(self.recent, (market(market_id=GALILEO.market_id), market(market_id=2, station="Abraham")))
         self.r = rig(self)
         self.hub_app = server(market_database_file=self.database, hub_side=HubSide(self.r.registry, self.r.store_item,
-                                                                                    HUB_TOKEN, self.r.history),
+                                                                                    HUB_TOKEN, self.r.history,
+                                                                                    self.r.relay),
                               eddn_status=lambda: {"store": {"markets": 3}}, ardent_lookup=None)
         self.r.handlers.update(self.hub_app.state.link_handlers)
 
