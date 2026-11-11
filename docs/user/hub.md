@@ -49,7 +49,17 @@ Restart the peer. Its log says `Hub: searches and market pushes go to ...`. The 
 
 Peers usually leave `[eddn]` off: the hub listens to EDDN for everyone. `[eddn]` stays independent, so a peer that turns it on keeps a local EDDN listener, but its own visited markets still go only to the hub.
 
-Optional settings: `timeout_s` (default 10 s, routes and market pushes) and `search_timeout_s` (default 180 s, Inara searches).
+Optional settings: `timeout_s` (default 10 s, routes, market pushes and heartbeats), `search_timeout_s` (default 180 s, Inara searches) and `heartbeat_s` (default 30 s between reachability checks).
+
+## Is the peer connected?
+
+The startup line `Hub: searches and market pushes go to ...` only repeats the config. To see whether the hub actually answers:
+
+- **Log**: the peer pings the hub at start and every `heartbeat_s`, and logs only when that changes: `Hub <host> reachable (12 ms)` or `Hub <host> unreachable: <reason>`. A wrong `[hub].token` shows as `unreachable: HTTP 401: authentication required`.
+- **Sidebar chip**: every page with a sidebar shows `Hub <host>` on a peer: green when reachable, red when not, grey before the first check. Hover it (long-press on a phone) for the last good contact, the last market push and whether a resend of recent markets is pending. Pages on a server without `[hub]` show no chip.
+- **API**: `GET /api/hub-status` (see below).
+
+A successful market push also counts as contact, so the chip can turn green before the next heartbeat.
 
 ## Pages on a peer
 
@@ -72,4 +82,7 @@ Optional settings: `timeout_s` (default 10 s, routes and market pushes) and `sea
 - `GET /api/eddn-routes`: `system`, `capacity` and `laden_jump_range_ly` (and the other filters) override the hub's own ship and settings.
 - `POST /api/markets`: `{"markets": [<recent markets entry>, ...]}`, the shape of `.control_room_recent_markets.json`. Returns `{"results": [{"station", "system", "timestamp", "written"}]}`; 400 for a bad body, 503 when the hub has no EDDN database.
 
-All take the hub's token like every other `/api/*` call.
+- `GET /api/hub-ping`: `{"status": "ok"}`; what a peer's heartbeat asks for.
+- `GET /api/hub-status`: on any server. `{"configured": false}` without `[hub]`; otherwise `host`, `url`, `heartbeat_s`, `reachable` (`null` before the first check), `checked_at`, `last_ok_at`, `last_error`, `latency_ms`, `last_push` (`at`, `stations`, `written`, `kept`, `error`) and `resend_pending`. Times are ISO UTC. Takes the peer's own token.
+
+All take the server's token like every other `/api/*` call: the hub's token for the hub endpoints.

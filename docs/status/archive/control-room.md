@@ -4,6 +4,10 @@ Prepend displaced older status blocks from `docs/status/control-room.md` here.
 
 Legacy pre-split global status history remains in `../../status-archive.md`.
 
+## Archived 2026-11-11 (hub heartbeat)
+
+- Hub mode (`docs/user/hub.md`, since 2026-11-11, not yet tried live): with `[hub] url`/`token` set (`defaults/hub.toml`, empty = local), the server forwards `/api/eddn-routes` (ship and `haul_search.toml` inputs resolved locally by `resolve_route_params`), `/api/eddn-status` and the Inara haul search (websocket and `POST /api/haul-search`) to the hub, tagging answers `hub: <host>` (pages show `via hub`), 502 / `hub_unreachable` when it is down. Its visited markets go only to the hub (`HubMarketPusher`, thread `hub-markets`, `POST /api/markets`, newest wins; all recent markets at start and after a failed push, retried on the next market, not on a timer). Any server takes `POST /api/haul-search` and, with `[eddn]` on, `POST /api/markets` (503 without). Transport is `edap.hub.httpx_transport`, injected for tests. Commodity display names for `/routes` Copy still come from the hub's own recent markets.
+
 ## Archived 2026-11-11 (hub mode)
 
 - Market panel lock semantics are aligned across embedded and `connect`: `market lock` pins the displayed panel to the current market identity, same-market updates still render, and different-market data is held back until unlock.
