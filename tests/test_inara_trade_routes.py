@@ -6,6 +6,7 @@ from edap.inara.trade_routes import (
     _extract_key_value_pairs,
     _emit_debug,
     _row_to_route,
+    build_trade_route_query_params,
     build_trade_routes_url,
     parse_trade_routes_url,
 )
@@ -18,6 +19,14 @@ class InaraTradeRoutesTests(unittest.TestCase):
         self.assertIn("ps1=Praea+Euq+AK-A+d25", url)
         self.assertIn("pi10=460", url)
         self.assertIn("pi2=500", url)
+
+    def test_build_trade_route_query_params_rounds_route_distance_up(self) -> None:
+        cases = {"17.2": "18", "18": "18", "18.0": "18", "17.05": "18", "": "", "far": "far"}
+        for value, expected in cases.items():
+            with self.subTest(value=value):
+                params = build_trade_route_query_params({"max_route_distance_ly": value})
+
+                self.assertEqual(params["pi2"], expected)
 
     def test_build_trade_routes_url_maps_any_station_distance_to_inara_zero(self) -> None:
         url = build_trade_routes_url(

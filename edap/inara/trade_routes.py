@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, UTC
+import math
 import re
 import urllib.parse
 from pathlib import Path
@@ -163,6 +164,17 @@ def _normalize_max_station_distance_ls(value: str) -> str:
     return value.strip()
 
 
+def _ceil_route_distance_ly(value: str) -> str:
+    # Inara truncates `pi2` to an integer, so 17.2 Ly would drop a 17.05 Ly route.
+    try:
+        distance = float(value)
+    except ValueError:
+        return value
+    if not math.isfinite(distance):
+        return value
+    return str(math.ceil(distance))
+
+
 def _clean_search_params(params: Mapping[str, str] | None) -> dict[str, str]:
     cleaned = trade_route_search_defaults()
     if params is None:
@@ -182,7 +194,7 @@ def build_trade_route_query_params(search_params: Mapping[str, str] | None = Non
     params = _clean_search_params(search_params)
     query_params = dict(DEFAULT_TRADE_ROUTE_QUERY_PARAMS)
     query_params["pi10"] = params["cargo_capacity"]
-    query_params["pi2"] = params["max_route_distance_ly"]
+    query_params["pi2"] = _ceil_route_distance_ly(params["max_route_distance_ly"])
     query_params["pi5"] = params["max_price_age_hours"]
     query_params["pi3"] = _LANDING_PAD_TO_QUERY.get(params["min_landing_pad"], "3")
     query_params["pi9"] = params["max_station_distance_ls"]
