@@ -1,24 +1,24 @@
 # EDControlRoom
 
-## ⚠️ This violates the Elite Dangerous Terms of Use
-
-Frontier defines automation as more than one action in game per button press, and does not permit it. ([source](https://forums.frontier.co.uk/threads/does-anyone-has-experience-using-tools-called-fleet-carrier-macros.604481/))
-
-This tool is well past that line. **Do not run it on an account you'd mind losing.** No warranty, no assurance of account safety.
-
 [![Tests](https://github.com/TheClooneyCollection/EDControlRoom/actions/workflows/tests.yml/badge.svg)](https://github.com/TheClooneyCollection/EDControlRoom/actions/workflows/tests.yml)
 [![Discord](https://img.shields.io/badge/Discord-join%20chat-5865F2?logo=discord&logoColor=white)](https://discord.gg/73YSUBhfRG)
 
-Multiplatform Elite Dangerous command-and-routine tooling. It handles the repetitive station-side loop of trading and hauling so the commander can stay focused on the parts that still benefit from human attention. It is **not** a hands-off flight bot.
+A control room for Elite Dangerous traders and haulers, on any device on your LAN.
+
+- **Market intelligence built in.** A local EDDN listener keeps live prices for the whole bubble in your own database, and every market you open in game goes into it too. `/routes` ranks round trips by profit per hour, near you or galaxy-wide. `/markets` compares any two recent markets for your hold, with profit per ton, per trip and per hour from a trip time model (station facts from your journals, EDDN and Ardent), next to the profit per hour you actually measured on that pair. Inara haul search is one click away.
+- **Every machine in one place.** Run a hub and peers: one browser tab shows and drives whichever machine is playing, with one market database and one haul history.
+- **Your history and callouts.** Every haul run is saved, with profit per hour by route, commodity and ship. TTS callouts (system voice or Piper) speak on the game machine, the hub or a phone.
+- **Assisted haul loops, if you want them.** The two-way haul routine runs the station-side cycle for you (see [below](#assisted-haul-loop), including what it means for the Terms of Use).
 
 Live-validated on **macOS** (Elite through CrossOver), **Windows** (community-validated) and the **Steam Deck** (Elite under Proton, Desktop and Game Mode).
 
 ## Contents
 
-- [The Idea](#the-idea)
+- [Assisted Haul Loop](#assisted-haul-loop)
 - [Screenshots](#screenshots)
 - [What You Get](#what-you-get)
 - [Quick Start](#quick-start)
+- [Hub: Several Machines](#hub-several-machines)
 - [Steam Deck](#steam-deck)
 - [Piper Voice](#piper-voice)
 - [Documentation](#documentation)
@@ -27,17 +27,22 @@ Live-validated on **macOS** (Elite through CrossOver), **Windows** (community-va
 - [Contributing](#contributing)
 - [License](#license)
 
-## The Idea
+## Assisted Haul Loop
 
-A co-pilot, not an autopilot. You stay focused on flying; EDControlRoom takes over anything that lives behind a game menu.
+A co-pilot, not an autopilot. You fly the jumps; the routine takes over the part that lives behind station menus.
 
-The flagship is the **two-way haul routine**. When your ship drops near a station, it handles the boring bits end to end: request docking, work through station services, sell, refuel and repair, buy the return cargo, set the next-leg route, undock, clear mass lock, and prime the FSD. When the drive is primed it uses TTS to call the commander by title or name and announce the ship is ready to jump — that is your cue to take over for alignment and the next jump.
+When your ship drops near a station, the **two-way haul routine** handles the station cycle end to end: request docking, work through station services, sell, refuel and repair, buy the return cargo, set the next-leg route, undock, clear mass lock, and prime the FSD. When the drive is primed it calls the commander by title or name and announces the ship is ready to jump. That is your cue to take over for alignment and the next jump.
 
-That makes it a direct fit for high-volume A↔B cargo work like community goal loops or long chill hauls, where the station-to-station cycle is the part worth automating and human attention is better spent on flying.
+It fits high-volume A↔B cargo work like community goal loops or long chill hauls, where the station cycle is the repetitive part and your attention is better spent flying. Pick the pair from `/routes`, `/markets` Best deal or an Inara search, and **Open in haul**.
 
-**See it in action:** [live stream demo — co-pilot handling a station cycle](https://www.youtube.com/live/YKbz7xtc22Q?t=6014s)
+> [!WARNING]
+> **Routines that press keys for you break the Elite Dangerous Terms of Use.** Frontier counts more than one in-game action per button press as automation and does not permit it ([source](https://forums.frontier.co.uk/threads/does-anyone-has-experience-using-tools-called-fleet-carrier-macros.604481/)). The haul loops are well past that line, and so is every other button or command that drives the ship: the one-tap routines on `/controls`, Set destination, Travel assist, the `/travel` route runner and `dock` / `undock` / `jump`. **Do not run them on an account you'd mind losing.** No warranty, no assurance of account safety.
+>
+> Everything else reads your journal files and public market data and sends nothing to the game: markets, routes, Best deal, haul history, the hub and voice callouts.
 
-<a href="https://www.youtube.com/live/YKbz7xtc22Q?t=6014s"><img src="docs/assets/haul-vr.png" alt="Hauling in VR with EDControlRoom's help — click to watch on YouTube" width="50%"></a>
+**See it in action:** [live stream demo: the co-pilot handling a station cycle](https://www.youtube.com/live/YKbz7xtc22Q?t=6014s)
+
+<a href="https://www.youtube.com/live/YKbz7xtc22Q?t=6014s"><img src="docs/assets/haul-vr.png" alt="Hauling in VR with EDControlRoom's help, click to watch on YouTube" width="50%"></a>
 
 ## Screenshots
 
@@ -56,7 +61,7 @@ That makes it a direct fit for high-volume A↔B cargo work like community goal 
 
 ## What You Get
 
-A terminal Control Room with TTS callouts, a LAN web frontend (two-way haul, haul search, markets, EDDN trade routes, one-tap controls, Spansh travel), haul history, and journal-driven `dock`, `undock`, `jump`, `buy`, `sell`, `dest`, `home`.
+A LAN web frontend (markets and Best deal, EDDN trade routes, haul search, two-way haul, one-tap controls, Spansh travel), a terminal Control Room, haul history, TTS callouts, a multi-machine hub, and journal-driven `dock`, `undock`, `jump`, `buy`, `sell`, `dest`, `home`.
 
 _(Expand a section for details.)_
 
@@ -100,7 +105,7 @@ _(Expand a section for details.)_
 <details>
 <summary><strong>Markets</strong> — the last markets you opened, and the best deal between any two of them.</summary>
 
-- `/markets` lists the last 10 stations whose commodities market you opened, with the full market table for each.
+- `/markets` lists the last 20 stations whose commodities market you opened (`[control_room] recent_markets_limit`), with the full market table for each. On a hub the list holds every machine's markets.
 - **Best deal** compares two of them for your hold: the top 3 commodities each way, ranked by full-hold profit, with profit per ton, per trip and per hour.
 - **Copy route** or **Open in haul** runs the picked round trip as a two-way haul.
 
@@ -128,14 +133,6 @@ _(Expand a section for details.)_
 - Each panel shows `Idle` or `Busy: <routine>`, and routine buttons disable while something runs.
 
 <img src="docs/assets/screenshots/quick-controls.png" alt="Controls page" width="50%">
-</details>
-
-<details>
-<summary><strong>Hub</strong> — one Control Room for every machine you play on.</summary>
-
-- With several machines (a desktop, another PC, a Steam Deck), make one Control Room the hub with `[hub] role`. Its pages show and drive whichever machine is playing.
-- The hub keeps one market database and every machine's haul history. Peers find it on the LAN, send up what they learn, and run the commands it sends down.
-- Setup: [docs/user/hub.md](docs/user/hub.md).
 </details>
 
 <details>
@@ -172,6 +169,19 @@ Both the server and the web page default to token `edcr`, so no `--token` overri
 **Before your first run:** set arrow-key secondaries on `UI_Up / UI_Down / UI_Left / UI_Right` in Elite. See [docs/user/bindings-setup.md](docs/user/bindings-setup.md).
 
 Full walkthrough: [docs/user/getting-started.md](docs/user/getting-started.md).
+
+## Hub: Several Machines
+
+Play on more than one machine (a desktop, a second PC, a Steam Deck)? Make one the **hub** and the others **peers**:
+
+```sh
+uv run python3 control_room.py hub    # on the hub
+uv run python3 control_room.py peer   # on every other machine
+```
+
+Peers find the hub on the LAN, keep a link open to it and send up every market, station fact and finished haul run (queued while the hub is away, so nothing is lost). Open only the hub's pages: pick a machine in the sidebar's node picker to see and drive it, read one market database and one haul history for all of them, and play any machine's callouts on the hub or in your browser, with that machine muted.
+
+Tokens, names, a fixed hub address and the role table: [docs/user/hub.md](docs/user/hub.md).
 
 ## Steam Deck
 
