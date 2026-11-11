@@ -4,6 +4,10 @@ Prepend displaced older status blocks from `docs/status/control-room.md` here.
 
 Legacy pre-split global status history remains in `../../status-archive.md`.
 
+## Archived 2026-11-11 (peer link, plan 0015 step 2)
+
+- Hub mode (`docs/user/hub.md`, tried live between two LAN machines on 2026-11-11): HTTP forwarding of `/api/eddn-routes`, `/api/eddn-status` and the Inara haul search to the hub, `HubMarketPusher` (`POST /api/markets`), `hub-heartbeat` pinging `GET /api/hub-ping`, `edap.hub.HubStatus` behind `/api/hub-status` and the Hub chip, `edap.hub.httpx_transport`. Replaced by the plan 0015 peer link.
+
 ## Archived 2026-11-11 (hub roles, plan 0015 step 1)
 
 - Remote observer clients can start without a local Elite journal path and reconnect with exponential backoff; websocket recovery relies on server hydrate messages, while client shutdown state stays local, priority `Ctrl-C`/`Ctrl-D` bindings avoid command-input collisions, and remote-active `Ctrl-D` opens the detach prompt then exits the client on the next press without cancelling the server routine.
