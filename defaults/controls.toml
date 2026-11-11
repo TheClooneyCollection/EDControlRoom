@@ -45,18 +45,9 @@ sell_quantity_restore_taps = 5
 sell_quantity_restore_tap_delay_seconds = 0.05
 critical_level_multiplier = 10.0
 
+# One flat hold for every amount: holding longer than needed only wastes time, and haul tops up a
+# buy that comes up short (buy_top_up_max_attempts).
 [[controls.market.buy_hold_segments]]
 start = 0
 function = "flat"
-hold_seconds = 3.0
-
-[[controls.market.buy_hold_segments]]
-start = 100
-function = "flat"
-hold_seconds = 5.0
-
-[[controls.market.buy_hold_segments]]
-start = 301
-function = "log"
-base_seconds = -12.5627
-multiplier = 3.0756
+hold_seconds = 3.5
