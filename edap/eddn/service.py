@@ -11,6 +11,7 @@ from edap.config import EddnConfig
 from edap.eddn.game_markets import import_game_markets, import_summary
 from edap.eddn.listener import EddnListener, EddnListenerStats, EddnSocket
 from edap.eddn.store import EddnStore, EddnStoreCounts
+from edap.hub import watch_recent_markets
 
 
 def status_line(stats: EddnListenerStats, counts: EddnStoreCounts) -> str:
@@ -48,21 +49,14 @@ class EddnService:
 
     def import_game_markets_every(self, recent_markets_file: Path, interval_s: float, log: Callable[[str], None]) -> None:
         """Write our own Market.json captures into the store, at start and whenever the Control Room records one."""
-
-        def watch() -> None:
-            last_mtime: float | None = None
-            while True:
-                try:
-                    mtime = recent_markets_file.stat().st_mtime
-                except OSError:
-                    mtime = None
-                if mtime is not None and mtime != last_mtime:
-                    last_mtime = mtime
-                    log(f"EDDN {import_summary(import_game_markets(self.store, recent_markets_file))}")
-                if self._stop_status.wait(interval_s):
-                    return
-
-        threading.Thread(target=watch, name="eddn-game-markets", daemon=True).start()
+        watch_recent_markets(
+            recent_markets_file,
+            interval_s,
+            lambda path: log(f"EDDN {import_summary(import_game_markets(self.store, path))}"),
+            stop=self._stop_status,
+            log=log,
+            name="eddn-game-markets",
+        )
 
     def close(self) -> None:
         self._stop_status.set()

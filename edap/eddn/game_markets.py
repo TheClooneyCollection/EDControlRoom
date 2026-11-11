@@ -6,7 +6,7 @@ from pathlib import Path
 
 from edap.eddn.messages import market_snapshot_from_game
 from edap.eddn.store import EddnStore
-from edap.recent_markets import load_recent_markets
+from edap.recent_markets import MarketSnapshot, load_recent_markets
 
 
 @dataclass(frozen=True)
@@ -24,8 +24,13 @@ def import_game_markets(store: EddnStore, recent_markets_file: Path) -> list[Gam
     A newer snapshot replaces the station's whole price list, as an EDDN message does, so stale rows
     cannot ride along under a fresh timestamp.
     """
+    return import_markets(store, load_recent_markets(recent_markets_file))
+
+
+def import_markets(store: EddnStore, markets: tuple[MarketSnapshot, ...]) -> list[GameMarketImport]:
+    """Write captured markets, from our own file or pushed by a peer Control Room, then commit."""
     results = []
-    for game in load_recent_markets(recent_markets_file):
+    for game in markets:
         snapshot = market_snapshot_from_game(game)
         if snapshot is not None:
             results.append(GameMarketImport(game.station, game.system, game.timestamp, store.apply(snapshot)))

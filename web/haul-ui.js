@@ -1139,7 +1139,7 @@ let routes = [];
           renderRows();
           renderSelected();
           persistSelectedRoute(routeByIndex(selectedRouteIndex));
-          setResultCount(`Found ${result.route_count || 0} ${searchScopeLabel()}`);
+          setResultCount(`Found ${result.route_count || 0} ${searchScopeLabel()}${result.hub ? ` via hub ${result.hub}` : ""}`);
           setInaraSearchLink(result.query_url || "");
           appendActivity(`Route search returned ${result.route_count || 0} result(s).`, "Search", "success");
         })

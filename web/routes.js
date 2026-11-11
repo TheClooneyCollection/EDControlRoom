@@ -123,13 +123,13 @@ async function refreshStatus() {
   try {
     const status = await fetchJson("/api/eddn-status");
     if (!status.enabled) {
-      setText("eddn-label", "off");
-      if (!eddnOffLogged) appendLog("EDDN is off: set [eddn] enabled = true in config.toml and restart the server.");
+      setText("eddn-label", status.hub ? `off on hub ${status.hub}` : "off");
+      if (!eddnOffLogged) appendLog(`EDDN is off${status.hub ? ` on hub ${status.hub}` : ""}: set [eddn] enabled = true in its config.toml and restart the server.`);
       eddnOffLogged = true;
       return;
     }
     const state = status.listener.connected ? "live" : "disconnected";
-    setText("eddn-label", `${state}, ${count(status.store.markets)} markets`);
+    setText("eddn-label", `${state}, ${count(status.store.markets)} markets${status.hub ? ` (hub ${status.hub})` : ""}`);
     appendLog(statusLogLine(status.listener, status.store));
     lastListener = status.listener;
   } catch (error) {
@@ -162,7 +162,8 @@ function renderRoutes(payload) {
   const query = payload.query;
   const reach = range.jumps ? `${query.jumps} jumps (${query.max_route_ly.toFixed(1)} Ly)` : `${query.max_route_ly} Ly`;
   const where = query.view === "near" ? `near ${query.system}` : "anywhere";
-  setText("routes-status", `${payload.routes.length} routes ${where}, ${reach}, from ${count(payload.markets_considered)} markets`);
+  const source = payload.hub ? ` via hub ${payload.hub}` : "";
+  setText("routes-status", `${payload.routes.length} routes ${where}, ${reach}, from ${count(payload.markets_considered)} markets${source}`);
   if (!payload.routes.length) {
     table.innerHTML = `<p class="empty-note">No profitable round trips match these filters.</p>`;
     return;

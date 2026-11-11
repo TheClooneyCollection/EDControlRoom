@@ -112,39 +112,41 @@ def load_recent_markets(path: Path) -> tuple[MarketSnapshot, ...]:
     markets = payload.get("markets") if isinstance(payload, dict) else None
     if not isinstance(markets, list):
         return ()
-    snapshots = []
-    for entry in markets:
-        if not isinstance(entry, dict):
-            continue
-        snapshot = snapshot_from_market_json(
-            {
-                "MarketID": entry.get("market_id"),
-                "StationName": entry.get("station"),
-                "StarSystem": entry.get("system"),
-                "StationType": entry.get("station_type"),
-                "timestamp": entry.get("timestamp"),
-                "Items": entry.get("items"),
-            }
-        )
-        if snapshot is not None:
-            snapshots.append(snapshot)
-    return tuple(snapshots)
+    snapshots = [snapshot_from_entry(entry) for entry in markets]
+    return tuple(snapshot for snapshot in snapshots if snapshot is not None)
+
+
+def snapshot_from_entry(entry: object) -> MarketSnapshot | None:
+    """One stored entry (the shape `snapshot_entry` writes); None when it is not one."""
+    if not isinstance(entry, dict):
+        return None
+    return snapshot_from_market_json(
+        {
+            "MarketID": entry.get("market_id"),
+            "StationName": entry.get("station"),
+            "StarSystem": entry.get("system"),
+            "StationType": entry.get("station_type"),
+            "timestamp": entry.get("timestamp"),
+            "Items": entry.get("items"),
+        }
+    )
+
+
+def snapshot_entry(snapshot: MarketSnapshot) -> dict[str, Any]:
+    return {
+        "market_id": snapshot.market_id,
+        "station": snapshot.station,
+        "system": snapshot.system,
+        "station_type": snapshot.station_type,
+        "timestamp": snapshot.timestamp,
+        "items": list(snapshot.items),
+    }
 
 
 def save_recent_markets(path: Path, snapshots: tuple[MarketSnapshot, ...]) -> None:
     payload = {
         "schema": _SCHEMA,
-        "markets": [
-            {
-                "market_id": s.market_id,
-                "station": s.station,
-                "system": s.system,
-                "station_type": s.station_type,
-                "timestamp": s.timestamp,
-                "items": list(s.items),
-            }
-            for s in snapshots
-        ],
+        "markets": [snapshot_entry(snapshot) for snapshot in snapshots],
     }
     directory = path.parent if str(path.parent) else Path(".")
     directory.mkdir(parents=True, exist_ok=True)

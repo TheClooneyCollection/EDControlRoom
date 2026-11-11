@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import threading
 import time
 
 import uvicorn
@@ -17,8 +18,10 @@ from edap.control_room.server.sink import (
     FanoutControlRoomEventSink,
     ServerActivityLogSink,
 )
+from edap.eddn.game_markets import import_markets
 from edap.eddn.listener import open_zmq_socket
 from edap.eddn.service import EddnService, start_eddn_service
+from edap.hub import HubClient, HubMarketPusher, httpx_transport, watch_recent_markets
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.tts import NullSpeechBackend, build_speech_backend
 
@@ -96,8 +99,21 @@ def serve_observer_mode(
             log=eddn_logger.info,
         )
         eddn_logger.info("EDDN listener started: %s -> %s", eddn_config.relay, eddn_config.database_file)
-        # Recent markets are recorded by the Control Room whenever Market.json changes.
-        eddn.import_game_markets_every(loaded.config.control_room.recent_markets_file, 5.0, eddn_logger.info)
+    recent_markets_file = loaded.config.control_room.recent_markets_file
+    hub_config = loaded.config.hub
+    hub = HubClient(hub_config, httpx_transport) if hub_config.enabled else None
+    stop_hub_push = threading.Event()
+    # Recent markets are recorded by the Control Room whenever Market.json changes; with a hub
+    # they go only to the hub's DB.
+    if hub is not None:
+        hub_logger = logging.getLogger("edap.hub")
+        hub_logger.info("Hub: searches and market pushes go to %s", hub_config.url)
+        pusher = HubMarketPusher(client=hub, log=hub_logger.info)
+        watch_recent_markets(
+            recent_markets_file, 5.0, pusher.push_changes, stop=stop_hub_push, log=hub_logger.warning, name="hub-markets"
+        )
+    elif eddn is not None:
+        eddn.import_game_markets_every(recent_markets_file, 5.0, logging.getLogger("edap.eddn").info)
     broker.server_state.set_selected_trade_route(runtime_host._saved_state.selected_trade_route)
     broker.server_state.set_running_trade_route(runtime_host._saved_state.running_trade_route)
     app = build_observer_server_app(
@@ -108,15 +124,18 @@ def serve_observer_mode(
         web_default_access_token=web_default_access_token,
         journal_dir=journal_dir,
         haul_runs_file=loaded.config.control_room.haul_runs_file,
-        recent_markets_file=loaded.config.control_room.recent_markets_file,
+        recent_markets_file=recent_markets_file,
         eddn_status=eddn.status if eddn is not None else None,
         eddn_database_file=eddn_config.database_file if eddn is not None else None,
+        import_markets=(lambda markets: import_markets(eddn.store, markets)) if eddn is not None else None,
+        hub=hub,
         route_compare_navroute_wait_seconds=loaded.config.control_room.route_compare_navroute_wait_seconds,
         route_compare_compare_retry_attempts=loaded.config.control_room.route_compare_compare_retry_attempts,
     )
     try:
         uvicorn.run(app, host=host, port=port, log_level="info")
     finally:
+        stop_hub_push.set()
         if eddn is not None:
             eddn.close()
         runtime_host.close()

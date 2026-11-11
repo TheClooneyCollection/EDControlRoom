@@ -27,17 +27,47 @@ class RouteQuery:
     limit: int
 
 
+# Query parameters and their `haul_search.toml` fallback, where the names differ.
+_ROUTE_PARAM_DEFAULT_KEYS = {
+    "laden_jump_range_ly": "max_route_distance_ly",
+    "pad": "min_landing_pad",
+    "surface": "use_surface_stations",
+    "max_age_hours": "max_price_age_hours",
+}
+_ROUTE_PARAMS = (
+    "view", "system", "jumps", "laden_jump_range_ly", "max_route_ly", "radius_ly", "capacity", "pad", "surface",
+    "carriers", "max_station_distance_ls", "min_supply", "max_age_hours", "limit",
+)
+
+
+def _param(params: Mapping[str, str], search_defaults: Mapping[str, str], key: str) -> str:
+    raw = (params.get(key) or "").strip()
+    return raw or (search_defaults.get(_ROUTE_PARAM_DEFAULT_KEYS.get(key, key)) or "").strip()
+
+
+def resolve_route_params(
+    params: Mapping[str, str], *, search_defaults: Mapping[str, str], current_system: str, cargo_capacity: int
+) -> dict[str, str]:
+    """Fill blank parameters from `haul_search.toml` and the current ship, as `parse_route_query` would.
+
+    A peer sends these to its hub, so the hub answers for the peer's ship and search settings.
+    """
+    resolved = {key: _param(params, search_defaults, key) for key in _ROUTE_PARAMS}
+    resolved["system"] = resolved["system"] or current_system
+    resolved["capacity"] = resolved["capacity"] or (str(cargo_capacity) if cargo_capacity else "")
+    return {key: value for key, value in resolved.items() if value}
+
+
 def parse_route_query(
     params: Mapping[str, str], *, search_defaults: Mapping[str, str], current_system: str, cargo_capacity: int
 ) -> RouteQuery:
     """Build a query; missing parameters fall back to `haul_search.toml` and the current ship."""
 
-    def value(key: str, default_key: str | None = None) -> str:
-        raw = (params.get(key) or "").strip()
-        return raw or (search_defaults.get(default_key or key) or "").strip()
+    def value(key: str) -> str:
+        return _param(params, search_defaults, key)
 
-    def number(key: str, fallback: float, default_key: str | None = None) -> float:
-        raw = value(key, default_key)
+    def number(key: str, fallback: float) -> float:
+        raw = value(key)
         if not raw or raw.lower() == "any":
             return fallback
         parsed = float(raw)
@@ -48,14 +78,14 @@ def parse_route_query(
     view = value("view") or "near"
     if view not in {"near", "global"}:
         raise ValueError("view must be near or global")
-    laden = number("laden_jump_range_ly", DEFAULT_LADEN_JUMP_RANGE_LY, "max_route_distance_ly")
+    laden = number("laden_jump_range_ly", DEFAULT_LADEN_JUMP_RANGE_LY)
     if laden <= 0:
         raise ValueError("laden_jump_range_ly must be positive")
     jumps = int(number("jumps", DEFAULT_ROUTE_JUMPS))
     # An explicit ly range (the 100 ly+ presets) overrides the jump count.
     max_route_ly = number("max_route_ly", jumps * laden) or jumps * laden
     max_station_ls = number("max_station_distance_ls", 0.0)
-    pad = value("pad", "min_landing_pad").lower()[:1].upper() or "L"
+    pad = value("pad").lower()[:1].upper() or "L"
     if pad not in {"S", "M", "L"}:
         raise ValueError("pad must be S, M or L")
     return RouteQuery(
@@ -68,13 +98,13 @@ def parse_route_query(
         capacity=int(number("capacity", cargo_capacity)),
         filters=RouteFilters(
             min_pad=pad,
-            include_surface=_include_surface(value("surface", "use_surface_stations")),
+            include_surface=_include_surface(value("surface")),
             include_carriers=_flag(value("carriers")),
             max_station_distance_ls=max_station_ls or None,
             min_supply=int(number("min_supply", 0)),
             max_age_s=(
-                _NO_AGE_LIMIT_S if value("max_age_hours", "max_price_age_hours").lower() == "any"
-                else number("max_age_hours", 48.0, "max_price_age_hours") * 3600 or 48 * 3600
+                _NO_AGE_LIMIT_S if value("max_age_hours").lower() == "any"
+                else number("max_age_hours", 48.0) * 3600 or 48 * 3600
             ),
         ),
         limit=min(200, max(1, int(number("limit", 50)))),

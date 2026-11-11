@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import asdict, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 import json
 import logging
@@ -21,12 +21,14 @@ from starlette.responses import HTMLResponse, JSONResponse, Response
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from edap.eddn.route_query import RouteQueryError, parse_route_query, run_route_query
+from edap.eddn.game_markets import GameMarketImport
+from edap.eddn.route_query import RouteQueryError, parse_route_query, resolve_route_params, run_route_query
 from edap.eddn.routes import TimeModel
 from edap.haul_history import load_runs, parse_window, summarize
 from edap.journal_trade_ledger import journal_trade_ledger
 from edap.market_compare import compare_markets
-from edap.recent_markets import MarketSnapshot, load_recent_markets, market_items
+from edap.hub import HubClient, HubUnreachable, hub_unreachable_detail, with_hub_source
+from edap.recent_markets import MarketSnapshot, load_recent_markets, market_items, snapshot_from_entry
 from edap.platform.local_time import SystemLocalTimezone
 from edap.control_room.server.auth import ObserverServerAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
@@ -180,6 +182,8 @@ def build_observer_server_app(
     recent_markets_file: Path | None = None,
     eddn_status: Callable[[], dict[str, Any]] | None = None,
     eddn_database_file: Path | None = None,
+    import_markets: Callable[[tuple[MarketSnapshot, ...]], list[GameMarketImport]] | None = None,
+    hub: HubClient | None = None,
     route_compare_navroute_wait_seconds: float = 6.0,
     route_compare_compare_retry_attempts: int = 3,
 ) -> Starlette:
@@ -464,6 +468,8 @@ def build_observer_server_app(
         auth_failure = require_http_auth(request)
         if auth_failure is not None:
             return auth_failure
+        if hub is not None:
+            return await forward_to_hub("/api/eddn-status", {})
         if eddn_status is None:
             return JSONResponse({"enabled": False})
         return JSONResponse({"enabled": True, **await asyncio.to_thread(eddn_status)})
@@ -472,20 +478,23 @@ def build_observer_server_app(
         auth_failure = require_http_auth(request)
         if auth_failure is not None:
             return auth_failure
-        if eddn_database_file is None or not eddn_database_file.exists():
-            return JSONResponse({"detail": "EDDN is not enabled or has no data yet"}, status_code=404)
         data = data_provider()
         try:
             search_defaults = await asyncio.to_thread(load_haul_search_config)
         except (OSError, HaulSearchConfigError):
             search_defaults = {}
+        ship_inputs = {
+            "search_defaults": search_defaults,
+            "current_system": getattr(getattr(data, "ship", None), "system", None) or "",
+            "cargo_capacity": _ship_cargo_capacity(data),
+        }
+        if hub is not None:
+            # The hub answers for this ship and this server's search settings, not its own.
+            return await forward_to_hub("/api/eddn-routes", resolve_route_params(request.query_params, **ship_inputs))
+        if eddn_database_file is None or not eddn_database_file.exists():
+            return JSONResponse({"detail": "EDDN is not enabled or has no data yet"}, status_code=404)
         try:
-            query = parse_route_query(
-                request.query_params,
-                search_defaults=search_defaults,
-                current_system=getattr(getattr(data, "ship", None), "system", None) or "",
-                cargo_capacity=_ship_cargo_capacity(data),
-            )
+            query = parse_route_query(request.query_params, **ship_inputs)
         except ValueError as exc:
             return JSONResponse({"detail": str(exc)}, status_code=400)
         def search() -> dict[str, Any]:
@@ -501,6 +510,60 @@ def build_observer_server_app(
         except sqlite3.Error as exc:
             return JSONResponse({"detail": f"Cannot read the EDDN database: {exc}"}, status_code=503)
         return JSONResponse(payload)
+
+    async def forward_to_hub(path: str, params: dict[str, str]) -> JSONResponse:
+        assert hub is not None
+        try:
+            response = await asyncio.to_thread(hub.get, path, params)
+        except HubUnreachable as exc:
+            return JSONResponse({"detail": hub_unreachable_detail(hub.host, exc), "hub": hub.host}, status_code=502)
+        return JSONResponse(with_hub_source(response.payload, hub.host), status_code=response.status_code)
+
+    async def haul_search_endpoint(request: Request) -> JSONResponse:
+        """REST twin of `command.search_haul_routes`, used by peers; it leaves `haul_search.toml` alone."""
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        try:
+            payload = await request.json()
+        except ValueError:
+            return JSONResponse({"detail": "body must be a JSON object", "error_code": "invalid_search"}, status_code=400)
+        if not isinstance(payload, dict):
+            return JSONResponse({"detail": "body must be a JSON object", "error_code": "invalid_search"}, status_code=400)
+        try:
+            search = _haul_search_from_payload(payload, data=data_provider())
+            result = await asyncio.to_thread(_run_haul_search, search, hub=hub)
+        except _HaulSearchError as exc:
+            status_code = 400 if exc.error_code == "invalid_search" else 502
+            return JSONResponse({"detail": exc.message, "error_code": exc.error_code}, status_code=status_code)
+        return JSONResponse({"result": result})
+
+    async def markets_endpoint(request: Request) -> JSONResponse:
+        """Write markets a peer captured into this server's EDDN store, newest timestamp wins."""
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        if import_markets is None:
+            return JSONResponse({"detail": "This Control Room has no EDDN market DB; set [eddn] enabled = true"},
+                                status_code=503)
+        try:
+            body = await request.json()
+        except ValueError:
+            body = None
+        entries = body.get("markets") if isinstance(body, dict) else None
+        if not isinstance(entries, list) or not entries:
+            return JSONResponse({"detail": "body must be {\"markets\": [<recent market entry>, ...]}"}, status_code=400)
+        snapshots = tuple(snapshot_from_entry(entry) for entry in entries)
+        bad = [index for index, snapshot in enumerate(snapshots) if snapshot is None]
+        if bad:
+            return JSONResponse({"detail": f"markets {bad} are not recent market entries"}, status_code=400)
+        try:
+            results = await asyncio.to_thread(import_markets, snapshots)
+        except sqlite3.Error as exc:
+            return JSONResponse({"detail": f"Cannot write the EDDN database: {exc}"}, status_code=503)
+        logger.info("EDDN pushed markets: %s", ", ".join(
+            f"{result.station} {'written' if result.written else 'kept'}" for result in results))
+        return JSONResponse({"results": [asdict(result) for result in results]})
 
     async def spansh_route_endpoint(request: Request) -> JSONResponse:
         auth_failure = require_http_auth(request)
@@ -636,6 +699,7 @@ def build_observer_server_app(
                     broker=broker,
                     data_provider=data_provider,
                     journal_dir=journal_dir,
+                    hub=hub,
                     route_compare_navroute_wait_seconds=route_compare_navroute_wait_seconds,
                     route_compare_compare_retry_attempts=route_compare_compare_retry_attempts,
                 )
@@ -676,6 +740,8 @@ def build_observer_server_app(
             Route("/api/eddn-routes", eddn_routes_endpoint),
             Route("/api/command", command_endpoint, methods=["POST"]),
             Route("/api/stop", stop_endpoint, methods=["POST"]),
+            Route("/api/haul-search", haul_search_endpoint, methods=["POST"]),
+            Route("/api/markets", markets_endpoint, methods=["POST"]),
             Route(HAUL_WEB_ASSET_URL_PATH, haul_web_asset),
             WebSocketRoute("/session", session),
         ]
@@ -946,6 +1012,7 @@ async def _handle_search_haul_routes_message_async(
     *,
     client_role: str,
     data_provider: Callable[[], object] | None,
+    hub: HubClient | None,
 ) -> dict[str, object]:
     message_id_value = message.get("message_id")
     correlation_message_id = message_id_value if isinstance(message_id_value, str) else None
@@ -953,68 +1020,13 @@ async def _handle_search_haul_routes_message_async(
     payload = payload_value if isinstance(payload_value, dict) else {}
     if data_provider is None:
         return _transport_unavailable_error(correlation_message_id)
-    data = data_provider()
-    system_name = _payload_string(payload, "system_name") or _payload_string(payload, "origin")
-    if not system_name:
-        system_name = (getattr(data.ship, "system", "") or "").strip()
-    if not system_name:
-        return _response_error(
-            "invalid_search",
-            "Haul search needs an origin system.",
-            retryable=True,
-            correlation_message_id=correlation_message_id,
-        )
     try:
-        query_params = _haul_search_query_params(payload, data=data)
-    except ValueError as exc:
-        return _response_error(
-            "invalid_search",
-            str(exc),
-            retryable=True,
-            correlation_message_id=correlation_message_id,
-        )
-    await asyncio.to_thread(_save_haul_search_defaults, query_params)
-    destination_filter = (
-        _payload_string(payload, "destination")
-        or _payload_string(payload, "destination_filter")
-        or ""
-    )
-    try:
-        result = await asyncio.to_thread(
-            search_trade_routes,
-            system_name,
-            query_params=query_params,
-        )
-    except Exception as exc:
-        logger.exception("haul search failed (async)")
-        return _response_error(
-            "haul_search_failed",
-            str(exc) or "Failed to search haul routes.",
-            retryable=True,
-            correlation_message_id=correlation_message_id,
-        )
-    routes = list(result.routes)
-    unfiltered_count = len(routes)
-    if destination_filter:
-        routes = [
-            route
-            for route in routes
-            if _route_matches_destination(route, destination_filter)
-        ]
-    return protocol_message(
-        "response.success",
-        {
-            "accepted": True,
-            "message_text": "Haul search complete.",
-            "result": _haul_search_response(
-                result,
-                routes=routes,
-                unfiltered_count=unfiltered_count,
-                use_surface_stations=query_params["use_surface_stations"],
-            ),
-        },
-        correlation_message_id=correlation_message_id,
-    )
+        search = _haul_search_from_payload(payload, data=data_provider())
+        await asyncio.to_thread(_save_haul_search_defaults, search.query_params)
+        result = await asyncio.to_thread(_run_haul_search, search, hub=hub)
+    except _HaulSearchError as exc:
+        return _haul_search_error_response(exc, correlation_message_id)
+    return _haul_search_success_response(result, correlation_message_id)
 
 
 async def _handle_dispatch_route_all_in_one_async(
@@ -1188,6 +1200,83 @@ async def _handle_dispatch_route_all_in_one_async(
     )
 
 
+@dataclass(frozen=True)
+class _HaulSearch:
+    system_name: str
+    query_params: dict[str, str]
+    destination_filter: str
+
+
+class _HaulSearchError(Exception):
+    def __init__(self, error_code: str, message: str) -> None:
+        super().__init__(message)
+        self.error_code = error_code
+        self.message = message
+
+
+def _haul_search_from_payload(payload: dict[str, Any], *, data: object) -> _HaulSearch:
+    """Read an Inara search request; origin and cargo fall back to this server's ship."""
+    system_name = _payload_string(payload, "system_name") or _payload_string(payload, "origin")
+    if not system_name:
+        system_name = (getattr(getattr(data, "ship", None), "system", "") or "").strip()
+    if not system_name:
+        raise _HaulSearchError("invalid_search", "Haul search needs an origin system.")
+    try:
+        query_params = _haul_search_query_params(payload, data=data)
+    except ValueError as exc:
+        raise _HaulSearchError("invalid_search", str(exc)) from exc
+    destination_filter = _payload_string(payload, "destination") or _payload_string(payload, "destination_filter")
+    return _HaulSearch(system_name, query_params, destination_filter)
+
+
+def _run_haul_search(search: _HaulSearch, *, hub: HubClient | None) -> dict[str, Any]:
+    """Search Inara here, or on the hub when one is configured; blocks, so run it off the event loop."""
+    if hub is not None:
+        return _run_hub_haul_search(search, hub)
+    try:
+        result = search_trade_routes(search.system_name, query_params=search.query_params)
+    except Exception as exc:
+        logger.exception("haul search failed")
+        raise _HaulSearchError("haul_search_failed", str(exc) or "Failed to search haul routes.") from exc
+    routes = list(result.routes)
+    unfiltered_count = len(routes)
+    if search.destination_filter:
+        routes = [route for route in routes if _route_matches_destination(route, search.destination_filter)]
+    return _haul_search_response(
+        result,
+        routes=routes,
+        unfiltered_count=unfiltered_count,
+        use_surface_stations=search.query_params["use_surface_stations"],
+    )
+
+
+def _run_hub_haul_search(search: _HaulSearch, hub: HubClient) -> dict[str, Any]:
+    # The query params use the payload's own keys, so the hub reads them back unchanged.
+    body = {**search.query_params, "system_name": search.system_name, "destination": search.destination_filter}
+    try:
+        response = hub.post("/api/haul-search", body, timeout_s=hub.config.search_timeout_s)
+    except HubUnreachable as exc:
+        raise _HaulSearchError("hub_unreachable", hub_unreachable_detail(hub.host, exc)) from exc
+    payload = response.payload if isinstance(response.payload, dict) else {}
+    result = payload.get("result")
+    if response.status_code != 200 or not isinstance(result, dict):
+        detail = payload.get("detail") or f"HTTP {response.status_code}"
+        raise _HaulSearchError(str(payload.get("error_code") or "haul_search_failed"), f"Hub {hub.host}: {detail}")
+    return with_hub_source(result, hub.host)
+
+
+def _haul_search_error_response(exc: _HaulSearchError, correlation_message_id: str | None) -> dict[str, object]:
+    return _response_error(exc.error_code, exc.message, retryable=True, correlation_message_id=correlation_message_id)
+
+
+def _haul_search_success_response(result: dict[str, Any], correlation_message_id: str | None) -> dict[str, object]:
+    return protocol_message(
+        "response.success",
+        {"accepted": True, "message_text": "Haul search complete.", "result": result},
+        correlation_message_id=correlation_message_id,
+    )
+
+
 def _payload_string(payload: dict[str, Any], key: str) -> str:
     value = payload.get(key)
     if value is None:
@@ -1310,6 +1399,7 @@ async def _receive_session_messages(
     broker: InMemoryObserverSessionBroker,
     data_provider: Callable[[], object],
     journal_dir: Path | None,
+    hub: HubClient | None,
     route_compare_navroute_wait_seconds: float,
     route_compare_compare_retry_attempts: int,
 ) -> None:
@@ -1323,6 +1413,7 @@ async def _receive_session_messages(
             broker=broker,
             data_provider=data_provider,
             journal_dir=journal_dir,
+            hub=hub,
             route_compare_navroute_wait_seconds=route_compare_navroute_wait_seconds,
             route_compare_compare_retry_attempts=route_compare_compare_retry_attempts,
         )
@@ -1340,6 +1431,7 @@ async def _handle_session_message_async(
     broker: InMemoryObserverSessionBroker,
     data_provider: Callable[[], object] | None = None,
     journal_dir: Path | None = None,
+    hub: HubClient | None = None,
     route_compare_navroute_wait_seconds: float = 6.0,
     route_compare_compare_retry_attempts: int = 3,
 ) -> dict[str, object] | None:
@@ -1348,6 +1440,7 @@ async def _handle_session_message_async(
             message,
             client_role=client_role,
             data_provider=data_provider,
+            hub=hub,
         )
     if message.get("message_type") == "command.dispatch_route_all_in_one":
         return await _handle_dispatch_route_all_in_one_async(
@@ -1709,67 +1802,13 @@ def _handle_session_message(
     if message_type == "command.search_haul_routes":
         if data_provider is None:
             return _transport_unavailable_error(correlation_message_id)
-        data = data_provider()
-        system_name = _payload_string(payload, "system_name") or _payload_string(payload, "origin")
-        if not system_name:
-            system_name = (getattr(data.ship, "system", "") or "").strip()
-        if not system_name:
-            return _response_error(
-                "invalid_search",
-                "Haul search needs an origin system.",
-                retryable=True,
-                correlation_message_id=correlation_message_id,
-            )
         try:
-            query_params = _haul_search_query_params(payload, data=data)
-        except ValueError as exc:
-            return _response_error(
-                "invalid_search",
-                str(exc),
-                retryable=True,
-                correlation_message_id=correlation_message_id,
-            )
-        _save_haul_search_defaults(query_params)
-        destination_filter = (
-            _payload_string(payload, "destination")
-            or _payload_string(payload, "destination_filter")
-            or ""
-        )
-        try:
-            result = search_trade_routes(
-                system_name,
-                query_params=query_params,
-            )
-        except Exception as exc:
-            logger.exception("haul search failed (sync)")
-            return _response_error(
-                "haul_search_failed",
-                str(exc) or "Failed to search haul routes.",
-                retryable=True,
-                correlation_message_id=correlation_message_id,
-            )
-        routes = list(result.routes)
-        unfiltered_count = len(routes)
-        if destination_filter:
-            routes = [
-                route
-                for route in routes
-                if _route_matches_destination(route, destination_filter)
-            ]
-        return protocol_message(
-            "response.success",
-            {
-                "accepted": True,
-                "message_text": "Haul search complete.",
-                "result": _haul_search_response(
-                    result,
-                    routes=routes,
-                    unfiltered_count=unfiltered_count,
-                    use_surface_stations=query_params["use_surface_stations"],
-                ),
-            },
-            correlation_message_id=correlation_message_id,
-        )
+            search = _haul_search_from_payload(payload, data=data_provider())
+            _save_haul_search_defaults(search.query_params)
+            result = _run_haul_search(search, hub=None)
+        except _HaulSearchError as exc:
+            return _haul_search_error_response(exc, correlation_message_id)
+        return _haul_search_success_response(result, correlation_message_id)
 
     if message_type == "command.cancel_active_routine":
         if command_handler is None:
