@@ -195,11 +195,14 @@ class Rig:
             names=lambda node_id: HUB_NODE.name if node_id == HUB_NODE.node_id else self.relay.name(node_id),
             run_in_background=lambda work: work(), log=self.hub_logs.append,
         )
-        self.peer = PeerLink(hello=PEER_NODE, hub_url=HUB_URL, outbox=self.outbox,
+        self.peer = PeerLink(hello=PEER_NODE, hub_url=lambda: HUB_URL, outbox=self.outbox,
                              relay=peer_relay or QuietRelay(), connect=self.connect,
+                             accept_hub=lambda hub_id, name, url: self.refuse_hub,
                              now=self.clock, log=self.peer_logs.append, heartbeat_s=30.0,
                              request_timeout_s=10.0, search_timeout_s=180.0)
         self.links: list[Loopback] = []
+        # What `accept_hub` answers on welcome: "" links, anything else refuses the hub.
+        self.refuse_hub = ""
 
     def connect(self) -> Loopback:
         link = Loopback(self.peer)
@@ -253,8 +256,9 @@ class HubConfigTests(unittest.TestCase):
             hub = load_config(path).hub
             self.assertEqual((hub.url, hub.owns_data, hub.enabled, hub.outbox_file),
                              ("http://192.168.1.20:8765", False, True, Path("q") / "outbox.sqlite3"))
-            path.write_text('[hub]\nrole = "peer"\n', encoding="utf-8")
-            self.assertEqual(load_config(path).hub.enabled, False)
+            # No url: the peer still links, to the hub it finds on the LAN.
+            path.write_text('[hub]\nrole = "peer"\ntoken = "t"\n', encoding="utf-8")
+            self.assertEqual((load_config(path).hub.url, load_config(path).hub.enabled), ("", True))
 
             for text, key in (
                 ('[hub]\nrole = "server"\n', "hub.role"),
@@ -262,6 +266,7 @@ class HubConfigTests(unittest.TestCase):
                 ('[hub]\nrole = "peer"\nurl = "192.168.1.20"\ntoken = "t"\n', "hub.url"),
                 ('[hub]\nrole = "hub"\n', "hub.token"),
                 ('[hub]\nrole = "peer"\nurl = "http://192.168.1.20:8765"\n', "hub.token"),
+                ('[hub]\nrole = "peer"\n', "hub.token"),
                 ("[hub]\ntimeout_s = 0\n", "hub.timeout_s"),
                 ("[hub]\nheartbeat_s = -1\n", "hub.heartbeat_s"),
             ):

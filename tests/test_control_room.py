@@ -590,6 +590,7 @@ class ControlRoomCliTests(unittest.TestCase):
             config_path="config.toml",
             host="192.168.1.42",
             port=8765,
+            advertise_host="192.168.1.42",
             access_token="1001",
             speak_tts=True,
             web_default_access_token="",
@@ -606,6 +607,7 @@ class ControlRoomCliTests(unittest.TestCase):
             config_path="config.toml",
             host="192.168.1.42",
             port=8765,
+            advertise_host="192.168.1.42",
             access_token="1001",
             speak_tts=True,
             web_default_access_token="",
@@ -621,10 +623,21 @@ class ControlRoomCliTests(unittest.TestCase):
             config_path="config.toml",
             host="127.0.0.1",
             port=8765,
+            advertise_host="",
             access_token="1001",
             speak_tts=True,
             web_default_access_token="",
         )
+
+    def test_serve_on_every_interface_advertises_the_detected_lan_host(self) -> None:
+        with patch("sys.argv", ["control_room.py", "serve", "--host", "0.0.0.0"]), patch(
+            "edap.control_room.app._detect_lan_host",
+            return_value="192.168.1.42",
+        ), patch("edap.control_room.server.serve.serve_observer_mode") as serve:
+            main()
+
+        self.assertEqual((serve.call_args.kwargs["host"], serve.call_args.kwargs["advertise_host"]),
+                         ("0.0.0.0", "192.168.1.42"))
 
     def test_no_tts_keeps_the_server_silent(self) -> None:
         with patch("sys.argv", ["control_room.py", "local", "--token", "1001", "--no-tts"]), patch(
@@ -649,6 +662,7 @@ class ControlRoomCliTests(unittest.TestCase):
             config_path="config.toml",
             host="127.0.0.1",
             port=8765,
+            advertise_host="",
             access_token=DEFAULT_OBSERVER_ACCESS_TOKEN,
             speak_tts=True,
             web_default_access_token=DEFAULT_OBSERVER_ACCESS_TOKEN,

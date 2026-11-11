@@ -261,7 +261,7 @@ class EddnConfig:
 class HubConfig:
     # "hub" and "standalone" own the market and station database; a "peer" owns none.
     role: str = "standalone"
-    # Peer only: the hub this peer keeps its link open to.
+    # Peer only: the hub this peer keeps its link open to; empty finds the hub on the LAN over mDNS.
     url: str = ""
     # Hub: what peers must present on the link. Peer: sent to the hub.
     token: str = ""
@@ -284,8 +284,8 @@ class HubConfig:
 
     @property
     def enabled(self) -> bool:
-        """A peer with a hub address: it keeps a link to the hub."""
-        return self.role == "peer" and bool(self.url)
+        """A peer: it keeps a link to the hub at `url`, or to the one it finds on the LAN."""
+        return self.role == "peer"
 
 
 @dataclass(frozen=True)
@@ -731,8 +731,8 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `hub.url` is only used with `hub.role = \"peer\"`.")
     if config.hub.url and not config.hub.url.startswith(("http://", "https://")):
         raise ConfigError("Config value `hub.url` must start with http:// or https://.")
-    if (config.hub.role == "hub" or config.hub.enabled) and not config.hub.token:
-        raise ConfigError("Config value `hub.token` is required on a hub and on a peer with `hub.url`.")
+    if config.hub.role != "standalone" and not config.hub.token:
+        raise ConfigError("Config value `hub.token` is required on a hub and on a peer.")
     for key, value in (
         ("timeout_s", config.hub.timeout_s),
         ("search_timeout_s", config.hub.search_timeout_s),

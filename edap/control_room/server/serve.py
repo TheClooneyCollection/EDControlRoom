@@ -26,10 +26,13 @@ from edap.eddn.game_markets import import_game_markets_every
 from edap.eddn.listener import open_zmq_socket
 from edap.eddn.service import EddnService, start_eddn_service
 from edap.haul_history import load_runs
+from edap.hub.discovery import (
+    BROWSE_S, KNOWN_HUB_FILE_NAME, DiscoveredHub, KnownHub, advert_properties, zeroconf_advertise, zeroconf_browse,
+)
 from edap.hub.history import CentralHistory, HubRuns
 from edap.hub.nodes import HubSide, NodeRegistry, store_link_item
 from edap.hub.outbox import Outbox
-from edap.hub.peer import NODE_ID_FILE_NAME, NodeHello, PeerLink, load_node_id, new_node_id, websocket_connector
+from edap.hub.peer import NODE_ID_FILE_NAME, NodeHello, PeerLink, load_node_id, new_node_id, websocket_dialer
 from edap.hub.relay import HubRelay, PeerRelay, node_state
 from edap.hub.voice import HubVoice, callout_text
 from edap.recent_markets import load_recent_markets, watch_file
@@ -44,6 +47,7 @@ def serve_observer_mode(
     config_path: str,
     host: str,
     port: int,
+    advertise_host: str,
     access_token: str,
     speak_tts: bool,
     web_default_access_token: str = "",
@@ -101,12 +105,27 @@ def serve_observer_mode(
             run_in_background=lambda work: threading.Thread(target=work, name="hub-relay", daemon=True).start(),
             log=hub_logger.info,
         )
+        dial = websocket_dialer(hub_config.token, timeout_s=hub_config.timeout_s)
+        if hub_config.url:
+            # A hub the user named is trusted as named.
+            hub_url = lambda: hub_config.url
+            connect = lambda: dial(hub_config.url)
+            accept_hub = lambda hub_id, name, url: ""
+        else:
+            # Found over mDNS; the first hub that welcomes this peer is remembered and the only one dialled.
+            known_hub = KnownHub(Path(loaded.config_path).parent / KNOWN_HUB_FILE_NAME, hub_logger.warning)
+            discovered = DiscoveredHub(browse=zeroconf_browse(BROWSE_S), known=known_hub, dial=dial,
+                                       log=hub_logger.warning)
+            hub_url = lambda: discovered.url
+            connect = discovered
+            accept_hub = known_hub.accept
         peer_link = PeerLink(
             hello=node,
-            hub_url=hub_config.url,
+            hub_url=hub_url,
             outbox=Outbox.open(hub_config.outbox_file, now=time.time()),
             relay=peer_relay,
-            connect=websocket_connector(hub_config.url, hub_config.token, timeout_s=hub_config.timeout_s),
+            connect=connect,
+            accept_hub=accept_hub,
             now=time.time,
             log=hub_logger.info,
             heartbeat_s=hub_config.heartbeat_s,
@@ -172,7 +191,8 @@ def serve_observer_mode(
     # Recent markets are recorded by the Control Room whenever Market.json changes; a peer queues
     # them for the hub, a hub or standalone writes them into its own database.
     if peer_link is not None:
-        hub_logger.info("Hub link: %s as %s (node %s)", hub_config.url, node.name, node.node_id)
+        hub_logger.info("Hub link: %s as %s (node %s)", hub_config.url or "found on the LAN over mDNS",
+                        node.name, node.node_id)
         watch_file(
             recent_markets_file, 5.0, lambda path: peer_link.enqueue_markets(load_recent_markets(path)),
             stop=stop_background, log=hub_logger.warning, name="hub-markets",
@@ -182,8 +202,6 @@ def serve_observer_mode(
             haul_runs_file, 5.0, lambda path: peer_link.enqueue_runs(load_runs(path)[0]),
             stop=stop_background, log=hub_logger.warning, name="hub-runs",
         )
-    elif hub_config.role == "peer":
-        hub_logger.info("Hub link: none, `[hub] url` is empty")
     hub_side: HubSide | None = None
     if store is not None and node is not None:
         hub_logger.info("Hub %s (node %s): peers link at /api/peer-link", node.name, node.node_id)
@@ -216,6 +234,17 @@ def serve_observer_mode(
                            history=CentralHistory(local=node, local_file=haul_runs_file, runs=hub_runs),
                            relay=hub_relay,
                            voice=hub_voice)
+    stop_advert = None
+    if hub_side is not None:
+        if advertise_host:
+            try:
+                stop_advert = zeroconf_advertise(address=advertise_host, port=port, properties=advert_properties(
+                    hub_id=node.node_id, name=node.name, version=node.version))
+                hub_logger.info("Hub advertised over mDNS as %s at %s:%s", node.name, advertise_host, port)
+            except Exception as exc:  # No multicast: peers can still use `[hub] url`.
+                hub_logger.warning("Hub not advertised over mDNS (%s); peers need `[hub] url`", exc)
+        else:
+            hub_logger.info("Hub not advertised over mDNS: bound to %s; serve with `lan` so peers find it", host)
     if store is not None:
         import_game_markets_every(store, recent_markets_file, 5.0, db_logger.info, stop=stop_background)
     ardent_lookup: ArdentLookup | None = None
@@ -253,6 +282,8 @@ def serve_observer_mode(
         uvicorn.run(app, host=host, port=port, log_level="info")
     finally:
         stop_background.set()
+        if stop_advert is not None:
+            stop_advert()
         if eddn is not None:
             eddn.close()
         runtime_host.close()

@@ -86,10 +86,11 @@ class PeerLink:
         self,
         *,
         hello: NodeHello,
-        hub_url: str,
+        hub_url: Callable[[], str],
         outbox: Outbox,
         relay: LinkRelay,
         connect: Callable[[], LinkConnection],
+        accept_hub: Callable[[str, str, str], str],
         now: Callable[[], float],
         log: Callable[[str], None],
         heartbeat_s: float,
@@ -100,7 +101,10 @@ class PeerLink:
         # How long route, status and station fact requests wait; Inara searches drive a browser and take longer.
         self.request_timeout_s = request_timeout_s
         self.search_timeout_s = search_timeout_s
-        self.hub_url = hub_url
+        # The configured hub, or the one discovery dialled last (`edap.hub.discovery.DiscoveredHub`).
+        self._hub_url = hub_url
+        # Checks the hub's id, name and url on welcome: "" keeps the link, else why it is refused.
+        self._accept_hub = accept_hub
         self.outbox = outbox
         self._relay = relay
         self._connect = connect
@@ -121,6 +125,10 @@ class PeerLink:
         self._last_error = ""
         self._waiters: dict[str, _Waiter] = {}
         self._ids = itertools.count(1)
+
+    @property
+    def hub_url(self) -> str:
+        return self._hub_url()
 
     @property
     def host(self) -> str:
@@ -227,6 +235,12 @@ class PeerLink:
         with self._lock:
             self._last_contact = self._now()
             if kind == "welcome":
+                refusal = self._accept_hub(str(frame.get("node_id") or ""), str(frame.get("name") or ""),
+                                           self.hub_url)
+                if refusal:
+                    self._last_error = refusal
+                    self._log(f"WARNING: not linking to {self.host}: {refusal}")
+                    raise LinkClosed(refusal)
                 self._welcomed = True
                 self._connected_since = self._last_contact
                 self._last_error = ""
@@ -296,7 +310,7 @@ class PeerLink:
                 with self._lock:
                     self._last_error = error
                 if not quiet:
-                    self._log(f"Hub link to {self.host} failed: {error}; redialling with backoff")
+                    self._log(f"Hub link to {self.host or 'the hub'} failed: {error}; redialling with backoff")
                     quiet = True
             else:
                 if self.serve(conn):
@@ -396,8 +410,10 @@ class WebSocketLink:
         self._socket.close()
 
 
-def websocket_connector(hub_url: str, token: str, *, timeout_s: float) -> Callable[[], LinkConnection]:
-    def connect() -> LinkConnection:
+def websocket_dialer(token: str, *, timeout_s: float) -> Callable[[str], LinkConnection]:
+    """Dials a hub's link at the given base URL."""
+
+    def dial(hub_url: str) -> LinkConnection:
         from websockets.sync.client import connect as ws_connect
 
         socket = ws_connect(
@@ -409,4 +425,4 @@ def websocket_connector(hub_url: str, token: str, *, timeout_s: float) -> Callab
         )
         return WebSocketLink(socket)
 
-    return connect
+    return dial

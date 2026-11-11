@@ -2475,6 +2475,7 @@ def main() -> None:
     serve_local = args.mode == "local"
     if args.mode in {"serve", "lan", "local"}:
         from edap.control_room.server.serve import serve_observer_mode
+        from edap.hub.discovery import advertise_address
 
         if serve_lan and args.host:
             parser.error("LAN serve mode cannot be combined with --host")
@@ -2495,6 +2496,8 @@ def main() -> None:
             config_path=args.config,
             host=host,
             port=args.port,
+            # The hub advertises where peers can reach it: `lan` binds the detected LAN address already.
+            advertise_host=advertise_address(host, _detect_lan_host),
             access_token=access_token,
             speak_tts=not args.no_tts,
             web_default_access_token=web_default_access_token,
