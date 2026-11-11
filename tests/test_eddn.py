@@ -11,8 +11,8 @@ from tempfile import TemporaryDirectory
 
 from edap.config import ConfigError, EddnConfig, load_config
 from edap.eddn.listener import EddnListener, apply_payload
-from edap.eddn.game_markets import import_game_markets
-from edap.eddn.service import EddnService, start_eddn_service
+from edap.eddn.game_markets import import_game_markets, import_game_markets_every
+from edap.eddn.service import start_eddn_service
 from edap.eddn.messages import COMMODITY_SCHEMA, JOURNAL_SCHEMA, parse_eddn_message
 from edap.eddn.store import EddnStore
 from edap.recent_markets import save_recent_markets, snapshot_from_market_json
@@ -278,7 +278,7 @@ class GameMarketImportTests(unittest.TestCase):
     def test_service_imports_our_markets_at_start_and_when_the_file_changes(self) -> None:
         store = memory_store()
         self.addCleanup(store.close)
-        service = EddnService(store=store, listener=None)  # type: ignore[arg-type]
+        stop = threading.Event()
         logs: list[str] = []
         imported = threading.Condition()
 
@@ -290,17 +290,17 @@ class GameMarketImportTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "recent_markets.json"
             save_game_markets(path, "2026-11-10T14:00:00Z")
-            service.import_game_markets_every(path, 0.001, log)
+            import_game_markets_every(store, path, 0.001, log, stop=stop)
             with imported:
                 self.assertTrue(imported.wait_for(lambda: len(logs) == 1, 2.0))
             save_game_markets(path, "2026-11-10T14:00:00Z", "2026-11-10T14:05:00Z")
             with imported:
                 self.assertTrue(imported.wait_for(lambda: len(logs) == 2, 2.0))
-            service._stop_status.set()
+            stop.set()
 
-        self.assertEqual(logs[0], "EDDN our markets: 1 written: Galileo (2026-11-10T14:00:00Z); 0 already in the DB")
+        self.assertEqual(logs[0], "Market DB our markets: 1 written: Galileo (2026-11-10T14:00:00Z); 0 already in the DB")
         # Every recorded market is offered again; one already stored with the same timestamp is kept.
-        self.assertEqual(logs[1], "EDDN our markets: 1 written: Galileo 1 (2026-11-10T14:05:00Z); 1 already in the DB")
+        self.assertEqual(logs[1], "Market DB our markets: 1 written: Galileo 1 (2026-11-10T14:05:00Z); 1 already in the DB")
         self.assertEqual(store.counts().markets, 2)
 
 
@@ -323,8 +323,10 @@ class EddnServiceTests(unittest.TestCase):
                 done.set()
                 time.sleep(0.001)
 
+            store = EddnStore.open(path)
             service = start_eddn_service(
                 EddnConfig(enabled=True, database_file=path, status_every_s=0.001),
+                store=store,
                 open_socket=lambda: FakeSocket([frame(commodity_envelope())], on_empty=idle),
                 time_fn=lambda: 1000.0,
                 log=log,
@@ -333,6 +335,7 @@ class EddnServiceTests(unittest.TestCase):
             self.assertTrue(reported.wait(2.0))
             status = service.status()
             service.close()
+            store.close()
 
             self.assertEqual(status["listener"]["markets"], 1)
             self.assertEqual(status["store"]["prices"], 2)

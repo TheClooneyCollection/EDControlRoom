@@ -25,8 +25,9 @@
 # status_every_s = 30.0
 
 [hub]
-# Point this Control Room at a home hub that runs route searches and keeps the market DB
-# (docs/user/hub.md). Peers usually leave [eddn] off.
+# "standalone" (default), "hub" or "peer" (docs/user/hub.md). Standalone and hub keep the
+# market DB; a peer keeps none and sends searches and markets to the hub at `url`.
+# role = "peer"
 # url = "http://192.168.1.20:8765"
 # token = "the hub's --token"
 

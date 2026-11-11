@@ -2,7 +2,7 @@
 
 The estimate uses the same time model and jump count as `/routes`, so both pages agree.
 Each station needs its system coordinates, distance from the star and station type; these
-come from the first source that knows them (EDDN store, then the journal, then Ardent).
+come from the market store (EDDN, our journal and Market.json), then Ardent for what is still missing.
 Nothing is guessed: a missing input leaves the trip time unknown and names what is missing.
 """
 from __future__ import annotations
@@ -14,7 +14,7 @@ from typing import Callable, Iterable, Sequence
 
 from edap.eddn.routes import SURFACE_TYPES, TimeModel, jump_count, round_trip_s
 from edap.haul_history import RouteSummary
-from edap.recent_markets import JournalPlaces, MarketSnapshot
+from edap.recent_markets import MarketSnapshot
 
 Coords = tuple[float, float, float]
 
@@ -144,25 +144,8 @@ def measured_route(
     return MeasuredRoute(runs=runs, profit=profit, duration_s=duration, profit_per_hour=round(profit * 3600 / duration))
 
 
-def journal_lookup(places: JournalPlaces, snapshots: Iterable[MarketSnapshot]) -> FactLookup:
-    """Docked distance and type, FSDJump/Location coordinates, and the Market.json station type."""
-    market_types = {snapshot.market_id: snapshot.station_type for snapshot in snapshots}
-
-    def lookup(market_id: int, station: str, system: str) -> PartialFacts:
-        docked = places.station(market_id)
-        position = places.system(system)
-        return PartialFacts(
-            coords=(position.x, position.y, position.z) if position is not None else None,
-            dist_ls=docked.dist_ls if docked is not None else None,
-            station_type=(docked.station_type if docked is not None and docked.station_type else None)
-            or market_types.get(market_id) or None,
-        )
-
-    return lookup
-
-
 def store_lookup(db: sqlite3.Connection) -> FactLookup:
-    """The EDDN store's station row (by market id) and system coordinates (by address, else name).
+    """The market store's station row (by market id) and system coordinates (by address, else name).
 
     An unreadable store (such as one mid-migration) knows nothing, so the next source answers.
     """

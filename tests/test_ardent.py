@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from edap.ardent import ArdentError, ArdentLookup, store_saver
+from edap.ardent import ArdentError, ArdentLookup
 from edap.eddn.messages import StationInfo, SystemPosition
 from edap.trade_trip import PartialFacts, store_lookup
 from tests.test_eddn import memory_store
@@ -99,8 +99,7 @@ class ArdentLookupTests(unittest.TestCase):
     def test_saved_rows_land_in_the_eddn_store_for_routes_and_best_deal(self) -> None:
         store = memory_store()
         self.addCleanup(store.close)
-        save = store_saver(store.apply, store.commit)
-        save([
+        store.save([
             SystemPosition(address=7, name="Chelgit", x=6.0, y=-33.5, z=56.0, timestamp=1.0),
             StationInfo(market_id=11, system_address=7, system_name="Chelgit", name="Humboldt Hub",
                         type="Ocellus", dist_ls=5.7, max_pad="L", timestamp=1.0),

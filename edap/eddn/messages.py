@@ -63,7 +63,18 @@ class StationInfo:
     timestamp: float
 
 
-EddnUpdate = MarketSnapshot | SystemPosition | StationInfo
+@dataclass(frozen=True)
+class StationTypeSeen:
+    """A station type from our own Market.json, which names no system address or pads."""
+
+    market_id: int
+    system_name: str
+    name: str
+    type: str
+    timestamp: float
+
+
+EddnUpdate = MarketSnapshot | SystemPosition | StationInfo | StationTypeSeen
 
 
 def is_carrier_station(name: str, station_type: str) -> bool:
@@ -88,6 +99,22 @@ def parse_eddn_message(envelope: Any) -> list[EddnUpdate]:
     if schema == JOURNAL_SCHEMA:
         return _journal_updates(message, timestamp)
     return []
+
+
+def journal_event_updates(event: Any) -> list[EddnUpdate]:
+    """The system and station facts in one of our own journal events, read as EDDN reads uploads of it."""
+    if not isinstance(event, dict):
+        return []
+    timestamp = _timestamp(event.get("timestamp"))
+    return _journal_updates(event, timestamp) if timestamp is not None else []
+
+
+def station_type_from_game(game: GameMarket) -> StationTypeSeen | None:
+    timestamp = _timestamp(game.timestamp)
+    if timestamp is None or not game.station_type:
+        return None
+    return StationTypeSeen(market_id=game.market_id, system_name=game.system, name=game.station,
+                           type=game.station_type, timestamp=timestamp)
 
 
 def _is_legacy(header: dict[str, Any]) -> bool:
@@ -172,7 +199,8 @@ def _journal_updates(message: dict[str, Any], timestamp: float) -> list[EddnUpda
     ):
         x, y, z = (float(value) for value in position)
         updates.append(SystemPosition(address=address, name=system_name, x=x, y=y, z=z, timestamp=timestamp))
-    station = _station_info(message, address, system_name, timestamp) if event in _STATION_EVENTS else None
+    docked = event in _STATION_EVENTS or (event == "Location" and message.get("Docked") is True)
+    station = _station_info(message, address, system_name, timestamp) if docked else None
     if station is not None:
         updates.append(station)
     return updates

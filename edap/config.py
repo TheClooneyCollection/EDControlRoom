@@ -35,6 +35,7 @@ VALID_PLATFORMS = {"linux", "macos", "windows"}
 VALID_CAPTURE_MODES = {"fullscreen", "region"}
 VALID_TTS_TITLE_MODES = {"commander", "custom", "commander_name"}
 VALID_MARKET_BUY_HOLD_SEGMENT_FUNCTIONS = {"flat", "linear", "log"}
+VALID_HUB_ROLES = {"hub", "peer", "standalone"}
 
 
 def default_runtime_platform() -> str:
@@ -258,7 +259,9 @@ class EddnConfig:
 
 @dataclass(frozen=True)
 class HubConfig:
-    # Empty: no hub, searches and the market DB stay local.
+    # "hub" and "standalone" own the market and station database; a "peer" owns none.
+    role: str = "standalone"
+    # Peer only: the hub to send searches and markets to.
     url: str = ""
     token: str = ""
     timeout_s: float = 10.0
@@ -266,8 +269,13 @@ class HubConfig:
     heartbeat_s: float = 30.0
 
     @property
+    def owns_data(self) -> bool:
+        return self.role != "peer"
+
+    @property
     def enabled(self) -> bool:
-        return bool(self.url)
+        """A peer with a hub address: searches and markets go to the hub."""
+        return self.role == "peer" and bool(self.url)
 
 
 @dataclass(frozen=True)
@@ -706,6 +714,11 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `eddn.max_age_days` must be positive and finite.")
     if not math.isfinite(config.eddn.status_every_s) or config.eddn.status_every_s < 0:
         raise ConfigError("Config value `eddn.status_every_s` must be zero or positive.")
+    if config.hub.role not in VALID_HUB_ROLES:
+        supported = ", ".join(sorted(VALID_HUB_ROLES))
+        raise ConfigError(f"Config value `hub.role` must be one of: {supported}.")
+    if config.hub.url and config.hub.role != "peer":
+        raise ConfigError("Config value `hub.url` is only used with `hub.role = \"peer\"`.")
     if config.hub.url and not config.hub.url.startswith(("http://", "https://")):
         raise ConfigError("Config value `hub.url` must start with http:// or https://.")
     for key, value in (
@@ -1271,6 +1284,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             status_every_s=_float(eddn, "status_every_s", _float(default_eddn, "status_every_s", 30.0)),
         ),
         hub=HubConfig(
+            role=_string(hub, "role", _string(default_hub, "role", "standalone")).strip().lower(),
             url=_string(hub, "url", _string(default_hub, "url", "")).strip().rstrip("/"),
             token=_string(hub, "token", _string(default_hub, "token", "")),
             timeout_s=_float(hub, "timeout_s", _float(default_hub, "timeout_s", 10.0)),

@@ -7,14 +7,14 @@
 
 Each request has a short timeout and a system is fetched at most once per process; a failed
 lookup is retried only after `retry_after_s`, so a slow or down Ardent costs one wait, not one
-per page refresh. Found rows go to `save` (the EDDN store when there is one).
+per page refresh. Found rows go to `save` (the market store, so `/routes` gains them too).
 """
 from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Callable, Iterable
+from typing import Callable
 from urllib.parse import quote
 
 from edap.eddn.messages import EddnUpdate, StationInfo, SystemPosition
@@ -186,13 +186,3 @@ def _station_info(row: object) -> StationInfo | None:
         timestamp=timestamp,
     )
 
-
-def store_saver(apply: Callable[[EddnUpdate], bool], commit: Callable[[], None]) -> Callable[[list[EddnUpdate]], None]:
-    """Write Ardent rows into the EDDN store, so `/routes` gains the coordinates and station details too."""
-
-    def save(updates: Iterable[EddnUpdate]) -> None:
-        for update in updates:
-            apply(update)
-        commit()
-
-    return save

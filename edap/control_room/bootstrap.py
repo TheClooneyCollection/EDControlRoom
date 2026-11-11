@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from edap.cargo_manifest import read_cargo_inventory
 from edap.config import AppConfig
 from edap.control_room import rendering as _rendering
 from edap.control_room.models import MarketData, ShipState
-from edap.recent_markets import JOURNAL_PLACE_EVENTS, record_journal_events, record_market_json
+from edap.eddn.messages import EddnUpdate, journal_event_updates
+from edap.recent_markets import record_market_json
 from edap.status import read_status
 from edap.state import get_latest_journal_log, read_ship_state
 
@@ -20,6 +21,7 @@ class BootstrapHost(Protocol):
     _market: MarketData
     _ship: ShipState
     _config: AppConfig
+    _record_station_facts: Callable[[list[EddnUpdate]], None]
 
     def _refresh_market(self) -> None: ...
     def _log(self, msg: str) -> None: ...
@@ -71,16 +73,16 @@ def bootstrap_ship_state(app: BootstrapHost) -> None:
             app._ship.max_jump_range_ly = state.max_jump_range_ly
         except Exception:
             pass
-        record_journal_places(app, log)
+        record_journal_facts(app, log)
 
     sync_status_state(app)
     if not sync_cargo_manifest(app, update_count=False):
         app._ship.cargo_inventory = _rendering.read_cargo_inventory(app._journal_dir)
 
 
-def record_journal_places(app: BootstrapHost, log_path: Path) -> None:
-    """Keep the station and system places of the latest journal, which predate this launch."""
-    events = []
+def record_journal_facts(app: BootstrapHost, log_path: Path) -> None:
+    """Record the station and system facts of the latest journal, which predate this launch."""
+    updates: list[EddnUpdate] = []
     try:
         with log_path.open(encoding="utf-8") as handle:
             for line in handle:
@@ -88,11 +90,11 @@ def record_journal_places(app: BootstrapHost, log_path: Path) -> None:
                     event = json.loads(line)
                 except ValueError:
                     continue
-                if isinstance(event, dict) and event.get("event") in JOURNAL_PLACE_EVENTS:
-                    events.append(event)
+                updates.extend(journal_event_updates(event))
     except OSError:
         return
-    record_journal_events(app._config.control_room.recent_markets_file, events, app._log)
+    if updates:
+        app._record_station_facts(updates)
 
 
 def load_market_json(app: BootstrapHost) -> None:

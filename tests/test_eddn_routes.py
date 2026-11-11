@@ -180,7 +180,7 @@ class EddnRoutesApiTests(unittest.TestCase):
             app = build_observer_server_app(
                 data_provider=lambda: type("Data", (), {"ship": ShipState(system="Nowhere", cargo_capacity=1137)})(),
                 command_handler=None, broker=InMemoryObserverSessionBroker(),
-                auth=SharedAccessTokenAuth("secret-token"), eddn_database_file=path,
+                auth=SharedAccessTokenAuth("secret-token"), market_database_file=path,
             )
             with patch("edap.control_room.server.app.load_haul_search_config", return_value={}), TestClient(app) as client:
                 self.assertEqual(client.get("/api/eddn-routes").status_code, 401)

@@ -136,6 +136,24 @@ def _make_config(journal_dir: Path) -> AppConfig:
     )
 
 
+def _facts_db(directory: str, recent_markets: Path, events: list[dict]) -> Path:
+    """A market store holding our recorded markets (with their Market.json types) and these journal events."""
+    from edap.eddn.game_markets import import_game_markets
+    from edap.eddn.messages import journal_event_updates
+    from edap.eddn.store import EddnStore
+
+    path = Path(directory) / "markets.sqlite3"
+    store = EddnStore.open(path)
+    store.save([update for event in events for update in journal_event_updates(event)])
+    import_game_markets(store, recent_markets)
+    store.close()
+    return path
+
+
+def _drop_facts(updates: list) -> None:
+    pass
+
+
 def _make_context(journal_dir: Path) -> RuntimeContext:
     resolved = ResolvedPath(
         configured={"path": str(journal_dir), "status": "ok", "reason": "test journal dir"},
@@ -321,7 +339,7 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
 class ControlRoomServerTests(unittest.TestCase):
     def test_headless_host_initializes_data_source_before_mount(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource())
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
 
             data = host.dependencies.data_source.current()
 
@@ -330,7 +348,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_accepts_simple_remote_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource())
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
 
             host.handle_remote_input("market filter gold")
 
@@ -340,7 +358,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_submit_input_alias_accepts_simple_remote_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource())
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
 
             host.submit_input("market filter gold")
 
@@ -349,7 +367,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_accepts_stats_via_submit_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource())
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
             host.submit_input("stats all")
             output = "\n".join(content.plain for content, _ in host._activity_widget.writes)
             self.assertIn("no haul runs recorded yet", output)
@@ -357,7 +375,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_reloads_config_via_submit_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource())
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
             config_path = Path(temp_dir) / "config.toml"
             config_path.write_text("[controls.market]\nnav_delay_seconds = 0.25\n", encoding="utf-8")
             host._config_path = config_path
@@ -371,7 +389,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_emits_announcement_events_without_local_speech(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context_with_tts(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource())
+            host = HeadlessControlRoomHost(_make_context_with_tts(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
             sink = _EventSinkRecorder()
             host._protocol_event_sink = sink
 
@@ -392,7 +410,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
         backend = _RecordingBackend()
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context_with_tts(Path(temp_dir)), speech_backend=backend, version_source=_FakeVersionSource())
+            host = HeadlessControlRoomHost(_make_context_with_tts(Path(temp_dir)), speech_backend=backend, version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
             sink = _EventSinkRecorder()
             host._protocol_event_sink = sink
 
@@ -409,7 +427,7 @@ class ControlRoomServerTests(unittest.TestCase):
                 '{"event":"LoadGame","Commander":"VRYAE"}\n',
                 encoding="utf-8",
             )
-            host = HeadlessControlRoomHost(_make_context_with_tts(journal_dir), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource())
+            host = HeadlessControlRoomHost(_make_context_with_tts(journal_dir), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
             host._start_watcher_loop = lambda: None
 
             host.start()
@@ -418,7 +436,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_publishes_data_refresh_after_remote_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource())
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
             sink = _EventSinkRecorder()
             host._protocol_event_sink = sink
 
@@ -429,7 +447,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_remote_ctrl_c_cancels_prompt_flow_and_publishes_data_refresh(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource())
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
             sink = _EventSinkRecorder()
             host._protocol_event_sink = sink
             host._start_dest_prompt("Achenar")
@@ -622,7 +640,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_command_api_refuses_routine_command_while_busy(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource())
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
             host._controls = object()
             host._routine_active = True
             host._active_routine_name = "haul"
@@ -658,7 +676,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_submit_input_reports_busy_refusals(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource())
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
             host._controls = object()
             host._routine_active = True
             host._haul_stats.active = True
@@ -864,19 +882,21 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(smaller["round_trip"]["hold_profit"], 1100 * 10)
         self.assertEqual(missing.status_code, 404)
         self.assertEqual(invalid.status_code, 400)
-        # Both stations are in Sol, so only the never-docked distances are missing; no guess is made.
+        # Without a market database (a peer) no station facts are known here; the hub supplies them.
         self.assertEqual(comparison["trip"]["missing"],
-                         ["Galileo distance from star", "Abraham Lincoln distance from star"])
+                         ["Galileo distance from star", "Galileo station type",
+                          "Abraham Lincoln distance from star", "Abraham Lincoln station type"])
+        self.assertEqual(comparison["trip"]["hint"], "Station facts come from the hub.")
         self.assertIsNone(comparison["trip"]["trip_s"])
         self.assertEqual(comparison["trip"]["jumps"], 0)
-        self.assertEqual(comparison["trip"]["stations"]["x"]["station_type_source"], "journal")
+        self.assertIn("trip.hint", script.text)
         self.assertIsNone(comparison["measured"])
 
-    def test_market_compare_estimates_trip_time_from_the_journal_and_measures_haul_runs(self) -> None:
+    def test_market_compare_estimates_trip_time_from_the_store_and_measures_haul_runs(self) -> None:
         import json
 
         from edap.eddn.routes import TimeModel
-        from edap.recent_markets import record_journal_events, record_market_json
+        from edap.recent_markets import record_market_json
         from edap.trade_trip import StationFacts, estimate_trip
 
         def run(station_1: str, station_2: str, duration_s: float) -> dict:
@@ -894,16 +914,19 @@ class ControlRoomServerTests(unittest.TestCase):
                 record_market_json(store, {"MarketID": market_id, "StationName": station, "StarSystem": system,
                                            "StationType": "Coriolis", "timestamp": "2026-11-10T10:00:00Z",
                                            "Items": []}, lambda _: None)
-            record_journal_events(store, [
-                {"event": "Location", "StarSystem": "Sol", "StarPos": [0, 0, 0], "Docked": True, "MarketID": 1,
-                 "StationName": "Galileo", "StationType": "Coriolis", "DistFromStarLS": 500.0},
-                {"event": "FSDJump", "StarSystem": "Alpha", "StarPos": [30.0, 0, 0]},
-                {"event": "Docked", "StarSystem": "Alpha", "MarketID": 2, "StationName": "Alpha Port",
-                 "StationType": "CraterOutpost", "DistFromStarLS": 80.0},
-            ], lambda _: None)
+            database = _facts_db(directory, store, [
+                {"event": "Location", "timestamp": "2026-11-10T10:30:00Z", "StarSystem": "Sol", "SystemAddress": 10,
+                 "StarPos": [0, 0, 0], "Docked": True, "MarketID": 1, "StationName": "Galileo",
+                 "StationType": "Coriolis", "DistFromStarLS": 500.0},
+                {"event": "FSDJump", "timestamp": "2026-11-10T10:40:00Z", "StarSystem": "Alpha", "SystemAddress": 20,
+                 "StarPos": [30.0, 0, 0]},
+                {"event": "Docked", "timestamp": "2026-11-10T10:45:00Z", "StarSystem": "Alpha", "SystemAddress": 20,
+                 "MarketID": 2, "StationName": "Alpha Port", "StationType": "CraterOutpost", "DistFromStarLS": 80.0},
+            ])
             app = build_observer_server_app(
                 data_provider=_base_data_read_model, command_handler=None, broker=InMemoryObserverSessionBroker(),
                 auth=SharedAccessTokenAuth("secret-token"), recent_markets_file=store, haul_runs_file=runs,
+                market_database_file=database,
             )
             with TestClient(app) as client:
                 url = "/api/market-compare?x=1&y=2&capacity=10&access_token=secret-token"
@@ -920,12 +943,13 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(trip["trip_s"], expected.trip_s)
         self.assertEqual(trip["laden_jump_range_ly"], 20.0)
         self.assertEqual(trip["stations"]["y"]["station_type"], "CraterOutpost")
+        self.assertEqual((trip["stations"]["x"]["dist_ls_source"], trip["hint"]), ("store", None))
         self.assertEqual(compared["measured"],
                          {"runs": 2, "profit": 4_000_000, "duration_s": 2400.0, "profit_per_hour": 6_000_000})
         self.assertEqual(bad.status_code, 400)
 
-    def test_market_compare_asks_ardent_only_for_what_the_journal_lacks(self) -> None:
-        from edap.recent_markets import record_journal_events, record_market_json
+    def test_market_compare_asks_ardent_only_for_what_the_store_lacks(self) -> None:
+        from edap.recent_markets import record_market_json
         from edap.trade_trip import PartialFacts
 
         asked: list[str] = []
@@ -942,13 +966,18 @@ class ControlRoomServerTests(unittest.TestCase):
                 record_market_json(store, {"MarketID": market_id, "StationName": station, "StarSystem": system,
                                            "StationType": "Coriolis", "timestamp": f"2026-11-10T10:0{market_id}:00Z",
                                            "Items": []}, lambda _: None)
-            record_journal_events(store, [
-                {"event": "Location", "StarSystem": "Sol", "StarPos": [0, 0, 0], "Docked": True, "MarketID": 1,
-                 "StationName": "Galileo", "StationType": "Coriolis", "DistFromStarLS": 500.0},
-            ], lambda _: None)
+            database = _facts_db(directory, store, [
+                {"event": "Location", "timestamp": "2026-11-10T10:30:00Z", "StarSystem": "Sol", "SystemAddress": 10,
+                 "StarPos": [0, 0, 0], "Docked": True, "MarketID": 1, "StationName": "Galileo",
+                 "StationType": "Coriolis", "DistFromStarLS": 500.0},
+                # Coordinates only: Dark's Market.json type then lands in the store too.
+                {"event": "FSDJump", "timestamp": "2026-11-10T09:00:00Z", "StarSystem": "Down", "SystemAddress": 30,
+                 "StarPos": [50.0, 0, 0]},
+            ])
             app = build_observer_server_app(
                 data_provider=_base_data_read_model, command_handler=None, broker=InMemoryObserverSessionBroker(),
                 auth=SharedAccessTokenAuth("secret-token"), recent_markets_file=store, ardent_lookup=ardent,
+                market_database_file=database,
             )
             with TestClient(app) as client:
                 url = "/api/market-compare?capacity=10&laden_jump_range_ly=20&access_token=secret-token"
@@ -958,11 +987,13 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(asked, ["Far Port", "Dark"])
         self.assertEqual((filled["jumps"], filled["missing"]), (2, []))
         self.assertIsNotNone(filled["trip_s"])
-        self.assertEqual(filled["stations"]["x"]["dist_ls_source"], "journal")
+        self.assertEqual(filled["stations"]["x"]["dist_ls_source"], "store")
         self.assertEqual((filled["stations"]["y"]["coords_source"], filled["stations"]["y"]["dist_ls_source"]),
                          ("ardent", "ardent"))
-        # Market.json still knows the type; a failed Ardent lookup only leaves the rest missing.
-        self.assertEqual(down["missing"], ["Down coordinates", "Dark distance from star"])
+        # The store knows Down's coordinates and Dark's Market.json type; a failed Ardent lookup leaves the distance.
+        self.assertEqual((down["stations"]["y"]["coords_source"], down["stations"]["y"]["station_type_source"]),
+                         ("store", "store"))
+        self.assertEqual(down["missing"], ["Dark distance from star"])
         self.assertIsNone(down["trip_s"])
 
     def test_every_page_renders_the_one_shared_nav(self) -> None:
@@ -1570,7 +1601,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             broker = InMemoryObserverSessionBroker()
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource())
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
             host._controls = object()
             app = build_observer_server_app(
                 data_provider=host.dependencies.data_source.current,

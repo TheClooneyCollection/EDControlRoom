@@ -1,28 +1,20 @@
 from __future__ import annotations
 
-from pathlib import Path
-import tempfile
 import unittest
 
 from edap.eddn.routes import TimeModel
 from edap.haul_history import RouteSummary, RunTotals
-from edap.recent_markets import (
-    JournalPlaces,
-    MarketSnapshot,
-    load_journal_places,
-    load_recent_markets,
-    record_journal_events,
-    record_market_json,
-)
+from edap.eddn.messages import journal_event_updates, station_type_from_game
+from edap.recent_markets import MarketSnapshot
 from edap.trade_trip import (
     PartialFacts,
     StationFacts,
     estimate_trip,
     gather_facts,
-    journal_lookup,
     measured_route,
     store_lookup,
 )
+from tests.test_eddn import memory_store
 from tests.test_eddn_routes import galaxy, routes
 
 
@@ -113,41 +105,43 @@ class FactSourceTests(unittest.TestCase):
         self.assertEqual((found.station_type, found.station_type_source), ("Orbis", "journal"))
         self.assertEqual(calls, ["eddn", "journal"])
 
-    def test_the_journal_knows_docked_distance_jump_coordinates_and_the_market_type(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "recent.json"
-            logs: list[str] = []
-            record_market_json(path, {"MarketID": 1, "StationName": "Galileo", "StarSystem": "Sol",
-                                      "StationType": "Ocellus", "timestamp": "2026-11-10T09:00:00Z", "Items": []},
-                               logs.append)
-            changed = record_journal_events(path, [
-                {"event": "FSDJump", "timestamp": "2026-11-10T10:00:00Z", "StarSystem": "Sol", "StarPos": [0, 0, 0]},
-                {"event": "Docked", "timestamp": "2026-11-10T10:05:00Z", "MarketID": 1, "StationName": "Galileo",
-                 "StarSystem": "Sol", "StationType": "Ocellus", "DistFromStarLS": 505.3},
-                {"event": "Location", "timestamp": "2026-11-10T11:00:00Z", "StarSystem": "Alpha",
-                 "StarPos": [10.0, 0.0, 0.0], "Docked": False},
-                {"event": "Music", "timestamp": "2026-11-10T11:01:00Z"},
-            ], logs.append)
-            unchanged = record_journal_events(path, [{"event": "Undocked"}], logs.append)
-            # A later market visit keeps the stored places.
-            record_market_json(path, {"MarketID": 2, "StationName": "Alpha Port", "StarSystem": "Alpha",
-                                      "StationType": "Coriolis", "timestamp": "2026-11-10T11:30:00Z", "Items": []},
-                               logs.append)
-            places = load_journal_places(path)
-            snapshots = load_recent_markets(path)
+    def test_the_store_knows_docked_distance_jump_coordinates_and_the_market_type_from_our_journal(self) -> None:
+        store = memory_store()
+        self.addCleanup(store.close)
+        events = [
+            {"event": "FSDJump", "timestamp": "2026-11-10T10:00:00Z", "StarSystem": "Sol", "SystemAddress": 10,
+             "StarPos": [0, 0, 0]},
+            {"event": "Docked", "timestamp": "2026-11-10T10:05:00Z", "MarketID": 1, "StationName": "Galileo",
+             "StarSystem": "Sol", "SystemAddress": 10, "StationType": "Ocellus", "DistFromStarLS": 505.3,
+             "LandingPads": {"Small": 4, "Medium": 6, "Large": 2}},
+            {"event": "Location", "timestamp": "2026-11-10T11:00:00Z", "StarSystem": "Alpha", "SystemAddress": 20,
+             "StarPos": [10.0, 0.0, 0.0], "Docked": False},
+            {"event": "Music", "timestamp": "2026-11-10T11:01:00Z"},
+        ]
+        store.save([update for event in events for update in journal_event_updates(event)])
+        # Market.json names the type of a station we never docked at, and a market in an unknown system.
+        store.save([station_type_from_game(snapshot(2, "Alpha Port", "Alpha")),
+                    station_type_from_game(snapshot(3, "Far Port", "Unvisited"))])
 
-        lookup = journal_lookup(places, snapshots)
-        self.assertTrue(changed)
-        self.assertFalse(unchanged)
-        self.assertEqual(logs, [])
+        lookup = store_lookup(store._db)
         self.assertEqual(lookup(1, "Galileo", "SOL"), PartialFacts((0.0, 0.0, 0.0), 505.3, "Ocellus"))
+        self.assertEqual(store._db.execute("SELECT max_pad FROM station WHERE market_id = 1").fetchone(), ("L",))
         # Never docked at Alpha Port: coordinates from the jump, type from Market.json, no distance.
         self.assertEqual(lookup(2, "Alpha Port", "Alpha"), PartialFacts((10.0, 0.0, 0.0), None, "Coriolis"))
+        self.assertEqual(lookup(3, "Far Port", "Unvisited"), PartialFacts())
 
-    def test_an_unknown_station_has_no_journal_facts(self) -> None:
-        lookup = journal_lookup(JournalPlaces(), ())
-        self.assertEqual(lookup(5, "Nowhere", "Void"), PartialFacts())
+    def test_a_docked_location_records_the_station_and_newest_wins(self) -> None:
+        store = memory_store()
+        self.addCleanup(store.close)
+        docked = {"event": "Location", "timestamp": "2026-11-10T12:00:00Z", "StarSystem": "Sol", "SystemAddress": 10,
+                  "StarPos": [0, 0, 0], "Docked": True, "MarketID": 1, "StationName": "Galileo",
+                  "StationType": "Ocellus", "DistFromStarLS": 505.3}
+        store.save(journal_event_updates(docked))
+        # An older Market.json type does not overwrite the newer docked row.
+        store.save([station_type_from_game(MarketSnapshot(1, "Galileo", "Sol", "Coriolis", "2026-11-10T09:00:00Z", ()))])
 
+        self.assertEqual(store_lookup(store._db)(1, "Galileo", "Sol"), PartialFacts((0.0, 0.0, 0.0), 505.3, "Ocellus"))
+        self.assertEqual(journal_event_updates({"event": "Docked", "MarketID": 1}), [])
 
 class MeasuredRouteTests(unittest.TestCase):
     def test_completed_runs_either_way_and_any_case_add_up_to_a_measured_rate(self) -> None:

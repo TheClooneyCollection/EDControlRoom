@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from rich.markup import escape
 
@@ -12,6 +12,7 @@ from edap.control_room.app import ControlRoomApp, VersionSource
 from edap.control_room.history import now_iso
 from edap.control_room.routine_stop import RoutineStopMode
 from edap.control_room_state import CommandHistoryEntry
+from edap.eddn.messages import EddnUpdate
 from edap.inara.trade_routes import TradeRoute
 from edap.routing.types import Route
 from edap.runtime import RuntimeContext
@@ -95,6 +96,7 @@ class HeadlessControlRoomHost(ControlRoomApp):
         *,
         speech_backend: SpeechBackend,
         version_source: VersionSource,
+        record_station_facts: Callable[[list[EddnUpdate]], None],
         market_filter: str | None = None,
     ) -> None:
         self._activity_widget = _ActivityWidgetStub()
@@ -108,7 +110,9 @@ class HeadlessControlRoomHost(ControlRoomApp):
         self._trade_route_list_widget = _OptionListWidgetStub()
         self._trade_route_picker_widget = _ContainerWidgetStub()
         self._main_widget = _ContainerWidgetStub()
-        super().__init__(ctx, market_filter=market_filter, version_source=version_source)
+        super().__init__(
+            ctx, market_filter=market_filter, version_source=version_source, record_station_facts=record_station_facts
+        )
         self._tts = TTSAnnouncer(
             self._config.tts,
             platform_name=self._config.runtime.platform,

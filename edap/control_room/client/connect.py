@@ -62,6 +62,8 @@ def connect_observer_mode(
             execution=execution,
         ),
         title_override=f"ED Control Room Observer - {server_target.host}:{server_target.port}",
+        # The server records station facts from its own journal; an observer has none to add.
+        record_station_facts=lambda updates: None,
     )
     execution.bind_app(app)
     app.run()

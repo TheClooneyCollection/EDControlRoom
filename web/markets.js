@@ -226,6 +226,9 @@ function dealMetrics(perTon, perTrip, perHour, trip, measured) {
   if (perHour !== null) {
     const legs = trip.jumps ? `${trip.jumps} jump${trip.jumps === 1 ? "" : "s"} each way, ${trip.distance_ly} Ly` : "same system";
     hourNote = `Estimate: ${minutes(trip.trip_s)} round trip, ${legs} at ${trip.laden_jump_range_ly} Ly laden`;
+  } else if (trip && trip.hint) {
+    // A peer has no station facts of its own; the hub supplies them.
+    hourNote = escapeHtml(trip.hint);
   } else {
     const missing = (trip && trip.missing) || [];
     hourNote = missing.length ? `Missing ${escapeHtml(missing.join(", "))}. Docking there or EDDN data fills it in.` : "No trip estimate.";

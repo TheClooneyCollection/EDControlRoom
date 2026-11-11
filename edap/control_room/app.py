@@ -122,7 +122,7 @@ from edap.control_room_state import (
 from edap.binding_conflicts import read_galaxy_map_binding_conflicts
 from edap.binding_lookup import load_binding_lookup
 from edap.binding_names import format_binding_action_hint
-from edap.recent_markets import JOURNAL_PLACE_EVENTS, record_journal_events
+from edap.eddn.messages import EddnUpdate, journal_event_updates
 from edap.runtime import RuntimeContext, build_runtime_context, load_config_with_fallback
 from edap.ship_controls import DEFAULT_SHIP_CONTROL_ACTIONS, ShipControls
 from edap.tts import AnnouncementId, TTSAnnouncer, format_credits_short, parse_announcement_id
@@ -412,9 +412,12 @@ class ControlRoomApp(App[None]):
         dependencies: ControlRoomDependencies | None = None,
         view_actions: ControlRoomViewActions | None = None,
         title_override: str | None = None,
+        record_station_facts: Callable[[list[EddnUpdate]], None],
     ) -> None:
         super().__init__()
         self._ctx = ctx
+        # System and station facts from the journal: the market store on a hub or standalone.
+        self._record_station_facts = record_station_facts
         self._config: AppConfig = ctx.config
         self._config_path: Path = ctx.config_path
         self._config_loaded_from_example_fallback = ctx.used_example_config_fallback
@@ -1690,8 +1693,9 @@ class ControlRoomApp(App[None]):
         if event in {"Cargo", "MarketBuy", "MarketSell"}:
             _bootstrap.sync_cargo_manifest(self)
 
-        if event in JOURNAL_PLACE_EVENTS:
-            record_journal_events(self._config.control_room.recent_markets_file, [ev], self._log)
+        facts = journal_event_updates(ev)
+        if facts:
+            self._record_station_facts(facts)
         if event in {"Docked", "Market"}:
             self._load_market_json()
 
@@ -2518,7 +2522,13 @@ def main() -> None:
         )
         sys.exit(1)
 
-    app = ControlRoomApp(ctx, market_filter=args.market)
+    from edap.market_db import open_market_store, station_facts_writer
+
+    store = open_market_store(loaded.config)
+    # The writer logs through the app's activity log, which exists by the time a fact arrives.
+    app = ControlRoomApp(
+        ctx, market_filter=args.market, record_station_facts=station_facts_writer(store, lambda msg: app._log(msg))
+    )
     previous_sigint = signal.getsignal(signal.SIGINT)
 
     def handle_sigint(signum, frame) -> None:  # type: ignore[no-untyped-def]
@@ -2530,6 +2540,8 @@ def main() -> None:
         app.run()
     finally:
         signal.signal(signal.SIGINT, previous_sigint)
+        if store is not None:
+            store.close()
 
 
 if __name__ == "__main__":

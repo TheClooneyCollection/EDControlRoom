@@ -35,14 +35,12 @@ from edap.journal_trade_ledger import journal_trade_ledger
 from edap.market_compare import compare_markets
 from edap.hub import HubClient, HubStatus, HubUnreachable, hub_unreachable_detail, with_hub_source
 from edap.recent_markets import (
-    JournalPlaces,
     MarketSnapshot,
-    load_journal_places,
     load_recent_markets,
     market_items,
     snapshot_from_entry,
 )
-from edap.trade_trip import FactLookup, estimate_trip, gather_facts, journal_lookup, measured_route, store_lookup
+from edap.trade_trip import FactLookup, estimate_trip, gather_facts, measured_route, store_lookup
 from edap.platform.local_time import SystemLocalTimezone
 from edap.control_room.server.auth import ObserverServerAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
@@ -197,7 +195,7 @@ def build_observer_server_app(
     haul_runs_file: Path | None = None,
     recent_markets_file: Path | None = None,
     eddn_status: Callable[[], dict[str, Any]] | None = None,
-    eddn_database_file: Path | None = None,
+    market_database_file: Path | None = None,
     import_markets: Callable[[tuple[MarketSnapshot, ...]], list[GameMarketImport]] | None = None,
     ardent_lookup: FactLookup | None = None,
     hub: HubClient | None = None,
@@ -512,7 +510,7 @@ def build_observer_server_app(
             comparison = compare_markets(market_items(market_x), market_items(market_y), cargo_capacity)
             return {
                 **asdict(comparison),
-                **read_trip(market_x, market_y, snapshots, laden),
+                **read_trip(market_x, market_y, laden),
             }
 
         payload = await asyncio.to_thread(compare)
@@ -521,23 +519,21 @@ def build_observer_server_app(
         return JSONResponse(payload)
 
     def read_trip(
-        market_x: MarketSnapshot, market_y: MarketSnapshot, snapshots: tuple[MarketSnapshot, ...], laden: float
+        market_x: MarketSnapshot, market_y: MarketSnapshot, laden: float
     ) -> dict[str, Any]:
-        """Estimated trip time (EDDN store, then journal, then Ardent) and measured haul profit per hour."""
-        places = load_journal_places(recent_markets_file) if recent_markets_file is not None else JournalPlaces()
+        """Estimated trip time (market store, then Ardent) and measured haul profit per hour."""
         store = None
-        if eddn_database_file is not None and eddn_database_file.exists():
+        if market_database_file is not None and market_database_file.exists():
             try:
-                store = sqlite3.connect(f"file:{eddn_database_file}?mode=ro", uri=True)
+                store = sqlite3.connect(f"file:{market_database_file}?mode=ro", uri=True)
             except sqlite3.Error:
                 store = None
         try:
             sources: list[tuple[str, FactLookup]] = []
             if store is not None:
-                sources.append(("eddn", store_lookup(store)))
-            sources.append(("journal", journal_lookup(places, snapshots)))
+                sources.append(("store", store_lookup(store)))
             if ardent_lookup is not None:
-                # Asked only for what the store and journal lack; a failed lookup just leaves "-".
+                # Asked only for what the store lacks; a failed lookup just leaves "-".
                 sources.append(("ardent", ardent_lookup))
             facts = [gather_facts(m.market_id, m.station, m.system, sources) for m in (market_x, market_y)]
         finally:
@@ -553,7 +549,12 @@ def build_observer_server_app(
             except (OSError, ValueError):
                 measured = None
         return {
-            "trip": {**asdict(estimate), "stations": {"x": asdict(facts[0]), "y": asdict(facts[1])}},
+            "trip": {
+                **asdict(estimate),
+                "stations": {"x": asdict(facts[0]), "y": asdict(facts[1])},
+                # A peer owns no station facts; the hub supplies them once the hub link exists.
+                "hint": "Station facts come from the hub." if market_database_file is None else None,
+            },
             "measured": asdict(measured) if measured is not None else None,
         }
 
@@ -599,8 +600,10 @@ def build_observer_server_app(
         if hub is not None:
             # The hub answers for this ship and this server's search settings, not its own.
             return await forward_to_hub("/api/eddn-routes", resolve_route_params(request.query_params, **ship_inputs))
-        if eddn_database_file is None or not eddn_database_file.exists():
-            return JSONResponse({"detail": "EDDN is not enabled or has no data yet"}, status_code=404)
+        if market_database_file is None:
+            return JSONResponse({"detail": "This peer has no market database; the hub serves routes"}, status_code=404)
+        if not market_database_file.exists():
+            return JSONResponse({"detail": "The market database has no data yet"}, status_code=404)
         try:
             query = parse_route_query(request.query_params, **ship_inputs)
         except ValueError as exc:
@@ -608,7 +611,7 @@ def build_observer_server_app(
         def search() -> dict[str, Any]:
             names = {item.commodity: item.name for snapshot in read_recent_markets() for item in market_items(snapshot)}
             return run_route_query(
-                eddn_database_file, query, time_model=TimeModel(), display_names=names, now=time.time()
+                market_database_file, query, time_model=TimeModel(), display_names=names, now=time.time()
             )
 
         try:
@@ -616,7 +619,7 @@ def build_observer_server_app(
         except RouteQueryError as exc:
             return JSONResponse({"detail": str(exc)}, status_code=404)
         except sqlite3.Error as exc:
-            return JSONResponse({"detail": f"Cannot read the EDDN database: {exc}"}, status_code=503)
+            return JSONResponse({"detail": f"Cannot read the market database: {exc}"}, status_code=503)
         return JSONResponse(payload)
 
     async def forward_to_hub(path: str, params: dict[str, str]) -> JSONResponse:
@@ -652,7 +655,7 @@ def build_observer_server_app(
         if auth_failure is not None:
             return auth_failure
         if import_markets is None:
-            return JSONResponse({"detail": "This Control Room has no EDDN market DB; set [eddn] enabled = true"},
+            return JSONResponse({"detail": "This Control Room has no market database (a peer)"},
                                 status_code=503)
         try:
             body = await request.json()
@@ -668,7 +671,7 @@ def build_observer_server_app(
         try:
             results = await asyncio.to_thread(import_markets, snapshots)
         except sqlite3.Error as exc:
-            return JSONResponse({"detail": f"Cannot write the EDDN database: {exc}"}, status_code=503)
+            return JSONResponse({"detail": f"Cannot write the market database: {exc}"}, status_code=503)
         logger.info("EDDN pushed markets: %s", ", ".join(
             f"{result.station} {'written' if result.written else 'kept'}" for result in results))
         return JSONResponse({"results": [asdict(result) for result in results]})

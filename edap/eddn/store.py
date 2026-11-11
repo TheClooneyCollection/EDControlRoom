@@ -1,5 +1,7 @@
-"""SQLite store of the latest EDDN market snapshot per station (no price history).
+"""SQLite store of the latest market snapshot per station (no price history) plus system and station facts.
 
+Hub and standalone Control Rooms always open it; a peer never does. EDDN, our own journal and
+Market.json, and Ardent all write into it with the same newest-wins rule.
 Writes are batched: callers apply updates and call `commit()` periodically.
 WAL mode lets route queries read from their own connection while the listener writes.
 """
@@ -10,7 +12,14 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
-from edap.eddn.messages import EddnUpdate, MarketSnapshot, StationInfo, SystemPosition, is_carrier_station
+from edap.eddn.messages import (
+    EddnUpdate,
+    MarketSnapshot,
+    StationInfo,
+    StationTypeSeen,
+    SystemPosition,
+    is_carrier_station,
+)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS system (
@@ -83,11 +92,20 @@ class EddnStore:
         with self._lock:
             return self._apply(update)
 
+    def save(self, updates: list[EddnUpdate]) -> None:
+        """Apply several updates and commit them, as the journal and Ardent writers do."""
+        with self._lock:
+            for update in updates:
+                self._apply(update)
+            self._db.commit()
+
     def _apply(self, update: EddnUpdate) -> bool:
         if isinstance(update, MarketSnapshot):
             return self._apply_market(update)
         if isinstance(update, SystemPosition):
             return self._apply_system(update)
+        if isinstance(update, StationTypeSeen):
+            return self._apply_station_type(update)
         return self._apply_station(update)
 
     def commit(self) -> None:
@@ -185,3 +203,24 @@ class EddnStore:
         if cursor.rowcount > 0 and is_carrier_station(station.name, station.type):
             self._db.execute("UPDATE market SET is_carrier = 1 WHERE market_id = ?", (station.market_id,))
         return cursor.rowcount > 0
+
+    def _apply_station_type(self, seen: StationTypeSeen) -> bool:
+        """Set a known station's type; a new row needs the system address, from the system table."""
+        cursor = self._db.execute(
+            "UPDATE station SET type = ?, updated_at = ? WHERE market_id = ? AND updated_at <= ?",
+            (seen.type, seen.timestamp, seen.market_id, seen.timestamp),
+        )
+        if cursor.rowcount > 0:
+            return True
+        if self._db.execute("SELECT 1 FROM station WHERE market_id = ?", (seen.market_id,)).fetchone() is not None:
+            return False
+        row = self._db.execute(
+            "SELECT address FROM system WHERE name = ? COLLATE NOCASE ORDER BY updated_at DESC LIMIT 1",
+            (seen.system_name,),
+        ).fetchone()
+        if row is None:
+            return False
+        return self._apply_station(StationInfo(
+            market_id=seen.market_id, system_address=row[0], system_name=seen.system_name, name=seen.name,
+            type=seen.type, dist_ls=None, max_pad="", timestamp=seen.timestamp,
+        ))

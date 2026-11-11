@@ -127,7 +127,7 @@ def _make_context(journal_dir: Path) -> RuntimeContext:
 
 class _ProtocolHarnessApp(ControlRoomApp):
     def __init__(self, ctx: RuntimeContext) -> None:
-        super().__init__(ctx, version_source=_FakeVersionSource())
+        super().__init__(ctx, version_source=_FakeVersionSource(), record_station_facts=lambda updates: None)
         self._current_version = "1.2.3"
         self._activity_widget = _ActivityLogStub()
 
@@ -215,7 +215,9 @@ class _RenderHarnessApp(_ProtocolHarnessApp):
         if backend is None:
             super().__init__(ctx)
         else:
-            ControlRoomApp.__init__(self, ctx, backend=backend, version_source=_FakeVersionSource())
+            ControlRoomApp.__init__(
+                self, ctx, backend=backend, version_source=_FakeVersionSource(), record_station_facts=lambda updates: None
+            )
         self._activity_widget = _ActivityLogStub()
 
     def query_one(self, selector: str, widget_type=None):  # type: ignore[override]

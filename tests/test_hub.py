@@ -30,7 +30,7 @@ from edap.recent_markets import load_recent_markets, snapshot_entry
 from tests.test_eddn import memory_store, prices, save_game_markets
 
 TOKEN = "hub-token"
-HUB = HubConfig(url="http://hub.local:8765", token=TOKEN)
+HUB = HubConfig(role="peer", url="http://hub.local:8765", token=TOKEN)
 NOW = 1794387600.0  # 2026-11-11T09:00:00Z
 
 
@@ -91,19 +91,33 @@ def client_into(app) -> tuple[TestClient, callable]:
 
 
 class HubConfigTests(unittest.TestCase):
-    def test_no_hub_by_default_and_url_is_validated(self) -> None:
+    def test_standalone_by_default_and_role_and_url_are_validated(self) -> None:
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.toml"
             path.write_text("", encoding="utf-8")
             hub = load_config(path).hub
-            self.assertFalse(hub.enabled)
+            self.assertEqual((hub.role, hub.owns_data, hub.enabled), ("standalone", True, False))
             self.assertEqual((hub.timeout_s, hub.search_timeout_s, hub.heartbeat_s), (10.0, 180.0, 30.0))
 
-            path.write_text('[hub]\nurl = "http://192.168.1.20:8765/"\ntoken = "t"\n', encoding="utf-8")
+            path.write_text('[hub]\nrole = "Hub"\ntoken = "t"\n', encoding="utf-8")
             hub = load_config(path).hub
-            self.assertEqual((hub.url, hub.token, hub.enabled), ("http://192.168.1.20:8765", "t", True))
+            self.assertEqual((hub.role, hub.owns_data, hub.enabled), ("hub", True, False))
 
-            path.write_text('[hub]\nurl = "192.168.1.20"\n', encoding="utf-8")
+            path.write_text('[hub]\nrole = "peer"\nurl = "http://192.168.1.20:8765/"\ntoken = "t"\n', encoding="utf-8")
+            hub = load_config(path).hub
+            self.assertEqual((hub.url, hub.token, hub.owns_data, hub.enabled),
+                             ("http://192.168.1.20:8765", "t", False, True))
+            path.write_text('[hub]\nrole = "peer"\n', encoding="utf-8")
+            self.assertEqual((load_config(path).hub.owns_data, load_config(path).hub.enabled), (False, False))
+
+            path.write_text('[hub]\nrole = "server"\n', encoding="utf-8")
+            with self.assertRaisesRegex(ConfigError, "hub.role"):
+                load_config(path)
+            # A hub address only means something to a peer.
+            path.write_text('[hub]\nurl = "http://192.168.1.20:8765"\n', encoding="utf-8")
+            with self.assertRaisesRegex(ConfigError, "hub.url"):
+                load_config(path)
+            path.write_text('[hub]\nrole = "peer"\nurl = "192.168.1.20"\n', encoding="utf-8")
             with self.assertRaisesRegex(ConfigError, "hub.url"):
                 load_config(path)
             path.write_text("[hub]\ntimeout_s = 0\n", encoding="utf-8")

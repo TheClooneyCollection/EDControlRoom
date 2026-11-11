@@ -225,10 +225,12 @@ class _FakeVersionSource:
 class _HarnessApp(ControlRoomApp):
     def __init__(self, ctx: RuntimeContext, *, activity_log_max_lines: int | None = None) -> None:
         self.version_source = _FakeVersionSource()
+        self.station_facts: list = []
         super().__init__(
             ctx,
             activity_log_max_lines=activity_log_max_lines,
             version_source=self.version_source,
+            record_station_facts=self.station_facts.extend,
         )
         self._journal_artifact_log_path = ctx.config.control_room.state_file.parent / "control-room-artifact.log"
         self.logged: list[str] = []
@@ -286,7 +288,7 @@ class _WorkerGroupStub:
 class _ShutdownHarnessApp(ControlRoomApp):
     def __init__(self, ctx: RuntimeContext) -> None:
         self.version_source = _FakeVersionSource()
-        super().__init__(ctx, version_source=self.version_source)
+        super().__init__(ctx, version_source=self.version_source, record_station_facts=lambda updates: None)
         self._journal_artifact_log_path = ctx.config.control_room.state_file.parent / "control-room-artifact.log"
         self.exit_calls = 0
 
@@ -1360,21 +1362,27 @@ class ControlRoomCommandTests(unittest.TestCase):
                          [(3228, "Pawelczyk Dock", "Coriolis")])
         self.assertEqual(markets[0].items[0]["Name_Localised"], "Gold")
 
-    def test_jumps_and_docking_record_journal_places_live_and_from_the_latest_log(self) -> None:
-        from edap.recent_markets import load_journal_places
+    def test_jumps_and_docking_record_station_facts_live_and_from_the_latest_log(self) -> None:
+        from edap.eddn.messages import StationInfo, SystemPosition
 
         journal_dir = Path(self.tmpdir.name)
         (journal_dir / "Journal.240101000000.01.log").write_text(
-            json.dumps({"event": "FSDJump", "StarSystem": "HIP 58412", "StarPos": [1.5, 2.0, -3.0]}) + "\n",
+            json.dumps({"event": "FSDJump", "timestamp": "2026-11-10T10:00:00Z", "StarSystem": "HIP 58412",
+                        "SystemAddress": 7, "StarPos": [1.5, 2.0, -3.0]}) + "\n",
             encoding="utf-8",
         )
 
         self.app._bootstrap_ship_state()
-        self.app._handle_event({"event": "Docked", "MarketID": 3228, "StationName": "Pawelczyk Dock",
-                                "StationType": "Coriolis", "StarSystem": "HIP 58412", "DistFromStarLS": 1234.5})
+        self.app._handle_event({"event": "Docked", "timestamp": "2026-11-10T10:05:00Z", "MarketID": 3228,
+                                "StationName": "Pawelczyk Dock", "StationType": "Coriolis",
+                                "StarSystem": "HIP 58412", "SystemAddress": 7, "DistFromStarLS": 1234.5})
+        self.app._handle_event({"event": "Undocked", "timestamp": "2026-11-10T10:09:00Z"})
 
-        places = load_journal_places(self.app._config.control_room.recent_markets_file)
-        self.assertEqual((places.system("hip 58412").x, places.station(3228).dist_ls), (1.5, 1234.5))
+        system, station = self.app.station_facts
+        self.assertIsInstance(system, SystemPosition)
+        self.assertEqual((system.name, system.x), ("HIP 58412", 1.5))
+        self.assertIsInstance(station, StationInfo)
+        self.assertEqual((station.market_id, station.dist_ls, station.type), (3228, 1234.5, "Coriolis"))
 
     def test_load_market_json_does_not_seed_when_not_in_station(self) -> None:
         journal_dir = Path(self.tmpdir.name)
@@ -2853,6 +2861,7 @@ class ActivityLogTests(unittest.TestCase):
         app = ControlRoomApp(
             _make_context(Path(self.tmpdir.name), activity_log_max_lines=17),
             version_source=_FakeVersionSource(),
+            record_station_facts=lambda updates: None,
         )
 
         self.assertEqual(app._activity_log_max_lines, 17)
@@ -2862,6 +2871,7 @@ class ActivityLogTests(unittest.TestCase):
             _make_context(Path(self.tmpdir.name), activity_log_max_lines=17),
             activity_log_max_lines=5,
             version_source=_FakeVersionSource(),
+            record_station_facts=lambda updates: None,
         )
 
         self.assertEqual(app._activity_log_max_lines, 5)

@@ -1,6 +1,8 @@
 [hub]
-# Base URL of the home Control Room that searches routes and holds the market DB, such as
-# "http://192.168.1.20:8765". Empty runs everything locally.
+# "standalone" (one machine, the default), "hub" (the home Control Room that owns the market
+# and station database) or "peer" (owns no data; asks the hub).
+role = "standalone"
+# Peer only: base URL of the hub, such as "http://192.168.1.20:8765".
 url = ""
 # The hub's access token (its `--token`).
 token = ""

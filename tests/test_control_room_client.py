@@ -342,6 +342,7 @@ class ControlRoomClientTests(unittest.TestCase):
             ),
             title_override="ED Control Room Observer - bridge.local:8765",
             version_source=_FakeVersionSource(),
+            record_station_facts=lambda updates: None,
         )
         execution.bind_app(app)
         return app

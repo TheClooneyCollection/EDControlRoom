@@ -18,11 +18,12 @@ from edap.control_room.server.sink import (
     FanoutControlRoomEventSink,
     ServerActivityLogSink,
 )
-from edap.ardent import ArdentLookup, httpx_fetch_json, store_saver
-from edap.eddn.game_markets import import_markets
+from edap.ardent import ArdentLookup, httpx_fetch_json
+from edap.eddn.game_markets import import_game_markets_every, import_markets
 from edap.eddn.listener import open_zmq_socket
 from edap.eddn.service import EddnService, start_eddn_service
 from edap.hub import HubClient, HubMarketPusher, HubStatus, httpx_transport, run_hub_heartbeat, watch_recent_markets
+from edap.market_db import open_market_store, station_facts_writer
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.tts import NullSpeechBackend, build_speech_backend
 from edap.version import REPOSITORY_NAME, get_current_version
@@ -66,10 +67,14 @@ def serve_observer_mode(
         if speak_tts
         else NullSpeechBackend()
     )
+    hub_config = loaded.config.hub
+    # Hub and standalone own the market and station database, with or without the EDDN listener.
+    store = open_market_store(loaded.config)
     runtime_host = HeadlessControlRoomHost(
         ctx,
         speech_backend=speech_backend,
         version_source=DefaultVersionSource(),
+        record_station_facts=station_facts_writer(store, logging.getLogger("edap.market_db").warning),
     )
 
     def data_provider():
@@ -96,47 +101,56 @@ def serve_observer_mode(
     )
     eddn_config = loaded.config.eddn
     eddn: EddnService | None = None
-    if eddn_config.enabled:
+    db_logger = logging.getLogger("edap.market_db")
+    if store is not None:
+        db_logger.info("Market DB (role %s): %s", hub_config.role, eddn_config.database_file)
+    else:
+        db_logger.info("Market DB: none on a peer; the hub owns market and station data")
+    if store is not None and eddn_config.enabled:
         eddn_logger = logging.getLogger("edap.eddn")
         eddn = start_eddn_service(
             eddn_config,
+            store=store,
             open_socket=lambda: open_zmq_socket(eddn_config.relay),
             time_fn=time.time,
             log=eddn_logger.info,
         )
         eddn_logger.info("EDDN listener started: %s -> %s", eddn_config.relay, eddn_config.database_file)
+    elif eddn_config.enabled:
+        logging.getLogger("edap.eddn").info("EDDN listener off: a peer never listens; the hub does")
     recent_markets_file = loaded.config.control_room.recent_markets_file
-    hub_config = loaded.config.hub
     hub = HubClient(hub_config, httpx_transport) if hub_config.enabled else None
     hub_status: HubStatus | None = None
-    stop_hub_push = threading.Event()
-    # Recent markets are recorded by the Control Room whenever Market.json changes; with a hub
-    # they go only to the hub's DB.
+    stop_background = threading.Event()
+    # Recent markets are recorded by the Control Room whenever Market.json changes; a peer sends
+    # them only to the hub, a hub or standalone writes them into its own database.
     if hub is not None:
         hub_logger = logging.getLogger("edap.hub")
         hub_logger.info("Hub: searches and market pushes go to %s", hub_config.url)
         hub_status = HubStatus(hub, time.time)
         pusher = HubMarketPusher(client=hub, log=hub_logger.info, status=hub_status)
         watch_recent_markets(
-            recent_markets_file, 5.0, pusher.push_changes, stop=stop_hub_push, log=hub_logger.warning, name="hub-markets"
+            recent_markets_file, 5.0, pusher.push_changes, stop=stop_background, log=hub_logger.warning,
+            name="hub-markets",
         )
         threading.Thread(
             target=lambda: run_hub_heartbeat(
-                hub_status, perf_counter=time.perf_counter, wait=stop_hub_push.wait, log=hub_logger.info
+                hub_status, perf_counter=time.perf_counter, wait=stop_background.wait, log=hub_logger.info
             ),
             name="hub-heartbeat",
             daemon=True,
         ).start()
-    elif eddn is not None:
-        eddn.import_game_markets_every(recent_markets_file, 5.0, logging.getLogger("edap.eddn").info)
-    ardent_logger = logging.getLogger("edap.ardent")
-    ardent_lookup = ArdentLookup(
-        httpx_fetch_json(f"{REPOSITORY_NAME}/{get_current_version()} (Best deal lookups)"),
-        now=time.time,
-        # With an EDDN store the rows land there, so /routes gains them too; else they stay in memory.
-        save=store_saver(eddn.store.apply, eddn.store.commit) if eddn is not None else (lambda updates: None),
-        log=ardent_logger.info,
-    )
+    if store is not None:
+        import_game_markets_every(store, recent_markets_file, 5.0, db_logger.info, stop=stop_background)
+    ardent_lookup: ArdentLookup | None = None
+    if store is not None:
+        ardent_lookup = ArdentLookup(
+            httpx_fetch_json(f"{REPOSITORY_NAME}/{get_current_version()} (Best deal lookups)"),
+            now=time.time,
+            # Rows land in the store, so /routes gains them too.
+            save=store.save,
+            log=logging.getLogger("edap.ardent").info,
+        )
     broker.server_state.set_selected_trade_route(runtime_host._saved_state.selected_trade_route)
     broker.server_state.set_running_trade_route(runtime_host._saved_state.running_trade_route)
     app = build_observer_server_app(
@@ -149,8 +163,8 @@ def serve_observer_mode(
         haul_runs_file=loaded.config.control_room.haul_runs_file,
         recent_markets_file=recent_markets_file,
         eddn_status=eddn.status if eddn is not None else None,
-        eddn_database_file=eddn_config.database_file if eddn is not None else None,
-        import_markets=(lambda markets: import_markets(eddn.store, markets)) if eddn is not None else None,
+        market_database_file=eddn_config.database_file if store is not None else None,
+        import_markets=(lambda markets: import_markets(store, markets)) if store is not None else None,
         ardent_lookup=ardent_lookup,
         hub=hub,
         hub_status=hub_status,
@@ -160,7 +174,9 @@ def serve_observer_mode(
     try:
         uvicorn.run(app, host=host, port=port, log_level="info")
     finally:
-        stop_hub_push.set()
+        stop_background.set()
         if eddn is not None:
             eddn.close()
         runtime_host.close()
+        if store is not None:
+            store.close()

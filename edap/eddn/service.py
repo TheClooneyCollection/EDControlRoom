@@ -1,17 +1,14 @@
-"""EDDN listener plus store, run as one background service inside the Control Room server."""
+"""EDDN listener writing into the server's market store, run as a background service inside the Control Room server."""
 from __future__ import annotations
 
 import threading
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Callable
 
 from edap.config import EddnConfig
-from edap.eddn.game_markets import import_game_markets, import_summary
 from edap.eddn.listener import EddnListener, EddnListenerStats, EddnSocket
 from edap.eddn.store import EddnStore, EddnStoreCounts
-from edap.hub import watch_recent_markets
 
 
 def status_line(stats: EddnListenerStats, counts: EddnStoreCounts) -> str:
@@ -47,32 +44,21 @@ class EddnService:
 
         threading.Thread(target=report, name="eddn-status", daemon=True).start()
 
-    def import_game_markets_every(self, recent_markets_file: Path, interval_s: float, log: Callable[[str], None]) -> None:
-        """Write our own Market.json captures into the store, at start and whenever the Control Room records one."""
-        watch_recent_markets(
-            recent_markets_file,
-            interval_s,
-            lambda path: log(f"EDDN {import_summary(import_game_markets(self.store, path))}"),
-            stop=self._stop_status,
-            log=log,
-            name="eddn-game-markets",
-        )
-
     def close(self) -> None:
+        """Stop the listener; the store belongs to the server and stays open."""
         self._stop_status.set()
         self.listener.stop()
         self.listener.join(5.0)
-        self.store.close()
 
 
 def start_eddn_service(
     config: EddnConfig,
     *,
+    store: EddnStore,
     open_socket: Callable[[], EddnSocket],
     time_fn: Callable[[], float],
     log: Callable[[str], None],
 ) -> EddnService:
-    store = EddnStore.open(config.database_file)
     listener = EddnListener(
         store=store,
         open_socket=open_socket,
