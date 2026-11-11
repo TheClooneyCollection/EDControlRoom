@@ -99,6 +99,9 @@ class HaulSummaryTests(unittest.TestCase):
         })
         self.assertEqual(asdict(result.aborted), {"count": 1, "cost": 80, "revenue": 10, "profit": -70})
         self.assertEqual(asdict(result.all_in), {"count": 3, "cost": 220, "revenue": 410, "profit": 190})
+        # The total covers aborted runs too, since a stop or relaunch splits a run into aborted halves.
+        self.assertEqual(result.all_in_duration_s, 13600)
+        self.assertAlmostEqual(result.all_in_profit_per_hour, 190 * 3600 / 13600)
         self.assertEqual(result.skipped_lines, 3)
         self.assertEqual(len(result.routes), 2)
         self.assertEqual(result.routes[0].completed.profit, 260)
@@ -117,6 +120,7 @@ class HaulSummaryTests(unittest.TestCase):
         self.assertIsNone(empty.completed.mean_profit)
         self.assertIsNone(empty.completed.best_profit)
         self.assertIsNone(empty.completed.profit_per_hour)
+        self.assertIsNone(empty.all_in_profit_per_hour)
         result = summarize([run_row(cost=20, revenue=0, expected=None, duration=0)], None, NOW)
         self.assertEqual(result.completed.best_profit, -20)
         self.assertIsNone(result.completed.profit_per_hour)
@@ -164,6 +168,7 @@ class HaulStatsCliTests(unittest.TestCase):
             with redirect_stdout(output):
                 code = main(["all", "--file", str(path), "--journal-dir", directory], now=NOW)
             self.assertEqual(code, 0)
+            self.assertIn("Total: profit 200 CR", output.getvalue())
             self.assertIn("Completed: 1 runs", output.getvalue())
             self.assertIn("profit 200 CR", output.getvalue())
             with redirect_stderr(error):

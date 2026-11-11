@@ -1692,7 +1692,7 @@
 .history-panel { grid-column: 1 / -1; min-width: 0; }
 .history-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
 .history-tabs .btn[aria-pressed="true"] { color: var(--amber); border-color: var(--amber); background: var(--amber-dim); }
-.history-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.history-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .history-metrics .metric-value { overflow-wrap: anywhere; }
 .history-panel h3 { font-size: 12px; color: var(--text-2); margin: 16px 0 6px; }
 .history-table-scroll { max-width: 100%; overflow-x: auto; }

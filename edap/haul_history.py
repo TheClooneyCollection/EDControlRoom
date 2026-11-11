@@ -230,6 +230,9 @@ class HaulSummary:
     completed: CompletedSummary
     aborted: RunTotals
     all_in: RunTotals
+    # A stop, pause or relaunch splits a run into aborted halves, so only all-in is the real total.
+    all_in_duration_s: float
+    all_in_profit_per_hour: float | None
     routes: tuple[RouteSummary, ...]
     commodities: tuple[CommoditySummary, ...]
     skipped_lines: int
@@ -313,6 +316,8 @@ def summarize(
     aborted = [row for row in selected if row["status"] == "aborted"]
     totals = _run_totals(completed)
     duration = sum(float(row.get("duration_s", 0)) for row in completed)
+    all_in = _run_totals(selected)
+    all_in_duration = sum(float(row.get("duration_s", 0)) for row in selected)
     profits = [row["revenue"] - row["cost"] for row in completed]
     expected = [row for row in completed if row.get("expected_profit") is not None]
     expected_profit = sum(row["expected_profit"] for row in expected) if expected else None
@@ -349,6 +354,8 @@ def summarize(
             max(profits) if profits else None, len(expected), expected_profit, actual_profit,
             actual_profit - expected_profit if expected else None,
         ),
-        aborted=_run_totals(aborted), all_in=_run_totals(selected), routes=routes,
+        aborted=_run_totals(aborted), all_in=all_in, all_in_duration_s=all_in_duration,
+        all_in_profit_per_hour=all_in.profit * 3600 / all_in_duration if all_in_duration > 0 else None,
+        routes=routes,
         commodities=commodities, skipped_lines=skipped_lines,
     )

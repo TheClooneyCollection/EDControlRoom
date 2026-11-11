@@ -36,6 +36,13 @@ class ControlRoomHaulWebTests(unittest.TestCase):
             self.assertIn(hook, source)
         self.assertIn('escapeHtml(route.station_1)', source)
         self.assertIn('escapeHtml(item.commodity)', source)
+        # The headline is the all-in total, which counts the aborted halves of split runs.
+        for hook in ('["Total profit", historyMoney(runs.all_in.profit)]', 'runs.all_in_profit_per_hour',
+                     'runs.all_in_duration_s'):
+            self.assertIn(hook, source)
+        # Everything below the headline numbers starts collapsed.
+        self.assertIn('<details class="rc-details history-details"${detailsOpen}>', source)
+        self.assertNotIn('["Completed profit"', source)
 
     def test_two_way_phase_projection_compacts_phase_and_station_for_web(self) -> None:
         self.assertEqual(_project_two_way_phase(Phase.AT_STATION_1_SELL), ("sell", 1))

@@ -66,10 +66,10 @@ let routes = [];
     function renderHaulHistory(payload) {
       const runs = payload.runs;
       const completed = runs.completed;
+      // Total counts aborted runs too: a stop, pause or relaunch splits a run's buy and sell into aborted halves.
       const metrics = [
-        ["Completed runs", completed.count], ["Completed profit", historyMoney(completed.profit)],
-        ["Profit / hour", historyMoney(completed.profit_per_hour)], ["Time", formatDuration(completed.duration_s)],
-        ["Mean", historyMoney(completed.mean_profit)], ["Best", historyMoney(completed.best_profit)]
+        ["Total profit", historyMoney(runs.all_in.profit)], ["Total / hour", historyMoney(runs.all_in_profit_per_hour)],
+        ["Total time", formatDuration(runs.all_in_duration_s)], ["Runs", `${completed.count} done, ${runs.aborted.count} aborted`]
       ].map(([name, value]) => `<div class="metric"><div class="metric-label">${name}</div><div class="metric-value mono">${value}</div></div>`).join("");
       const expected = completed.expected_count ? `<p>Expected vs actual (${completed.expected_count} completed): ${
         historyMoney(completed.expected_profit)} / ${historyMoney(completed.expected_actual_profit)}; delta ${historyMoney(completed.profit_delta)}</p>` : "";
@@ -78,13 +78,18 @@ let routes = [];
       const journal = payload.journal;
       const coverage = journal && journal.coverage;
       const journalLine = journal ? `Trade profit ${historyMoney(journal.profit)}; balance change ${historyMoney(journal.net_balance_change)}. Coverage: ${coverage.files} files, ${escapeHtml(coverage.first_event_at || "unknown")} to ${escapeHtml(coverage.last_event_at || "unknown")}${coverage.window_start_before_oldest_journal ? "; window predates oldest journal" : ""}; ${coverage.skipped_lines} skipped / ${coverage.unreadable_files} unreadable.` : "Journal data unavailable on this server.";
-      document.getElementById("history-content").innerHTML = `
+      const content = document.getElementById("history-content");
+      // The panel re-renders on refresh; keep Details open if the user opened it.
+      const detailsOpen = content.querySelector(".history-details")?.open ? " open" : "";
+      content.innerHTML = `
         <div class="history-metrics">${metrics}</div>
+        <details class="rc-details history-details"${detailsOpen}><summary class="rc-details-toggle">Details</summary>
+        <p>Completed: ${completed.count} runs; profit ${historyMoney(completed.profit)}; ${historyMoney(completed.profit_per_hour)} / hour; mean ${historyMoney(completed.mean_profit)}; best ${historyMoney(completed.best_profit)}</p>
         <p>Aborted: ${runs.aborted.count} runs; realized profit ${historyMoney(runs.aborted.profit)}</p>
-        <p><strong>All-in:</strong> ${historyMoney(runs.all_in.profit)}; revenue ${historyMoney(runs.all_in.revenue)}; cost ${historyMoney(runs.all_in.cost)}</p>
+        <p>All-in revenue ${historyMoney(runs.all_in.revenue)}; cost ${historyMoney(runs.all_in.cost)}</p>
         ${expected}<h3>Routes</h3>${historyTable(["Route", "Completed / Aborted", "Profit", "Cost", "Revenue"], routes)}
         <h3>Commodities</h3>${historyTable(["Commodity", "Bought / Sold", "Cost", "Revenue"], commodities)}
-        <p class="history-journal"><strong>All trading (journal):</strong> ${journalLine}</p>`;
+        <p class="history-journal"><strong>All trading (journal):</strong> ${journalLine}</p></details>`;
     }
 
     async function refreshHaulHistory() {
@@ -842,7 +847,7 @@ let routes = [];
       const amount = Number(value || 0);
       const abs = Math.abs(amount);
       if (abs >= 1000000000) {
-        return `${(amount / 1000000000).toFixed(1)}b CR`;
+        return `${(amount / 1000000000).toFixed(2)}b CR`;
       }
       if (abs >= 1000000) {
         return `${(amount / 1000000).toFixed(1)}m CR`;
