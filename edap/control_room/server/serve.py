@@ -96,6 +96,8 @@ def serve_observer_mode(
             log=eddn_logger.info,
         )
         eddn_logger.info("EDDN listener started: %s -> %s", eddn_config.relay, eddn_config.database_file)
+        # Recent markets are recorded by the Control Room whenever Market.json changes.
+        eddn.import_game_markets_every(loaded.config.control_room.recent_markets_file, 5.0, eddn_logger.info)
     broker.server_state.set_selected_trade_route(runtime_host._saved_state.selected_trade_route)
     broker.server_state.set_running_trade_route(runtime_host._saved_state.running_trade_route)
     app = build_observer_server_app(

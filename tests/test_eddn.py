@@ -11,9 +11,11 @@ from tempfile import TemporaryDirectory
 
 from edap.config import ConfigError, EddnConfig, load_config
 from edap.eddn.listener import EddnListener, apply_payload
-from edap.eddn.service import start_eddn_service
+from edap.eddn.game_markets import import_game_markets
+from edap.eddn.service import EddnService, start_eddn_service
 from edap.eddn.messages import COMMODITY_SCHEMA, JOURNAL_SCHEMA, parse_eddn_message
 from edap.eddn.store import EddnStore
+from edap.recent_markets import save_recent_markets, snapshot_from_market_json
 
 LIVE_HEADER = {"softwareName": "EDMC", "gameversion": "4.0.0.1904", "uploaderID": "x"}
 
@@ -219,6 +221,70 @@ class EddnListenerTests(unittest.TestCase):
         self.assertTrue(all(socket.closed for socket in sockets))
         self.assertEqual(logs, ["EDDN relay silent; reconnecting."])
         self.assertEqual(len(prices(store)), 2)
+
+
+def save_game_markets(path: Path, *timestamps: str) -> None:
+    """Recent markets as the Control Room records them from Market.json, one per timestamp."""
+    markets = []
+    for index, timestamp in enumerate(timestamps):
+        markets.append(snapshot_from_market_json({
+            "timestamp": timestamp, "MarketID": 3229359104 + index, "StationName": f"Galileo {index}" if index else "Galileo",
+            "StarSystem": "Sol", "StationType": "Ocellus",
+            "Items": [
+                {"Name": "$gold_name;", "BuyPrice": 9500, "SellPrice": 9400, "Stock": 700, "Demand": 1},
+                {"Name": "$insulatingmembrane_name;", "BuyPrice": 0, "SellPrice": 20375, "Stock": 0, "Demand": 7134688},
+                {"Name": "$tea_name;", "BuyPrice": 0, "SellPrice": 1400, "Stock": 0, "Demand": 0},
+            ],
+        }))
+    save_recent_markets(path, tuple(markets))
+
+
+class GameMarketImportTests(unittest.TestCase):
+    def test_our_market_uses_eddn_names_and_replaces_only_older_data(self) -> None:
+        store = memory_store()
+        apply_payload(store, frame(commodity_envelope(timestamp="2026-11-10T15:00:00Z")))
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "recent_markets.json"
+            save_game_markets(path, "2026-11-10T14:00:00Z")
+            [older] = import_game_markets(store, path)
+            self.assertFalse(older.written)
+            self.assertEqual(len(prices(store)), 2)
+
+            save_game_markets(path, "2026-11-10T16:00:00Z")
+            [newer] = import_game_markets(store, path)
+
+        self.assertTrue(newer.written)
+        # The whole station is replaced: EDDN's silver row does not ride along under our timestamp.
+        self.assertEqual(prices(store), [(3229359104, "gold", 9500, 9400, 700, 1),
+                                         (3229359104, "insulatingmembrane", 0, 20375, 0, 7134688)])
+        self.assertEqual(apply_payload(store, frame(commodity_envelope(timestamp="2026-11-10T15:30:00Z"))), [])
+
+    def test_service_imports_our_markets_at_start_and_when_the_file_changes(self) -> None:
+        store = memory_store()
+        service = EddnService(store=store, listener=None)  # type: ignore[arg-type]
+        logs: list[str] = []
+        imported = threading.Condition()
+
+        def log(message: str) -> None:
+            with imported:
+                logs.append(message)
+                imported.notify_all()
+
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "recent_markets.json"
+            save_game_markets(path, "2026-11-10T14:00:00Z")
+            service.import_game_markets_every(path, 0.005, log)
+            with imported:
+                self.assertTrue(imported.wait_for(lambda: len(logs) == 1, 2.0))
+            save_game_markets(path, "2026-11-10T14:00:00Z", "2026-11-10T14:05:00Z")
+            with imported:
+                self.assertTrue(imported.wait_for(lambda: len(logs) == 2, 2.0))
+            service._stop_status.set()
+
+        self.assertEqual(logs[0], "EDDN our markets: 1 written: Galileo (2026-11-10T14:00:00Z); 0 already newer in the DB")
+        # Every recorded market is offered again; an equal timestamp rewrites the same rows.
+        self.assertIn("2 written: Galileo (2026-11-10T14:00:00Z), Galileo 1 (2026-11-10T14:05:00Z)", logs[1])
+        self.assertEqual(store.counts().markets, 2)
 
 
 class EddnServiceTests(unittest.TestCase):

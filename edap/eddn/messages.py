@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from edap.recent_markets import MarketSnapshot as GameMarket, commodity_key
+
 COMMODITY_SCHEMA = "https://eddn.edcd.io/schemas/commodity/3"
 JOURNAL_SCHEMA = "https://eddn.edcd.io/schemas/journal/1"
 
@@ -121,6 +123,23 @@ def _market_snapshot(message: dict[str, Any], timestamp: float) -> MarketSnapsho
         timestamp=timestamp,
         prices=prices,
     )
+
+
+def market_snapshot_from_game(game: GameMarket) -> MarketSnapshot | None:
+    """Our captured Market.json in the shape an EDDN commodity message parses to.
+
+    It keeps the game's own timestamp, so it competes with EDDN data on the same newest-wins rule.
+    """
+    timestamp = _timestamp(game.timestamp)
+    if timestamp is None or not game.station or not game.system:
+        return None
+    commodities = [
+        {"name": commodity_key(str(item.get("Name") or "")), "buyPrice": item.get("BuyPrice"),
+         "sellPrice": item.get("SellPrice"), "stock": item.get("Stock"), "demand": item.get("Demand")}
+        for item in game.items
+    ]
+    return _market_snapshot({"marketId": game.market_id, "systemName": game.system, "stationName": game.station,
+                             "stationType": game.station_type, "commodities": commodities}, timestamp)
 
 
 def _price(item: object) -> CommodityPrice | None:
