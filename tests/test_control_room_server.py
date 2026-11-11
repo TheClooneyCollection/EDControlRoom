@@ -810,6 +810,9 @@ class ControlRoomServerTests(unittest.TestCase):
         for label in ("Stations", "Out", "Back", "Per hour", "Haul"):
             self.assertIn(f'data-label="{label}"', script.text)
         self.assertIn("@media (max-width: 760px)", page.text)
+        # Open in haul hands the route to /haul the way /markets does.
+        self.assertIn("/haul#route=${encodeURIComponent(JSON.stringify(tradeRoute))}", script.text)
+        self.assertIn(">Open in haul</a>", script.text)
 
     def test_routes_page_starts_the_surface_checkbox_from_the_haul_search_choice(self) -> None:
         def data_provider() -> ControlRoomDataReadModel:

@@ -63,6 +63,15 @@
     .profit {
       color: var(--green);
     }
+    .route-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+    .route-actions a.btn {
+      text-decoration: none;
+    }
     .empty-note {
       color: var(--text-2);
     }
@@ -104,6 +113,9 @@
       }
       .route-table td > div + div {
         margin-top: 6px;
+      }
+      .route-actions {
+        justify-content: flex-start;
       }
     }
   </style>

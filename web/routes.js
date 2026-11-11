@@ -149,6 +149,11 @@ function legCell(leg) {
   return `${escapeHtml(leg.name)}<span class="route-sub">${escapeHtml(detail)}</span>`;
 }
 
+// /haul imports a route from its #route= fragment once it connects, as /markets does.
+function haulUrl(tradeRoute) {
+  return `/haul#route=${encodeURIComponent(JSON.stringify(tradeRoute))}`;
+}
+
 function renderRoutes(payload) {
   const table = document.getElementById("route-table");
   const query = payload.query;
@@ -171,7 +176,10 @@ function renderRoutes(payload) {
       <td data-label="Est. trip">${duration(route.trip_s)}</td>
       <td data-label="Data age">${ageLabel(Math.max(route.station_1.age_s, route.station_2.age_s))}</td>
       <td data-label="Haul">${route.trade_route
-        ? `<button class="btn" type="button" data-copy-route="${index}">Copy</button>`
+        ? `<div class="route-actions">
+            <a class="btn" href="${escapeHtml(haulUrl(route.trade_route))}">Open in haul</a>
+            <button class="btn" type="button" data-copy-route="${index}">Copy</button>
+          </div>`
         : `<span class="route-sub">name unknown</span>`}</td>
     </tr>`).join("");
   table.innerHTML = `
