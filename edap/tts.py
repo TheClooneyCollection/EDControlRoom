@@ -458,8 +458,9 @@ class TTSAnnouncer:
         self._commander_name = text or None
 
     def render_announcement(self, message_id: AnnouncementId, /, **values: object) -> str | None:
+        """The line to publish and speak; None for a disabled message, so pages and the hub skip it too."""
         template = self._phrases.get(message_id)
-        if not template:
+        if not template or message_id in self._disabled:
             return None
         normalized_values = {
             key: normalize_tts_value(key, value)

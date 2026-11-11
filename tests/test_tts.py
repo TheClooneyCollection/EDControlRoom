@@ -251,6 +251,9 @@ class TTSHelpersTests(unittest.TestCase):
         announcer.close()
 
         self.assertEqual(backend.spoken, ["Ready to jump, captain.", "Haul aborted."])
+        # Rendering is what gets published to pages and the hub, so a disabled message is never published.
+        self.assertIsNone(announcer.render_announcement(AnnouncementId.ARRIVAL, system_name="Achenar"))
+        self.assertEqual(announcer.render_announcement(AnnouncementId.STATION_CLEARED), "Ready to jump, captain.")
 
     def test_announcer_says_free_text_and_offers_phrase_presets(self) -> None:
         backend = _FakeBackend()
