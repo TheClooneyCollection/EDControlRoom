@@ -8,7 +8,7 @@ from typing import Callable
 
 from edap.eddn.messages import market_snapshot_from_game, station_type_from_game
 from edap.eddn.store import EddnStore
-from edap.recent_markets import MarketSnapshot, load_recent_markets, watch_recent_markets
+from edap.recent_markets import MarketSnapshot, load_recent_markets, watch_file
 
 
 @dataclass(frozen=True)
@@ -58,7 +58,7 @@ def import_game_markets_every(
     stop: threading.Event,
 ) -> None:
     """Write our own Market.json captures into the store, at start and whenever the Control Room records one."""
-    watch_recent_markets(
+    watch_file(
         recent_markets_file,
         interval_s,
         lambda path: log(f"Market DB {import_summary(import_game_markets(store, path))}"),

@@ -3,6 +3,8 @@
 Items leave in the order they were added. Each item has a key (a market's id and game timestamp,
 a fact's own identity and timestamp); a key already queued once is not queued again, so the
 journal replay and market rescan at every start do not resend what the hub already has.
+Haul run keys never expire: the whole run history is rescanned at every start, and a run older
+than 30 days must not go up again.
 """
 from __future__ import annotations
 
@@ -25,6 +27,9 @@ CREATE TABLE IF NOT EXISTS item (
 CREATE TABLE IF NOT EXISTS seen (
     key TEXT PRIMARY KEY,
     added_at REAL NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS kept (
+    key TEXT PRIMARY KEY
 ) WITHOUT ROWID;
 """
 
@@ -50,10 +55,14 @@ class Outbox:
         # The journal, market watcher and link threads all add or remove items.
         return cls(sqlite3.connect(path, check_same_thread=False), now=now)
 
-    def add(self, kind: str, body: Any, *, key: str, now: float) -> int | None:
-        """Queue one item; None when its key was queued before."""
+    def add(self, kind: str, body: Any, *, key: str, now: float, forever: bool = False) -> int | None:
+        """Queue one item; None when its key was queued before. A `forever` key is never forgotten."""
         with self._lock:
-            if self._db.execute("INSERT OR IGNORE INTO seen (key, added_at) VALUES (?, ?)", (key, now)).rowcount == 0:
+            if forever:
+                added = self._db.execute("INSERT OR IGNORE INTO kept (key) VALUES (?)", (key,)).rowcount
+            else:
+                added = self._db.execute("INSERT OR IGNORE INTO seen (key, added_at) VALUES (?, ?)", (key, now)).rowcount
+            if added == 0:
                 return None
             seq = self._db.execute("INSERT INTO item (kind, body) VALUES (?, ?)", (kind, json.dumps(body))).lastrowid
             self._db.commit()

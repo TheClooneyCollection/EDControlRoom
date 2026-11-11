@@ -32,6 +32,7 @@ from edap.eddn.routes import TimeModel
 from edap.haul_history import load_runs, parse_window, summarize
 from edap.journal_trade_ledger import journal_trade_ledger
 from edap.market_compare import compare_markets
+from edap.hub.history import ALL, filter_runs, history_options, parse_node_filter, parse_ship_filter
 from edap.hub.nodes import HubLinkSession, HubSide, RequestHandler
 from edap.hub.peer import PeerLink, hub_unreachable_detail, with_hub_source
 from edap.hub.protocol import (
@@ -39,6 +40,8 @@ from edap.hub.protocol import (
     REQUEST_EDDN_ROUTES,
     REQUEST_EDDN_STATUS,
     REQUEST_HAUL_SEARCH,
+    REQUEST_HAUL_STATS,
+    REQUEST_MEASURED,
     REQUEST_STATION_FACTS,
     HubUnreachable,
     LinkReply,
@@ -48,7 +51,9 @@ from edap.recent_markets import (
     load_recent_markets,
     market_items,
 )
-from edap.trade_trip import FactLookup, StationFacts, estimate_trip, gather_facts, measured_route, store_lookup
+from edap.trade_trip import (
+    FactLookup, StationFacts, StationName, estimate_trip, gather_facts, measured_route, store_lookup,
+)
 from edap.platform.local_time import SystemLocalTimezone
 from edap.control_room.server.auth import ObserverServerAuth, SharedAccessTokenAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
@@ -445,29 +450,78 @@ def build_observer_server_app(
             }
         )
 
+    # This server's own node: the hub's local node, or the peer itself; a standalone server has none.
+    own_node = hub_side.registry.local if hub_side is not None else peer_link.hello if peer_link is not None else None
+
+    def read_history() -> tuple[list[dict[str, Any]], int]:
+        """Hub: every node's runs, tagged with their node. Standalone: this server's own file."""
+        if hub_side is not None:
+            return hub_side.history.rows()
+        return load_runs(haul_runs_file) if haul_runs_file is not None else ([], 0)
+
+    def answer_haul_stats(body: Any) -> LinkReply:
+        """Haul history for a window, node and ship, from the history this server owns; peers ask it too."""
+        if not isinstance(body, dict):
+            return LinkReply(400, {"detail": "body must be a JSON object"})
+        window = str(body.get("window") or "today")
+        try:
+            since, until, label = parse_window(window, datetime.now(SystemLocalTimezone()))
+            node = parse_node_filter(str(body.get("node") or ""))
+            ship = parse_ship_filter(str(body.get("ship") or ""))
+        except ValueError as exc:
+            return LinkReply(400, {"detail": str(exc)})
+        try:
+            rows, skipped = read_history()
+        except (OSError, ValueError) as exc:
+            return LinkReply(503, {"detail": f"Cannot read haul statistics: {exc}"})
+        runs = summarize(filter_runs(rows, node=node, ship=ship), since, until, skipped_lines=skipped)
+        return LinkReply(200, {
+            "window": window, "label": label,
+            "since": since.isoformat() if since is not None else None, "until": until.isoformat(),
+            "node": node, "ship": ship if ship is not None else ALL,
+            "runs": asdict(runs),
+            **history_options(rows, own_node if hub_side is not None else None),
+        })
+
+    def with_journal(payload: dict[str, Any], window: str, node: str) -> dict[str, Any]:
+        """The trade ledger from this machine's own journals: shown for every node or this one only."""
+        since, until, _ = parse_window(window, datetime.now(SystemLocalTimezone()))
+        ours = node == ALL or (own_node is not None and node == own_node.node_id)
+        ledger = journal_trade_ledger(journal_dir, since, until) if ours and journal_dir is not None else None
+        return {
+            **payload,
+            "journal": asdict(ledger) if ledger is not None and ledger.available else None,
+            "journal_node": own_node.name if own_node is not None else None,
+        }
+
     async def haul_stats_endpoint(request: Request) -> JSONResponse:
         auth_failure = require_http_auth(request)
         if auth_failure is not None:
             return auth_failure
-        window = request.query_params.get("window", "today")
+        params = request.query_params
+        body = {"window": params.get("window", "today"), "node": params.get("node", ALL),
+                "ship": params.get("ship", ALL)}
         try:
-            since, until, label = parse_window(window, datetime.now(SystemLocalTimezone()))
+            parse_window(body["window"], datetime.now(SystemLocalTimezone()))
+            node = parse_node_filter(body["node"])
+            parse_ship_filter(body["ship"])
         except ValueError as exc:
             return JSONResponse({"detail": str(exc)}, status_code=400)
-
-        def read_statistics() -> dict[str, Any]:
-            rows, skipped = load_runs(haul_runs_file) if haul_runs_file is not None else ([], 0)
-            runs = summarize(rows, since, until, skipped_lines=skipped)
-            ledger = journal_trade_ledger(journal_dir, since, until) if journal_dir is not None else None
-            return {
-                "window": window, "label": label,
-                "since": since.isoformat() if since is not None else None, "until": until.isoformat(),
-                "runs": asdict(runs),
-                "journal": asdict(ledger) if ledger is not None and ledger.available else None,
-            }
-
+        if peer_link is not None:
+            # A peer owns no history to show: the hub has every node's runs, this one's included.
+            try:
+                reply = await asyncio.to_thread(peer_link.request, REQUEST_HAUL_STATS, body,
+                                                timeout_s=peer_link.request_timeout_s)
+            except HubUnreachable as exc:
+                label = peer_link.hub_label
+                return JSONResponse({"detail": hub_unreachable_detail(label, exc), "hub": label}, status_code=502)
+            reply = LinkReply(reply.status, with_hub_source(reply.body, peer_link.hub_label))
+        else:
+            reply = await asyncio.to_thread(answer_haul_stats, body)
+        if reply.status != 200 or not isinstance(reply.body, dict):
+            return link_reply_response(reply)
         try:
-            return JSONResponse(await asyncio.to_thread(read_statistics))
+            return JSONResponse(await asyncio.to_thread(with_journal, reply.body, body["window"], node))
         except (OSError, ValueError) as exc:
             return JSONResponse({"detail": f"Cannot read haul statistics: {exc}"}, status_code=503)
 
@@ -571,17 +625,31 @@ def build_observer_server_app(
         market_x: MarketSnapshot, market_y: MarketSnapshot, ship: Any, current_laden: float,
         window: str, since: datetime | None, until: datetime,
     ) -> dict[str, Any]:
-        """Measured profit per hour from this server's own haul history, for the current ship."""
+        """Measured profit per hour for the current ship: every node's runs on a hub, this server's own
+        standalone, and the hub's answer on a peer."""
         ship_id = getattr(ship, "ship_id", None)
         measured = None
-        if haul_runs_file is not None:
+        hint = None
+        if peer_link is not None:
+            body = {"stations": [{"station": m.station, "system": m.system} for m in (market_x, market_y)],
+                    "ship_id": ship_id, "window": window}
             try:
-                rows, _ = load_runs(haul_runs_file)
-                measured = measured_route(rows, market_x, market_y, ship_id=ship_id, since=since, until=until)
+                reply = peer_link.request(REQUEST_MEASURED, body, timeout_s=peer_link.request_timeout_s)
+                measured = reply.body["measured"] if reply.status == 200 else None
+                if reply.status != 200:
+                    hint = f"Hub {peer_link.hub_label}: {reply.body.get('detail')}"
+            except (HubUnreachable, KeyError, TypeError, AttributeError) as exc:
+                hint = hub_unreachable_detail(peer_link.hub_label, exc)
+        else:
+            try:
+                rows, _ = read_history()
+                found = measured_route(rows, market_x, market_y, ship_id=ship_id, since=since, until=until)
+                measured = asdict(found) if found is not None else None
             except (OSError, ValueError):
                 measured = None
         return {
-            "measured": asdict(measured) if measured is not None else None,
+            "measured": measured,
+            "measured_hint": hint,
             "measured_window": window,
             "measured_ship": {
                 "id": ship_id, "type": getattr(ship, "ship_type", None), "name": getattr(ship, "ship_name", None),
@@ -616,6 +684,28 @@ def build_observer_server_app(
         ):
             return LinkReply(400, {"detail": "body must be {\"stations\": [{market_id, station, system}, ...]}"})
         return LinkReply(200, {"stations": [asdict(facts) for facts in station_facts(entries)]})
+
+    def answer_measured(body: Any) -> LinkReply:
+        """A peer's Best deal measured profit per hour, from the central history."""
+        stations = body.get("stations") if isinstance(body, dict) else None
+        if not isinstance(stations, list) or len(stations) != 2 or not all(
+            isinstance(entry, dict) and isinstance(entry.get("station"), str) and isinstance(entry.get("system"), str)
+            for entry in stations
+        ):
+            return LinkReply(400, {"detail": "body must be {\"stations\": [{station, system}, {station, system}], ...}"})
+        ship_id = body.get("ship_id")
+        window = body.get("window")
+        if (ship_id is not None and (not isinstance(ship_id, int) or isinstance(ship_id, bool))) \
+                or window not in MEASURED_WINDOWS:
+            return LinkReply(400, {"detail": f"ship_id must be a number or null, window one of {', '.join(MEASURED_WINDOWS)}"})
+        since, until, _ = parse_window(window, datetime.now(SystemLocalTimezone()))
+        x, y = (StationName(entry["station"], entry["system"]) for entry in stations)
+        try:
+            rows, _ = read_history()
+        except (OSError, ValueError) as exc:
+            return LinkReply(503, {"detail": f"Cannot read haul history: {exc}"})
+        found = measured_route(rows, x, y, ship_id=ship_id, since=since, until=until)
+        return LinkReply(200, {"measured": asdict(found) if found is not None else None})
 
     def answer_eddn_status(_body: Any) -> LinkReply:
         if eddn_status is None:
@@ -724,6 +814,8 @@ def build_observer_server_app(
         REQUEST_EDDN_ROUTES: answer_eddn_routes,
         REQUEST_EDDN_STATUS: answer_eddn_status,
         REQUEST_STATION_FACTS: answer_station_facts,
+        REQUEST_HAUL_STATS: answer_haul_stats,
+        REQUEST_MEASURED: answer_measured,
     }
 
     async def peer_link_endpoint(websocket: WebSocket) -> None:

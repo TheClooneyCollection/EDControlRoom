@@ -54,10 +54,30 @@ def append_run(path: Path, row: dict[str, Any], log: Callable[[str], None]) -> b
         return False
 
 
+def run_key(row: object) -> tuple[str, str, str, str | None]:
+    """A finished run's identity: `started_at`, `ended_at`, `station_1` and, on the hub, its node id.
+
+    Raises ValueError for anything that is not a finished schema 1 two-way run.
+    """
+    try:
+        if (not isinstance(row, dict) or row.get("schema") != 1
+                or row.get("kind") != "two_way"
+                or row.get("status") not in {"completed", "aborted"}):
+            raise ValueError("Invalid run")
+        key = (row["started_at"], row["ended_at"], row["route"]["station_1"])
+    except (KeyError, TypeError) as exc:
+        raise ValueError("Invalid run identity") from exc
+    if not all(isinstance(item, str) for item in key):
+        raise ValueError("Invalid run identity")
+    node = row.get("node")
+    node_id = node.get("id") if isinstance(node, dict) else None
+    return (*key, node_id if isinstance(node_id, str) else None)
+
+
 def load_runs(path: Path) -> tuple[list[dict[str, Any]], int]:
     """Return unique rows and the number of invalid/torn lines skipped."""
     rows: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str]] = set()
+    seen: set[tuple[str, str, str, str | None]] = set()
     skipped = 0
     if not path.exists():
         return rows, skipped
@@ -65,17 +85,11 @@ def load_runs(path: Path) -> tuple[list[dict[str, Any]], int]:
         for line in handle:
             try:
                 row = json.loads(line)
-                if (not isinstance(row, dict) or row.get("schema") != 1
-                        or row.get("kind") != "two_way"
-                        or row.get("status") not in {"completed", "aborted"}):
-                    raise ValueError("Invalid run")
-                key = (row["started_at"], row["ended_at"], row["route"]["station_1"])
-                if not all(isinstance(item, str) for item in key):
-                    raise ValueError("Invalid run identity")
+                key = run_key(row)
                 if key not in seen:
                     rows.append(row)
                     seen.add(key)
-            except (ValueError, KeyError, TypeError, UnicodeError):
+            except (ValueError, UnicodeError):
                 skipped += 1
     return rows, skipped
 

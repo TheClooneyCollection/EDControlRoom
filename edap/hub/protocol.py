@@ -17,12 +17,15 @@ PEER_LINK_PATH = "/api/peer-link"
 # Outbox item kinds.
 ITEM_MARKET = "market"
 ITEM_STATION_FACTS = "station_facts"
+ITEM_HAUL_RUN = "haul_run"
 
 # Requests a peer asks the hub.
 REQUEST_HAUL_SEARCH = "haul_search"
 REQUEST_EDDN_ROUTES = "eddn_routes"
 REQUEST_EDDN_STATUS = "eddn_status"
 REQUEST_STATION_FACTS = "station_facts"
+REQUEST_HAUL_STATS = "haul_stats"
+REQUEST_MEASURED = "measured"
 
 
 class HubUnreachable(OSError):

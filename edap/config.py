@@ -267,8 +267,10 @@ class HubConfig:
     token: str = ""
     # This node's name on the hub; empty means the host name.
     name: str = ""
-    # Peer only: markets and station facts wait here until the hub acknowledges them.
+    # Peer only: markets, station facts and haul runs wait here until the hub acknowledges them.
     outbox_file: Path = Path(".control_room_hub_outbox.sqlite3")
+    # Hub only: every peer's finished haul runs, tagged with their node; its own stay in `haul_runs_file`.
+    runs_file: Path = Path(".control_room_hub_runs.jsonl")
     timeout_s: float = 10.0
     search_timeout_s: float = 180.0
     # Seconds of quiet on the link before the peer pings the hub; twice that without an answer redials.
@@ -1298,6 +1300,9 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             name=_string(hub, "name", _string(default_hub, "name", "")).strip(),
             outbox_file=Path(
                 _string(hub, "outbox_file", _string(default_hub, "outbox_file", ".control_room_hub_outbox.sqlite3"))
+            ),
+            runs_file=Path(
+                _string(hub, "runs_file", _string(default_hub, "runs_file", ".control_room_hub_runs.jsonl"))
             ),
             timeout_s=_float(hub, "timeout_s", _float(default_hub, "timeout_s", 10.0)),
             search_timeout_s=_float(hub, "search_timeout_s", _float(default_hub, "search_timeout_s", 180.0)),

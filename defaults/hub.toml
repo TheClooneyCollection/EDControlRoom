@@ -8,8 +8,11 @@ url = ""
 token = ""
 # This node's name on the hub; empty means the host name.
 name = ""
-# Peer only: markets and station facts wait here until the hub acknowledges them.
+# Peer only: markets, station facts and finished haul runs wait here until the hub acknowledges them.
 outbox_file = ".control_room_hub_outbox.sqlite3"
+# Hub only: every peer's finished haul runs (JSONL, tagged with their node). The hub's own runs
+# stay in `control_room.haul_runs_file`.
+runs_file = ".control_room_hub_runs.jsonl"
 # Seconds to wait for the hub on route, status and station fact requests.
 timeout_s = 10.0
 # Seconds to wait for an Inara haul search, which drives a browser on the hub.

@@ -125,8 +125,16 @@ def estimate_trip(
     )
 
 
+@dataclass(frozen=True)
+class StationName:
+    """A station by name, as a peer names Best deal's pair when it asks the hub for measured runs."""
+
+    station: str
+    system: str
+
+
 def measured_route(
-    rows: Iterable[dict[str, Any]], x: MarketSnapshot, y: MarketSnapshot, *,
+    rows: Iterable[dict[str, Any]], x: MarketSnapshot | StationName, y: MarketSnapshot | StationName, *,
     ship_id: int | None, since: datetime | None, until: datetime,
 ) -> MeasuredRoute | None:
     """Completed haul runs between the two stations, either direction, in the window, for one ship.

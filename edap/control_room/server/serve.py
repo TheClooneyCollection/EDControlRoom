@@ -24,10 +24,12 @@ from edap.ardent import ArdentLookup, httpx_fetch_json
 from edap.eddn.game_markets import import_game_markets_every
 from edap.eddn.listener import open_zmq_socket
 from edap.eddn.service import EddnService, start_eddn_service
+from edap.haul_history import load_runs
+from edap.hub.history import CentralHistory, HubRuns
 from edap.hub.nodes import HubSide, NodeRegistry, store_link_item
 from edap.hub.outbox import Outbox
 from edap.hub.peer import NODE_ID_FILE_NAME, NodeHello, PeerLink, load_node_id, new_node_id, websocket_connector
-from edap.recent_markets import load_recent_markets, watch_recent_markets
+from edap.recent_markets import load_recent_markets, watch_file
 from edap.market_db import open_market_store, station_facts_writer
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.tts import NullSpeechBackend, build_speech_backend
@@ -150,14 +152,20 @@ def serve_observer_mode(
     elif eddn_config.enabled:
         logging.getLogger("edap.eddn").info("EDDN listener off: a peer never listens; the hub does")
     recent_markets_file = loaded.config.control_room.recent_markets_file
+    haul_runs_file = loaded.config.control_room.haul_runs_file
     stop_background = threading.Event()
     # Recent markets are recorded by the Control Room whenever Market.json changes; a peer queues
     # them for the hub, a hub or standalone writes them into its own database.
     if peer_link is not None:
         hub_logger.info("Hub link: %s as %s (node %s)", hub_config.url, node.name, node.node_id)
-        watch_recent_markets(
+        watch_file(
             recent_markets_file, 5.0, lambda path: peer_link.enqueue_markets(load_recent_markets(path)),
             stop=stop_background, log=hub_logger.warning, name="hub-markets",
+        )
+        # Every finished haul run goes up too; the first link backfills the whole file once.
+        watch_file(
+            haul_runs_file, 5.0, lambda path: peer_link.enqueue_runs(load_runs(path)[0]),
+            stop=stop_background, log=hub_logger.warning, name="hub-runs",
         )
         threading.Thread(target=lambda: peer_link.run(stop_background.wait), name="hub-link", daemon=True).start()
     elif hub_config.role == "peer":
@@ -165,8 +173,12 @@ def serve_observer_mode(
     hub_side: HubSide | None = None
     if store is not None and node is not None:
         hub_logger.info("Hub %s (node %s): peers link at /api/peer-link", node.name, node.node_id)
-        hub_side = HubSide(registry=NodeRegistry(node, time.time), store_item=store_link_item(store, db_logger.info),
-                           token=hub_config.token)
+        hub_runs = HubRuns.open(hub_config.runs_file, hub_logger.warning)
+        hub_logger.info("Hub haul history: own runs %s, peer runs %s", haul_runs_file, hub_config.runs_file)
+        hub_side = HubSide(registry=NodeRegistry(node, time.time),
+                           store_item=store_link_item(store, hub_runs, hub_logger.info),
+                           token=hub_config.token,
+                           history=CentralHistory(local=node, local_file=haul_runs_file, runs=hub_runs))
     if store is not None:
         import_game_markets_every(store, recent_markets_file, 5.0, db_logger.info, stop=stop_background)
     ardent_lookup: ArdentLookup | None = None
@@ -187,7 +199,7 @@ def serve_observer_mode(
         auth=SharedAccessTokenAuth(access_token),
         web_default_access_token=web_default_access_token,
         journal_dir=journal_dir,
-        haul_runs_file=loaded.config.control_room.haul_runs_file,
+        haul_runs_file=haul_runs_file,
         recent_markets_file=recent_markets_file,
         eddn_status=eddn.status if eddn is not None else None,
         market_database_file=eddn_config.database_file if store is not None else None,

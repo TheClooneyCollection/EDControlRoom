@@ -17,9 +17,10 @@ from typing import Any, Callable
 from urllib.parse import urlparse
 
 from edap.eddn.messages import EddnUpdate
+from edap.haul_history import run_key
 from edap.hub.outbox import Outbox
 from edap.hub.protocol import (
-    ITEM_MARKET, ITEM_STATION_FACTS, PEER_LINK_PATH, HubUnreachable, LinkClosed, LinkConnection, LinkReply,
+    ITEM_HAUL_RUN, ITEM_MARKET, ITEM_STATION_FACTS, PEER_LINK_PATH, HubUnreachable, LinkClosed, LinkConnection, LinkReply,
     encode_update,
 )
 from edap.recent_markets import MarketSnapshot, snapshot_entry
@@ -133,10 +134,17 @@ class PeerLink:
             identity = body.get("market_id", body.get("address"))
             self._enqueue(ITEM_STATION_FACTS, body, key=f"{body['kind']}:{identity}:{update.timestamp}")
 
-    def _enqueue(self, kind: str, body: Any, *, key: str) -> None:
+    def enqueue_runs(self, rows: list[dict[str, Any]]) -> None:
+        """Queue every finished haul run not queued before; the run history watcher calls this at
+        start (the first link backfills the whole file once) and whenever the file changes."""
+        for row in rows:
+            started_at, ended_at, station_1, _ = run_key(row)
+            self._enqueue(ITEM_HAUL_RUN, row, key=f"run:{started_at}|{ended_at}|{station_1}", forever=True)
+
+    def _enqueue(self, kind: str, body: Any, *, key: str, forever: bool = False) -> None:
         with self._lock:
             try:
-                seq = self.outbox.add(kind, body, key=key, now=self._now())
+                seq = self.outbox.add(kind, body, key=key, now=self._now(), forever=forever)
             except sqlite3.Error as exc:
                 self._log(f"Warning: hub outbox write failed, {kind} not queued: {exc}")
                 return

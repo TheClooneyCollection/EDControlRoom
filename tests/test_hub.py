@@ -5,7 +5,7 @@ import json
 import sqlite3
 import unittest
 import warnings
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -28,6 +28,7 @@ from edap.control_room.server.broker import InMemoryObserverSessionBroker
 from edap.eddn.messages import StationInfo, SystemPosition
 from edap.eddn.route_query import parse_route_query, resolve_route_params
 from edap.eddn.store import EddnStore
+from edap.hub.history import CentralHistory, HubRuns
 from edap.hub.nodes import BadItem, HubLinkSession, HubSide, NodeRegistry, store_link_item
 from edap.hub.outbox import Outbox
 from edap.hub.peer import NodeHello, PeerLink, load_node_id, peer_link_url
@@ -71,6 +72,30 @@ def market(timestamp: str = "2026-11-10T14:00:00Z", market_id: int = 3229359104,
     })
     assert snapshot is not None
     return snapshot
+
+
+def haul_run(ended_at: str, *, ship_id: int | None = 7, station_1: str = "Galileo", station_2: str = "Abraham",
+             profit: int = 2_000_000, status: str = "completed") -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "schema": 1, "kind": "two_way", "status": status, "started_at": "2026-11-10T08:00:00Z", "ended_at": ended_at,
+        "duration_s": 1800.0, "cost": 1_000_000, "revenue": 1_000_000 + profit, "profit": profit, "legs": [],
+        "route": {"station_1": station_1, "system_1": "Sol", "station_2": station_2, "system_2": "Sol"},
+    }
+    if ship_id is not None:
+        row["ship"] = {"id": ship_id, "type": "cutter", "name": f"Ship {ship_id}", "laden_jump_range_ly": 20.0}
+    return row
+
+
+@dataclass(frozen=True)
+class Ledger:
+    """Stands in for the journal trade ledger."""
+
+    available: bool
+    profit: int
+
+
+def write_runs(path: Path, rows: list[dict[str, Any]]) -> None:
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
 
 
 def memory_outbox() -> Outbox:
@@ -125,13 +150,18 @@ class Rig:
     """A hub (registry, store, link session) and a peer, joined by `Loopback` links."""
 
     def __init__(self, *, handlers: dict[str, Callable[[Any], LinkReply]] | None = None,
-                 store_item: Callable[[str, Any], None] | None = None) -> None:
+                 store_item: Callable[[NodeHello, str, Any], None] | None = None) -> None:
         self.clock = FakeClock()
         self.store = memory_store()
         self.hub_logs: list[str] = []
         self.peer_logs: list[str] = []
         self.registry = NodeRegistry(HUB_NODE, self.clock)
-        self.store_item = store_item or store_link_item(self.store, self.hub_logs.append)
+        self.tmp = TemporaryDirectory()
+        self.hub_runs = HubRuns.open(Path(self.tmp.name) / "hub_runs.jsonl", self.hub_logs.append)
+        # The hub's own game's runs, which join the central view under its node id.
+        self.own_runs = Path(self.tmp.name) / "own_runs.jsonl"
+        self.history = CentralHistory(local=HUB_NODE, local_file=self.own_runs, runs=self.hub_runs)
+        self.store_item = store_item or store_link_item(self.store, self.hub_runs, self.hub_logs.append)
         self.handlers = handlers or {}
         self.outbox = memory_outbox()
         self.peer = PeerLink(hello=PEER_NODE, hub_url=HUB_URL, outbox=self.outbox, connect=self.connect,
@@ -159,6 +189,7 @@ class Rig:
     def close(self) -> None:
         self.store.close()
         self.outbox.close()
+        self.tmp.cleanup()
 
 
 def rig(test: unittest.TestCase, **options: Any) -> Rig:
@@ -174,7 +205,8 @@ class HubConfigTests(unittest.TestCase):
             path.write_text("", encoding="utf-8")
             hub = load_config(path).hub
             self.assertEqual((hub.role, hub.owns_data, hub.enabled, hub.name), ("standalone", True, False, ""))
-            self.assertEqual(hub.outbox_file, Path(".control_room_hub_outbox.sqlite3"))
+            self.assertEqual((hub.outbox_file, hub.runs_file),
+                             (Path(".control_room_hub_outbox.sqlite3"), Path(".control_room_hub_runs.jsonl")))
             self.assertEqual((hub.timeout_s, hub.search_timeout_s, hub.heartbeat_s), (10.0, 180.0, 30.0))
 
             path.write_text('[hub]\nrole = "Hub"\ntoken = "t"\nname = " Home "\n', encoding="utf-8")
@@ -234,12 +266,15 @@ class OutboxTests(unittest.TestCase):
             self.assertEqual(outbox.pending(after=second), [])
             self.assertEqual(outbox.count(), 1)
 
-    def test_old_keys_are_forgotten_after_thirty_days(self) -> None:
+    def test_old_keys_are_forgotten_after_thirty_days_but_haul_run_keys_never(self) -> None:
         outbox = memory_outbox()
         self.addCleanup(outbox.close)
         outbox.add("market", {}, key="a", now=NOW)
-        reopened = Outbox(outbox._db, now=NOW + 31 * 86400)
-        self.assertIsNotNone(reopened.add("market", {}, key="a", now=NOW + 31 * 86400))
+        outbox.add("haul_run", {}, key="run", now=NOW, forever=True)
+        later = NOW + 365 * 86400
+        reopened = Outbox(outbox._db, now=later)
+        self.assertIsNotNone(reopened.add("market", {}, key="a", now=later))
+        self.assertIsNone(reopened.add("haul_run", {}, key="run", now=later, forever=True))
 
 
 class LinkTests(unittest.TestCase):
@@ -321,10 +356,10 @@ class LinkTests(unittest.TestCase):
         r = rig(self)
         real_store = r.store_item
 
-        def flaky_store(kind: str, body: Any) -> None:
+        def flaky_store(node: NodeHello, kind: str, body: Any) -> None:
             if failures:
                 raise failures.pop()
-            real_store(kind, body)
+            real_store(node, kind, body)
 
         r.store_item = flaky_store
         link = r.attach()
@@ -342,22 +377,57 @@ class LinkTests(unittest.TestCase):
         store = memory_store()
         self.addCleanup(store.close)
         logs: list[str] = []
-        store_item = store_link_item(store, logs.append)
+        tmp = TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        store_item = store_link_item(store, HubRuns.open(Path(tmp.name) / "runs.jsonl", logs.append), logs.append)
         newer = market("2026-11-10T15:00:00Z", sell_gold=9900)
-        store_item("market", roundtrip(snapshot_entry(newer)))
-        store_item("market", roundtrip(snapshot_entry(newer)))
-        store_item("market", roundtrip(snapshot_entry(market("2026-11-10T14:00:00Z"))))
-        store_item("station_facts", roundtrip(encode_update(GALILEO)))
+        store_item(PEER_NODE, "market", roundtrip(snapshot_entry(newer)))
+        store_item(PEER_NODE, "market", roundtrip(snapshot_entry(newer)))
+        store_item(PEER_NODE, "market", roundtrip(snapshot_entry(market("2026-11-10T14:00:00Z"))))
+        store_item(PEER_NODE, "station_facts", roundtrip(encode_update(GALILEO)))
         older = replace(GALILEO, type="Coriolis", timestamp=NOW - 600)
-        store_item("station_facts", roundtrip(encode_update(older)))
+        store_item(PEER_NODE, "station_facts", roundtrip(encode_update(older)))
 
         self.assertEqual(prices(store), [(3229359104, "gold", 9500, 9900, 700, 900)])
         self.assertEqual(store._db.execute("SELECT type FROM station").fetchall(), [("Ocellus",)])
         self.assertEqual(logs, ["Market DB peer market Galileo: written", "Market DB peer market Galileo: already in the DB",
                                 "Market DB peer market Galileo: already in the DB"])
-        for kind, body in (("market", {"station": "x"}), ("station_facts", {"kind": "planet"}), ("ship", {})):
+        for kind, body in (("market", {"station": "x"}), ("station_facts", {"kind": "planet"}), ("ship", {}),
+                           ("haul_run", {"schema": 1}), ("haul_run", [1])):
             with self.subTest(kind=kind), self.assertRaises(BadItem):
-                store_item(kind, body)
+                store_item(PEER_NODE, kind, body)
+
+    def test_finished_runs_go_up_once_and_join_the_hubs_own_under_its_node_id(self) -> None:
+        r = rig(self)
+        first, second = haul_run("2026-11-10T09:00:00Z"), haul_run("2026-11-10T10:00:00Z", status="aborted")
+        # The first start with a link backfills the whole file while the hub is away.
+        r.peer.enqueue_runs([first, second])
+        self.assertEqual(r.outbox.count(), 2)
+        link = r.attach()
+        self.assertEqual([f.get("kind") for f in link.sent[1:]], ["haul_run", "haul_run"])
+        self.assertEqual(r.outbox.count(), 0)
+
+        # Every later start and file change rescans the file: only the new run goes up.
+        third = haul_run("2026-11-10T11:00:00Z")
+        r.peer.enqueue_runs([first, second, third])
+        self.assertEqual(len(link.sent), 4)
+        # A run delivered twice (its ack lost) is stored once.
+        r.peer._enqueue("haul_run", first, key="replayed")
+        write_runs(r.own_runs, [haul_run("2026-11-10T09:00:00Z")])
+
+        rows, skipped = r.history.rows()
+        self.assertEqual(skipped, 0)
+        self.assertEqual([(row["node"], row["ended_at"]) for row in rows], [
+            ({"id": "hub-node", "name": "Home"}, "2026-11-10T09:00:00Z"),
+            ({"id": "peer-node", "name": "Deck"}, "2026-11-10T09:00:00Z"),
+            ({"id": "peer-node", "name": "Deck"}, "2026-11-10T10:00:00Z"),
+            ({"id": "peer-node", "name": "Deck"}, "2026-11-10T11:00:00Z"),
+        ])
+        self.assertEqual(r.hub_logs.count("Haul history: run from Deck (completed, ended 2026-11-10T09:00:00Z)"), 1)
+        # The file survives a hub restart and still knows what it has.
+        reopened = HubRuns.open(r.hub_runs.path, r.hub_logs.append)
+        self.assertFalse(reopened.add(PEER_NODE, first))
+        self.assertTrue(reopened.add(replace(PEER_NODE, node_id="other"), first))
 
     def test_a_bad_item_is_dropped_with_a_log_on_both_sides(self) -> None:
         r = rig(self)
@@ -449,7 +519,7 @@ class LinkedServerTests(unittest.TestCase):
         save_recent_markets(self.recent, (market(market_id=GALILEO.market_id), market(market_id=2, station="Abraham")))
         self.r = rig(self)
         self.hub_app = server(market_database_file=self.database, hub_side=HubSide(self.r.registry, self.r.store_item,
-                                                                                    HUB_TOKEN),
+                                                                                    HUB_TOKEN, self.r.history),
                               eddn_status=lambda: {"store": {"markets": 3}}, ardent_lookup=None)
         self.r.handlers.update(self.hub_app.state.link_handlers)
 
@@ -490,6 +560,58 @@ class LinkedServerTests(unittest.TestCase):
         self.assertEqual(down.status_code, 502)
         self.assertEqual(down.json()["detail"], "Hub Home is unreachable: not connected to the hub: cable pulled")
         self.assertEqual(deal_down.json()["trip"]["hint"], "Hub Home is unreachable: not connected to the hub: cable pulled")
+
+    def test_history_and_measured_profit_come_from_the_hubs_central_history(self) -> None:
+        write_runs(self.r.own_runs, [haul_run("2026-11-10T09:00:00Z", ship_id=7, profit=1_000_000)])
+        self.r.peer.enqueue_runs([haul_run("2026-11-10T10:00:00Z", ship_id=8, profit=3_000_000),
+                                  haul_run("2026-11-10T11:00:00Z", ship_id=None, profit=5_000_000)])
+        self.r.attach()
+        params = {"access_token": TOKEN, "window": "all"}
+        with (
+            patch("edap.control_room.server.app.journal_trade_ledger", return_value=Ledger(True, 1)) as ledger,
+            TestClient(self.hub_app) as hub, TestClient(self.peer_app(journal_dir=Path("journals"))) as peer,
+        ):
+            every = hub.get("/api/haul-stats", params=params).json()
+            deck = hub.get("/api/haul-stats", params={**params, "node": "peer-node"}).json()
+            ship_8 = hub.get("/api/haul-stats", params={**params, "ship": "8"}).json()
+            from_peer = peer.get("/api/haul-stats", params=params).json()
+            from_peer_hub_node = peer.get("/api/haul-stats", params={**params, "node": "hub-node"}).json()
+            deal = peer.get("/api/market-compare", params={"access_token": TOKEN, "x": GALILEO.market_id, "y": 2,
+                                                           "window": "all"}).json()
+            self.r.drop(self.r.links[-1])
+            down = peer.get("/api/haul-stats", params=params)
+            deal_down = peer.get("/api/market-compare", params={"access_token": TOKEN, "x": GALILEO.market_id, "y": 2})
+
+        self.assertEqual((every["runs"]["all_in"]["count"], every["runs"]["all_in"]["profit"]), (3, 9_000_000))
+        self.assertEqual([(n["name"], n["local"]) for n in every["nodes"]], [("Home", True), ("Deck", False)])
+        self.assertEqual([s["id"] for s in every["ships"]], [7, 8])
+        self.assertEqual((deck["node"], deck["runs"]["all_in"]["profit"]), ("peer-node", 8_000_000))
+        self.assertEqual((ship_8["ship"], ship_8["runs"]["all_in"]["count"]), (8, 1))
+        # The peer shows the hub's answer with its own journal ledger, and none for another node's runs.
+        self.assertEqual((from_peer["hub"], from_peer["runs"]["all_in"]["count"]), ("Home", 3))
+        self.assertEqual((from_peer["journal"], from_peer["journal_node"]), ({"available": True, "profit": 1}, "Deck"))
+        self.assertEqual((from_peer_hub_node["journal"], from_peer_hub_node["runs"]["all_in"]["count"]), (None, 1))
+        self.assertEqual(ledger.call_count, 1)
+        # This ship is unknown, so Best deal counts every node's runs on the pair.
+        self.assertEqual((deal["measured"]["runs"], deal["measured"]["profit"], deal["measured_hint"]),
+                         (3, 9_000_000, None))
+        self.assertEqual(down.status_code, 502)
+        self.assertEqual(down.json()["detail"], "Hub Home is unreachable: not connected to the hub: cable pulled")
+        self.assertIsNone(deal_down.json()["measured"])
+        self.assertEqual(deal_down.json()["measured_hint"], "Hub Home is unreachable: not connected to the hub: cable pulled")
+
+    def test_measured_requests_are_checked_and_filter_by_ship(self) -> None:
+        answer = self.hub_app.state.link_handlers["measured"]
+        write_runs(self.r.own_runs, [haul_run("2026-11-10T09:00:00Z", ship_id=7),
+                                     haul_run("2026-11-10T10:00:00Z", ship_id=8)])
+        pair = [{"station": "Abraham", "system": "Sol"}, {"station": "Galileo", "system": "Sol"}]
+        found = answer({"stations": pair, "ship_id": 8, "window": "all"})
+        self.assertEqual((found.status, found.body["measured"]["runs"]), (200, 1))
+        for body in ([], {"stations": pair[:1], "window": "all"}, {"stations": pair, "ship_id": "8", "window": "all"},
+                     {"stations": pair, "window": "week"}):
+            with self.subTest(body=body):
+                self.assertEqual(answer(body).status, 400)
+        self.assertEqual(self.hub_app.state.link_handlers["haul_stats"]({"ship": "Cutter"}).status, 400)
 
     def test_haul_search_runs_on_the_hub_and_reports_it_unreachable(self) -> None:
         result = TradeRouteSearchResult(system_name="Sol", query_url="https://inara.cz/x", searched_at="",

@@ -49,8 +49,33 @@ let routes = [];
       const saved = window.localStorage.getItem(HISTORY_WINDOW_KEY);
       if (HISTORY_WINDOWS.includes(saved)) historyWindow = saved;
     } catch (_) {}
+    // Node and ship filters: shown once the history has more than one to pick (hub, or a peer asking it).
+    const HISTORY_NODE_KEY = "edcr.haul.historyNode";
+    const HISTORY_SHIP_KEY = "edcr.haul.historyShip";
+    let historyNode = "all";
+    let historyShip = "all";
+    try {
+      historyNode = window.localStorage.getItem(HISTORY_NODE_KEY) || "all";
+      historyShip = window.localStorage.getItem(HISTORY_SHIP_KEY) || "all";
+    } catch (_) {}
     let historyCompletedRuns = null;
     let historyRequest = 0;
+
+    function fillHistoryFilter(id, everyLabel, options, selected) {
+      const select = document.getElementById(id);
+      // A remembered pick with no runs in the history any more stays listed, so it can be cleared.
+      if (selected !== "all" && !options.some(([value]) => value === selected)) options = [...options, [selected, selected]];
+      select.hidden = options.length < 2 && selected === "all";
+      select.innerHTML = [["all", everyLabel], ...options].map(([value, label]) =>
+        `<option value="${escapeHtml(value)}"${value === selected ? " selected" : ""}>${escapeHtml(label)}</option>`).join("");
+    }
+
+    function renderHistoryFilters(payload) {
+      const nodes = (payload.nodes || []).map((node) => [node.id, node.local ? `${node.name} (hub)` : node.name]);
+      const ships = (payload.ships || []).map((ship) => [String(ship.id), [ship.name, ship.type].filter(Boolean).join(" · ") || `Ship ${ship.id}`]);
+      fillHistoryFilter("history-node", "All nodes", nodes, String(payload.node || "all"));
+      fillHistoryFilter("history-ship", "All ships", ships, String(payload.ship || "all"));
+    }
 
     function historyMoney(value) {
       return value == null ? "n/a" : formatCredits(Math.round(Number(value)));
@@ -77,7 +102,7 @@ let routes = [];
       const commodities = (runs.commodities || []).map((item) => `<tr><td>${escapeHtml(item.commodity)}</td><td>${item.all_in.tons_bought} / ${item.all_in.tons_sold} t</td><td>${historyMoney(item.all_in.cost)}</td><td>${historyMoney(item.all_in.revenue)}</td></tr>`);
       const journal = payload.journal;
       const coverage = journal && journal.coverage;
-      const journalLine = journal ? `Trade profit ${historyMoney(journal.profit)}; balance change ${historyMoney(journal.net_balance_change)}. Coverage: ${coverage.files} files, ${escapeHtml(coverage.first_event_at || "unknown")} to ${escapeHtml(coverage.last_event_at || "unknown")}${coverage.window_start_before_oldest_journal ? "; window predates oldest journal" : ""}; ${coverage.skipped_lines} skipped / ${coverage.unreadable_files} unreadable.` : "Journal data unavailable on this server.";
+      const journalLine = journal ? `${payload.journal_node ? `${escapeHtml(payload.journal_node)}: ` : ""}Trade profit ${historyMoney(journal.profit)}; balance change ${historyMoney(journal.net_balance_change)}. Coverage: ${coverage.files} files, ${escapeHtml(coverage.first_event_at || "unknown")} to ${escapeHtml(coverage.last_event_at || "unknown")}${coverage.window_start_before_oldest_journal ? "; window predates oldest journal" : ""}; ${coverage.skipped_lines} skipped / ${coverage.unreadable_files} unreadable.` : payload.node !== "all" && payload.journal_node ? `Journal ledger only for ${escapeHtml(payload.journal_node)}, this server's own game.` : "Journal data unavailable on this server.";
       const content = document.getElementById("history-content");
       // The panel re-renders on refresh; keep Details open if the user opened it.
       const detailsOpen = content.querySelector(".history-details")?.open ? " open" : "";
@@ -101,14 +126,17 @@ let routes = [];
       });
       const url = new URL("/api/haul-stats", window.location.origin);
       url.searchParams.set("window", historyWindow);
+      url.searchParams.set("node", historyNode);
+      url.searchParams.set("ship", historyShip);
       if (accessToken) url.searchParams.set(AUTH_QUERY_PARAMETER_NAME, accessToken);
       try {
         const response = await fetch(url, { method: "GET" });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
         if (request !== historyRequest) return;
+        renderHistoryFilters(payload);
         renderHaulHistory(payload);
-        status.textContent = runsHistoryStatus(payload.runs.skipped_lines);
+        status.textContent = runsHistoryStatus(payload.runs.skipped_lines) + (payload.hub ? ` (from hub ${payload.hub})` : "");
       } catch (error) {
         if (request !== historyRequest) return;
         status.textContent = `History unavailable: ${error.message}`;
@@ -1427,6 +1455,13 @@ let routes = [];
       button.addEventListener("click", () => {
         historyWindow = button.dataset.historyWindow;
         try { window.localStorage.setItem(HISTORY_WINDOW_KEY, historyWindow); } catch (_) {}
+        refreshHaulHistory();
+      });
+    });
+    [["history-node", HISTORY_NODE_KEY], ["history-ship", HISTORY_SHIP_KEY]].forEach(([id, key]) => {
+      document.getElementById(id).addEventListener("change", (event) => {
+        if (id === "history-node") historyNode = event.target.value; else historyShip = event.target.value;
+        try { window.localStorage.setItem(key, event.target.value); } catch (_) {}
         refreshHaulHistory();
       });
     });

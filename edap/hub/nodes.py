@@ -12,8 +12,9 @@ from typing import Any, Callable, Mapping
 
 from edap.eddn.game_markets import import_markets
 from edap.eddn.store import EddnStore
+from edap.hub.history import CentralHistory, HubRuns
 from edap.hub.peer import NodeHello, iso_utc
-from edap.hub.protocol import ITEM_MARKET, ITEM_STATION_FACTS, LinkReply, decode_update, response_frame
+from edap.hub.protocol import ITEM_HAUL_RUN, ITEM_MARKET, ITEM_STATION_FACTS, LinkReply, decode_update, response_frame
 from edap.recent_markets import snapshot_from_entry
 
 
@@ -21,8 +22,8 @@ class BadItem(ValueError):
     """An outbox item the hub can never store; it is acknowledged with an error and dropped."""
 
 
-# Stores one outbox item; raises BadItem for one that can never be stored, anything else to keep it.
-ItemSink = Callable[[str, Any], None]
+# Stores one outbox item from a node; raises BadItem for one that can never be stored, anything else to keep it.
+ItemSink = Callable[[NodeHello, str, Any], None]
 # Answers one peer request from its body.
 RequestHandler = Callable[[Any], LinkReply]
 
@@ -99,11 +100,13 @@ class NodeRegistry:
 
 @dataclass(frozen=True)
 class HubSide:
-    """What a hub needs to take peer links: its registry, where items go, and the token peers present."""
+    """What a hub needs to take peer links: its registry, where items go, the token peers present
+    and the central haul history its views read."""
 
     registry: NodeRegistry
     store_item: ItemSink
     token: str
+    history: CentralHistory
 
 
 class HubLinkSession:
@@ -170,7 +173,7 @@ class HubLinkSession:
     def _item(self, frame: dict[str, Any]) -> dict[str, Any]:
         seq = frame.get("seq")
         try:
-            self._store_item(str(frame.get("kind")), frame.get("body"))
+            self._store_item(self.hello, str(frame.get("kind")), frame.get("body"))
         except BadItem as exc:
             self._log(f"Peer {self.label}: dropped outbox item {seq}: {exc}")
             return {"type": "ack", "seq": seq, "error": str(exc)}
@@ -192,10 +195,19 @@ class HubLinkSession:
         return response_frame(request_id, reply)
 
 
-def store_link_item(store: EddnStore, log: Callable[[str], None]) -> ItemSink:
-    """Write a peer's market snapshots and station facts into the hub's store, newest wins."""
+def store_link_item(store: EddnStore, runs: HubRuns, log: Callable[[str], None]) -> ItemSink:
+    """Write a peer's market snapshots and station facts into the hub's store, newest wins, and its
+    haul runs into the central history, once per run key and node."""
 
-    def store_item(kind: str, body: Any) -> None:
+    def store_item(node: NodeHello, kind: str, body: Any) -> None:
+        if kind == ITEM_HAUL_RUN:
+            try:
+                added = runs.add(node, body)
+            except ValueError as exc:
+                raise BadItem(str(exc)) from exc
+            if added:
+                log(f"Haul history: run from {node.name} ({body.get('status')}, ended {body.get('ended_at')})")
+            return
         if kind == ITEM_MARKET:
             snapshot = snapshot_from_entry(body)
             if snapshot is None:

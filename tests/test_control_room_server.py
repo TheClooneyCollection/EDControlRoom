@@ -603,7 +603,10 @@ class ControlRoomServerTests(unittest.TestCase):
             response = client.get("/api/haul-stats", headers={"Authorization": "Bearer secret-token"})
             self.assertEqual(response.status_code, 200)
             payload = response.json()
-            self.assertEqual(set(payload), {"window", "label", "since", "until", "runs", "journal"})
+            self.assertEqual(set(payload), {"window", "label", "since", "until", "node", "ship", "nodes", "ships",
+                                            "runs", "journal", "journal_node"})
+            self.assertEqual((payload["node"], payload["ship"], payload["nodes"], payload["journal_node"]),
+                             ("all", "all", [], None))
             self.assertEqual(payload["window"], "today")
             self.assertEqual(payload["label"], "today")
             self.assertEqual(datetime.fromisoformat(payload["since"]).hour, 0)
@@ -612,6 +615,8 @@ class ControlRoomServerTests(unittest.TestCase):
             bad = client.get("/api/haul-stats?window=invalid&access_token=secret-token")
             self.assertEqual(bad.status_code, 400)
             self.assertIn("Usage: stats", bad.json()["detail"])
+            bad_ship = client.get("/api/haul-stats?ship=Cutter&access_token=secret-token")
+            self.assertEqual(bad_ship.status_code, 400)
 
     def test_command_api_runs_command_text_and_rejects_bad_requests(self) -> None:
         recorder = _CommandHandlerRecorder()

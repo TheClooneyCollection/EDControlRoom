@@ -12,6 +12,7 @@
 - [Resume Semantics](#resume-semantics)
 - [Multi-Leg Haul](#multi-leg-haul)
 - [Interrupt Behavior](#interrupt-behavior)
+- [Haul History](#haul-history)
 - [Related](#related)
 
 ## What Haul Does
@@ -117,6 +118,12 @@ The route can come from the normalized JSON schema at `docs/schemas/multi_leg_ha
 
 - First `Ctrl-C` or `Ctrl-D`: finish the current run, stop at station 1 after the return sale, before the next buy.
 - Second `Ctrl-C` or `Ctrl-D`: cancel immediately.
+
+## Haul History
+
+Every finished run, completed or aborted, is written to `control_room.haul_runs_file` with its ship. The **History** panel on the web haul page sums it for a window (Today, 48h, Week, Month, All), and `stats [window]` does the same in the command bar.
+
+With a hub (`[hub] role`), the hub's History panel shows every machine's runs: its own and every peer's. Pick a node and a ship in the two selects next to the window buttons (all nodes and all ships by default; they only show when there is more than one to pick). A peer still writes its own file and sends each finished run up to the hub, which keeps it in `[hub] runs_file`; runs made while the hub is away wait on the peer and go up when it returns. A peer's own History panel shows the hub's view and says the hub is unreachable while it is away. The `stats` command and the TUI's "Today" line still read only the machine's own file.
 
 ## Related
 

@@ -247,7 +247,10 @@ function measuredMetric(payload, trip) {
   const windowText = (MEASURED_WINDOWS.find(([value]) => value === payload.measured_window) || [null, "the window"])[1];
   const span = windowText === "All" ? "ever" : `in the last ${windowText}`;
   let note;
-  if (!measured) {
+  if (payload.measured_hint) {
+    // A peer's measured runs come from the hub's central history; say so when it is away.
+    note = escapeHtml(payload.measured_hint);
+  } else if (!measured) {
     note = `No completed haul runs on this route ${span} by ${shipLabel(payload.measured_ship)}.`;
   } else {
     note = `${count(measured.runs)} completed run${measured.runs === 1 ? "" : "s"} ${span} by ${shipLabel(payload.measured_ship)}, `

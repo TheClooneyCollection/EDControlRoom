@@ -199,8 +199,8 @@ def _int(value: Any) -> int:
     return 0
 
 
-def watch_recent_markets(
-    recent_markets_file: Path,
+def watch_file(
+    path: Path,
     interval_s: float,
     on_change: Callable[[Path], None],
     *,
@@ -214,15 +214,15 @@ def watch_recent_markets(
         last_mtime: float | None = None
         while True:
             try:
-                mtime: float | None = recent_markets_file.stat().st_mtime
+                mtime: float | None = path.stat().st_mtime
             except OSError:
                 mtime = None
             if mtime is not None and mtime != last_mtime:
                 last_mtime = mtime
                 try:
-                    on_change(recent_markets_file)
+                    on_change(path)
                 except Exception as exc:  # A bad push or import must not end the watcher.
-                    log(f"Recent markets watcher error: {exc}")
+                    log(f"Watcher {name} error: {exc}")
             if stop.wait(interval_s):
                 return
 
