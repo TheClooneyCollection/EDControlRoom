@@ -2,7 +2,7 @@
 
 ## Status
 
-Designed (2026-11-11). Built: step 1 (roles and data ownership, 2026-11-11), step 2 (peer link and outbox, 2026-11-11), step 3 (ship on every run, 2026-11-11). One feature: it replaces today's hub mode (`docs/user/hub.md`) as a whole and is released only when every build step below is done. The end state is designed here at once; no step keeps the old hub mode working alongside it.
+Designed (2026-11-11). Built: step 1 (roles and data ownership, 2026-11-11), step 2 (peer link and outbox, 2026-11-11), step 3 (ship on every run, 2026-11-11), step 4 (central history, 2026-11-11). One feature: it replaces today's hub mode (`docs/user/hub.md`) as a whole and is released only when every build step below is done. The end state is designed here at once; no step keeps the old hub mode working alongside it.
 
 ## Why
 
@@ -82,6 +82,7 @@ The existing pages already talk to their server over the session websocket (`hyd
 
 - Every run records its ship: ship ID, type, name, cargo capacity, max jump range (`Loadout.MaxJumpRange`) and laden jump range.
 - Hub history views show every node, with filters for node and ship.
+- Storage: the hub appends peers' runs to `[hub] runs_file` (the `haul_runs_file` JSONL format plus `node: {id, name}`) and reads its own `haul_runs_file` under its own node id, so every node's own file stays its source of truth. A peer's history views and measured profit per hour ask the hub.
 - Best deal's measured profit per hour uses completed runs on the station pair, either direction, for the current ship, over a window picked next to it (48h, 7 days default, 30 days, all). It shows the run count, average loop time and the ship's laden jump range, so a ship that now jumps further is visible. Older runs without ship data count within the window, marked "ship unknown".
 
 ### TTS on the hub

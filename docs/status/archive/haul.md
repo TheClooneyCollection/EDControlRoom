@@ -4,6 +4,10 @@ Prepend displaced older status blocks from `docs/status/haul.md` here.
 
 Legacy pre-split global status history remains in `../../status-archive.md`.
 
+## Archived 2026-11-11
+
+- Two-way `haul` loads ignored repo-root `haul.toml` by default via `haul load [path]`; the tracked profile shape lives in `defaults/haul.toml`, and the default haul docking timeout is now `1200s`.
+
 ## Archived 2026-11-10
 
 - Two-way `haul` now accepts one-sided loops: station 1 or station 2 buy cargo may be blank as long as the other side is configured, and the routine skips the missing buy/sell leg cleanly during prompt flow, launch, and resume detection.
