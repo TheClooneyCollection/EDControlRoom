@@ -11,7 +11,8 @@ The peer takes these frames only from the link it dialled itself: nothing listen
 
 Hub to peer: `channel_open` (channel, client_name), `channel_close` (channel), `channel_command`
 (channel, message), `read` (id, path, params), `act` (id, path, body).
-Peer to hub: `channel` (channel, message), `read_response` (id, status, body), `node_state` (state).
+Peer to hub: `channel` (channel, message), `read_response` (id, status, body), `node_state` (state),
+and `callout` (text: each callout the node speaks, for the hub to voice; see `edap.hub.voice`).
 """
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ from typing import Any, Callable
 from edap.control_room.server.messages import protocol_message
 from edap.hub.peer import NodeHello
 from edap.hub.protocol import LinkReply
+from edap.hub.voice import CALLOUT_FRAME, callout_text
 
 # The page reads a hub relays to the node a page looks at; everything else the hub answers itself.
 NODE_READS = frozenset({
@@ -294,11 +296,12 @@ class PeerRelay:
         self._running: set[str] = set()
 
     def link_up(self, send: Send) -> None:
-        """The hub welcomed this peer: tell it the ship and routine, and again whenever they change."""
+        """The hub welcomed this peer: tell it the ship and routine, and again whenever they change,
+        and send up each callout this node speaks (live only: one missed while the link is down is gone)."""
         with self._lock:
             self._send = send
             self._last_state = None
-            self._remove_state_listener = self._add_listener(lambda _message: self._send_state())
+            self._remove_state_listener = self._add_listener(self._on_event)
             early, self._early = self._early, []
         self._send_state()
         for channel_id in early:
@@ -426,6 +429,13 @@ class PeerRelay:
                 self._log(f"Hub action {path} failed: {exc}")
                 reply = LinkReply(500, {"detail": str(exc) or type(exc).__name__})
         self._try_send({"type": "read_response", "id": read_id, "status": reply.status, "body": reply.body})
+
+    def _on_event(self, message: dict[str, Any]) -> None:
+        text = callout_text(message)
+        if text is not None:
+            self._try_send({"type": CALLOUT_FRAME, "text": text})
+            return
+        self._send_state()
 
     def _send_state(self) -> None:
         state = self._state()

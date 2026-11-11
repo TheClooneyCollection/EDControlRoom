@@ -1,6 +1,7 @@
 """Plan 0015 steps 5 and 6: hub pages look at and drive a peer through the link (no sockets, an in-memory link)."""
 from __future__ import annotations
 
+import base64
 import json
 import unittest
 from dataclasses import replace
@@ -13,10 +14,11 @@ from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from edap.control_room.protocol import ActivityLogEntry
+from edap.control_room.protocol.events import AnnouncementEvent
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
 from edap.eddn.store import EddnStore
-from edap.hub.nodes import HubSide
 from edap.hub.relay import HubRelay, NodeOffline, PeerRelay, node_state
+from edap.hub.voice import HubVoice
 from edap.recent_markets import save_recent_markets
 from tests.test_control_room_server import _base_data_read_model, _CommandHandlerRecorder
 from tests.test_hub import GALILEO, HUB_TOKEN, PEER_NODE, SOL, TOKEN, market, rig, server
@@ -102,7 +104,7 @@ class RelayTests(unittest.TestCase):
         self.hub_app = server(data_provider=hub_data, market_database_file=self.database,
                               recent_markets_file=self.hub_recent, ardent_lookup=None,
                               journal_dir=self.hub_journals,
-                              hub_side=HubSide(self.r.registry, self.r.store_item, HUB_TOKEN, self.r.history, self.r.relay))
+                              hub_side=self.r.hub_side())
         self.r.handlers.update(self.hub_app.state.link_handlers)
         self.peer_app = server(data_provider=lambda: peer_data(self.routine), broker=self.peer_broker,
                                peer_link=self.r.peer, recent_markets_file=self.peer_recent,
@@ -363,6 +365,90 @@ class RelayTests(unittest.TestCase):
         relay.detach("peer-node", 1)  # the old connection's late close changes nothing
         self.assertEqual(ended, ["it reconnected"])
         self.assertEqual(relay.name("peer-node"), "Deck")
+
+    def callout(self, text: str) -> None:
+        """The peer speaks a callout, as its Control Room publishes it."""
+        self.peer_broker.publish_announcement(AnnouncementEvent(announcement_id="docking_complete", message_text=text))
+
+    def test_the_hub_voices_only_the_chosen_node_and_only_with_the_switch_on(self) -> None:
+        voice = self.r.voice
+        heard: list[dict[str, Any]] = []
+        voice.add_listener(heard.append)
+        self.callout("Missed while the link is down.")
+        link = self.r.attach()
+        self.callout("Docked at Galileo.")  # voice off by default
+        voice.update({"node_id": "peer-node"})
+        self.callout("Undocking,  commander.")
+        voice.update({"speakers": True})
+        self.callout("Jump initiated.")
+        voice.callout("hub-node", "Hub game docked.")  # not the voiced node
+        voice.update({"node_id": "hub-node"})
+        voice.callout("hub-node", "Hub game undocking.")
+        self.callout("Peer not voiced now.")
+        saved = HubVoice(local_node_id="hub-node", settings_file=self.r.tmp_path / "voice.json", speak=self.fail,
+                         synthesize=None, names=str, run_in_background=run_now, log=self.logs.append).settings()
+        voice.update({"node_id": None})
+        self.callout("Voice off again.")
+
+        self.assertEqual([frame["text"] for frame in link.sent if frame["type"] == "callout"],
+                         ["Docked at Galileo.", "Undocking,  commander.", "Jump initiated.", "Peer not voiced now.",
+                          "Voice off again."])
+        # Hub speakers: the voiced peer only, never the hub's own game (it already spoke there).
+        self.assertEqual(self.r.spoken, ["Jump initiated."])
+        callouts = [(m["node_name"], m["text"], base64.b64decode(m["wav"]).decode()) for m in heard if m["type"] == "callout"]
+        self.assertEqual(callouts, [("Deck", "Undocking, commander.", "WAV Undocking, commander."),
+                                    ("Deck", "Jump initiated.", "WAV Jump initiated."),
+                                    ("Home", "Hub game undocking.", "WAV Hub game undocking.")])
+        self.assertEqual([m["settings"]["node_name"] for m in heard if m["type"] == "settings"],
+                         [None, "Deck", "Deck", "Home", None])
+        self.assertEqual((saved["node_id"], saved["speakers"], saved["piper"]), ("hub-node", True, False))
+
+    def test_without_piper_pages_get_the_text_to_speak_themselves(self) -> None:
+        heard: list[dict[str, Any]] = []
+        logs: list[str] = []
+
+        def broken(text: str) -> bytes:
+            raise OSError("Piper wrote no audio")
+
+        for synthesize in (None, broken):
+            voice = HubVoice(local_node_id="hub-node", settings_file=self.r.tmp_path / "voice.json", speak=self.fail,
+                             synthesize=synthesize, names=lambda node_id: "Deck", run_in_background=run_now, log=logs.append)
+            voice.update({"node_id": "peer-node"})
+            voice.add_listener(heard.append)
+            voice.callout("peer-node", "Docked.")
+
+        self.assertEqual([(m["text"], m["wav"]) for m in heard if m["type"] == "callout"], [("Docked.", None)] * 2)
+        self.assertIn("Hub voice: Piper failed, pages speak the text: Piper wrote no audio", logs)
+        with self.assertRaises(ValueError):
+            voice.update({"speakers": "yes"})
+        with self.assertRaises(ValueError):
+            voice.update({"volume": 3})
+
+    def test_a_hub_page_sets_the_voice_and_listens(self) -> None:
+        self.r.attach()
+        with TestClient(self.hub_app) as hub, TestClient(self.peer_app) as peer:
+            default = hub.get("/api/hub-voice", params=PAGE).json()
+            bad = hub.post("/api/hub-voice", params=PAGE, json={"speakers": 1})
+            with hub.websocket_connect("/api/hub-voice/listen", params=PAGE) as page:
+                first = page.receive_json()
+                chosen = hub.post("/api/hub-voice", params=PAGE, json={"node_id": "peer-node", "speakers": True}).json()
+                told = page.receive_json()
+                self.callout("Docked at Galileo.")
+                heard = page.receive_json()
+            not_a_hub = peer.get("/api/hub-voice", params=PAGE)
+            with self.assertRaises(WebSocketDisconnect):
+                with hub.websocket_connect("/api/hub-voice/listen") as stranger:
+                    stranger.receive_json()
+
+        self.assertEqual((default["node_id"], default["speakers"], default["piper"]), (None, False, True))
+        self.assertEqual(bad.status_code, 400)
+        self.assertEqual(first, {"type": "settings", "settings": default})
+        self.assertEqual((chosen["node_name"], chosen["speakers"]), ("Deck", True))
+        self.assertEqual(told["settings"], chosen)
+        self.assertEqual((heard["node_id"], heard["text"], base64.b64decode(heard["wav"])),
+                         ("peer-node", "Docked at Galileo.", b"WAV Docked at Galileo."))
+        self.assertEqual(self.r.spoken, ["Docked at Galileo."])
+        self.assertEqual(not_a_hub.status_code, 404)
 
 
 if __name__ == "__main__":

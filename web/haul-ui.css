@@ -1817,6 +1817,51 @@
   }
 }
 
+/* Hub voice (hub-voice.js), under the node picker: the voiced node, hub speakers, Listen here. */
+.hub-voice {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 10px 6px 0;
+}
+
+.hub-voice-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.hub-voice select {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-2);
+  color: var(--text-1);
+  font-size: 12.5px;
+}
+
+.hub-voice-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.hub-voice-status {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+@media (max-width: 760px) {
+  .hub-voice {
+    margin: 0 2px 8px;
+    min-width: 200px;
+  }
+}
+
 /* Activity log bar (activity-dock.js): docked to the bottom of the main column on desktop widths,
    collapsed to the newest entry until clicked. Phones keep the panel in the page flow. */
 .activity-toggle {

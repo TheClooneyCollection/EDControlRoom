@@ -271,6 +271,8 @@ class HubConfig:
     outbox_file: Path = Path(".control_room_hub_outbox.sqlite3")
     # Hub only: every peer's finished haul runs, tagged with their node; its own stay in `haul_runs_file`.
     runs_file: Path = Path(".control_room_hub_runs.jsonl")
+    # Hub only: the node whose callouts the hub voices and its speaker switch, set from the hub pages.
+    voice_file: Path = Path(".control_room_hub_voice.json")
     timeout_s: float = 10.0
     search_timeout_s: float = 180.0
     # Seconds of quiet on the link before the peer pings the hub; twice that without an answer redials.
@@ -1303,6 +1305,9 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             ),
             runs_file=Path(
                 _string(hub, "runs_file", _string(default_hub, "runs_file", ".control_room_hub_runs.jsonl"))
+            ),
+            voice_file=Path(
+                _string(hub, "voice_file", _string(default_hub, "voice_file", ".control_room_hub_voice.json"))
             ),
             timeout_s=_float(hub, "timeout_s", _float(default_hub, "timeout_s", 10.0)),
             search_timeout_s=_float(hub, "search_timeout_s", _float(default_hub, "search_timeout_s", 180.0)),

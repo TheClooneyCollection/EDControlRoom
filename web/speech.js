@@ -114,6 +114,9 @@
     });
     window.addEventListener("edcr:announcement", (event) => {
       const text = event.detail && event.detail.message_text;
+      // A hub page listening to the hub voice (hub-voice.js) plays that node instead.
+      const hubVoice = window.EDCRHubVoice;
+      if (hubVoice && hubVoice.listening()) return;
       if (settings.enabled && unlocked && text) speak(text);
     });
   }

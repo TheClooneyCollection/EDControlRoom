@@ -238,6 +238,10 @@ window.EDCRNode = (() => {
 
   getJson("/api/hub-status").then((status) => {
     if (status.role !== "hub") return;
+    // The hub voice panel (which node the hub voices, Listen here) sits under the picker.
+    const voice = document.createElement("script");
+    voice.src = "/assets/hub-voice.js";
+    document.head.append(voice);
     refreshNodes();
     window.setInterval(refreshNodes, 10000);
   }).catch(() => {});

@@ -378,6 +378,7 @@ def build_observer_server_app(
             "active-route.js": "text/javascript; charset=utf-8",
             "speech.js": "text/javascript; charset=utf-8",
             "hub-status.js": "text/javascript; charset=utf-8",
+            "hub-voice.js": "text/javascript; charset=utf-8",
             "activity-dock.js": "text/javascript; charset=utf-8",
         }
         media_type = allowed_assets.get(asset_name)
@@ -757,6 +758,56 @@ def build_observer_server_app(
         local_state = await asyncio.to_thread(lambda: node_state(data_provider()))
         return JSONResponse({"nodes": [{**node, "state": local_state} if node["local"] else node for node in nodes]})
 
+    async def hub_voice_endpoint(request: Request) -> JSONResponse:
+        """Which node the hub voices and whether its speakers are on (plan 0015 step 7); POST changes them."""
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        if hub_side is None:
+            return JSONResponse({"detail": "Only a hub voices nodes"}, status_code=404)
+        if request.method == "GET":
+            return JSONResponse(hub_side.voice.settings())
+        try:
+            return JSONResponse(hub_side.voice.update(await request.json()))
+        except ValueError as exc:
+            return JSONResponse({"detail": str(exc) or "body must be JSON"}, status_code=400)
+
+    async def hub_voice_listen(websocket: WebSocket) -> None:
+        """A hub page listening: the voice settings, then every voiced callout (text, WAV or null)."""
+        if not auth.is_websocket_authorized(websocket):
+            await websocket.close(code=4401, reason="authentication required")
+            return
+        if hub_side is None:
+            await websocket.close(code=4404, reason="not a hub")
+            return
+        await websocket.accept()
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        remove = hub_side.voice.add_listener(lambda message: loop.call_soon_threadsafe(queue.put_nowait, message))
+
+        async def send() -> None:
+            while True:
+                await websocket.send_json(await queue.get())
+
+        async def receive() -> None:
+            # Only to notice the page going away.
+            while True:
+                await websocket.receive_text()
+
+        tasks = {asyncio.create_task(send()), asyncio.create_task(receive())}
+        try:
+            done, pending_tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            for task in pending_tasks:
+                task.cancel()
+            for task in done:
+                task.result()
+        except (WebSocketDisconnect, RuntimeError):
+            pass
+        finally:
+            for task in tasks:
+                task.cancel()
+            remove()
+
     def route_ship_inputs() -> dict[str, Any]:
         data = data_provider()
         try:
@@ -856,7 +907,8 @@ def build_observer_server_app(
             future.add_done_callback(lambda done: done.cancelled() or done.exception())
 
         session = HubLinkSession(registry=hub_side.registry, store_item=hub_side.store_item, handlers=link_handlers,
-                                 relay=hub_side.relay, send=send_soon, log=logging.getLogger("edap.hub").info)
+                                 relay=hub_side.relay, callout=hub_side.voice.callout, send=send_soon,
+                                 log=logging.getLogger("edap.hub").info)
 
         async def answer(frame: dict[str, Any]) -> None:
             await send(await asyncio.to_thread(session.receive, frame))
@@ -1242,11 +1294,13 @@ def build_observer_server_app(
             Route("/api/eddn-routes", node_read_endpoint("/api/eddn-routes")),
             Route("/api/hub-status", hub_status_endpoint),
             Route("/api/nodes", nodes_endpoint),
+            Route("/api/hub-voice", hub_voice_endpoint, methods=["GET", "POST"]),
             Route("/api/command", node_action_endpoint("/api/command", empty_body=None), methods=["POST"]),
             Route("/api/stop", node_action_endpoint("/api/stop", empty_body={}), methods=["POST"]),
             Route(HAUL_WEB_ASSET_URL_PATH, haul_web_asset),
             WebSocketRoute("/session", session),
             WebSocketRoute(PEER_LINK_PATH, peer_link_endpoint),
+            WebSocketRoute("/api/hub-voice/listen", hub_voice_listen),
         ]
     )
     # The hub's answers to peer requests, so tests drive a link session without a socket.

@@ -33,6 +33,7 @@ from edap.hub.nodes import BadItem, HubLinkSession, HubSide, NodeRegistry, store
 from edap.hub.outbox import Outbox
 from edap.hub.peer import NodeHello, PeerLink, load_node_id, peer_link_url
 from edap.hub.relay import HubRelay
+from edap.hub.voice import HubVoice
 from edap.hub.protocol import (
     REQUEST_EDDN_STATUS, HubUnreachable, LinkClosed, LinkReply, decode_update, encode_update,
 )
@@ -177,6 +178,7 @@ class Rig:
         self.peer_logs: list[str] = []
         self.registry = NodeRegistry(HUB_NODE, self.clock)
         self.tmp = TemporaryDirectory()
+        self.tmp_path = Path(self.tmp.name)
         self.hub_runs = HubRuns.open(Path(self.tmp.name) / "hub_runs.jsonl", self.hub_logs.append)
         # The hub's own game's runs, which join the central view under its node id.
         self.own_runs = Path(self.tmp.name) / "own_runs.jsonl"
@@ -185,6 +187,14 @@ class Rig:
         self.handlers = handlers or {}
         self.outbox = memory_outbox()
         self.relay = HubRelay(log=self.hub_logs.append, read_timeout_s=10.0, slow_read_timeout_s=60.0)
+        # What the hub speakers said, and the WAVs Piper made (bytes of the text, so tests read them).
+        self.spoken: list[str] = []
+        self.voice = HubVoice(
+            local_node_id=HUB_NODE.node_id, settings_file=Path(self.tmp.name) / "voice.json",
+            speak=lambda text: self.spoken.append(text) is None, synthesize=lambda text: f"WAV {text}".encode(),
+            names=lambda node_id: HUB_NODE.name if node_id == HUB_NODE.node_id else self.relay.name(node_id),
+            run_in_background=lambda work: work(), log=self.hub_logs.append,
+        )
         self.peer = PeerLink(hello=PEER_NODE, hub_url=HUB_URL, outbox=self.outbox,
                              relay=peer_relay or QuietRelay(), connect=self.connect,
                              now=self.clock, log=self.peer_logs.append, heartbeat_s=30.0,
@@ -194,9 +204,13 @@ class Rig:
     def connect(self) -> Loopback:
         link = Loopback(self.peer)
         link.session = HubLinkSession(registry=self.registry, store_item=self.store_item, handlers=self.handlers,
-                                      relay=self.relay, send=link.down, log=self.hub_logs.append)
+                                      relay=self.relay, callout=self.voice.callout, send=link.down,
+                                      log=self.hub_logs.append)
         self.links.append(link)
         return link
+
+    def hub_side(self) -> HubSide:
+        return HubSide(self.registry, self.store_item, HUB_TOKEN, self.history, self.relay, self.voice)
 
     def attach(self) -> Loopback:
         link = self.connect()
@@ -543,9 +557,7 @@ class LinkedServerTests(unittest.TestCase):
 
     def setUp(self) -> None:
         self.r = rig(self)
-        self.hub_app = server(market_database_file=self.database, hub_side=HubSide(self.r.registry, self.r.store_item,
-                                                                                    HUB_TOKEN, self.r.history,
-                                                                                    self.r.relay),
+        self.hub_app = server(market_database_file=self.database, hub_side=self.r.hub_side(),
                               eddn_status=lambda: {"store": {"markets": 3}}, ardent_lookup=None)
         self.r.handlers.update(self.hub_app.state.link_handlers)
 

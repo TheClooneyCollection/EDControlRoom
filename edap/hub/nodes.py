@@ -16,6 +16,7 @@ from edap.hub.history import CentralHistory, HubRuns
 from edap.hub.peer import NodeHello, iso_utc
 from edap.hub.protocol import ITEM_HAUL_RUN, ITEM_MARKET, ITEM_STATION_FACTS, LinkReply, decode_update, response_frame
 from edap.hub.relay import RELAY_FRAMES, HubRelay
+from edap.hub.voice import CALLOUT_FRAME, HubVoice
 from edap.recent_markets import snapshot_from_entry
 
 
@@ -111,13 +112,15 @@ class NodeRegistry:
 @dataclass(frozen=True)
 class HubSide:
     """What a hub needs to take peer links: its registry, where items go, the token peers present,
-    the central haul history its views read and the relay for pages looking at a peer."""
+    the central haul history its views read, the relay for pages looking at a peer and the voice
+    that speaks one node's callouts."""
 
     registry: NodeRegistry
     store_item: ItemSink
     token: str
     history: CentralHistory
     relay: HubRelay
+    voice: HubVoice
 
 
 class HubLinkSession:
@@ -131,11 +134,14 @@ class HubLinkSession:
         store_item: ItemSink,
         handlers: Mapping[str, RequestHandler],
         relay: HubRelay,
+        callout: Callable[[str, str], None],
         send: Callable[[dict[str, Any]], None],
         log: Callable[[str], None],
     ) -> None:
         self._registry = registry
         self._relay = relay
+        # Hands a peer's callout (node id, text) to the hub voice.
+        self._callout = callout
         # Sends a frame to this peer outside an answer: the relay's channel and read frames.
         self._send = send
         self._store_item = store_item
@@ -166,6 +172,10 @@ class HubLinkSession:
         if kind == "node_state":
             if isinstance(frame.get("state"), dict):
                 self._registry.set_state(self.hello.node_id, frame["state"])
+            return []
+        if kind == CALLOUT_FRAME:
+            if isinstance(frame.get("text"), str):
+                self._callout(self.hello.node_id, frame["text"])
             return []
         if kind in RELAY_FRAMES:
             self._relay.on_frame(self.hello.node_id, frame)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import logging
 from pathlib import Path
 import socket
@@ -30,10 +31,11 @@ from edap.hub.nodes import HubSide, NodeRegistry, store_link_item
 from edap.hub.outbox import Outbox
 from edap.hub.peer import NODE_ID_FILE_NAME, NodeHello, PeerLink, load_node_id, new_node_id, websocket_connector
 from edap.hub.relay import HubRelay, PeerRelay, node_state
+from edap.hub.voice import HubVoice, callout_text
 from edap.recent_markets import load_recent_markets, watch_file
 from edap.market_db import open_market_store, station_facts_writer
 from edap.runtime import build_runtime_context, load_config_with_fallback
-from edap.tts import NullSpeechBackend, build_speech_backend
+from edap.tts import NullSpeechBackend, PiperSpeechBackend, build_speech_backend
 from edap.version import REPOSITORY_NAME, get_current_version
 
 
@@ -187,12 +189,33 @@ def serve_observer_mode(
         hub_logger.info("Hub %s (node %s): peers link at /api/peer-link", node.name, node.node_id)
         hub_runs = HubRuns.open(hub_config.runs_file, hub_logger.warning)
         hub_logger.info("Hub haul history: own runs %s, peer runs %s", haul_runs_file, hub_config.runs_file)
+        hub_relay = HubRelay(log=hub_logger.info, read_timeout_s=hub_config.timeout_s,
+                             slow_read_timeout_s=hub_config.search_timeout_s)
+        local_node = node
+        # Piper clips for listening pages, made one at a time in callout order.
+        voice_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="hub-voice")
+        hub_voice = HubVoice(
+            local_node_id=node.node_id,
+            settings_file=hub_config.voice_file,
+            # The hub's own speaker queue, so a voiced node never talks over the hub's own callouts.
+            speak=runtime_host.say,
+            # Piper only: the platform voices cannot write a file, so pages then speak the text themselves.
+            synthesize=speech_backend.synthesize_wav if isinstance(speech_backend, PiperSpeechBackend) else None,
+            names=lambda node_id: local_node.name if node_id == local_node.node_id else hub_relay.name(node_id),
+            run_in_background=voice_worker.submit,
+            log=hub_logger.info,
+        )
+        voice_settings = hub_voice.settings()
+        hub_logger.info("Hub voice: %s, hub speakers %s (%s)", voice_settings["node_name"] or "off",
+                        "on" if voice_settings["speakers"] else "off", hub_config.voice_file)
+        # The hub's own game reaches the voice through its broker; a peer's through its link.
+        broker.add_listener(lambda message: hub_voice.callout(local_node.node_id, callout_text(message) or ""))
         hub_side = HubSide(registry=NodeRegistry(node, time.time),
                            store_item=store_link_item(store, hub_runs, hub_logger.info),
                            token=hub_config.token,
                            history=CentralHistory(local=node, local_file=haul_runs_file, runs=hub_runs),
-                           relay=HubRelay(log=hub_logger.info, read_timeout_s=hub_config.timeout_s,
-                                          slow_read_timeout_s=hub_config.search_timeout_s))
+                           relay=hub_relay,
+                           voice=hub_voice)
     if store is not None:
         import_game_markets_every(store, recent_markets_file, 5.0, db_logger.info, stop=stop_background)
     ardent_lookup: ArdentLookup | None = None

@@ -13,6 +13,8 @@ outbox_file = ".control_room_hub_outbox.sqlite3"
 # Hub only: every peer's finished haul runs (JSONL, tagged with their node). The hub's own runs
 # stay in `control_room.haul_runs_file`.
 runs_file = ".control_room_hub_runs.jsonl"
+# Hub only: which node the hub voices and whether its speakers are on, as set from the hub pages.
+voice_file = ".control_room_hub_voice.json"
 # Seconds to wait for the hub on route, status and station fact requests.
 timeout_s = 10.0
 # Seconds to wait for an Inara haul search, which drives a browser on the hub.

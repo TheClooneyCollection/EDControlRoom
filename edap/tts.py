@@ -175,6 +175,21 @@ class PiperSpeechBackend:
         with self._lock:
             self._speak_line(line)
 
+    def synthesize_wav(self, text: str) -> bytes:
+        """One line as WAV bytes, not played (the hub sends them to listening pages). Raises OSError
+        when Piper writes nothing; waits while a line is spoken, so both share one Piper process."""
+        line = " ".join(text.split())
+        if not line:
+            raise OSError("nothing to say")
+        with self._lock:
+            wav_path = self._synthesize(line) or self._synthesize(line)
+        if not wav_path:
+            raise OSError("Piper wrote no audio")
+        try:
+            return Path(wav_path).read_bytes()
+        finally:
+            Path(wav_path).unlink(missing_ok=True)
+
     def _speak_line(self, line: str) -> None:
         wav_path = self._synthesize(line) or self._synthesize(line)
         if not wav_path:

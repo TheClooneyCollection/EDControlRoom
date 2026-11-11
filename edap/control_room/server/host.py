@@ -184,6 +184,10 @@ class HeadlessControlRoomHost(ControlRoomApp):
         if self._ctx.input_controller is not None:
             self._ctx.input_controller.close()
 
+    def say(self, text: str) -> bool:
+        """Speak a line on this host's speaker queue, after the callouts already queued; False when speech is off."""
+        return self._tts.say(text)
+
     def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> bool:
         """Run one command; returns False when it was refused because a routine was already running."""
         resolved = raw_input
