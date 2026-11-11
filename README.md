@@ -1,5 +1,9 @@
 # EDControlRoom
 
+<p align="center">
+  <img src="assets/logos/hyperspace-trail-wordmark.png" alt="EDControlRoom" width="640">
+</p>
+
 [![Tests](https://github.com/TheClooneyCollection/EDControlRoom/actions/workflows/tests.yml/badge.svg)](https://github.com/TheClooneyCollection/EDControlRoom/actions/workflows/tests.yml)
 [![Release](https://img.shields.io/github/v/release/TheClooneyCollection/EDControlRoom)](https://github.com/TheClooneyCollection/EDControlRoom/releases/latest)
 [![License](https://img.shields.io/github/license/TheClooneyCollection/EDControlRoom)](LICENSE)
