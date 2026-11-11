@@ -127,6 +127,7 @@ _(Expand a section for details.)_
 
 ```sh
 uv sync
+uv run python3 tools/setup_piper.py   # optional: set up Piper TTS, see Piper Voice below for more details
 uv run python3 control_room.py lan
 ```
 
