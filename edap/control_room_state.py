@@ -191,8 +191,8 @@ def save_control_room_state(path: Path, state: ControlRoomState) -> None:
     }
 
     with NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
-        json.dump(payload, handle, indent=2, sort_keys=True)
-        handle.write("\n")
+        # One write: json.dump streams hundreds of small chunks, which made each save several times slower.
+        handle.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
         handle.flush()
         os.fsync(handle.fileno())
         temp_path = Path(handle.name)
