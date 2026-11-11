@@ -37,7 +37,8 @@ class HaulWindowTests(unittest.TestCase):
         for window, expected in (("", monday), ("today", monday), ("week", monday),
                                  ("month", monday.replace(day=1)),
                                  ("since 2026-11-02", monday.replace(day=2)), ("all", None),
-                                 ("48h", monday - timedelta(hours=48))):
+                                 ("48h", monday - timedelta(hours=48)), ("7d", monday - timedelta(days=7)),
+                                 ("30d", monday - timedelta(days=30))):
             with self.subTest(window=window):
                 since, until, label = parse_window(window, monday)
                 self.assertEqual(since, expected)

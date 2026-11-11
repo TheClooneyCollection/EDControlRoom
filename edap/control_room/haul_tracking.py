@@ -24,9 +24,19 @@ class HaulTrackingHost(Protocol):
     _time_fn: Callable[[], float]
 
     def _log(self, msg: str) -> None: ...
+    def _laden_jump_range_ly(self) -> float: ...
     def _refresh_haul_stats(self) -> None: ...
     def _save_saved_state(self) -> None: ...
     def _announce_tts(self, message_id: AnnouncementId, /, **values: object) -> None: ...
+
+
+def ship_record(ship: ShipState, laden_jump_range_ly: float) -> dict[str, Any]:
+    """The ship a haul run is flown in, as stored on its history row."""
+    return {
+        "id": ship.ship_id, "type": ship.ship_type, "name": ship.ship_name, "ident": ship.ship_ident,
+        "cargo_capacity": ship.cargo_capacity, "max_jump_range_ly": ship.max_jump_range_ly,
+        "laden_jump_range_ly": laden_jump_range_ly,
+    }
 
 
 def start_haul_stats(
@@ -297,6 +307,9 @@ def handle_haul_event(
         record_event(stats, ev, current_station or "", ev.get("StarSystem") or app._ship.system or "")
         if stats.current_run is not None:
             stats.current_run["phase"] = app._runtime_state.haul_phase
+            # A row saved before ship tracking, or begun before the Loadout arrived, gets its ship here.
+            if (stats.current_run.get("ship") or {}).get("id") is None:
+                stats.current_run["ship"] = ship_record(app._ship, app._laden_jump_range_ly())
             for index in (1, 2):
                 key = f"system_{index}"
                 if not stats.current_run["route"][key]:

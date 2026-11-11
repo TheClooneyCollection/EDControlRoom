@@ -14,6 +14,16 @@ let compareRequest = 0;
 let shownTradeRoute = null;
 let shownComparison = null;
 let chosenDeals = { outbound: null, inbound: null };
+const WINDOW_STORAGE_KEY = "edcr.markets.measuredWindow";
+// Measured profit per hour window: the server's MEASURED_WINDOWS, 7 days by default.
+const MEASURED_WINDOWS = [["48h", "48h"], ["7d", "7 days"], ["30d", "30 days"], ["all", "All"]];
+let measuredWindow = "7d";
+try {
+  const saved = window.localStorage.getItem(WINDOW_STORAGE_KEY);
+  if (MEASURED_WINDOWS.some(([value]) => value === saved)) measuredWindow = saved;
+} catch (error) {
+  // Storage can be blocked; the default window still works.
+}
 
 const COMMODITY_COLUMNS = [
   { key: "name", label: "Commodity" },
@@ -220,8 +230,40 @@ function metric(label, value, note) {
     <span class="deal-metric-value mono">${value}</span>${note ? `<span class="deal-metric-note">${note}</span>` : ""}</div>`;
 }
 
+function shipLabel(ship) {
+  if (!ship || ship.id === null || ship.id === undefined) return "any ship (current ship unknown)";
+  const name = ship.name ? ` "${escapeHtml(ship.name)}"` : "";
+  return `this ship (${escapeHtml(ship.type || "ship")}${name})`;
+}
+
+// Completed haul runs on the pair, for the current ship, over the picked window.
+function measuredMetric(payload, trip) {
+  const measured = payload.measured;
+  const options = MEASURED_WINDOWS.map(([value, label]) =>
+    `<option value="${value}"${value === measuredWindow ? " selected" : ""}>${label}</option>`).join("");
+  const select = `<select class="select deal-window" id="deal-window" aria-label="Measured window">${options}</select>`;
+  const windowText = (MEASURED_WINDOWS.find(([value]) => value === payload.measured_window) || [null, "the window"])[1];
+  const span = windowText === "All" ? "ever" : `in the last ${windowText}`;
+  let note;
+  if (!measured) {
+    note = `No completed haul runs on this route ${span} by ${shipLabel(payload.measured_ship)}.`;
+  } else {
+    note = `${count(measured.runs)} completed run${measured.runs === 1 ? "" : "s"} ${span} by ${shipLabel(payload.measured_ship)}, `
+      + `${minutes(measured.loop_s)} loop`;
+    if (measured.laden_jump_range_ly !== null) {
+      const now = trip && trip.laden_jump_range_ly;
+      const changed = now && Math.abs(now - measured.laden_jump_range_ly) >= 0.05 ? ` (now ${now} Ly)` : "";
+      note += `, flown at ${measured.laden_jump_range_ly} Ly laden${changed}`;
+    }
+    if (measured.unknown_ship_runs) note += `; ${count(measured.unknown_ship_runs)} ship unknown`;
+  }
+  return `<div><span class="deal-window-head"><span class="field-label">Measured per hour</span>${select}</span>
+    <span class="deal-metric-value mono">${measured ? `${credits(measured.profit_per_hour)}/h` : "-"}</span>
+    <span class="deal-metric-note">${note}</span></div>`;
+}
+
 // Inara's trade route view: profit per ton, profit per trip and profit per hour, plus our measured runs.
-function dealMetrics(perTon, perTrip, perHour, trip, measured) {
+function dealMetrics(perTon, perTrip, perHour, trip, payload) {
   let hourNote;
   if (perHour !== null) {
     const legs = trip.jumps ? `${trip.jumps} jump${trip.jumps === 1 ? "" : "s"} each way, ${trip.distance_ly} Ly` : "same system";
@@ -233,15 +275,11 @@ function dealMetrics(perTon, perTrip, perHour, trip, measured) {
     const missing = (trip && trip.missing) || [];
     hourNote = missing.length ? `Missing ${escapeHtml(missing.join(", "))}. Docking there or EDDN data fills it in.` : "No trip estimate.";
   }
-  const measuredValue = measured ? `${credits(measured.profit_per_hour)}/h` : "-";
-  const measuredNote = measured
-    ? `${count(measured.runs)} completed haul run${measured.runs === 1 ? "" : "s"}, ${minutes(measured.duration_s / measured.runs)} each`
-    : "No completed haul runs on this route.";
   return `<div class="deal-metrics">
     ${metric("Profit per ton", `${count(perTon)} Cr/t`, "Both legs added")}
     ${metric("Profit per trip", credits(perTrip), "Full-hold round trip")}
     ${metric("Profit per hour", perHour !== null ? `${credits(perHour)}/h` : "-", hourNote)}
-    ${metric("Measured per hour", measuredValue, measuredNote)}
+    ${measuredMetric(payload, trip)}
   </div>`;
 }
 
@@ -287,7 +325,7 @@ function renderComparison() {
   result.innerHTML = `
     <div class="deal-round-trip"><strong>Round trip:</strong> X → Y ${out ? escapeHtml(out.name) : "nothing"},
       Y → X ${back ? escapeHtml(back.name) : "nothing"}.
-      ${dealMetrics(perTon, perTrip, perHour, payload.trip, payload.measured)}
+      ${dealMetrics(perTon, perTrip, perHour, payload.trip, payload)}
       <div class="deal-actions">
         <button class="btn" type="button" id="deal-copy">Copy route</button>
         <a class="btn" href="${escapeHtml(haulUrl)}">Open in haul</a>
@@ -335,7 +373,8 @@ async function refreshComparison() {
       x,
       y,
       capacity: document.getElementById("deal-capacity").value.trim(),
-      laden_jump_range_ly: document.getElementById("deal-laden").value.trim()
+      laden_jump_range_ly: document.getElementById("deal-laden").value.trim(),
+      window: measuredWindow
     });
     if (request !== compareRequest) return;
     const byId = Object.fromEntries(markets.map((market) => [String(market.market_id), market]));
@@ -394,6 +433,16 @@ document.getElementById("deal-result").addEventListener("click", (event) => {
   if (button) copyTradeRoute(button);
 });
 document.getElementById("deal-result").addEventListener("change", (event) => {
+  if (event.target.id === "deal-window") {
+    measuredWindow = event.target.value;
+    try {
+      window.localStorage.setItem(WINDOW_STORAGE_KEY, measuredWindow);
+    } catch (error) {
+      // Not remembered across loads; this page still uses it.
+    }
+    refreshComparison();
+    return;
+  }
   const leg = event.target.name === "deal-outbound" ? "outbound" : event.target.name === "deal-inbound" ? "inbound" : null;
   if (!leg) return;
   chosenDeals[leg] = event.target.value;

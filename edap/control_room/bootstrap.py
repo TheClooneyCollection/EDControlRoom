@@ -66,6 +66,9 @@ def bootstrap_ship_state(app: BootstrapHost) -> None:
             app._ship.station = state.station
             app._ship.status = state.status
             app._ship.ship_type = state.ship_type
+            app._ship.ship_id = state.ship_id
+            app._ship.ship_name = state.ship_name
+            app._ship.ship_ident = state.ship_ident
             app._ship.fuel_level = state.fuel_level
             app._ship.fuel_capacity = state.fuel_capacity
             app._ship.target = state.target

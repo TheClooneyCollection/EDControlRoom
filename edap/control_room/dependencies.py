@@ -408,6 +408,9 @@ def _copy_ship_state(ship: ShipState) -> ShipState:
     return ShipState(
         commander=ship.commander,
         ship_type=ship.ship_type,
+        ship_id=ship.ship_id,
+        ship_name=ship.ship_name,
+        ship_ident=ship.ship_ident,
         system=ship.system,
         station=ship.station,
         status=ship.status,

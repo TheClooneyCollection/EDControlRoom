@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime, timedelta, timezone
 
 from edap.eddn.routes import TimeModel
-from edap.haul_history import RouteSummary, RunTotals
 from edap.eddn.messages import journal_event_updates, station_type_from_game
 from edap.recent_markets import MarketSnapshot
 from edap.trade_trip import (
@@ -26,14 +26,21 @@ def snapshot(market_id: int, station: str, system: str, station_type: str = "Cor
     return MarketSnapshot(market_id, station, system, station_type, "2026-11-10T10:00:00Z", ())
 
 
-def totals(count: int, profit: int, duration_s: float) -> RunTotals:
-    return RunTotals(count, 0, profit, profit, duration_s)
+NOW = datetime(2026, 11, 11, 12, 0, tzinfo=timezone.utc)
 
 
-def route(station_1: str, system_1: str | None, station_2: str, system_2: str | None, *, count: int, profit: int,
-          duration_s: float) -> RouteSummary:
-    done = totals(count, profit, duration_s)
-    return RouteSummary(station_1, system_1, station_2, system_2, done, totals(0, 0, 0.0), done)
+def run(station_1: str, system_1: str | None, station_2: str, system_2: str | None, *, profit: int,
+        duration_s: float, ship: dict | None = None, ended: datetime = NOW, status: str = "completed") -> dict:
+    row = {"status": status, "ended_at": ended.isoformat(), "duration_s": duration_s, "cost": 0, "revenue": profit,
+           "route": {"station_1": station_1, "system_1": system_1, "station_2": station_2, "system_2": system_2}}
+    if ship is not None:
+        row["ship"] = ship
+    return row
+
+
+def cutter(laden: float) -> dict:
+    return {"id": 7, "type": "cutter", "name": "Hauler", "ident": "HL-07", "cargo_capacity": 784,
+            "max_jump_range_ly": 30.5, "laden_jump_range_ly": laden}
 
 
 class TripEstimateTests(unittest.TestCase):
@@ -144,24 +151,55 @@ class FactSourceTests(unittest.TestCase):
         self.assertEqual(journal_event_updates({"event": "Docked", "MarketID": 1}), [])
 
 class MeasuredRouteTests(unittest.TestCase):
+    x, y = snapshot(1, "Galileo", "Sol"), snapshot(2, "Alpha Port", "Alpha")
+
+    def measure(self, rows: list[dict], *, ship_id: int | None = 7, since: datetime | None = None):
+        return measured_route(rows, self.x, self.y, ship_id=ship_id, since=since, until=NOW)
+
     def test_completed_runs_either_way_and_any_case_add_up_to_a_measured_rate(self) -> None:
-        summaries = [
-            route("Galileo", "Sol", "Alpha Port", "Alpha", count=2, profit=8_000_000, duration_s=2400.0),
-            route("alpha port", None, "GALILEO", "sol", count=1, profit=4_000_000, duration_s=1200.0),
-            route("Galileo", "Other Sol", "Alpha Port", "Alpha", count=5, profit=1, duration_s=1.0),
-            route("Galileo", "Sol", "Elsewhere", "Alpha", count=5, profit=1, duration_s=1.0),
+        rows = [
+            run("Galileo", "Sol", "Alpha Port", "Alpha", profit=8_000_000, duration_s=2400.0, ship=cutter(20.0)),
+            run("alpha port", None, "GALILEO", "sol", profit=4_000_000, duration_s=1200.0, ship=cutter(20.0)),
+            run("Galileo", "Other Sol", "Alpha Port", "Alpha", profit=1, duration_s=1.0),
+            run("Galileo", "Sol", "Elsewhere", "Alpha", profit=1, duration_s=1.0),
+            run("Galileo", "Sol", "Alpha Port", "Alpha", profit=1, duration_s=1.0, status="aborted"),
         ]
 
-        measured = measured_route(summaries, snapshot(1, "Galileo", "Sol"), snapshot(2, "Alpha Port", "Alpha"))
+        measured = self.measure(rows)
 
-        self.assertEqual((measured.runs, measured.profit, measured.duration_s), (3, 12_000_000, 3600.0))
-        self.assertEqual(measured.profit_per_hour, 12_000_000)
+        self.assertEqual((measured.runs, measured.profit, measured.duration_s), (2, 12_000_000, 3600.0))
+        self.assertEqual((measured.profit_per_hour, measured.loop_s, measured.unknown_ship_runs), (12_000_000, 1800, 0))
+
+    def test_only_the_current_ship_and_unknown_ships_count_and_the_newest_laden_range_shows(self) -> None:
+        rows = [
+            run("Galileo", "Sol", "Alpha Port", "Alpha", profit=3_000_000, duration_s=1800.0, ship=cutter(18.0),
+                ended=NOW - timedelta(hours=2)),
+            run("Galileo", "Sol", "Alpha Port", "Alpha", profit=2_000_000, duration_s=1200.0, ship=cutter(24.5),
+                ended=NOW - timedelta(hours=1)),
+            run("Galileo", "Sol", "Alpha Port", "Alpha", profit=1_000_000, duration_s=600.0),
+            run("Galileo", "Sol", "Alpha Port", "Alpha", profit=9_000_000, duration_s=60.0,
+                ship={**cutter(40.0), "id": 8}),
+        ]
+
+        measured = self.measure(rows)
+        anyone = self.measure(rows, ship_id=None)
+
+        self.assertEqual((measured.runs, measured.unknown_ship_runs, measured.laden_jump_range_ly), (3, 1, 24.5))
+        self.assertEqual(measured.profit_per_hour, 6_000_000)
+        self.assertEqual((anyone.runs, anyone.laden_jump_range_ly), (4, 40.0))
+
+    def test_the_window_keeps_runs_that_ended_inside_it(self) -> None:
+        rows = [run("Galileo", "Sol", "Alpha Port", "Alpha", profit=1_000_000, duration_s=600.0, ship=cutter(20.0),
+                    ended=NOW - timedelta(days=days)) for days in (1, 6, 8, 40)]
+
+        counts = [self.measure(rows, since=NOW - timedelta(days=days)).runs for days in (2, 7, 30)]
+
+        self.assertEqual(counts + [self.measure(rows).runs], [1, 2, 3, 4])
+        self.assertIsNone(self.measure(rows, since=NOW))
 
     def test_no_completed_timed_runs_means_no_measurement(self) -> None:
-        x, y = snapshot(1, "Galileo", "Sol"), snapshot(2, "Alpha Port", "Alpha")
-        self.assertIsNone(measured_route([], x, y))
-        self.assertIsNone(measured_route([route("Galileo", "Sol", "Alpha Port", "Alpha", count=1, profit=5,
-                                                duration_s=0.0)], x, y))
+        self.assertIsNone(self.measure([]))
+        self.assertIsNone(self.measure([run("Galileo", "Sol", "Alpha Port", "Alpha", profit=5, duration_s=0.0)]))
 
 
 if __name__ == "__main__":

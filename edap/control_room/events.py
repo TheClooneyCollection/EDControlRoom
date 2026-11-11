@@ -6,6 +6,16 @@ from edap.journal_events import is_manual_launch_control_resumed_event, is_no_fi
 from edap.control_room.models import ShipState
 
 
+def apply_ship_identity(ship: ShipState, ev: dict[str, Any]) -> None:
+    """ShipID, ShipName and ShipIdent from LoadGame or Loadout; a new ShipID clears a missing name or ident."""
+    ship_id = ev.get("ShipID")
+    if not isinstance(ship_id, int) or isinstance(ship_id, bool):
+        return
+    ship.ship_id = ship_id
+    ship.ship_name = ev.get("ShipName") or None
+    ship.ship_ident = ev.get("ShipIdent") or None
+
+
 def apply_ship_event(ship: ShipState, ev: dict[str, Any]) -> None:
     event = ev.get("event", "")
     cleared_station_cue = ship.status == "in_undocking" and (
@@ -18,10 +28,12 @@ def apply_ship_event(ship: ShipState, ev: dict[str, Any]) -> None:
     elif event == "LoadGame":
         ship.commander = ev.get("Commander", ship.commander)
         ship.ship_type = ev.get("Ship", ship.ship_type)
+        apply_ship_identity(ship, ev)
         if "Credits" in ev:
             ship.credits = ev["Credits"]
     elif event == "Loadout":
         ship.ship_type = ev.get("Ship", ship.ship_type)
+        apply_ship_identity(ship, ev)
         ship.cargo_capacity = ev.get("CargoCapacity", ship.cargo_capacity)
         max_jump_range = ev.get("MaxJumpRange")
         if isinstance(max_jump_range, (int, float)) and not isinstance(max_jump_range, bool):

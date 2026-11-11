@@ -10,10 +10,10 @@ from __future__ import annotations
 import math
 import sqlite3
 from dataclasses import dataclass
-from typing import Callable, Iterable, Sequence
+from datetime import datetime
+from typing import Any, Callable, Iterable, Sequence
 
 from edap.eddn.routes import SURFACE_TYPES, TimeModel, jump_count, round_trip_s
-from edap.haul_history import RouteSummary
 from edap.recent_markets import MarketSnapshot
 
 Coords = tuple[float, float, float]
@@ -57,6 +57,12 @@ class MeasuredRoute:
     profit: int
     duration_s: float
     profit_per_hour: int
+    # Average loop time, in seconds.
+    loop_s: int
+    # Runs recorded before ship tracking: their ship is unknown.
+    unknown_ship_runs: int
+    # The laden range recorded on the newest run with ship data, so a ship that now jumps further shows.
+    laden_jump_range_ly: float | None
 
 
 def gather_facts(
@@ -120,28 +126,60 @@ def estimate_trip(
 
 
 def measured_route(
-    routes: Iterable[RouteSummary], x: MarketSnapshot, y: MarketSnapshot
+    rows: Iterable[dict[str, Any]], x: MarketSnapshot, y: MarketSnapshot, *,
+    ship_id: int | None, since: datetime | None, until: datetime,
 ) -> MeasuredRoute | None:
-    """Completed haul runs between the two stations, either direction; None without any timed run."""
-    runs = profit = 0
-    duration = 0.0
+    """Completed haul runs between the two stations, either direction, in the window, for one ship.
+
+    Runs recorded before ship tracking count too and are reported as `unknown_ship_runs`.
+    With no current ship id every run counts. None without any timed run.
+    """
     pair = {x.station.casefold(), y.station.casefold()}
     if len(pair) != 2:
         return None
     systems = {x.station.casefold(): x.system.casefold(), y.station.casefold(): y.system.casefold()}
-    for route in routes:
-        ends = ((route.station_1, route.system_1), (route.station_2, route.system_2))
+
+    def on_pair(row: dict[str, Any]) -> bool:
+        route = row.get("route") or {}
+        ends = [(str(route.get(f"station_{i}") or ""), route.get(f"system_{i}")) for i in (1, 2)]
         if {station.casefold() for station, _ in ends} != pair:
-            continue
+            return False
         # A recorded system must match too, so two same-named stations in different systems stay apart.
-        if any(system is not None and system.casefold() != systems[station.casefold()] for station, system in ends):
-            continue
-        runs += route.completed.count
-        profit += route.completed.profit
-        duration += route.completed.duration_s
-    if not runs or duration <= 0:
+        return not any(system and str(system).casefold() != systems[station.casefold()] for station, system in ends)
+
+    def flown_by(row: dict[str, Any]) -> bool:
+        recorded = _ship_id(row)
+        return ship_id is None or recorded is None or recorded == ship_id
+
+    kept = [row for row in rows if row.get("status") == "completed" and _ended_within(row, since, until)
+            and on_pair(row) and flown_by(row)]
+    profit = sum(int(row.get("revenue") or 0) - int(row.get("cost") or 0) for row in kept)
+    duration = sum(float(row.get("duration_s") or 0) for row in kept)
+    if not kept or duration <= 0:
         return None
-    return MeasuredRoute(runs=runs, profit=profit, duration_s=duration, profit_per_hour=round(profit * 3600 / duration))
+    unknown = sum(1 for row in kept if _ship_id(row) is None)
+    latest = max((row for row in kept if _ship_id(row) is not None), key=lambda row: row["ended_at"], default=None)
+    laden = latest["ship"].get("laden_jump_range_ly") if latest is not None else None
+    return MeasuredRoute(
+        runs=len(kept), profit=profit, duration_s=duration, profit_per_hour=round(profit * 3600 / duration),
+        loop_s=round(duration / len(kept)), unknown_ship_runs=unknown,
+        laden_jump_range_ly=laden if isinstance(laden, (int, float)) else None,
+    )
+
+
+def _ship_id(row: dict[str, Any]) -> int | None:
+    ship = row.get("ship")
+    ship_id = ship.get("id") if isinstance(ship, dict) else None
+    return ship_id if isinstance(ship_id, int) and not isinstance(ship_id, bool) else None
+
+
+def _ended_within(row: dict[str, Any], since: datetime | None, until: datetime) -> bool:
+    """The window test `haul_history.summarize` applies: ended_at, both ends inclusive."""
+    try:
+        ended = datetime.fromisoformat(str(row["ended_at"]).replace("Z", "+00:00"))
+        return ended.utcoffset() is not None and (since is None or ended >= since) and ended <= until
+    except (KeyError, ValueError):
+        return False
 
 
 def store_lookup(db: sqlite3.Connection) -> FactLookup:

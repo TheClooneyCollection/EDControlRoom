@@ -1,7 +1,9 @@
 """Durable, append-only two-way haul history (schema 1).
 
 Legs describe station visits, with individual buys/sells to preserve mixed cargo.
-Raw events retain any additional journal fields. Duration follows the live haul
+Raw events retain any additional journal fields. Since plan 0015 step 3 a row also carries
+the ship it was flown in (`ship`: id, type, name, ident, cargo capacity, max and laden jump
+range); older rows have no `ship` and stay valid. Duration follows the live haul
 clock (excludes pauses); timestamps identify journal boundaries independently.
 """
 from __future__ import annotations
@@ -240,7 +242,9 @@ class HaulSummary:
     skipped_lines: int
 
 
-WINDOW_USAGE = "Usage: stats [today | 48h | week | month | all | since YYYY-MM-DD]"
+WINDOW_USAGE = "Usage: stats [today | 48h | 7d | 30d | week | month | all | since YYYY-MM-DD]"
+# Elapsed windows, like 48h; Best deal picks between 48h, 7d, 30d and all.
+_ELAPSED_WINDOWS = {"48h": timedelta(hours=48), "7d": timedelta(days=7), "30d": timedelta(days=30)}
 
 
 def parse_window(text: str, now: datetime) -> tuple[datetime | None, datetime, str]:
@@ -255,8 +259,8 @@ def parse_window(text: str, now: datetime) -> tuple[datetime | None, datetime, s
     midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
     if label == "today":
         since = midnight
-    elif label == "48h":
-        since = (now.astimezone(timezone.utc) - timedelta(hours=48)).astimezone(now.tzinfo)
+    elif label in _ELAPSED_WINDOWS:
+        since = (now.astimezone(timezone.utc) - _ELAPSED_WINDOWS[label]).astimezone(now.tzinfo)
     elif label == "week":
         since = midnight - timedelta(days=now.weekday())
     elif label == "month":

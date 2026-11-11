@@ -11,6 +11,10 @@ from edap.inara.trade_routes import TradeRoute
 class ShipState:
     commander: str | None = None
     ship_type: str | None = None
+    # Loadout/LoadGame: the game's ShipID, the player's ship name and ident.
+    ship_id: int | None = None
+    ship_name: str | None = None
+    ship_ident: str | None = None
     system: str | None = None
     station: str | None = None
     status: str | None = None

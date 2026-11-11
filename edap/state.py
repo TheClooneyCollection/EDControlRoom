@@ -16,6 +16,9 @@ class ShipState:
     commander: str | None
     status: str | None
     ship_type: str | None
+    ship_id: int | None
+    ship_name: str | None
+    ship_ident: str | None
     location: str | None
     station: str | None
     star_class: str | None
@@ -117,6 +120,14 @@ def get_latest_journal_log(journal_dir: Path) -> Path | None:
     return logs[-1]
 
 
+def _read_ship_identity(ship: dict[str, object], log: dict[str, object]) -> None:
+    ship_id = log.get("ShipID")
+    if isinstance(ship_id, int) and not isinstance(ship_id, bool):
+        ship["ship_id"] = ship_id
+        ship["ship_name"] = log.get("ShipName") or None
+        ship["ship_ident"] = log.get("ShipIdent") or None
+
+
 def read_ship_state(log_path: Path) -> ShipState:
     last_modified = datetime.fromtimestamp(log_path.stat().st_mtime)
     ship = {
@@ -124,6 +135,9 @@ def read_ship_state(log_path: Path) -> ShipState:
         "commander": None,
         "status": None,
         "ship_type": None,
+        "ship_id": None,
+        "ship_name": None,
+        "ship_ident": None,
         "location": None,
         "station": None,
         "star_class": None,
@@ -188,8 +202,10 @@ def read_ship_state(log_path: Path) -> ShipState:
             if event == "LoadGame":
                 ship["commander"] = log.get("Commander", ship["commander"])
                 ship["ship_type"] = log.get("Ship")
+                _read_ship_identity(ship, log)
             elif event == "Loadout":
                 ship["ship_type"] = log.get("Ship")
+                _read_ship_identity(ship, log)
                 cargo_capacity = log.get("CargoCapacity")
                 if isinstance(cargo_capacity, (int, float)) and not isinstance(cargo_capacity, bool):
                     ship["cargo_capacity"] = int(cargo_capacity)

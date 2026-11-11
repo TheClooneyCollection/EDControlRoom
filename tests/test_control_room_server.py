@@ -867,7 +867,8 @@ class ControlRoomServerTests(unittest.TestCase):
         for hook in ('"/api/recent-markets"', '"/api/market-compare"', "ageLabel(market.timestamp)", "/haul#route=",
                      "const DEAL_CHOICES = 3;", 'name="deal-${leg}"', "tradeRoute(marketX, marketY, out, back, perHour)",
                      '"Profit per ton"', '"Profit per trip", credits(perTrip), "Full-hold round trip"',
-                     '"Profit per hour"', '"Measured per hour"', "perTrip * 3600 / trip.trip_s",
+                     '"Profit per hour"', ">Measured per hour<", 'id="deal-window"', "window: measuredWindow",
+                     "perTrip * 3600 / trip.trip_s",
                      'laden_jump_range_ly: document.getElementById("deal-laden").value.trim()'):
             self.assertIn(hook, script.text)
         self.assertEqual(listing["cargo_capacity"], 256)
@@ -899,17 +900,24 @@ class ControlRoomServerTests(unittest.TestCase):
         from edap.recent_markets import record_market_json
         from edap.trade_trip import StationFacts, estimate_trip
 
-        def run(station_1: str, station_2: str, duration_s: float) -> dict:
-            return {"schema": 1, "kind": "two_way", "status": "completed", "started_at": "2026-11-10T09:00:00Z",
-                    "ended_at": "2026-11-10T10:00:00Z", "duration_s": duration_s, "cost": 1_000_000,
-                    "revenue": 3_000_000, "profit": 2_000_000, "legs": [],
-                    "route": {"station_1": station_1, "system_1": None, "station_2": station_2, "system_2": None}}
+        def run(station_1: str, station_2: str, duration_s: float, ship_id: int | None) -> dict:
+            row = {"schema": 1, "kind": "two_way", "status": "completed", "started_at": "2026-11-10T09:00:00Z",
+                   "ended_at": "2026-11-10T10:00:00Z", "duration_s": duration_s, "cost": 1_000_000,
+                   "revenue": 3_000_000, "profit": 2_000_000, "legs": [],
+                   "route": {"station_1": station_1, "system_1": None, "station_2": station_2, "system_2": None}}
+            if ship_id is not None:
+                row["ship"] = {"id": ship_id, "type": "cutter", "laden_jump_range_ly": 21.5}
+            return row
+
+        def flying_ship_7():
+            return replace(_base_data_read_model(), ship=ShipState(ship_id=7, ship_type="cutter", ship_name="Hauler"))
 
         with tempfile.TemporaryDirectory() as directory:
             store = Path(directory) / "recent.json"
             runs = Path(directory) / "runs.jsonl"
-            runs.write_text(json.dumps(run("Galileo", "Alpha Port", 1500.0)) + "\n"
-                            + json.dumps(run("alpha port", "galileo", 900.0)) + "\n", encoding="utf-8")
+            runs.write_text("".join(json.dumps(row) + "\n" for row in (
+                run("Galileo", "Alpha Port", 1500.0, 7), run("alpha port", "galileo", 900.0, None),
+                run("Galileo", "Alpha Port", 60.0, 8))), encoding="utf-8")
             for market_id, station, system in ((1, "Galileo", "Sol"), (2, "Alpha Port", "Alpha")):
                 record_market_json(store, {"MarketID": market_id, "StationName": station, "StarSystem": system,
                                            "StationType": "Coriolis", "timestamp": "2026-11-10T10:00:00Z",
@@ -924,14 +932,16 @@ class ControlRoomServerTests(unittest.TestCase):
                  "MarketID": 2, "StationName": "Alpha Port", "StationType": "CraterOutpost", "DistFromStarLS": 80.0},
             ])
             app = build_observer_server_app(
-                data_provider=_base_data_read_model, command_handler=None, broker=InMemoryObserverSessionBroker(),
+                data_provider=flying_ship_7, command_handler=None, broker=InMemoryObserverSessionBroker(),
                 auth=SharedAccessTokenAuth("secret-token"), recent_markets_file=store, haul_runs_file=runs,
                 market_database_file=database,
             )
             with TestClient(app) as client:
                 url = "/api/market-compare?x=1&y=2&capacity=10&access_token=secret-token"
-                compared = client.get(f"{url}&laden_jump_range_ly=20").json()
+                # The runs are fixed in time, so `all` keeps them whatever today is.
+                compared = client.get(f"{url}&laden_jump_range_ly=20&window=all").json()
                 bad = client.get(f"{url}&laden_jump_range_ly=-3")
+                bad_window = client.get(f"{url}&window=week")
 
         trip = compared["trip"]
         expected = estimate_trip(
@@ -944,9 +954,13 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(trip["laden_jump_range_ly"], 20.0)
         self.assertEqual(trip["stations"]["y"]["station_type"], "CraterOutpost")
         self.assertEqual((trip["stations"]["x"]["dist_ls_source"], trip["hint"]), ("store", None))
+        # Ship 8's run is left out; the run without ship data counts as ship unknown.
         self.assertEqual(compared["measured"],
-                         {"runs": 2, "profit": 4_000_000, "duration_s": 2400.0, "profit_per_hour": 6_000_000})
-        self.assertEqual(bad.status_code, 400)
+                         {"runs": 2, "profit": 4_000_000, "duration_s": 2400.0, "profit_per_hour": 6_000_000,
+                          "loop_s": 1200, "unknown_ship_runs": 1, "laden_jump_range_ly": 21.5})
+        self.assertEqual(compared["measured_window"], "all")
+        self.assertEqual(compared["measured_ship"], {"id": 7, "type": "cutter", "name": "Hauler"})
+        self.assertEqual((bad.status_code, bad_window.status_code), (400, 400))
 
     def test_market_compare_asks_ardent_only_for_what_the_store_lacks(self) -> None:
         from edap.recent_markets import record_market_json

@@ -115,6 +115,9 @@ def _ship(payload: dict[str, Any]) -> ShipState:
     return ShipState(
         commander=_optional_str(payload.get("commander")),
         ship_type=_optional_str(payload.get("ship_type")),
+        ship_id=_optional_int(payload.get("ship_id")),
+        ship_name=_optional_str(payload.get("ship_name")),
+        ship_ident=_optional_str(payload.get("ship_ident")),
         system=_optional_str(payload.get("system")),
         station=_optional_str(payload.get("station")),
         status=_optional_str(payload.get("status")),

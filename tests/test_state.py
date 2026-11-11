@@ -35,7 +35,7 @@ class StateTests(unittest.TestCase):
                 log_path,
                 [
                     '{"event":"LoadGame","Commander":"VRYAE","Ship":"type6","FuelLevel":8.0,"FuelCapacity":{"Main":16.0}}',
-                    '{"event":"Loadout","Ship":"type6","CargoCapacity":460,"MaxJumpRange":31.42}',
+                    '{"event":"Loadout","Ship":"type6","ShipID":12,"ShipName":"Mule","ShipIdent":"MU-12","CargoCapacity":460,"MaxJumpRange":31.42}',
                     '{"event":"Location","Docked":false,"StarSystem":"Sol","FuelLevel":8.0,"FuelCapacity":16.0}',
                     '{"event":"FSDTarget","Name":"Achenar"}',
                     '{"event":"StartJump","JumpType":"Hyperspace","StarClass":"K"}',
@@ -50,6 +50,7 @@ class StateTests(unittest.TestCase):
             self.assertEqual(state.ship_type, "type6")
             self.assertEqual(state.cargo_capacity, 460)
             self.assertEqual(state.max_jump_range_ly, 31.42)
+            self.assertEqual((state.ship_id, state.ship_name, state.ship_ident), (12, "Mule", "MU-12"))
             self.assertEqual(state.location, "Sol")
             self.assertIsNone(state.station)
             self.assertEqual(state.target, "Achenar")

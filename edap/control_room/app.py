@@ -65,6 +65,7 @@ from textual.events import MouseScrollDown, MouseScrollUp
 from textual.widgets import Footer, Header, Input, OptionList, RichLog, Static, Tab, Tabs
 
 from edap.haul_history import WARNING_IDS
+from edap.haul_search_config import HaulSearchConfigError, load_haul_search_config
 from edap.haul_stats_cache import TodayHaulCache
 from edap.platform.local_time import SystemLocalTimezone
 from edap.config import AppConfig, load_config
@@ -123,6 +124,7 @@ from edap.binding_conflicts import read_galaxy_map_binding_conflicts
 from edap.binding_lookup import load_binding_lookup
 from edap.binding_names import format_binding_action_hint
 from edap.eddn.messages import EddnUpdate, journal_event_updates
+from edap.eddn.route_query import DEFAULT_LADEN_JUMP_RANGE_LY, laden_jump_range
 from edap.runtime import RuntimeContext, build_runtime_context, load_config_with_fallback
 from edap.ship_controls import DEFAULT_SHIP_CONTROL_ACTIONS, ShipControls
 from edap.tts import AnnouncementId, TTSAnnouncer, format_credits_short, parse_announcement_id
@@ -910,6 +912,9 @@ class ControlRoomApp(App[None]):
         self._ship = ShipState(
             commander=data.ship.commander,
             ship_type=data.ship.ship_type,
+            ship_id=data.ship.ship_id,
+            ship_name=data.ship.ship_name,
+            ship_ident=data.ship.ship_ident,
             system=data.ship.system,
             station=data.ship.station,
             status=data.ship.status,
@@ -1172,6 +1177,13 @@ class ControlRoomApp(App[None]):
         self.query_one("#status", Static).update(
             Text.from_markup(_rendering.status_panel_markup(self._status_panel_view_model()))
         )
+
+    def _laden_jump_range_ly(self) -> float:
+        """The laden jump range Best deal and /routes use: haul_search.toml, else the default."""
+        try:
+            return laden_jump_range({}, search_defaults=load_haul_search_config())
+        except (OSError, HaulSearchConfigError, ValueError):
+            return DEFAULT_LADEN_JUMP_RANGE_LY
 
     def _refresh_haul_stats(self) -> None:
         widget = self.query_one("#haul", Static)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import asdict, dataclass, replace
-from datetime import datetime, timezone
+from datetime import datetime
 import json
 import logging
 from pathlib import Path
@@ -508,6 +508,11 @@ def build_observer_server_app(
             laden = laden_jump_range(params, search_defaults=search_defaults)
         except ValueError:
             return JSONResponse({"detail": "laden_jump_range_ly must be a positive number"}, status_code=400)
+        window = params.get("window") or MEASURED_WINDOW_DEFAULT
+        if window not in MEASURED_WINDOWS:
+            return JSONResponse({"detail": f"window must be one of {', '.join(MEASURED_WINDOWS)}"}, status_code=400)
+        since, until, _ = parse_window(window, datetime.now(SystemLocalTimezone()))
+        ship = getattr(data_provider(), "ship", None)
 
         def compare() -> dict[str, Any] | None:
             snapshots = read_recent_markets()
@@ -520,6 +525,7 @@ def build_observer_server_app(
             return {
                 **asdict(comparison),
                 **read_trip(market_x, market_y, laden),
+                **read_measured(market_x, market_y, ship, window, since, until),
             }
 
         payload = await asyncio.to_thread(compare)
@@ -547,14 +553,6 @@ def build_observer_server_app(
             # A peer without a hub address yet (discovery comes later) owns no station facts.
             hint = "Station facts come from the hub." if market_database_file is None else None
         estimate = estimate_trip(facts[0], facts[1], laden_jump_range_ly=laden, time_model=TimeModel())
-        measured = None
-        if haul_runs_file is not None:
-            try:
-                rows, skipped = load_runs(haul_runs_file)
-                summary = summarize(rows, None, datetime.now(timezone.utc), skipped_lines=skipped)
-                measured = measured_route(summary.routes, market_x, market_y)
-            except (OSError, ValueError):
-                measured = None
         trip: dict[str, Any] = {
             **asdict(estimate),
             "stations": {"x": asdict(facts[0]), "y": asdict(facts[1])},
@@ -562,7 +560,28 @@ def build_observer_server_app(
         }
         if peer_link is not None:
             trip["hub"] = peer_link.hub_label
-        return {"trip": trip, "measured": asdict(measured) if measured is not None else None}
+        return {"trip": trip}
+
+    def read_measured(
+        market_x: MarketSnapshot, market_y: MarketSnapshot, ship: Any,
+        window: str, since: datetime | None, until: datetime,
+    ) -> dict[str, Any]:
+        """Measured profit per hour from this server's own haul history, for the current ship."""
+        ship_id = getattr(ship, "ship_id", None)
+        measured = None
+        if haul_runs_file is not None:
+            try:
+                rows, _ = load_runs(haul_runs_file)
+                measured = measured_route(rows, market_x, market_y, ship_id=ship_id, since=since, until=until)
+            except (OSError, ValueError):
+                measured = None
+        return {
+            "measured": asdict(measured) if measured is not None else None,
+            "measured_window": window,
+            "measured_ship": {
+                "id": ship_id, "type": getattr(ship, "ship_type", None), "name": getattr(ship, "ship_name", None),
+            },
+        }
 
     def station_facts(stations: list[dict[str, Any]]) -> list[StationFacts]:
         """Facts from this server's store, then Ardent for what it lacks; a peer's requests land here too."""
@@ -939,6 +958,11 @@ def build_observer_server_app(
 
     app.add_exception_handler(Exception, _log_unhandled_exception)
     return app
+
+
+# Best deal's measured profit per hour window choices (haul_history.parse_window labels).
+MEASURED_WINDOWS = ("48h", "7d", "30d", "all")
+MEASURED_WINDOW_DEFAULT = "7d"
 
 
 def _ship_cargo_capacity(data: object) -> int:

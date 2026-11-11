@@ -2427,6 +2427,9 @@ manual_landing = true
 
     def test_haul_stats_track_clean_cycle_profit_and_time(self) -> None:
         self.app._tts = _FakeTTS()
+        self.app._laden_jump_range_ly = lambda: 21.5
+        apply_ship_event(self.app._ship, {"event": "Loadout", "Ship": "cutter", "ShipID": 7, "ShipName": "Hauler",
+                                          "ShipIdent": "HL-07", "CargoCapacity": 784, "MaxJumpRange": 30.5})
         self.app._ship.status = "in_station"
         self.app._ship.station = "Pawelczyk Dock"
         self.app._ship.credits = 1_000_000
@@ -2488,6 +2491,9 @@ manual_landing = true
         rows, skipped = load_runs(self.app._config.control_room.haul_runs_file)
         self.assertEqual(skipped, 0)
         self.assertEqual((rows[-1]["cost"], rows[-1]["revenue"]), (350_000, 650_000))
+        self.assertEqual(rows[-1]["ship"], {"id": 7, "type": "cutter", "name": "Hauler", "ident": "HL-07",
+                                            "cargo_capacity": 784, "max_jump_range_ly": 30.5,
+                                            "laden_jump_range_ly": 21.5})
         self.assertEqual(rows[-1]["profit"], self.app._haul_stats.last_run_profit)
         self.assertEqual(self.app._haul_stats.last_run_profit_delta, 50_000)
         self.assertEqual(self.app._haul_stats.accumulated_profit, 300_000)
