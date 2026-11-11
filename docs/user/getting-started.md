@@ -89,6 +89,8 @@ It installs `piper-tts` with `uv tool` (in its own environment, separate from ED
 
 Typical setup: the game machine runs `control_room.py lan` and speaks callouts, and an iPad or another window drives the browser UI. Optionally a second LAN box runs `connect ...` for the activity log.
 
+With more than one machine that plays, make one the hub and the others peers so one set of pages shows and drives all of them: [hub.md](hub.md).
+
 ## The Five-Second Safety Delay
 
 Ship-affecting commands wait **5 seconds** before pressing any keys, so you have time to click back into Elite. Do that as soon as you fire a command from the browser or TUI.

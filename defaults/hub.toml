@@ -2,7 +2,9 @@
 # "standalone" (one machine, the default), "hub" (the home Control Room that owns the market
 # and station database) or "peer" (owns no data; keeps a link open to the hub).
 role = "standalone"
-# Peer only: base URL of the hub, such as "http://192.168.1.20:8765".
+# Peer only, optional: base URL of the hub, such as "http://192.168.1.20:8765". Empty finds the hub
+# on the LAN over mDNS and remembers the first one in `.control_room_known_hub.json` next to the
+# config; delete that file to switch hubs.
 url = ""
 # Hub: the token peers must present on the link. Peer: the hub's token. Required for both.
 token = ""

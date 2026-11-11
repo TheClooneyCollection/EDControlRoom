@@ -68,7 +68,10 @@ curl -X POST "$HOST/api/stop" -H "Authorization: Bearer $TOKEN" \
 | `400` | Body is not JSON, `raw_input` is missing or empty, `skip_delay` is not a boolean, or `/api/stop` got an unknown `mode`. |
 | `401` | Missing or wrong token. |
 | `409` | Refused because a routine is already running (`accepted: false`, `detail` names it). For `/api/stop`: no routine is running. |
+| `502` | With `?node=`: that node is offline or did not answer. |
 | `503` | This server cannot run commands. |
+
+On a hub ([hub.md](hub.md)), add `?node=<node_id>` (from `GET /api/nodes`) to run the command or stop on that machine instead of the hub; the answer is the node's, unchanged.
 
 ## Limits
 
