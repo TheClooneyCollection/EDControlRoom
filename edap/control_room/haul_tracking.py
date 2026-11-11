@@ -382,12 +382,16 @@ _TRACKED_PHASES = {
 }
 
 
+_STATION_EVENTS = {"MarketBuy", "Undocked", "Docked", "MarketSell"}
+
+
 def _track_phase(app: HaulTrackingHost, event: str, *, at_station_1: bool, at_station_2: bool) -> None:
     phase = _TRACKED_PHASES.get(event)
     if phase is None:
         return
     station_index = app._runtime_state.haul_phase_station_index
-    if at_station_1 or at_station_2:
+    # Only station events name the station; in flight the ship's station can still be the one just left.
+    if event in _STATION_EVENTS and (at_station_1 or at_station_2):
         here = 1 if at_station_1 else 2
         # Buying and undocking head for the other station; docking and selling are at this one.
         station_index = 3 - here if phase in {"buy", "undock"} else here

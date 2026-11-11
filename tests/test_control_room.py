@@ -2287,6 +2287,54 @@ manual_landing = true
         self.assertFalse(stats.tracking)
         self.assertIsNone(self.app._runtime_state.haul_phase)
 
+    def test_haul_track_replays_a_real_hand_flown_journal(self) -> None:
+        # Three loops from a real journal, cut down to the haul events and fields (no commander or chat data).
+        from datetime import datetime
+
+        fixture = Path(__file__).resolve().parent / "fixtures" / "journal" / "two_way_haul_hand_flown.jsonl"
+        events = [json.loads(line) for line in fixture.read_text(encoding="utf-8").splitlines()]
+        clock = [0.0]
+        self.app._time_fn = lambda: clock[0]
+        self.app._ship.status = "in_station"
+        self.app._ship.station = "Chauhan Dock"
+        self.app._ship.system = "Crucis Sector FW-W b1-7"
+        self.app._haul_params = {
+            "station_1_buying": "Beryllium",
+            "station_1": "Chauhan Dock",
+            "station_1_system": "Crucis Sector FW-W b1-7",
+            "station_2_buying": "Insulating Membrane",
+            "station_2": "Sitterly Enterprise",
+            "station_2_system": "Crucis Sector FW-W b1-7",
+            "mode": "track",
+        }
+        self.app._facade.dispatch_haul_loop(skip_delay=True, raw_command="haul track")
+
+        phases: list[str] = []
+        for ev in events:
+            clock[0] = datetime.fromisoformat(ev["timestamp"].replace("Z", "+00:00")).timestamp()
+            self.app._handle_event(ev)
+            phase = f"{self.app._runtime_state.haul_phase}{self.app._runtime_state.haul_phase_station_index}"
+            if not phases or phases[-1] != phase:
+                phases.append(phase)
+
+        loop = ["buy2", "undock2", "depart2", "transit2", "sell2", "buy1", "undock1", "depart1", "transit1", "sell1"]
+        self.assertEqual(phases, loop * 3)
+        stats = self.app._haul_stats
+        self.assertEqual(
+            (stats.completed_runs, stats.accumulated_profit, stats.cargo_moved_t),
+            (3, 151_505_250, 6_822),
+        )
+        from edap.haul_history import load_runs
+        rows, _ = load_runs(self.app._config.control_room.haul_runs_file)
+        self.assertEqual(
+            [(row["mode"], row["status"], row["profit"], round(row["duration_s"])) for row in rows],
+            [
+                ("tracked", "completed", 50_503_266, 599),
+                ("tracked", "completed", 50_500_992, 712),
+                ("tracked", "completed", 50_500_992, 607),
+            ],
+        )
+
     def test_haul_track_refuses_while_a_routine_runs(self) -> None:
         self.app._haul_params = {
             "station_1_buying": "Aluminium",

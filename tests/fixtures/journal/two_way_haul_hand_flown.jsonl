@@ -1,0 +1,42 @@
+{"timestamp": "2026-01-01T06:03:51Z", "event": "MarketBuy", "MarketID": 4244083203, "Type": "beryllium", "Count": 1137, "BuyPrice": 4049, "TotalCost": 4603713}
+{"timestamp": "2026-01-01T06:04:18Z", "event": "Undocked", "StationName": "Chauhan Dock", "StationType": "CraterOutpost", "MarketID": 4244083203}
+{"timestamp": "2026-01-01T06:04:57Z", "event": "StartJump", "JumpType": "Supercruise"}
+{"timestamp": "2026-01-01T06:05:02Z", "event": "SupercruiseEntry", "StarSystem": "Crucis Sector FW-W b1-7"}
+{"timestamp": "2026-01-01T06:06:46Z", "event": "SupercruiseExit", "StarSystem": "Crucis Sector FW-W b1-7", "Body": "Sitterly Enterprise", "BodyType": "Station"}
+{"timestamp": "2026-01-01T06:09:05Z", "event": "Docked", "StationName": "Sitterly Enterprise", "StationType": "Orbis", "StarSystem": "Crucis Sector FW-W b1-7", "MarketID": 4217347075}
+{"timestamp": "2026-01-01T06:09:36Z", "event": "MarketSell", "MarketID": 4217347075, "Type": "beryllium", "Count": 1137, "SellPrice": 38718, "TotalSale": 44022366, "AvgPricePaid": 4049}
+{"timestamp": "2026-01-01T06:10:08Z", "event": "MarketBuy", "MarketID": 4217347075, "Type": "insulatingmembrane", "Count": 1137, "BuyPrice": 10626, "TotalCost": 12081762}
+{"timestamp": "2026-01-01T06:10:27Z", "event": "Undocked", "StationName": "Sitterly Enterprise", "StationType": "Orbis", "MarketID": 4217347075}
+{"timestamp": "2026-01-01T06:11:32Z", "event": "StartJump", "JumpType": "Supercruise"}
+{"timestamp": "2026-01-01T06:11:37Z", "event": "SupercruiseEntry", "StarSystem": "Crucis Sector FW-W b1-7"}
+{"timestamp": "2026-01-01T06:13:11Z", "event": "SupercruiseExit", "StarSystem": "Crucis Sector FW-W b1-7", "Body": "Crucis Sector FW-W b1-7 1", "BodyType": "Planet"}
+{"timestamp": "2026-01-01T06:14:17Z", "event": "Docked", "StationName": "Chauhan Dock", "StationType": "CraterOutpost", "StarSystem": "Crucis Sector FW-W b1-7", "MarketID": 4244083203}
+{"timestamp": "2026-01-01T06:14:45Z", "event": "MarketSell", "MarketID": 4244083203, "Type": "insulatingmembrane", "Count": 1137, "SellPrice": 20375, "TotalSale": 23166375, "AvgPricePaid": 10626}
+{"timestamp": "2026-01-01T06:15:21Z", "event": "MarketBuy", "MarketID": 4244083203, "Type": "beryllium", "Count": 1137, "BuyPrice": 4049, "TotalCost": 4603713}
+{"timestamp": "2026-01-01T06:15:40Z", "event": "Undocked", "StationName": "Chauhan Dock", "StationType": "CraterOutpost", "MarketID": 4244083203}
+{"timestamp": "2026-01-01T06:16:23Z", "event": "StartJump", "JumpType": "Supercruise"}
+{"timestamp": "2026-01-01T06:16:28Z", "event": "SupercruiseEntry", "StarSystem": "Crucis Sector FW-W b1-7"}
+{"timestamp": "2026-01-01T06:17:31Z", "event": "SupercruiseExit", "StarSystem": "Crucis Sector FW-W b1-7", "Body": "Sitterly Enterprise", "BodyType": "Station"}
+{"timestamp": "2026-01-01T06:18:57Z", "event": "Docked", "StationName": "Sitterly Enterprise", "StationType": "Orbis", "StarSystem": "Crucis Sector FW-W b1-7", "MarketID": 4217347075}
+{"timestamp": "2026-01-01T06:19:30Z", "event": "MarketSell", "MarketID": 4217347075, "Type": "beryllium", "Count": 1137, "SellPrice": 38718, "TotalSale": 44022366, "AvgPricePaid": 4049}
+{"timestamp": "2026-01-01T06:20:01Z", "event": "MarketBuy", "MarketID": 4217347075, "Type": "insulatingmembrane", "Count": 1137, "BuyPrice": 10628, "TotalCost": 12084036}
+{"timestamp": "2026-01-01T06:20:21Z", "event": "Undocked", "StationName": "Sitterly Enterprise", "StationType": "Orbis", "MarketID": 4217347075}
+{"timestamp": "2026-01-01T06:24:03Z", "event": "StartJump", "JumpType": "Supercruise"}
+{"timestamp": "2026-01-01T06:24:08Z", "event": "SupercruiseEntry", "StarSystem": "Crucis Sector FW-W b1-7"}
+{"timestamp": "2026-01-01T06:25:24Z", "event": "SupercruiseExit", "StarSystem": "Crucis Sector FW-W b1-7", "Body": "Crucis Sector FW-W b1-7 1", "BodyType": "Planet"}
+{"timestamp": "2026-01-01T06:27:32Z", "event": "Docked", "StationName": "Chauhan Dock", "StationType": "CraterOutpost", "StarSystem": "Crucis Sector FW-W b1-7", "MarketID": 4244083203}
+{"timestamp": "2026-01-01T06:28:24Z", "event": "MarketSell", "MarketID": 4244083203, "Type": "insulatingmembrane", "Count": 1137, "SellPrice": 20375, "TotalSale": 23166375, "AvgPricePaid": 10628}
+{"timestamp": "2026-01-01T06:28:58Z", "event": "MarketBuy", "MarketID": 4244083203, "Type": "beryllium", "Count": 1137, "BuyPrice": 4049, "TotalCost": 4603713}
+{"timestamp": "2026-01-01T06:29:17Z", "event": "Undocked", "StationName": "Chauhan Dock", "StationType": "CraterOutpost", "MarketID": 4244083203}
+{"timestamp": "2026-01-01T06:29:50Z", "event": "StartJump", "JumpType": "Supercruise"}
+{"timestamp": "2026-01-01T06:29:55Z", "event": "SupercruiseEntry", "StarSystem": "Crucis Sector FW-W b1-7"}
+{"timestamp": "2026-01-01T06:31:53Z", "event": "SupercruiseExit", "StarSystem": "Crucis Sector FW-W b1-7", "Body": "Sitterly Enterprise", "BodyType": "Station"}
+{"timestamp": "2026-01-01T06:33:38Z", "event": "Docked", "StationName": "Sitterly Enterprise", "StationType": "Orbis", "StarSystem": "Crucis Sector FW-W b1-7", "MarketID": 4217347075}
+{"timestamp": "2026-01-01T06:34:08Z", "event": "MarketSell", "MarketID": 4217347075, "Type": "beryllium", "Count": 1137, "SellPrice": 38718, "TotalSale": 44022366, "AvgPricePaid": 4049}
+{"timestamp": "2026-01-01T06:34:37Z", "event": "MarketBuy", "MarketID": 4217347075, "Type": "insulatingmembrane", "Count": 1137, "BuyPrice": 10628, "TotalCost": 12084036}
+{"timestamp": "2026-01-01T06:34:55Z", "event": "Undocked", "StationName": "Sitterly Enterprise", "StationType": "Orbis", "MarketID": 4217347075}
+{"timestamp": "2026-01-01T06:35:59Z", "event": "StartJump", "JumpType": "Supercruise"}
+{"timestamp": "2026-01-01T06:36:04Z", "event": "SupercruiseEntry", "StarSystem": "Crucis Sector FW-W b1-7"}
+{"timestamp": "2026-01-01T06:37:50Z", "event": "SupercruiseExit", "StarSystem": "Crucis Sector FW-W b1-7", "Body": "Crucis Sector FW-W b1-7 1", "BodyType": "Planet"}
+{"timestamp": "2026-01-01T06:39:24Z", "event": "Docked", "StationName": "Chauhan Dock", "StationType": "CraterOutpost", "StarSystem": "Crucis Sector FW-W b1-7", "MarketID": 4244083203}
+{"timestamp": "2026-01-01T06:39:51Z", "event": "MarketSell", "MarketID": 4244083203, "Type": "insulatingmembrane", "Count": 1137, "SellPrice": 20375, "TotalSale": 23166375, "AvgPricePaid": 10628}
