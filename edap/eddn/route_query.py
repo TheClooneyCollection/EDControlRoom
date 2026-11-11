@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from edap.eddn.routes import FoundRoute, RouteFilters, RouteLeg, TimeModel, find_routes, load_route_markets
+from edap.inara.trade_routes import parse_surface_stations
 
 DEFAULT_ROUTE_JUMPS = 4
 DEFAULT_LADEN_JUMP_RANGE_LY = 17.2
@@ -67,7 +68,7 @@ def parse_route_query(
         capacity=int(number("capacity", cargo_capacity)),
         filters=RouteFilters(
             min_pad=pad,
-            include_surface=_flag(value("surface", "use_surface_stations")),
+            include_surface=_include_surface(value("surface", "use_surface_stations")),
             include_carriers=_flag(value("carriers")),
             max_station_distance_ls=max_station_ls or None,
             min_supply=int(number("min_supply", 0)),
@@ -79,6 +80,12 @@ def parse_route_query(
 
 def _flag(raw: str) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _include_surface(raw: str) -> bool:
+    # The page sends yes/no; haul_search.toml uses Inara's choices such as `yes_with_odyssey`.
+    choice = parse_surface_stations(raw, default="no")
+    return _flag(raw) if choice is None else choice != "no"
 
 
 class RouteQueryError(LookupError):

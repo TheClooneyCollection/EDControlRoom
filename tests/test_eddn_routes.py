@@ -122,6 +122,16 @@ class EddnRouteFinderTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "view"):
             parse_route_query({"view": "x"}, search_defaults={}, current_system="", cargo_capacity=0)
 
+    def test_surface_stations_follow_the_page_then_the_haul_search_choice(self) -> None:
+        def include_surface(params: dict[str, str], saved: str) -> bool:
+            query = parse_route_query(params, search_defaults={"use_surface_stations": saved}, current_system="Sol", cargo_capacity=1)
+            return query.filters.include_surface
+
+        self.assertEqual([include_surface({}, saved) for saved in ("yes_with_odyssey", "yes_exclude_odyssey", "no", "")],
+                         [True, True, False, False])
+        self.assertEqual([include_surface({"surface": page}, "yes_with_odyssey") for page in ("no", "0")], [False, False])
+        self.assertEqual([include_surface({"surface": page}, "no") for page in ("yes", "1")], [True, True])
+
 
 class EddnRoutesApiTests(unittest.TestCase):
     def test_api_runs_near_search_from_the_database_file(self) -> None:

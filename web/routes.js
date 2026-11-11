@@ -230,6 +230,8 @@ function pressOnly(selector, button) {
 }
 
 applyWebConfigLabels();
+// Start from the haul search surface choice (`use_surface_stations`) so surface ports are not hidden by default.
+document.getElementById("route-surface").checked = (WEB_CONFIG.webDefaults || {}).allowPlanetary === "true";
 document.getElementById("access-token").value = accessToken;
 document.getElementById("save-token").addEventListener("click", () => {
   accessToken = document.getElementById("access-token").value.trim();

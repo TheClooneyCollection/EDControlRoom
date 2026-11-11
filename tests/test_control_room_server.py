@@ -807,6 +807,21 @@ class ControlRoomServerTests(unittest.TestCase):
         for hook in ('"/api/eddn-routes"', '"/api/eddn-status"', "params.max_route_ly"):
             self.assertIn(hook, script.text)
 
+    def test_routes_page_starts_the_surface_checkbox_from_the_haul_search_choice(self) -> None:
+        def data_provider() -> ControlRoomDataReadModel:
+            data = _base_data_read_model()
+            return replace(data, server_status=replace(
+                data.server_status, web_form_defaults={"allowPlanetary": "true", "surfaceStations": "yes_with_odyssey"}))
+
+        app = build_observer_server_app(data_provider=data_provider, command_handler=None,
+                                        broker=InMemoryObserverSessionBroker(), auth=SharedAccessTokenAuth("secret-token"))
+        with TestClient(app) as client:
+            page = client.get("/routes")
+            script = client.get("/assets/routes.js")
+        self.assertIn('"allowPlanetary": "true"', page.text)
+        self.assertIn('getElementById("route-surface").checked = (WEB_CONFIG.webDefaults || {}).allowPlanetary === "true"',
+                      script.text)
+
     def test_controls_endpoint_serves_button_board(self) -> None:
         broker = InMemoryObserverSessionBroker()
         app = build_observer_server_app(
