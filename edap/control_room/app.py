@@ -2448,7 +2448,12 @@ def _detect_lan_host() -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="ED AutoPilot Control Room — live TUI")
-    parser.add_argument("mode", nargs="?", choices=["serve", "connect", "lan", "local"])
+    parser.add_argument(
+        "mode",
+        nargs="?",
+        choices=["serve", "connect", "lan", "local", "hub", "peer"],
+        help="hub / peer: lan as that hub role, whatever [hub] role says",
+    )
     parser.add_argument("target", nargs="?", help="server host[:port] for connect mode")
     parser.add_argument("--config", default="config.toml")
     parser.add_argument("--market", metavar="FILTER", help="initial market filter (e.g. --market aluminium)")
@@ -2473,12 +2478,13 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if args.lan and args.mode not in {"serve", "lan"}:
+    if args.lan and args.mode not in {"serve", "lan", "hub", "peer"}:
         parser.error("--lan is only valid with serve")
 
-    serve_lan = args.lan or args.mode == "lan"
+    hub_role = args.mode if args.mode in {"hub", "peer"} else None
+    serve_lan = args.lan or args.mode == "lan" or hub_role is not None
     serve_local = args.mode == "local"
-    if args.mode in {"serve", "lan", "local"}:
+    if args.mode in {"serve", "lan", "local", "hub", "peer"}:
         from edap.control_room.server.serve import serve_observer_mode
         from edap.hub.discovery import advertise_address
 
@@ -2505,6 +2511,7 @@ def main() -> None:
             advertise_host=advertise_address(host, _detect_lan_host),
             access_token=access_token,
             speak_tts=not args.no_tts,
+            hub_role=hub_role,
             web_default_access_token=web_default_access_token,
         )
         return

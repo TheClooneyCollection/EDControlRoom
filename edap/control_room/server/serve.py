@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 import logging
 from pathlib import Path
 import socket
@@ -37,6 +38,7 @@ from edap.hub.relay import HubRelay, PeerRelay, node_state
 from edap.hub.voice import HubVoice, callout_text, node_muter
 from edap.recent_markets import load_recent_markets, record_market, watch_file
 from edap.market_db import open_market_store, station_facts_writer
+from edap.config import with_hub_role
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.tts import NullSpeechBackend, PiperSpeechBackend, build_speech_backend
 from edap.version import REPOSITORY_NAME, get_current_version
@@ -50,9 +52,13 @@ def serve_observer_mode(
     advertise_host: str,
     access_token: str,
     speak_tts: bool,
+    hub_role: str | None,
     web_default_access_token: str = "",
 ) -> None:
+    """`hub_role`: `hub` or `peer` from the command line, overriding `[hub] role`; None keeps the config's."""
     loaded = load_config_with_fallback(config_path)
+    if hub_role is not None:
+        loaded = replace(loaded, config=with_hub_role(loaded.config, hub_role, access_token))
     ctx = build_runtime_context(
         loaded.config,
         config_path=loaded.config_path,

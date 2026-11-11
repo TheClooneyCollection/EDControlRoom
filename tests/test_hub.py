@@ -19,7 +19,7 @@ warnings.filterwarnings(
 
 from starlette.websockets import WebSocketDisconnect
 
-from edap.config import ConfigError, load_config
+from edap.config import ConfigError, load_config, with_hub_role
 from edap.control_room.models import ShipState
 from edap.control_room.server.app import _handle_session_message_async, build_observer_server_app
 from edap.control_room.server.auth import SharedAccessTokenAuth
@@ -281,6 +281,21 @@ class HubConfigTests(unittest.TestCase):
                     path.write_text(text, encoding="utf-8")
                     with self.assertRaisesRegex(ConfigError, key):
                         load_config(path)
+
+    def test_hub_and_peer_commands_set_the_role_and_fall_back_to_the_web_token(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            path.write_text("", encoding="utf-8")
+            hub = with_hub_role(load_config(path), "hub", "edcr").hub
+            self.assertEqual((hub.role, hub.token), ("hub", "edcr"))
+            # A config token wins, and a config role is overridden.
+            path.write_text('[hub]\nrole = "hub"\ntoken = "t"\n', encoding="utf-8")
+            peer = with_hub_role(load_config(path), "peer", "edcr").hub
+            self.assertEqual((peer.role, peer.token, peer.enabled), ("peer", "t", True))
+            # A url only a peer uses still fails as a hub.
+            path.write_text('[hub]\nrole = "peer"\nurl = "http://192.168.1.20:8765"\ntoken = "t"\n', encoding="utf-8")
+            with self.assertRaisesRegex(ConfigError, "hub.url"):
+                with_hub_role(load_config(path), "hub", "edcr")
 
     def test_node_id_is_made_once_and_kept(self) -> None:
         with TemporaryDirectory() as tmp:

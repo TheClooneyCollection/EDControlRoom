@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 import json
 import math
@@ -717,6 +717,12 @@ def _timing_channel(
         max_factor=_float(raw, "max_factor", _float(defaults, "max_factor", 1.0)),
         min_seconds=_float(raw, "min_seconds", _float(defaults, "min_seconds", 0.0)),
     )
+
+
+def with_hub_role(config: AppConfig, role: str, default_token: str) -> AppConfig:
+    """The config as `control_room.py hub` / `peer` run it: that role whatever `[hub] role` says, and
+    `default_token` (the web access token) on the link when `[hub] token` is empty."""
+    return validate_config(replace(config, hub=replace(config.hub, role=role, token=config.hub.token or default_token)))
 
 
 def validate_config(config: AppConfig) -> AppConfig:

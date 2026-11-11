@@ -594,6 +594,7 @@ class ControlRoomCliTests(unittest.TestCase):
             advertise_host="192.168.1.42",
             access_token="1001",
             speak_tts=True,
+            hub_role=None,
             web_default_access_token="",
         )
 
@@ -611,8 +612,28 @@ class ControlRoomCliTests(unittest.TestCase):
             advertise_host="192.168.1.42",
             access_token="1001",
             speak_tts=True,
+            hub_role=None,
             web_default_access_token="",
         )
+
+    def test_hub_and_peer_serve_on_the_lan_with_that_role(self) -> None:
+        for mode in ("hub", "peer"):
+            with self.subTest(mode=mode), patch("sys.argv", ["control_room.py", mode]), patch(
+                "edap.control_room.app._detect_lan_host",
+                return_value="192.168.1.42",
+            ), patch("edap.control_room.server.serve.serve_observer_mode") as serve:
+                main()
+
+            serve.assert_called_once_with(
+                config_path="config.toml",
+                host="192.168.1.42",
+                port=8765,
+                advertise_host="192.168.1.42",
+                access_token="edcr",
+                speak_tts=True,
+                hub_role=mode,
+                web_default_access_token="edcr",
+            )
 
     def test_local_alias_binds_loopback(self) -> None:
         with patch("sys.argv", ["control_room.py", "local", "--token", "1001"]), patch(
@@ -627,6 +648,7 @@ class ControlRoomCliTests(unittest.TestCase):
             advertise_host="",
             access_token="1001",
             speak_tts=True,
+            hub_role=None,
             web_default_access_token="",
         )
 
@@ -666,6 +688,7 @@ class ControlRoomCliTests(unittest.TestCase):
             advertise_host="",
             access_token=DEFAULT_OBSERVER_ACCESS_TOKEN,
             speak_tts=True,
+            hub_role=None,
             web_default_access_token=DEFAULT_OBSERVER_ACCESS_TOKEN,
         )
 

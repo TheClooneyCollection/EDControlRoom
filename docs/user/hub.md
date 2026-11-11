@@ -6,7 +6,14 @@ One machine on its own needs none of this: the default role, **standalone**, is 
 
 ## Roles
 
-Set the role in each machine's `config.toml` under `[hub] role`.
+Start each machine with its role, no config needed:
+
+```bash
+uv run python3 control_room.py hub    # on the hub
+uv run python3 control_room.py peer   # on every other machine
+```
+
+`hub` and `peer` are `lan` with that role, whatever `[hub] role` says. Without a `[hub] token` the peer link uses the page token (`--token`, default `edcr`), the same on every machine; set `[hub] token` on all of them for a separate link secret. `lan` with `[hub] role` set in `config.toml` works as before.
 
 | | hub | standalone (default) | peer |
 |---|---|---|---|
@@ -21,6 +28,8 @@ Set the role in each machine's `config.toml` under `[hub] role`.
 The hub can play too: its own game is just another node in the node picker.
 
 ## Set up the hub
+
+Optional settings, for `lan` or to name the machine:
 
 ```toml
 [hub]
