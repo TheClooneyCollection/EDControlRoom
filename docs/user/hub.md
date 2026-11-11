@@ -58,7 +58,7 @@ Start the peer as usual (`lan`, `serve` or `local`); its own `--token` still pro
 
 ### Discovery and the remembered hub
 
-Without `url`, the peer finds the hub on the LAN over mDNS (service `_edcr._tcp.local`, with a TXT record holding `role=hub`, the hub's id, name and version). The token still has to match.
+Without `url`, the peer finds the hub on the LAN over mDNS (service `_edcr._tcp.local`, with a TXT record holding `role=hub`, the hub's id, name and version). The token still has to match. A macOS peer browses with the system `dns-sd` tool (mDNSResponder), so it needs no Local Network permission for Python; Linux and Windows peers browse with `zeroconf`. A browse takes about 3 s, plus up to 3 s for each advert that no longer answers.
 
 - The first hub that accepts the peer is **remembered** in `.control_room_known_hub.json` next to the peer's `config.toml` (its id, name and last address). The log says `Hub Desk (...) is now this peer's hub`.
 - From then on the peer dials only that hub, wherever it moves on the LAN. If another hub appears, the peer logs `WARNING: another hub ... is on the LAN; ignoring it` and stays with its own. A hub that answers with a different id is refused with `WARNING: not linking to ...`.
@@ -123,7 +123,7 @@ Messages in a node's `[tts] disabled_messages` are never sent up, so the hub and
 
 | Symptom | Check |
 |---|---|
-| Peer logs `no hub found on the LAN` | The hub runs with role `hub` on `lan` or `serve --host 0.0.0.0` (not `local`), both machines are on the same LAN (mDNS does not cross VPNs or routed subnets), and the hub log shows `Hub advertised over mDNS`. On macOS, allow Local Network access for the terminal app in System Settings → Privacy & Security. Or set `[hub] url`. |
+| Peer logs `no hub found on the LAN` | The hub runs with role `hub` on `lan` or `serve --host 0.0.0.0` (not `local`), both machines are on the same LAN (mDNS does not cross VPNs or routed subnets), and the hub log shows `Hub advertised over mDNS`. On a macOS peer, run `dns-sd -B _edcr._tcp local` (Ctrl-C to stop): if the hub is not listed there, the Mac does not see it on the LAN at all. On a macOS hub, the advert works without extra permission, but if other machines cannot reach its pages, allow Local Network access for the terminal app in System Settings → Privacy & Security. Or set `[hub] url`. |
 | Peer logs `remembered hub ... not found on the LAN` | The remembered hub is off or not advertising. To use another hub, delete `.control_room_known_hub.json` next to the peer's `config.toml`. |
 | `WARNING: another hub ... is on the LAN` | Another Control Room runs as a hub. The peer ignores it; nothing to do unless you want to switch. |
 | `several hubs on the LAN` | Set `[hub] url` on the peer, or stop the extra hub. |
