@@ -7,6 +7,7 @@ import json
 import logging
 from pathlib import Path
 import sqlite3
+import threading
 import time
 from typing import Any, Awaitable, Callable, Mapping
 
@@ -197,6 +198,32 @@ def _haul_web_config(
         "sessionRole": getattr(session, "client_role", "observer"),
         "webDefaults": dict(getattr(server_status, "web_form_defaults", {}) or {}),
     }
+
+
+class NodeLoop:
+    """One long-lived event loop for the work a hub page runs on this peer (session commands, actions, reads).
+
+    A local page's handlers run on the server's loop, and a routine they start (a Textual thread worker)
+    lives on that loop. A fresh `asyncio.run` per relayed command would instead wait, as it closes its
+    loop, for that routine thread to end, holding the hub page's channel (and its stop) for the whole run.
+    Started on first use, so a server no hub page drives never starts it.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._loop: asyncio.AbstractEventLoop | None = None
+
+    def run(self, work: Awaitable[Any]) -> Any:
+        """Run `work` on the loop and wait for its result; never call this on the loop itself."""
+        return asyncio.run_coroutine_threadsafe(work, self._started()).result()
+
+    def _started(self) -> asyncio.AbstractEventLoop:
+        with self._lock:
+            if self._loop is None:
+                loop = asyncio.new_event_loop()
+                threading.Thread(target=loop.run_forever, name="node-loop", daemon=True).start()
+                self._loop = loop
+            return self._loop
 
 
 def build_observer_server_app(
@@ -1115,9 +1142,12 @@ def build_observer_server_app(
 
         return endpoint
 
+    # Hub pages' work on this peer runs on one loop, as a local page's runs on the server's.
+    node_loop = NodeLoop()
+
     def answer_node_action(path: str, body: Any) -> LinkReply:
-        """A hub page's command or stop on this peer, on a thread of its own, as if posted here."""
-        response = asyncio.run(node_actions[path](body))
+        """A hub page's command or stop on this peer, as if posted here (called off the loop)."""
+        response = node_loop.run(node_actions[path](body))
         return LinkReply(response.status_code, json.loads(bytes(response.body)))
 
     def answer_node_command(channel_id: str, message: dict[str, Any]) -> dict[str, Any] | None:
@@ -1126,7 +1156,7 @@ def build_observer_server_app(
             # Hub pages are not sessions on this server; they all drive it alike.
             return relay_error(message.get("message_id"), "unsupported_message_type",
                                "Hub pages do not claim the operator role on a node.")
-        return asyncio.run(_handle_session_message_async(
+        return node_loop.run(_handle_session_message_async(
             message,
             session_id=channel_id,
             client_role="active_operator",
@@ -1162,8 +1192,8 @@ def build_observer_server_app(
         return endpoint
 
     def answer_node_read(path: str, params: dict[str, str]) -> LinkReply:
-        """A hub page's read on this peer, on a thread of its own (it may ask the hub in turn)."""
-        response = asyncio.run(node_reads[path](params))
+        """A hub page's read on this peer, called off the loop (it may ask the hub in turn)."""
+        response = node_loop.run(node_reads[path](params))
         return LinkReply(response.status_code, json.loads(bytes(response.body)))
 
     def open_node_session(session_id: str) -> list[dict[str, Any]]:

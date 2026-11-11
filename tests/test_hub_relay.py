@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import json
+import threading
 import unittest
 from dataclasses import replace
 from pathlib import Path
@@ -11,6 +12,8 @@ from typing import Any
 from unittest.mock import patch
 
 from starlette.websockets import WebSocketDisconnect
+from textual import work
+from textual.app import App
 
 from edap.control_room.protocol import ActivityLogEntry
 from edap.control_room.protocol.events import AnnouncementEvent
@@ -52,6 +55,45 @@ class PeerCommands(_CommandHandlerRecorder):
     def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> bool:
         self.during(raw_input)
         return super().submit_input(raw_input, skip_delay=skip_delay)
+
+
+class RoutineHost(App):
+    """Starts a routine as the headless host does: a Textual thread worker of an app that is never run.
+    The routine flies until it is stopped, or gives up after a guard so a broken stop cannot hang the test."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.stop = threading.Event()
+        self.ended = threading.Event()
+        self.stopped = False
+
+    def call_from_thread(self, callback, *args, **kwargs):  # type: ignore[override]
+        # As the headless host: Textual starts a worker through this when called off the app's thread.
+        return callback(*args, **kwargs)
+
+    @work(thread=True, group="routines", exclusive=True)
+    def fly(self) -> None:
+        self.stopped = self.stop.wait(2.0)
+        self.ended.set()
+
+
+class RoutineCommands(PeerCommands):
+    """`haul` starts a routine on a real worker; a stop cancels it, as the host's commands do."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.host = RoutineHost()
+        self.worker: Any = None
+
+    def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> bool:
+        if raw_input == "haul":
+            self.worker = self.host.fly()
+        return super().submit_input(raw_input, skip_delay=skip_delay)
+
+    def cancel_active_routine(self, *, stop_mode: str = "toggle") -> None:
+        super().cancel_active_routine(stop_mode=stop_mode)
+        self.worker.cancel()
+        self.host.stop.set()
 
 
 def journal(directory: Path, total_sale: int) -> Path:
@@ -236,6 +278,8 @@ class RelayTests(unittest.TestCase):
 
     def test_a_command_cut_off_or_unanswered_gets_an_error_instead_of_a_hang(self) -> None:
         link = self.r.attach()
+        # Off the link thread, as live: the hub holds its relay lock while it sends a command down.
+        self.background = lambda work: threading.Thread(target=work, daemon=True).start()
         self.commands.during = lambda raw_input: self.r.drop(link)
         held: list[Any] = []
         with patch("edap.control_room.server.app.NODE_RETRY_S", 60.0), TestClient(self.hub_app) as hub:
@@ -290,6 +334,32 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(answers[2]["payload"]["error_code"], "invalid_command")
         self.assertEqual(self.commands.submitted_inputs, [("say 1", None), ("say 2", None)])
         self.assertEqual(self.logs, ["Hub command for channel c9, which is not open here: dropped"])
+
+    def test_a_hub_page_stops_a_routine_it_started_at_once(self) -> None:
+        # The peer runs hub commands off the link thread, as it does live; the routine is a real worker.
+        self.background = lambda work: threading.Thread(target=work, daemon=True).start()
+        self.commands = RoutineCommands()
+        self.peer_app = server(data_provider=lambda: peer_data(self.routine), broker=self.peer_broker,
+                               peer_link=self.r.peer, command_handler=self.commands)
+        self.r.attach()
+        with TestClient(self.hub_app) as hub:
+            with hub.websocket_connect("/session", params={**PAGE, "node": "peer-node"}) as page:
+                page.receive_json()
+                page.receive_json()
+                page.send_json({"message_type": "command.submit_input", "message_id": "m1",
+                                "payload": {"raw_input": "haul", "skip_delay": True}})
+                started = page.receive_json()
+                running_when_answered = not self.commands.host.ended.is_set()
+                page.send_json({"message_type": "command.cancel_active_routine", "message_id": "m2",
+                                "payload": {"mode": "now"}})
+                stopped = page.receive_json()
+        self.assertTrue(self.commands.host.ended.wait(2.0))
+
+        self.assertEqual((started["correlation_message_id"], started["message_type"]), ("m1", "response.success"))
+        self.assertTrue(running_when_answered)
+        self.assertEqual((stopped["correlation_message_id"], stopped["message_type"]), ("m2", "response.success"))
+        self.assertTrue(self.commands.host.stopped)
+        self.assertEqual(self.commands.cancel_modes, ["now"])
 
     def test_only_the_hub_sends_commands_down_never_a_peer_up(self) -> None:
         link = self.r.attach()
