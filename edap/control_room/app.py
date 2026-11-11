@@ -1553,16 +1553,20 @@ class ControlRoomApp(App[None]):
             else None
         )
         if rendered is not None:
-            announcement = build_announcement_event(
-                announcement_id=message_id.value,
-                message_text=rendered,
-                message_values=dict(values),
-            )
-            self._protocol_announcements.append(announcement)
-            if len(self._protocol_announcements) > _PROTOCOL_ANNOUNCEMENT_CACHE_LIMIT:
-                self._protocol_announcements = self._protocol_announcements[-_PROTOCOL_ANNOUNCEMENT_CACHE_LIMIT :]
-            self._backend.publish_announcement(announcement)
+            self._publish_announcement(message_id.value, rendered, dict(values))
         self._tts.announce(message_id, **values)
+
+    def _publish_announcement(self, announcement_id: str, text: str, values: dict[str, object]) -> None:
+        """Send a spoken line to pages and, on a peer, up to the hub."""
+        announcement = build_announcement_event(
+            announcement_id=announcement_id,
+            message_text=text,
+            message_values=values,
+        )
+        self._protocol_announcements.append(announcement)
+        if len(self._protocol_announcements) > _PROTOCOL_ANNOUNCEMENT_CACHE_LIMIT:
+            self._protocol_announcements = self._protocol_announcements[-_PROTOCOL_ANNOUNCEMENT_CACHE_LIMIT :]
+        self._backend.publish_announcement(announcement)
 
     def _announce_tts_for_event(self, ev: dict[str, Any], *, station_before: str | None) -> None:
         event = str(ev.get("event", ""))

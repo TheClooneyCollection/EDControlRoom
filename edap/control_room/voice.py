@@ -13,9 +13,16 @@ VOICE_USAGE = "Usage: voice | voice set [model=<name>] [<setting>=<number>|defau
 
 
 def cmd_say(app: CommandHost, text: str) -> None:
-    if not text.strip():
+    line = text.strip()
+    if not line:
         app._log("[red]Usage: say <text>[/]")
-    elif not app._tts.say(text):
+        return
+    # Published like a callout, so pages and the hub voice (plan 0015) play it too; a node the hub
+    # has muted leaves the speaking to the hub.
+    app._publish_announcement("say", line, {})
+    if app._tts.muted:
+        return
+    if not app._tts.say(line):
         app._log("[yellow]TTS is off, nothing spoken.[/] [dim]Set tts.enabled = true and restart.[/]")
 
 

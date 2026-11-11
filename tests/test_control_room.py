@@ -384,6 +384,7 @@ class _FakeTTS:
         self.calls: list[tuple[AnnouncementId, dict[str, object]]] = []
         self.said: list[str] = []
         self.commander_name: str | None = None
+        self.muted = False
 
     def announce(self, message_id: AnnouncementId, **values: object) -> None:
         self.calls.append((message_id, values))
@@ -3171,6 +3172,13 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.app._dispatch_command("say")
         self.assertEqual(self.app._tts.said, ["Fly safe, Commander"])
         self.assertIn("Usage: say <text>", "\n".join(self.app.logged))
+        # Pages and the hub voice get it like a callout; a node the hub muted only sends it up.
+        self.app._tts.muted = True
+        self.app._dispatch_command("say Hub only")
+        self.assertEqual(self.app._tts.said, ["Fly safe, Commander"])
+        self.assertEqual([(a.announcement_id, a.message_text) for a in self.app._protocol_announcements],
+                         [("say", "Fly safe, Commander"), ("say", "Hub only")])
+        self.app._tts.muted = False
 
         self._piper_app_voice()
         self.app._dispatch_command("say hello")
