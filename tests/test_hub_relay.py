@@ -41,17 +41,22 @@ def run_now(work) -> None:
 class RelayTests(unittest.TestCase):
     """A hub app and a peer app joined by the in-memory link, as a hub page sees them."""
 
-    def setUp(self) -> None:
+    @classmethod
+    def setUpClass(cls) -> None:
+        # Files the tests only read, made once for the class.
         tmp = TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.database = Path(tmp.name) / "markets.sqlite3"
-        store = EddnStore.open(self.database)
+        cls.addClassCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        cls.database = root / "markets.sqlite3"
+        store = EddnStore.open(cls.database)
         store.save([SOL, GALILEO])
         store.close()
-        self.peer_recent = Path(tmp.name) / "peer_recent.json"
-        save_recent_markets(self.peer_recent, (market(market_id=GALILEO.market_id), market(market_id=2, station="Abraham")))
-        self.hub_recent = Path(tmp.name) / "hub_recent.json"
-        save_recent_markets(self.hub_recent, (market(market_id=5, station="Jameson Memorial", system="Shinrarta"),))
+        cls.peer_recent = root / "peer_recent.json"
+        save_recent_markets(cls.peer_recent, (market(market_id=GALILEO.market_id), market(market_id=2, station="Abraham")))
+        cls.hub_recent = root / "hub_recent.json"
+        save_recent_markets(cls.hub_recent, (market(market_id=5, station="Jameson Memorial", system="Shinrarta"),))
+
+    def setUp(self) -> None:
         self.routine: str | None = None
         self.peer_broker = InMemoryObserverSessionBroker()
         self.logs: list[str] = []

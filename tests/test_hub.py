@@ -528,16 +528,19 @@ class LinkTests(unittest.TestCase):
 class LinkedServerTests(unittest.TestCase):
     """A peer server asking a real hub app through a link session, no sockets."""
 
-    def setUp(self) -> None:
-        self.tmp = TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        tmp = Path(self.tmp.name)
-        self.database = tmp / "markets.sqlite3"
-        store = EddnStore.open(self.database)
+    @classmethod
+    def setUpClass(cls) -> None:
+        # Files the tests only read, made once for the class.
+        tmp = TemporaryDirectory()
+        cls.addClassCleanup(tmp.cleanup)
+        cls.database = Path(tmp.name) / "markets.sqlite3"
+        store = EddnStore.open(cls.database)
         store.save([SOL, GALILEO])
         store.close()
-        self.recent = tmp / "recent.json"
-        save_recent_markets(self.recent, (market(market_id=GALILEO.market_id), market(market_id=2, station="Abraham")))
+        cls.recent = Path(tmp.name) / "recent.json"
+        save_recent_markets(cls.recent, (market(market_id=GALILEO.market_id), market(market_id=2, station="Abraham")))
+
+    def setUp(self) -> None:
         self.r = rig(self)
         self.hub_app = server(market_database_file=self.database, hub_side=HubSide(self.r.registry, self.r.store_item,
                                                                                     HUB_TOKEN, self.r.history,
