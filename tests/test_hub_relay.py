@@ -138,7 +138,7 @@ class RelayTests(unittest.TestCase):
                 local.receive_json()
                 local_hydrate = local.receive_json()
 
-        self.assertEqual((ready["message_type"], ready["payload"]["client_role"]), ("event.connection_ready", "observer"))
+        self.assertEqual((ready["message_type"], ready["payload"]["client_role"]), ("event.connection_ready", "active_operator"))
         self.assertEqual(hydrate["payload"]["ship"]["system"], "Achenar")
         self.assertEqual(event["payload"]["entry"]["message_text"], "Undocked at Galileo")
         # The peer ran them through its own handler; the answers come back as a local page gets them.

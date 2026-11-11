@@ -1126,7 +1126,7 @@ def build_observer_server_app(
         return asyncio.run(_handle_session_message_async(
             message,
             session_id=channel_id,
-            client_role="observer",
+            client_role="active_operator",
             command_handler=command_handler,
             broker=broker,
             data_provider=data_provider,
@@ -1165,7 +1165,8 @@ def build_observer_server_app(
 
     def open_node_session(session_id: str) -> list[dict[str, Any]]:
         """The first messages of a hub page's channel on this peer, as a local page gets them."""
-        return session_start_messages(session_id, data_provider, broker, client_role="observer")
+        # Hub pages drive the node (plan 0015), so they get the operator controls a local operator page gets.
+        return session_start_messages(session_id, data_provider, broker, client_role="active_operator")
 
     async def relayed_session(websocket: WebSocket, node_id: str, client_name: str) -> None:
         """Stream a peer's session to a hub page and send the page's commands to it. While the peer is
