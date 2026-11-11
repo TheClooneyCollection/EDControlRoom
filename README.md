@@ -15,10 +15,12 @@
 
 <table>
   <tr>
-    <td width="25%" align="center" valign="top"><a href="docs/assets/screenshots/intro-markets.png"><img src="docs/assets/screenshots/intro-markets.png" alt="Markets page comparing recent markets"></a><br><sub>Markets page</sub></td>
-    <td width="25%" align="center" valign="top"><a href="docs/assets/screenshots/intro-routes.png"><img src="docs/assets/screenshots/intro-routes.png" alt="Routes page ranking round trips"></a><br><sub>Routes page</sub></td>
-    <td width="25%" align="center" valign="top"><a href="docs/assets/screenshots/intro-inara-search.png"><img src="docs/assets/screenshots/intro-inara-search.png" alt="Integrated Inara haul search"></a><br><sub>Integrated Inara search</sub></td>
-    <td width="25%" align="center" valign="top"><a href="docs/assets/screenshots/intro-two-way-haul.png"><img src="docs/assets/screenshots/intro-two-way-haul.png" alt="Two-way haul page with a haul running"></a><br><sub>Two-way haul</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/intro-markets.png"><img src="docs/assets/screenshots/intro-markets.png" alt="Markets page comparing recent markets"></a><br><sub>Markets page</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/intro-routes.png"><img src="docs/assets/screenshots/intro-routes.png" alt="Routes page ranking round trips"></a><br><sub>Routes page</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/intro-inara-search.png"><img src="docs/assets/screenshots/intro-inara-search.png" alt="Integrated Inara haul search"></a><br><sub>Integrated Inara search</sub></td>
+    <td width="50%" align="center" valign="top"><a href="docs/assets/screenshots/intro-two-way-haul.png"><img src="docs/assets/screenshots/intro-two-way-haul.png" alt="Two-way haul page with a haul running"></a><br><sub>Two-way haul</sub></td>
   </tr>
 </table>
 
