@@ -93,13 +93,19 @@
     return Boolean(settings.local_node_id) && picked() !== settings.node_id;
   }
 
+  // A node's name from /api/nodes; empty when the list does not have it (yet).
   function nodeName(nodeId) {
     const node = nodes.find((item) => item.node_id === nodeId);
-    return node ? node.name : "this node";
+    return node ? node.name : "";
+  }
+
+  // The voiced node's name. An older hub sends no node_name: fall back to the node list, then to words.
+  function voicedName() {
+    return settings.node_name || nodeName(settings.node_id) || "the voiced node";
   }
 
   function render() {
-    const name = settings.node_name || "the node";
+    const name = voicedName();
     // The hub's own game already speaks on the hub speakers.
     speakersRow.hidden = local();
     speakersBox.checked = settings.speakers;
@@ -112,20 +118,37 @@
     muteBox.parentElement.title = `${name} stops speaking its own callouts; they play only on the hub. ` +
       "It speaks again when nothing plays them here or its hub link drops.";
     follow.hidden = !pickedElsewhere();
-    if (!follow.hidden) follow.textContent = `Voice ${nodeName(picked())} instead`;
-    statusText.textContent = statusLine();
+    if (!follow.hidden) follow.textContent = `Voice ${nodeName(picked()) || "the node picked here"} instead`;
+    statusText.textContent = statusLines().join(" ");
   }
 
-  function statusLine() {
-    const name = settings.node_name || "The node";
-    const label = pickedElsewhere() ? `${name} (picked in another browser)` : name;
+  // One short sentence per fact: who is voiced, where it plays, what to do next.
+  function statusLines() {
+    const name = voicedName();
+    const lines = [];
+    if (pickedElsewhere()) {
+      const hub = local() ? " (hub)" : "";
+      const other = settings.node_name || nodeName(settings.node_id) ? `${name}${hub}` : "a different node";
+      lines.push(`Another browser picked ${other}; the hub is voicing it.`);
+    }
     const where = [];
-    if (settings.speakers && !local()) where.push("hub speakers");
-    if (listen) where.push(unlocked ? "this browser" : "this browser once you tap the page");
-    const sound = listen && !settings.piper ? " Browser speech: the hub has no Piper." : "";
-    if (!where.length) return `${label}: speaks only on its own machine.`;
-    const muted = settings.muted ? ` ${name} is muted.` : "";
-    return `${label}: plays on ${where.join(" and ")}.${muted}${sound}`;
+    if (settings.speakers && !local()) where.push("on the hub speakers");
+    if (listen) where.push("in this browser");
+    if (!where.length) {
+      // Muted while nothing plays here: another hub page is playing them.
+      lines.push(settings.muted ? `${capitalised(name)} is muted; another browser on the hub plays its callouts.` :
+        `${capitalised(name)} speaks its callouts only on its own machine.`);
+      return lines;
+    }
+    lines.push(`Playing ${name}'s callouts ${where.join(" and ")}.`);
+    if (settings.muted) lines.push(`${capitalised(name)} is muted, so its own machine stays quiet.`);
+    if (listen && !unlocked) lines.push("Tap the page once to allow sound.");
+    if (listen && !settings.piper) lines.push("The hub has no Piper, so this browser's own voice reads them.");
+    return lines;
+  }
+
+  function capitalised(text) {
+    return text.charAt(0).toUpperCase() + text.slice(1);
   }
 
   async function save(change) {
