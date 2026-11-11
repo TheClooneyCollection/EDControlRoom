@@ -152,6 +152,7 @@ It installs `piper-tts` as a `uv` tool, downloads the voice (on macOS into `~/Li
 ## Documentation
 
 - [docs/user/](docs/user/): install, bindings, getting started, haul workflow, commands, troubleshooting.
+- [docs/user/command-api.md](docs/user/command-api.md): run Control Room commands over HTTP (`POST /api/command`) from `curl`, scripts, or Shortcuts.
 - [docs/user/background-input.md](docs/user/background-input.md): macOS background input through a helper in the CrossOver bottle (beta: keep the mouse off the game window while routines run). Coding agents can run the setup with the repo's `edcr-background-input` skill (`.agents/skills/`, linked from `.claude/skills/`).
 - [docs/operators/](docs/operators/): operator references (control room, remote / multi-client, bindings files, input and market timing).
 - [docs/diagnostics/](docs/diagnostics/): CLI and bindings reference for diagnostics.

@@ -4,6 +4,10 @@ Prepend displaced older status blocks from `docs/status/control-room.md` here.
 
 Legacy pre-split global status history remains in `../../status-archive.md`.
 
+## Archived 2026-11-11
+
+- `ControlRoomApp` no longer stores/applies backend snapshots, the backend contract no longer exposes `current_snapshot()`, and `ControlRoomEventSink` uses explicit `publish_data_refresh()` to fan out data-source hydrate messages.
+
 ## Archived 2026-11-10
 
 - Activity log redraws preserve first-observed display order across local prompt logs and remote server logs, so connect-mode hydrate refreshes do not reorder entries by cross-machine wall-clock timestamps.
