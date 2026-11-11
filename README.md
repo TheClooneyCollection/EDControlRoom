@@ -17,12 +17,13 @@
 
 A control room for Elite Dangerous traders and haulers, on any device on your LAN.
 
-- **Market intelligence built in.** A local EDDN listener keeps live prices for the whole bubble in your own database, and every market you open in game goes into it too. The database stays small: about 40 MB for 10,000+ markets. The Routes page ranks round trips by profit per hour, near you or galaxy-wide. The Markets page compares any two recent markets for your hold, with profit per ton, per trip and per hour from a trip time model (station facts from your journals, EDDN and Ardent), next to the profit per hour you actually measured on that pair. Inara haul search is built into the haul page.
-- **Every machine in one place.** Run a hub and peers: one browser tab shows and drives whichever machine is playing, with one market database and one haul history (see [Hub](#hub-connected-intelligence)).
-- **Your history and callouts.** Every haul run is saved, with profit per hour by route, commodity and ship. TTS callouts (system voice or Piper) speak on the game machine, the hub or a phone.
-- **Assisted haul loops, if you want them.** The two-way haul routine runs the station-side cycle for you (see [below](#assisted-haul-loop), and read its Terms of Use warning first).
-
-Live-validated on **macOS** (Elite through CrossOver), **Windows** (community-validated) and the **Steam Deck** (Elite under Proton, Desktop and Game Mode).
+- **Live market data, locally.** Your own EDDN database: about 40 MB for 10,000+ markets.
+- **Routes and Markets pages.** Powered by that database: round trips ranked by profit per hour, and the best deal between any two markets you visited, priced for your ship.
+- **Inara search.** Built into the haul page, one click to a route.
+- **Hub.** Every machine in one place: one tab, one database, one haul history (see [Hub](#hub-connected-intelligence)).
+- **Haul history.** Profit per hour by route, commodity and ship.
+- **Voice callouts.** Piper or system voice, on the game machine, the hub or a phone.
+- **Assisted haul loop.** Optional, see the [Terms of Use warning](#assisted-haul-loop).
 
 ## Contents
 
@@ -136,6 +137,8 @@ uv run python3 control_room.py lan
 ```
 
 `lan` starts a headless server and prints the bound URL on startup (e.g. `http://192.168.1.50:8765`). Open that URL in a browser to use the web frontend — ideally on a **secondary device** (tablet, phone, or another laptop) so Elite can stay the foreground application on the game machine. Routines drive Elite by key input, and alt-tabbing away from the game window will break them.
+
+Live-validated on **macOS** (Elite through CrossOver), **Windows** (community-validated) and the **Steam Deck** (Elite under Proton, Desktop and Game Mode).
 
 **Before your first run:** set arrow-key secondaries on `UI_Up / UI_Down / UI_Left / UI_Right` in Elite. See [docs/user/bindings-setup.md](docs/user/bindings-setup.md).
 
