@@ -302,14 +302,17 @@ class OutboxTests(unittest.TestCase):
             self.assertIsNone(outbox.add("market", {"n": 1}, key="a", now=NOW))
             outbox.close()
 
+            # Closed before the directory goes: Windows cannot delete an open SQLite file.
             outbox = Outbox.open(path, now=NOW + 86400)
-            self.addCleanup(outbox.close)
-            self.assertEqual([(item.seq, item.kind, item.body) for item in outbox.pending(after=0)],
-                             [(first, "market", {"n": 1}), (second, "station_facts", {"n": 2})])
-            outbox.remove(first)
-            self.assertEqual([item.seq for item in outbox.pending(after=0)], [second])
-            self.assertEqual(outbox.pending(after=second), [])
-            self.assertEqual(outbox.count(), 1)
+            try:
+                self.assertEqual([(item.seq, item.kind, item.body) for item in outbox.pending(after=0)],
+                                 [(first, "market", {"n": 1}), (second, "station_facts", {"n": 2})])
+                outbox.remove(first)
+                self.assertEqual([item.seq for item in outbox.pending(after=0)], [second])
+                self.assertEqual(outbox.pending(after=second), [])
+                self.assertEqual(outbox.count(), 1)
+            finally:
+                outbox.close()
 
     def test_old_keys_are_forgotten_after_thirty_days_but_haul_run_keys_never(self) -> None:
         outbox = memory_outbox()
