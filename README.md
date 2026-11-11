@@ -41,21 +41,6 @@ A LAN web frontend (markets and Best deal, EDDN trade routes, haul search, two-w
 _(Expand a section for details.)_
 
 <details>
-<summary><strong>Terminal Control Room (TUI)</strong> — ship status, activity log, market, and haul session, with TTS callouts.</summary>
-
-- Live panels: SHIP STATUS (commander, system, station, fuel, cargo, FSD target), ACTIVITY log, and MARKET table from `Market.json`.
-- Full command bar for `dock`, `undock`, `jump`, `buy`, `sell`, `dest`, `home`, `travel`, `market ...`.
-- Start haul work from the command bar: `haul [commodity]`, `haul start`, `haul load`, `haul search [system]`, `haul search url <inara-url>`, `haul route <n>`, `multi_leg_haul <route>`.
-- `stats [today|48h|week|month|all|since YYYY-MM-DD]` summarises saved haul runs: total profit, profit per hour, time, and per-route and per-commodity totals.
-- `reload_config` and `reload_keymap` reread `config.toml` and the bindings file without a restart.
-- `pause` / `resume` an active two-way haul. Session stats (timer, profit, runs, average run time) cover one haul: they stay on screen after it stops and start from zero on the next haul; `new_session` zeroes them mid-haul.
-- `Ctrl-R` reopens replay / command history; `Ctrl-C` interrupts (haul-aware safe stop first, cancel on second).
-- Speaks TTS callouts locally, e.g. "commander, ship ready to jump" at the end of a leg.
-
-<img src="docs/assets/tui-control-room.png" alt="Terminal Control Room TUI" width="50%">
-</details>
-
-<details>
 <summary><strong>Web dashboard</strong> — two-way haul control with live session stats, routine progress and haul history.</summary>
 
 - Quick stats strip: home system, current system, destination, cargo, routine, completed runs, session profit.
@@ -121,6 +106,21 @@ _(Expand a section for details.)_
 - Route detail table shows system, neutron flag, +LY per jump, and cumulative total for both routes side by side. The Active route panel at the top of `/travel` tracks jumps remaining / LY remaining / boosts while the runner is active.
 
 <img src="docs/assets/spansh-routes.png" alt="Spansh route fetch and comparison panel" width="50%">
+</details>
+
+<details>
+<summary><strong>Terminal Control Room (TUI)</strong> — ship status, activity log, market, and haul session, with TTS callouts.</summary>
+
+- Live panels: SHIP STATUS (commander, system, station, fuel, cargo, FSD target), ACTIVITY log, and MARKET table from `Market.json`.
+- Full command bar for `dock`, `undock`, `jump`, `buy`, `sell`, `dest`, `home`, `travel`, `market ...`.
+- Start haul work from the command bar: `haul [commodity]`, `haul start`, `haul load`, `haul search [system]`, `haul search url <inara-url>`, `haul route <n>`, `multi_leg_haul <route>`.
+- `stats [today|48h|week|month|all|since YYYY-MM-DD]` summarises saved haul runs: total profit, profit per hour, time, and per-route and per-commodity totals.
+- `reload_config` and `reload_keymap` reread `config.toml` and the bindings file without a restart.
+- `pause` / `resume` an active two-way haul. Session stats (timer, profit, runs, average run time) cover one haul: they stay on screen after it stops and start from zero on the next haul; `new_session` zeroes them mid-haul.
+- `Ctrl-R` reopens replay / command history; `Ctrl-C` interrupts (haul-aware safe stop first, cancel on second).
+- Speaks TTS callouts locally, e.g. "commander, ship ready to jump" at the end of a leg.
+
+<img src="docs/assets/tui-control-room.png" alt="Terminal Control Room TUI" width="50%">
 </details>
 
 ## Quick Start
