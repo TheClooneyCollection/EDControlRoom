@@ -34,9 +34,42 @@
     };
   }
 
+  // While the hub voices this node with its speakers muted, its pages say why they are quiet: a note under
+  // the chip and one in the speech settings, if the page has them. `muted` comes from /api/hub-status.
+  const notes = [];
+  let shownMuted = false;
+
+  function note(anchor, className) {
+    const element = document.createElement("p");
+    element.className = className;
+    element.setAttribute("role", "status");
+    element.hidden = true;
+    anchor.after(element);
+    notes.push(element);
+  }
+
+  function mutedText(status) {
+    return status.role === "hub" ?
+      "Muted: callouts play only in hub pages set to Play in this browser." :
+      "Muted by the hub: callouts play on the hub.";
+  }
+
+  function showMuted(status) {
+    shownMuted = status.muted === true;
+    for (const element of notes) {
+      element.hidden = !shownMuted;
+      element.textContent = shownMuted ? mutedText(status) : "";
+    }
+  }
+
   async function refresh() {
     const chip = document.getElementById("hub-chip");
     if (!chip) return;
+    if (!notes.length) {
+      note(chip, "hub-muted-note");
+      const speech = document.getElementById("speech-status");
+      if (speech) note(speech, "field-hint hub-muted-note");
+    }
     let status;
     try {
       const url = new URL("/api/hub-status", window.location.origin);
@@ -49,12 +82,19 @@
       return;
     }
     chip.hidden = !status.configured;
+    showMuted(status.configured ? status : {});
     if (!status.configured) return;
     const view = status.role === "hub" ? hubView(status) : peerView(status);
+    if (shownMuted) view.lines.push(mutedText(status));
     chip.dataset.state = view.state;
-    chip.querySelector("strong").textContent = view.label;
+    chip.querySelector("strong").textContent = shownMuted ? `${view.label} · muted` : view.label;
     chip.title = view.lines.join("\n");
   }
+
+  // An announcement says whether it was muted: when that changes, ask again rather than wait for the poll.
+  window.addEventListener("edcr:announcement", (event) => {
+    if (Boolean(event.detail && event.detail.muted) !== shownMuted) refresh();
+  });
 
   refresh();
   window.setInterval(refresh, 10000);

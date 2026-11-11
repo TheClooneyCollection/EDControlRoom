@@ -118,6 +118,10 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
     def mute_callouts(self, muted: bool) -> None:
         self._callouts_muted = muted
 
+    @property
+    def callouts_muted(self) -> bool:
+        return self._callouts_muted
+
     def publish_announcement(self, event: AnnouncementEvent) -> None:
         self._server_state.record_announcement(event)
         payload: dict[str, Any] = {

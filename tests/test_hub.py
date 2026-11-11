@@ -704,12 +704,19 @@ class LinkedServerTests(unittest.TestCase):
     def test_hub_status_and_nodes_for_each_role(self) -> None:
         self.r.attach()
         params = {"access_token": TOKEN}
+        peer_broker = InMemoryObserverSessionBroker()
         with (
-            TestClient(self.hub_app) as hub, TestClient(self.peer_app()) as peer, TestClient(server()) as standalone,
+            TestClient(self.hub_app) as hub, TestClient(self.peer_app(broker=peer_broker)) as peer,
+            TestClient(server()) as standalone,
         ):
             hub_status = hub.get("/api/hub-status", params=params).json()
             nodes = hub.get("/api/nodes", params=params)
             peer_status = peer.get("/api/hub-status", params=params).json()
+            # The hub voices the peer: its own pages say it is muted, and stop saying so once unmuted.
+            peer_broker.mute_callouts(True)
+            muted = peer.get("/api/hub-status", params=params).json()["muted"]
+            peer_broker.mute_callouts(False)
+            unmuted = peer.get("/api/hub-status", params=params).json()["muted"]
             alone = standalone.get("/api/hub-status", params=params).json()
             not_a_hub = peer.get("/api/nodes", params=params)
             unauthorized = hub.get("/api/nodes")
@@ -717,13 +724,15 @@ class LinkedServerTests(unittest.TestCase):
                     hub.post("/api/haul-search", json={}).status_code]
 
         self.assertEqual(hub_status, {"configured": True, "role": "hub", "node_id": "hub-node", "node_name": "Home",
-                                      "peers_connected": 1})
+                                      "peers_connected": 1, "muted": False})
         self.assertEqual([node["name"] for node in nodes.json()["nodes"]], ["Home", "Deck"])
         self.assertEqual(
-            {key: peer_status[key] for key in ("role", "connected", "hub_name", "host", "outbox_pending", "node_name")},
+            {key: peer_status[key] for key in ("role", "connected", "hub_name", "host", "outbox_pending", "node_name",
+                                               "muted")},
             {"role": "peer", "connected": True, "hub_name": "Home", "host": "hub.local:8765", "outbox_pending": 0,
-             "node_name": "Deck"},
+             "node_name": "Deck", "muted": False},
         )
+        self.assertEqual((muted, unmuted), (True, False))
         self.assertEqual(alone, {"configured": False, "role": "standalone"})
         self.assertEqual((not_a_hub.status_code, unauthorized.status_code), (404, 401))
         self.assertEqual(gone, [404, 404, 404])

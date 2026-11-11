@@ -1732,6 +1732,28 @@
   display: none;
 }
 
+/* hub-status.js: the hub voices this node with its speakers muted. */
+.hub-muted-note {
+  margin: 6px 6px 0;
+  font-size: 0.8rem;
+  color: var(--text-2);
+}
+
+.hub-muted-note[hidden] {
+  display: none;
+}
+
+.hub-chip + .hub-muted-note:not([hidden]) + .sidebar-foot {
+  margin-top: 10px;
+}
+
+@media (max-width: 760px) {
+  /* Phones keep the chip in the top row; its label says "muted" and the speech settings carry the note. */
+  .hub-chip + .hub-muted-note {
+    display: none;
+  }
+}
+
 .hub-chip::before {
   content: "";
   width: 6px;

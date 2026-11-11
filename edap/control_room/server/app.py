@@ -740,12 +740,14 @@ def build_observer_server_app(
         auth_failure = require_http_auth(request)
         if auth_failure is not None:
             return auth_failure
+        # `muted`: the hub voices this node's callouts, so its own pages say why they are quiet.
         if peer_link is not None:
-            return JSONResponse(await asyncio.to_thread(peer_link.status))
+            return JSONResponse({**await asyncio.to_thread(peer_link.status), "muted": broker.callouts_muted})
         if hub_side is not None:
             local = hub_side.registry.local
             return JSONResponse({"configured": True, "role": "hub", "node_id": local.node_id,
-                                 "node_name": local.name, "peers_connected": hub_side.registry.connected_peers()})
+                                 "node_name": local.name, "peers_connected": hub_side.registry.connected_peers(),
+                                 "muted": broker.callouts_muted})
         return JSONResponse({"configured": False, "role": "standalone"})
 
     async def nodes_endpoint(request: Request) -> JSONResponse:
