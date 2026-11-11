@@ -15,6 +15,7 @@ Goal: the hub is the one control room. Peers are end nodes: they send their data
 - The hub can play too. It is a node like the others ("local node"), so the same flow works whichever machine runs the game.
 - Peers keep their own web pages as a fallback when the hub is down. Normal use does not need them.
 - LAN only. A peer runs commands only from the hub it connected to, and the hub accepts only peers that present the hub token.
+- The hub can voice the selected node's callouts, behind a switch, on its speakers or in a hub page.
 
 ## Design
 
@@ -34,7 +35,7 @@ A hub keeps `[eddn]` and the Inara browser as today. A peer without `url` finds 
 
 The peer opens one websocket to the hub (`/api/peer-link`) and keeps it open, reconnecting with backoff. The peer always dials out, so the hub needs no peer address, peer token or open peer port.
 
-- `hello` (peer to hub): stable `node_id` (generated once, stored next to the config), name, version, capabilities, and whether the game is running (journal active).
+- `hello` (peer to hub): stable `node_id` (generated once, stored next to the config), name, version and capabilities.
 - Up: state updates, activity entries, market snapshots, haul runs.
 - Down: commands and relayed requests from hub pages.
 - The link replaces the heartbeat. `HubStatus` and the Hub chip read the link state instead of pings.
@@ -45,13 +46,22 @@ The existing pages already talk to their server over the session websocket (`hyd
 
 - A page on the hub opens its session with `?node=<node_id>`. For the local node nothing changes. For a peer, the hub opens a channel over the peer link; the peer attaches a broker observer for that channel and runs incoming `command.*` messages through its normal handler. Pages stay almost unchanged.
 - The page-level HTTP reads a page needs (haul stats, recent markets, market compare, route compare, Spansh route, hub status) are relayed the same way as request/response frames, limited to an allowlist.
-- Sidebar node picker: online nodes with name, game running, ship and current routine. By default it selects the node whose game is running; the choice is kept per browser.
+- Sidebar node picker: online nodes with name, ship and current routine. The user picks the node by hand; no automatic choice yet.
 
 ### Data on the hub
 
 - Markets: sent over the link (`POST /api/markets` stays for older peers). Newest snapshot wins, as today.
 - Haul runs: the peer still writes its own `haul_runs_file` (source of truth). The hub stores runs from every node in its history, tagged with `node`, deduplicated by the existing run key (`started_at`, `ended_at`, `station_1`). The hub acknowledges what it stored; on reconnect the peer sends runs after the last acknowledged one, so offline runs are not lost.
 - History views on the hub can filter by node or show all.
+
+### TTS on the hub
+
+The node keeps speaking its callouts as today. The node also sends each callout's text up the link, and the hub can voice it, behind a switch that is off by default:
+
+- **Hub speakers**: the hub speaks the text with its own voice (platform voice or `[tts.piper]`).
+- **Listen in the browser**: the hub synthesizes the text with Piper and sends the WAV to hub pages that opted in, which play it. Piper already writes one WAV per line (`edap/tts.py`), so this is per-callout audio, not a continuous stream, with a delay of about one synthesis. Without Piper on the hub, the page falls back to browser speech (`web/speech.js`).
+
+Only callouts from the selected node are voiced on the hub, so two nodes never talk over each other.
 
 ### Discovery
 
@@ -65,15 +75,15 @@ Each phase is usable on its own.
 2. **See a peer**: relay the session protocol and the allowlisted reads for `?node=`, plus the sidebar node picker. Read-only first: commands from relayed sessions are refused.
 3. **Drive a peer**: allow `command.*` over relayed sessions (haul start/stop, controls routines, travel). Same busy and refusal rules as local.
 4. **Central history**: haul runs up with acknowledgements, node-tagged history on the hub. Markets move onto the link.
-5. **Discovery and roles**: `role`, mDNS advertise/browse, remembered hub.
+5. **TTS on the hub**: callout text up the link, hub speaker switch, Piper WAV to opted-in hub pages.
+6. **Discovery and roles**: `role`, mDNS advertise/browse, remembered hub.
 
 ## Open points
 
-- Whether TTS should also play on the hub machine for the selected node, or stay only on the node (today: on the node).
-- How "game running" is decided: recent journal writes vs. a process check.
-- Several nodes playing at once is allowed (pick by hand), but not optimised for.
+- Picking the playing node automatically (needs a "game running" signal) is left for later.
+- Whether the node should mute itself while the hub voices its callouts.
 
 ## Validation
 
-- Unit tests with an in-memory link (no sockets): hello and registry, reconnect, relay of session messages and reads, refusal while read-only, run acknowledgements and resend, duplicate runs ignored.
+- Unit tests with an in-memory link (no sockets): hello and registry, reconnect, relay of session messages and reads, refusal while read-only, run acknowledgements and resend, duplicate runs ignored, callouts voiced only for the selected node and only with the switch on.
 - Live: a hub and one peer on the LAN; open only the hub's pages, start and stop a haul on the peer, check the peer's runs and markets appear on the hub, then restart the hub mid-haul and check nothing is lost.
