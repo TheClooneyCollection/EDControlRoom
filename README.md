@@ -3,46 +3,37 @@
 [![Tests](https://github.com/TheClooneyCollection/EDControlRoom/actions/workflows/tests.yml/badge.svg)](https://github.com/TheClooneyCollection/EDControlRoom/actions/workflows/tests.yml)
 [![Discord](https://img.shields.io/badge/Discord-join%20chat-5865F2?logo=discord&logoColor=white)](https://discord.gg/73YSUBhfRG)
 
+<table>
+  <tr>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/intro-markets.png"><img src="docs/assets/screenshots/intro-markets.png" alt="Markets page comparing recent markets"></a><br><sub>Markets page</sub></td>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/intro-routes.png"><img src="docs/assets/screenshots/intro-routes.png" alt="Routes page ranking round trips"></a><br><sub>Routes page</sub></td>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/intro-inara-search.png"><img src="docs/assets/screenshots/intro-inara-search.png" alt="Integrated Inara haul search"></a><br><sub>Integrated Inara search</sub></td>
+  </tr>
+</table>
+
 A control room for Elite Dangerous traders and haulers, on any device on your LAN.
 
-- **Market intelligence built in.** A local EDDN listener keeps live prices for the whole bubble in your own database, and every market you open in game goes into it too. `/routes` ranks round trips by profit per hour, near you or galaxy-wide. `/markets` compares any two recent markets for your hold, with profit per ton, per trip and per hour from a trip time model (station facts from your journals, EDDN and Ardent), next to the profit per hour you actually measured on that pair. Inara haul search is one click away.
-- **Every machine in one place.** Run a hub and peers: one browser tab shows and drives whichever machine is playing, with one market database and one haul history.
+- **Market intelligence built in.** A local EDDN listener keeps live prices for the whole bubble in your own database, and every market you open in game goes into it too. The database stays small: about 40 MB for 10,000+ markets. The Routes page ranks round trips by profit per hour, near you or galaxy-wide. The Markets page compares any two recent markets for your hold, with profit per ton, per trip and per hour from a trip time model (station facts from your journals, EDDN and Ardent), next to the profit per hour you actually measured on that pair. Inara haul search is built into the haul page.
+- **Every machine in one place.** Run a hub and peers: one browser tab shows and drives whichever machine is playing, with one market database and one haul history (see [Hub](#hub-connected-intelligence)).
 - **Your history and callouts.** Every haul run is saved, with profit per hour by route, commodity and ship. TTS callouts (system voice or Piper) speak on the game machine, the hub or a phone.
-- **Assisted haul loops, if you want them.** The two-way haul routine runs the station-side cycle for you (see [below](#assisted-haul-loop), including what it means for the Terms of Use).
+- **Assisted haul loops, if you want them.** The two-way haul routine runs the station-side cycle for you (see [below](#assisted-haul-loop), and read its Terms of Use warning first).
 
 Live-validated on **macOS** (Elite through CrossOver), **Windows** (community-validated) and the **Steam Deck** (Elite under Proton, Desktop and Game Mode).
 
 ## Contents
 
-- [Assisted Haul Loop](#assisted-haul-loop)
 - [Screenshots](#screenshots)
 - [What You Get](#what-you-get)
 - [Quick Start](#quick-start)
-- [Hub: Several Machines](#hub-several-machines)
+- [Hub: Connected Intelligence](#hub-connected-intelligence)
 - [Steam Deck](#steam-deck)
 - [Piper Voice](#piper-voice)
+- [Assisted Haul Loop](#assisted-haul-loop)
 - [Documentation](#documentation)
 - [Development](#development)
 - [Repo Layout](#repo-layout)
 - [Contributing](#contributing)
 - [License](#license)
-
-## Assisted Haul Loop
-
-A co-pilot, not an autopilot. You fly the jumps; the routine takes over the part that lives behind station menus.
-
-When your ship drops near a station, the **two-way haul routine** handles the station cycle end to end: request docking, work through station services, sell, refuel and repair, buy the return cargo, set the next-leg route, undock, clear mass lock, and prime the FSD. When the drive is primed it calls the commander by title or name and announces the ship is ready to jump. That is your cue to take over for alignment and the next jump.
-
-It fits high-volume A↔B cargo work like community goal loops or long chill hauls, where the station cycle is the repetitive part and your attention is better spent flying. Pick the pair from `/routes`, `/markets` Best deal or an Inara search, and **Open in haul**.
-
-> [!WARNING]
-> **Routines that press keys for you break the Elite Dangerous Terms of Use.** Frontier counts more than one in-game action per button press as automation and does not permit it ([source](https://forums.frontier.co.uk/threads/does-anyone-has-experience-using-tools-called-fleet-carrier-macros.604481/)). The haul loops are well past that line, and so is every other button or command that drives the ship: the one-tap routines on `/controls`, Set destination, Travel assist, the `/travel` route runner and `dock` / `undock` / `jump`. **Do not run them on an account you'd mind losing.** No warranty, no assurance of account safety.
->
-> Everything else reads your journal files and public market data and sends nothing to the game: markets, routes, Best deal, haul history, the hub and voice callouts.
-
-**See it in action:** [live stream demo: the co-pilot handling a station cycle](https://www.youtube.com/live/YKbz7xtc22Q?t=6014s)
-
-<a href="https://www.youtube.com/live/YKbz7xtc22Q?t=6014s"><img src="docs/assets/haul-vr.png" alt="Hauling in VR with EDControlRoom's help, click to watch on YouTube" width="50%"></a>
 
 ## Screenshots
 
@@ -170,7 +161,7 @@ Both the server and the web page default to token `edcr`, so no `--token` overri
 
 Full walkthrough: [docs/user/getting-started.md](docs/user/getting-started.md).
 
-## Hub: Several Machines
+## Hub: Connected Intelligence
 
 Play on more than one machine (a desktop, a second PC, a Steam Deck)? Make one the **hub** and the others **peers**:
 
@@ -180,6 +171,8 @@ uv run python3 control_room.py peer   # on every other machine
 ```
 
 Peers find the hub on the LAN, keep a link open to it and send up every market, station fact and finished haul run (queued while the hub is away, so nothing is lost). Open only the hub's pages: pick a machine in the sidebar's node picker to see and drive it, read one market database and one haul history for all of them, and play any machine's callouts on the hub or in your browser, with that machine muted.
+
+Commands go the other way too: from the hub's pages, the haul page, Controls, Travel and the command box run on the picked peer, and `POST /api/command?node=<node_id>` sends a command to it from a script ([command-api.md](docs/user/command-api.md)).
 
 Tokens, names, a fixed hub address and the role table: [docs/user/hub.md](docs/user/hub.md).
 
@@ -209,6 +202,23 @@ uv run python3 tools/setup_piper.py --voice jenny   # or Jenny (en_GB, medium qu
 ```
 
 It installs `piper-tts` as a `uv` tool, downloads the voice (on macOS into `~/Library/Application Support/EDControlRoom/piper`), writes `[tts.piper]` into `config.toml`, and speaks a test line. Restart `control_room.py` to pick it up. Pace, intonation and volume can be tuned in `[tts.piper]` (see [config.example.toml](config.example.toml)) or live from the `/controls` Voice panel. Delete the `[tts.piper]` section to go back to the system voice.
+
+## Assisted Haul Loop
+
+A co-pilot, not an autopilot. You fly the jumps; the routine takes over the part that lives behind station menus.
+
+When your ship drops near a station, the **two-way haul routine** handles the station cycle end to end: request docking, work through station services, sell, refuel and repair, buy the return cargo, set the next-leg route, undock, clear mass lock, and prime the FSD. When the drive is primed it calls the commander by title or name and announces the ship is ready to jump. That is your cue to take over for alignment and the next jump.
+
+It fits high-volume A↔B cargo work like community goal loops or long chill hauls, where the station cycle is the repetitive part and your attention is better spent flying. Pick the pair from the Routes page, the Markets page's Best deal or an Inara search, and **Open in haul**.
+
+> [!WARNING]
+> **The assisted haul loops break the Elite Dangerous Terms of Use.** You still fly the jumps, but at each station the routine does the station work for you from one click: request docking, sell, buy, plot the next leg, undock and prime the FSD. Frontier counts more than one in-game action per button press as automation and does not permit it ([source](https://forums.frontier.co.uk/threads/does-anyone-has-experience-using-tools-called-fleet-carrier-macros.604481/)). **Do not run them on an account you'd mind losing.** No warranty, no assurance of account safety.
+>
+> Other buttons that send keys to the game are single actions you trigger yourself; judge those for yourself.
+
+**See it in action:** [live stream demo: the co-pilot handling a station cycle](https://www.youtube.com/live/YKbz7xtc22Q?t=6014s)
+
+<a href="https://www.youtube.com/live/YKbz7xtc22Q?t=6014s"><img src="docs/assets/haul-vr.png" alt="Hauling in VR with EDControlRoom's help, click to watch on YouTube" width="50%"></a>
 
 ## Documentation
 
