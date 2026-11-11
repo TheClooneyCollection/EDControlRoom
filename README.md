@@ -43,14 +43,14 @@ That makes it a direct fit for high-volume A↔B cargo work like community goal 
 
 <table>
   <tr>
-    <td width="33%" align="center" valign="top"><a href="docs/assets/two-way-haul.png"><img src="docs/assets/two-way-haul.png" alt="Two-way haul page"></a><br><sub>New and updated two-way haul</sub></td>
-    <td width="33%" align="center" valign="top"><a href="docs/assets/copy-paste-route.png"><img src="docs/assets/copy-paste-route.png" alt="Copy and paste route panel"></a><br><sub>Copy and paste routes to fly and earn credits with friends</sub></td>
-    <td width="33%" align="center" valign="top"><a href="docs/assets/markets-best-deal.png"><img src="docs/assets/markets-best-deal.png" alt="Markets page with best deal"></a><br><sub>Recent markets and best deals</sub></td>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/two-way-haul.png"><img src="docs/assets/screenshots/two-way-haul.png" alt="Two-way haul page"></a><br><sub>New and updated two-way haul</sub></td>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/copy-paste-route.png"><img src="docs/assets/screenshots/copy-paste-route.png" alt="Copy and paste route panel"></a><br><sub>Copy and paste routes to fly and earn credits with friends</sub></td>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/markets-best-deal.png"><img src="docs/assets/screenshots/markets-best-deal.png" alt="Markets page with best deal"></a><br><sub>Recent markets and best deals</sub></td>
   </tr>
   <tr>
-    <td width="33%" align="center" valign="top"><a href="docs/assets/eddn-routes.png"><img src="docs/assets/eddn-routes.png" alt="EDDN routes page"></a><br><sub>Routes powered by a local EDDN database</sub></td>
-    <td width="33%" align="center" valign="top"><a href="docs/assets/quick-controls.png"><img src="docs/assets/quick-controls.png" alt="Controls page"></a><br><sub>Quick controls</sub></td>
-    <td width="33%" align="center" valign="top"><a href="docs/assets/travel-page.png"><img src="docs/assets/travel-page.png" alt="Travel page"></a><br><sub>A dedicated travel page to plan long routes</sub></td>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/eddn-routes.png"><img src="docs/assets/screenshots/eddn-routes.png" alt="EDDN routes page"></a><br><sub>Routes powered by a local EDDN database</sub></td>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/quick-controls.png"><img src="docs/assets/screenshots/quick-controls.png" alt="Controls page"></a><br><sub>Quick controls</sub></td>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/travel-page.png"><img src="docs/assets/screenshots/travel-page.png" alt="Travel page"></a><br><sub>A dedicated travel page to plan long routes</sub></td>
   </tr>
 </table>
 
