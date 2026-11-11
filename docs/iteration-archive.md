@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `353`
-- Latest generated iteration number: `486`
+- Generated iteration count: `354`
+- Latest generated iteration number: `487`
 
 ## Iteration 134
 
@@ -10077,3 +10077,21 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - The haul page shows Inara's supply and demand trend icons as boxes; mapping U+E84D / U+E84E to arrows in `web/haul-ui.js` would fix it.
+
+## Iteration 487
+
+- When: `2026-11-11 21:42`
+- Area: `control-room`
+- Title: `inara-supply-level-arrows`
+- Source: [2026-11-11-21-42_control-room_inara-supply-level-arrows.md](iteration-logs/2026-11-11-21-42_control-room_inara-supply-level-arrows.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `inara-supply-level-arrows`
+- Started: `2026-11-11 21:42`
+
+## Summary
+
+- The haul page's Inara results showed boxes after supply and demand numbers. They are Inara's supply / demand level icons from its own icon font: U+E84E inside `supplydemandicon3` (high) and U+E84D inside `supplydemandicon0` (low or none). `marketAmount` in `web/haul-ui.js` shows them as ▲ / ▼ and drops any other private-use glyph. Only levels 0 and 3 were seen on a live results page; a level 1 or 2 glyph, if Inara has one, is dropped rather than guessed.
+- README: the Screenshots section is gone (the intro screenshots replace it); `copy-paste-route-wide.png` and `travel-page.png` had no other reference and were removed. The intro Inara screenshot is now cropped to the same 1.6 ratio as the other two so the row lines up.
