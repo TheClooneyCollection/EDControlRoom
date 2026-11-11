@@ -380,6 +380,15 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn("Sup ${escapeHtml(marketAmount(route.buyStationSupply))}", html)
         self.assertIn("Dem ${escapeHtml(marketAmount(route.sellStationDemand))}", html)
 
+    def test_haul_web_track_only_dispatches_the_route_in_track_mode(self) -> None:
+        html = _haul_web_source()
+
+        self.assertIn('id="track-haul"', html)
+        self.assertIn('{ ...selectedHaulParams(), mode: "track" }', html)
+        self.assertIn('document.getElementById("track-haul").addEventListener("click", () => startSelectedHaul(true));', html)
+        self.assertIn('const tracking = Boolean(haulSession.tracking && haulSession.active);', html)
+        self.assertIn('let routineStatus = tracking ? "Tracking" : "Running";', html)
+
     def test_haul_route_cards_label_every_column_like_the_table_header(self) -> None:
         web_dir = Path(__file__).resolve().parents[1] / "web"
         html = (web_dir / "haul-v1.html").read_text(encoding="utf-8")

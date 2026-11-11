@@ -28,6 +28,7 @@ class HaulTrackingHost(Protocol):
     def _refresh_haul_stats(self) -> None: ...
     def _save_saved_state(self) -> None: ...
     def _announce_tts(self, message_id: AnnouncementId, /, **values: object) -> None: ...
+    def _set_haul_phase(self, phase: str | None, station_index: int | None) -> None: ...
 
 
 def ship_record(ship: ShipState, laden_jump_range_ly: float) -> dict[str, Any]:
@@ -47,6 +48,7 @@ def start_haul_stats(
     station_1: str,
     station_2: str,
     expected_profit_per_trip_text: str = "",
+    tracking: bool,
 ) -> None:
     at_station_1 = bool(
         station_1
@@ -61,6 +63,7 @@ def start_haul_stats(
         previous.suspended = False
         previous.active = True
         previous.paused = True
+        previous.tracking = tracking
         previous.expected_profit_per_trip = parse_credit_amount(expected_profit_per_trip_text)
         previous.expected_profit_per_trip_text = expected_profit_per_trip_text
         app._log("[green]Continuing the haul run left open when the haul ended.[/]")
@@ -97,6 +100,7 @@ def start_haul_stats(
         last_run_profit_delta=previous.last_run_profit_delta,
         last_run_elapsed_s=previous.last_run_elapsed_s,
         total_run_elapsed_s=previous.total_run_elapsed_s,
+        tracking=tracking,
     )
     app._refresh_haul_stats()
     app._save_saved_state()
@@ -137,6 +141,9 @@ def stop_haul_stats(app: HaulTrackingHost) -> None:
         stats.current_run_elapsed_s = max(0.0, now - stats.current_run_started_at)
     stats.current_run_started_at = None
     abort_run(stats, "stats stopped", utc_timestamp(None), now)
+    if stats.tracking:
+        stats.tracking = False
+        app._set_haul_phase(None, None)
     if not (app._haul_stats.station_1 or app._haul_stats.station_1_buying):
         return
     if app._haul_stats.completed_runs > 0:
@@ -298,6 +305,9 @@ def handle_haul_event(
         and current_station.lower() == stats.station_2.lower()
     )
 
+    if stats.tracking:
+        _track_phase(app, event, at_station_1=at_station_1, at_station_2=at_station_2)
+
     if (at_station_1 and stats.current_run is not None
             and stats.current_run.get("partial_start")
             and (event == "Undocked" or (event == "MarketBuy" and stats.waiting_for_station_1_departure))):
@@ -358,3 +368,27 @@ def handle_haul_event(
 
     app._refresh_haul_stats()
     app._save_saved_state()
+
+
+# Track only: no routine sets the haul phase, so the journal does.
+_TRACKED_PHASES = {
+    "MarketBuy": "buy",
+    "Undocked": "undock",
+    "StartJump": "depart",
+    "FSDJump": "transit",
+    "SupercruiseExit": "transit",
+    "Docked": "transit",
+    "MarketSell": "sell",
+}
+
+
+def _track_phase(app: HaulTrackingHost, event: str, *, at_station_1: bool, at_station_2: bool) -> None:
+    phase = _TRACKED_PHASES.get(event)
+    if phase is None:
+        return
+    station_index = app._runtime_state.haul_phase_station_index
+    if at_station_1 or at_station_2:
+        here = 1 if at_station_1 else 2
+        # Buying and undocking head for the other station; docking and selling are at this one.
+        station_index = 3 - here if phase in {"buy", "undock"} else here
+    app._set_haul_phase(phase, station_index)

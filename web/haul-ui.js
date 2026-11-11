@@ -577,6 +577,7 @@ let routes = [];
       setText("session-role", roleLabel(clientRole));
       document.getElementById("start-haul").disabled = !active || !routeByIndex(selectedRouteIndex);
       document.getElementById("set-destination").disabled = !active || !routeByIndex(selectedRouteIndex);
+      document.getElementById("track-haul").disabled = !active || !routeByIndex(selectedRouteIndex) || routineActive;
       instantToggle.disabled = !active;
       instantToggle.textContent = instantMode ? "Instant on" : "Instant off";
       instantToggle.classList.toggle("on", instantMode);
@@ -911,7 +912,9 @@ let routes = [];
       const stationLabel = stationIndex ? `Station ${stationIndex}` : "";
       const phaseOrder = ["buy", "undock", "depart", "transit", "sell"];
       const phaseIndex = phase ? phaseOrder.indexOf(phase) : -1;
-      let routineStatus = "Running";
+      const tracking = Boolean(haulSession.tracking && haulSession.active);
+      const showSteps = tracking || (routine.routine_active && routine.active_routine_name === "haul");
+      let routineStatus = tracking ? "Tracking" : "Running";
       if (routine.haul_paused) {
         routineStatus = "Paused";
       } else if (routine.haul_pause_requested) {
@@ -920,14 +923,14 @@ let routes = [];
         routineStatus = "Stop requested";
       }
       document.getElementById("routine-status").textContent =
-        routine.routine_active && routine.active_routine_name === "haul"
+        showSteps
           ? `${routineStatus}${stationLabel ? ` · ${stationLabel}` : ""}`
           : "Idle";
       document.querySelectorAll("#routine-steps .step").forEach((step, index) => {
         const stepPhase = step.dataset.phase;
         const value = step.querySelector(".step-value");
         step.classList.remove("done", "current");
-        if (!routine.routine_active || routine.active_routine_name !== "haul") {
+        if (!showSteps) {
           value.textContent = "Pending";
         } else if (stepPhase === phase) {
           step.classList.add("current");
@@ -1002,16 +1005,19 @@ let routes = [];
       const route = routeByIndex(selectedRouteIndex);
       const startButton = document.getElementById("start-haul");
       const destinationButton = document.getElementById("set-destination");
+      const trackButton = document.getElementById("track-haul");
       if (!route) {
         document.getElementById("selected-title").textContent = "Select a route before starting.";
         document.getElementById("command-preview").textContent = "";
         updateTravelTarget(null, { force: true });
         startButton.disabled = true;
         destinationButton.disabled = true;
+        trackButton.disabled = true;
         return;
       }
       startButton.disabled = clientRole !== "active_operator";
       destinationButton.disabled = clientRole !== "active_operator";
+      trackButton.disabled = clientRole !== "active_operator" || Boolean(currentRoutine.routine_active);
       document.getElementById("selected-title").textContent =
         `${route.buySystem} (${route.buyStation}) -> ${route.sellSystem} (${route.sellStation})`;
       updateTravelTarget(route);
@@ -1300,7 +1306,8 @@ let routes = [];
         });
     });
 
-    document.getElementById("start-haul").addEventListener("click", () => {
+    // Track only sends the same dispatch with mode "track": the backend starts stats and runs no routine.
+    function startSelectedHaul(track) {
       const route = routeByIndex(selectedRouteIndex);
       if (!route) {
         appendActivity("Select a route before starting haul.", "Haul", "warning");
@@ -1314,19 +1321,22 @@ let routes = [];
         appendActivity("Connect to the backend before starting haul.", "Haul", "warning");
         return;
       }
-      const params = selectedHaulParams();
+      const params = track ? { ...selectedHaulParams(), mode: "track" } : selectedHaulParams();
       sendCommand("command.dispatch_haul_loop", {
         params,
-        raw_command: `web haul start ${route.buyStation} -> ${route.sellStation}`,
+        raw_command: `web haul ${track ? "track" : "start"} ${route.buyStation} -> ${route.sellStation}`,
         trade_route: tradeRoutePayload(route)
       })
         .then(() => {
-          appendActivity("Two-way haul accepted by backend.", "Haul", "success");
+          appendActivity(track ? "Haul tracking accepted by backend." : "Two-way haul accepted by backend.", "Haul", "success");
         })
         .catch((error) => {
           appendActivity(error.message, "Haul", "warning");
         });
-    });
+    }
+
+    document.getElementById("start-haul").addEventListener("click", () => startSelectedHaul(false));
+    document.getElementById("track-haul").addEventListener("click", () => startSelectedHaul(true));
 
     function requestRoutineStop(mode) {
       if (!accessToken) {

@@ -29,7 +29,7 @@ A control room for Elite Dangerous traders and haulers, on any device on your LA
 - **Markets page.** The best deal between any two markets you visited, priced for your ship.
 - **Inara search.** Built into the haul page, one click to a route.
 - **Hub.** Every machine in one place: one tab, one database, one haul history (see [Hub](#hub-connected-intelligence)).
-- **Haul history.** Profit per hour by route, commodity and ship.
+- **Haul history.** Profit per hour by route, commodity and ship. **Track only** counts the trips you fly and trade by hand, with no keys sent.
 - **Voice callouts.** Piper or system voice, on the game machine, the hub or a phone.
 - **Assisted haul loop.** Optional, see the [Terms of Use warning](#assisted-haul-loop).
 
@@ -70,7 +70,7 @@ _(Expand a section for details.)_
 
 - Filter by origin (and optional destination), max route distance with presets, station distance, cargo capacity, profit metric, surface stations, and min supply / demand.
 - Results sort by profit / hour or profit / trip and show cargo, both stations, distance, and route LY.
-- **Start route** hands the selected pair to the two-way haul routine; **Set destination** just routes there; **Travel assist** flies to an arbitrary system + station without hauling.
+- **Start route** hands the selected pair to the two-way haul routine; **Track only** just tracks it while you fly and trade by hand (session stats, stages and history from the journal, no keys sent); **Set destination** just routes there; **Travel assist** flies to an arbitrary system + station without hauling.
 - Same search is reachable from the TUI via `haul search [system]` and `haul search url <inara-url>`; `haul route <n>` picks a numbered result.
 - **Surface stations** picks Inara's planetary filter: No (default), Yes excluding Odyssey settlements, or Yes with them.
 </details>

@@ -35,6 +35,8 @@ Every command you can type in the TUI or web command bar. For the haul flow spec
 ## Haul
 
 - `haul [commodity]` — the two-way haul loop.
+- `haul start` — run the two-way haul loop on the selected `haul search` result.
+- `haul track` — track the selected result while you fly and trade by hand: stats and history from the journal, no keys sent. `stop` ends it.
 - `haul load [path]` — load `haul.toml` from the repo root by default, or a custom path.
 - `haul search home` — search Inara using the saved home system as origin.
 - `multi_leg_haul <route.json | spansh-url>` (alias `mult`) — finite multi-leg route.

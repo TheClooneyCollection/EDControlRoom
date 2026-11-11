@@ -351,6 +351,10 @@ def cmd_new_session(app: CommandHost) -> None:
 
 
 def cmd_stop_session(app: CommandHost) -> None:
+    if app._haul_stats.tracking and app._haul_stats.active:
+        app._stop_haul_stats()
+        app._log("[dim]Stopped tracking the haul.[/]")
+        return
     try:
         app._stop_session_stats()
     except ValueError as exc:

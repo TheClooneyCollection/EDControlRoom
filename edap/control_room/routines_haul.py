@@ -115,11 +115,13 @@ def cmd_haul(
 ) -> None:
     station_1_buying = rest.strip()
     parts = station_1_buying.split(None, 1)
-    if parts and parts[0].lower() == "start":
+    if parts and parts[0].lower() in {"start", "track"}:
+        action = parts[0].lower()
         start_selected_haul_route(
             app,
             skip_delay=skip_delay,
-            raw_command=raw_command or f"{'!' if skip_delay else ''}haul start".strip(),
+            raw_command=raw_command or f"{'!' if skip_delay else ''}haul {action}".strip(),
+            track=action == "track",
         )
         return
     if parts and parts[0].lower() == "route":
@@ -261,6 +263,7 @@ def start_selected_haul_route(
     *,
     skip_delay: bool = False,
     raw_command: str | None = None,
+    track: bool,
 ) -> None:
     route = selected_or_saved_trade_route(app)
     if route is None:
@@ -274,10 +277,42 @@ def start_selected_haul_route(
     app._saved_state.selected_trade_route = route
     app._save_saved_state()
     app._haul_params = haul_params_from_trade_route(route)
+    if track:
+        app._haul_params["mode"] = "track"
     dispatch_haul_loop(
         app,
         skip_delay=skip_delay,
         raw_command=raw_command or f"{'!' if skip_delay else ''}haul start".strip(),
+    )
+
+
+def track_haul(
+    app: HaulHost,
+    *,
+    station_1_buying: str,
+    station_2_buying: str,
+    station_1: str,
+    station_2: str,
+    route_profit_per_trip: str,
+) -> None:
+    """Track only: count the commander's own hauling from the journal, with no routine and no keys."""
+    if app._routine_active:
+        app._refuse_busy("[yellow]A routine is already running: stop it before tracking[/]")
+        return
+    app._clear_pending_haul_stop()
+    app._set_haul_phase(None, None)
+    app._start_haul_stats(
+        station_1_buying=station_1_buying,
+        station_2_buying=station_2_buying,
+        station_1=station_1,
+        station_2=station_2,
+        expected_profit_per_trip_text=route_profit_per_trip,
+        tracking=True,
+    )
+    app._log(
+        f"Tracking haul [cyan]{escape(station_1)}[/] ↔ [cyan]{escape(station_2)}[/]: "
+        "fly and trade by hand; stats come from the journal and no keys are sent. "
+        "`stop` ends tracking."
     )
 
 
@@ -492,6 +527,17 @@ def dispatch_haul_loop(
         app._log(f"[red]{escape(error_text.render(app._config, 'haul_params_required'))}[/]")
         return
 
+    if app._haul_params.get("mode") == "track":
+        track_haul(
+            app,
+            station_1_buying=station_1_buying,
+            station_2_buying=station_2_buying,
+            station_1=station_1,
+            station_2=station_2,
+            route_profit_per_trip=route_profit_per_trip,
+        )
+        return
+
     progress = app._make_progress()
     controls = app._make_controls(progress)
     sleeper = app._make_sleeper()
@@ -591,6 +637,7 @@ def dispatch_haul_loop(
             station_1=station_1,
             station_2=station_2,
             expected_profit_per_trip_text=route_profit_per_trip,
+            tracking=False,
         )
 
     app._start_delayed_routine(

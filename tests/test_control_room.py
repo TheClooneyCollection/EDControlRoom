@@ -2224,6 +2224,88 @@ manual_landing = true
         self.assertEqual(self.app._haul_params["station_2_manual_landing"], "false")
         self.assertEqual(self.app._saved_state.selected_trade_route, route)
 
+    def test_haul_track_counts_a_hand_flown_run_without_starting_a_routine(self) -> None:
+        self.app._trade_routes = TradeRoutesData(
+            system_name="Sol",
+            routes=[TradeRoute(
+                index=1,
+                from_station="Pawelczyk Dock",
+                from_system="Sol",
+                to_station="Hutton Orbital",
+                to_system="Alpha Centauri",
+                source_buy_commodity="Aluminium",
+                target_buy_commodity="Bertrandite",
+                profit_per_trip="250,000 Cr",
+            )],
+        )
+        self.app._selected_trade_route_index = 1
+        self.app._ship.status = "in_station"
+        self.app._ship.station = "Pawelczyk Dock"
+        self.app._ship.system = "Sol"
+        self.app._time_fn = lambda: 100.0
+
+        def no_routine(**kwargs: object) -> None:
+            raise AssertionError("track only must not start a routine")
+
+        self.app._start_delayed_routine = no_routine
+        self.app._cmd_haul("track", raw_command="haul track")
+
+        stats = self.app._haul_stats
+        self.assertTrue(stats.active)
+        self.assertTrue(stats.tracking)
+        phases: list[tuple[object, object]] = []
+
+        def step(ev: dict[str, object], station_before: str | None) -> None:
+            self.app._handle_haul_event(ev, station_before=station_before)
+            phases.append((self.app._runtime_state.haul_phase, self.app._runtime_state.haul_phase_station_index))
+
+        step({"event": "MarketBuy", "TotalCost": 100_000, "Count": 128}, "Pawelczyk Dock")
+        self.app._ship.station = None
+        step({"event": "Undocked", "StationName": "Pawelczyk Dock"}, "Pawelczyk Dock")
+        step({"event": "StartJump", "JumpType": "Hyperspace"}, None)
+        step({"event": "FSDJump", "StarSystem": "Alpha Centauri"}, None)
+        step({"event": "Docked", "StationName": "Hutton Orbital"}, None)
+        step({"event": "MarketSell", "TotalSale": 250_000}, "Hutton Orbital")
+        step({"event": "MarketBuy", "TotalCost": 50_000, "Count": 128}, "Hutton Orbital")
+        step({"event": "Undocked", "StationName": "Hutton Orbital"}, "Hutton Orbital")
+        step({"event": "Docked", "StationName": "Pawelczyk Dock"}, None)
+        step({"event": "MarketSell", "TotalSale": 200_000}, "Pawelczyk Dock")
+
+        self.assertEqual(phases, [
+            ("buy", 2), ("undock", 2), ("depart", 2), ("transit", 2), ("transit", 2),
+            ("sell", 2), ("buy", 1), ("undock", 1), ("transit", 1), ("sell", 1),
+        ])
+        self.assertEqual(stats.completed_runs, 1)
+        self.assertEqual(stats.last_run_profit, 300_000)
+        from edap.haul_history import load_runs
+        rows, _ = load_runs(self.app._config.control_room.haul_runs_file)
+        self.assertEqual(rows[-1]["mode"], "tracked")
+
+        self.app._dispatch_command("stop")
+
+        self.assertFalse(stats.active)
+        self.assertFalse(stats.tracking)
+        self.assertIsNone(self.app._runtime_state.haul_phase)
+
+    def test_haul_track_refuses_while_a_routine_runs(self) -> None:
+        self.app._haul_params = {
+            "station_1_buying": "Aluminium",
+            "station_1": "Pawelczyk Dock",
+            "station_1_system": "Sol",
+            "station_2_buying": "Bertrandite",
+            "station_2": "Hutton Orbital",
+            "station_2_system": "Alpha Centauri",
+            "mode": "track",
+        }
+        self.app._routine_active = True
+        refusals: list[str] = []
+        self.app._refuse_busy = refusals.append
+
+        self.app._facade.dispatch_haul_loop(skip_delay=True, raw_command="haul track")
+
+        self.assertEqual(len(refusals), 1)
+        self.assertFalse(self.app._haul_stats.active)
+
     def test_haul_dispatch_passes_manual_landing_flags(self) -> None:
         captured: dict[str, object] = {}
 
@@ -2494,6 +2576,7 @@ manual_landing = true
         self.app._ship.credits = 1_000_000
         self.app._time_fn = lambda: 100.0
         self.app._start_haul_stats(
+            tracking=False,
             station_1_buying="Aluminium",
             station_2_buying="Bertrandite",
             station_1="Pawelczyk Dock",
@@ -2550,6 +2633,7 @@ manual_landing = true
         rows, skipped = load_runs(self.app._config.control_room.haul_runs_file)
         self.assertEqual(skipped, 0)
         self.assertEqual((rows[-1]["cost"], rows[-1]["revenue"]), (350_000, 650_000))
+        self.assertEqual(rows[-1]["mode"], "assisted")
         self.assertEqual(rows[-1]["ship"], {"id": 9, "type": "panthermkii", "name": "Hauler", "ident": "HL-09",
                                             "cargo_capacity": 1137, "max_jump_range_ly": 29.390415,
                                             "laden_jump_range_ly": 17.2})
@@ -2592,6 +2676,7 @@ manual_landing = true
         self.app._time_fn = lambda: 100.0
 
         self.app._start_haul_stats(
+            tracking=False,
             station_1_buying="Aluminium",
             station_2_buying="Bertrandite",
             station_1="Pawelczyk Dock",
@@ -2611,6 +2696,7 @@ manual_landing = true
         self.app._ship.station = "Pawelczyk Dock"
         self.app._time_fn = lambda: 100.0
         self.app._start_haul_stats(
+            tracking=False,
             station_1_buying="Aluminium",
             station_2_buying="Bertrandite",
             station_1="Pawelczyk Dock",
@@ -2637,7 +2723,8 @@ manual_landing = true
             station_1="Pawelczyk Dock",
             station_2="Hutton Orbital",
         )
-        self.app._start_haul_stats(**route)
+        self.app._start_haul_stats(
+            tracking=False,**route)
         self.app._handle_haul_event({"event": "Undocked"}, station_before="Pawelczyk Dock")
         self.app._handle_haul_event(
             {"event": "MarketSell", "TotalSale": 250_000}, station_before="Hutton Orbital"
@@ -2650,13 +2737,15 @@ manual_landing = true
         self.assertEqual(self.app._saved_state.session_profit, 250_000)
 
         self.app._time_fn = lambda: 500.0
-        self.app._start_haul_stats(**route)
+        self.app._start_haul_stats(
+            tracking=False,**route)
         self.assertEqual((self.app._haul_stats.accumulated_profit, self.app._haul_stats.session_started_at), (0, 500.0))
 
     def test_haul_stats_ignore_partial_resume_until_next_clean_departure(self) -> None:
         self.app._ship.status = "in_supercruise"
         self.app._time_fn = lambda: 50.0
         self.app._start_haul_stats(
+            tracking=False,
             station_1_buying="Aluminium",
             station_2_buying="Bertrandite",
             station_1="Pawelczyk Dock",
@@ -2720,6 +2809,7 @@ manual_landing = true
         self.app._ship.station = "Pawelczyk Dock"
         self.app._ship.status = "in_station"
         self.app._start_haul_stats(
+            tracking=False,
             station_1_buying="Aluminium",
             station_2_buying="Bertrandite",
             station_1="Pawelczyk Dock",
@@ -3564,6 +3654,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
     def _start_timer_test_haul(self, now: float) -> None:
         self.app._time_fn = lambda: now
         self.app._start_haul_stats(
+            tracking=False,
             station_1_buying="Gold", station_2_buying="Silver",
             station_1="Alpha", station_2="Beta",
         )
@@ -4890,7 +4981,8 @@ class HaulRunHistoryTests(unittest.TestCase):
         self.start()
 
     def start(self) -> None:
-        self.app._start_haul_stats(station_1_buying="Gold", station_2_buying="Silver",
+        self.app._start_haul_stats(
+            tracking=False,station_1_buying="Gold", station_2_buying="Silver",
                                     station_1="Alpha", station_2="Beta",
                                     expected_profit_per_trip_text="100")
 
@@ -5064,7 +5156,8 @@ class HaulRunHistoryTests(unittest.TestCase):
     def test_a_different_haul_still_aborts_the_open_run(self) -> None:
         self.suspend_mid_run()
         self.app._time_fn = lambda: 130.0
-        self.app._start_haul_stats(station_1_buying="Gold", station_2_buying="Silver",
+        self.app._start_haul_stats(
+            tracking=False,station_1_buying="Gold", station_2_buying="Silver",
                                     station_1="Alpha", station_2="Gamma",
                                     expected_profit_per_trip_text="100")
         row, = self.rows()

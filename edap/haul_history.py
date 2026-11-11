@@ -103,7 +103,8 @@ def record_event(stats: HaulStats, event: dict[str, Any], station: str, system: 
             return
         timestamp = utc_timestamp(event.get("timestamp"))
         stats.current_run = {
-            "schema": 1, "kind": "two_way", "started_at": timestamp,
+            "schema": 1, "kind": "two_way", "mode": "tracked" if stats.tracking else "assisted",
+            "started_at": timestamp,
             "ended_at": timestamp, "duration_s": 0.0,
             "route": {"station_1": stats.station_1, "station_2": stats.station_2,
                       "system_1": None, "system_2": None},

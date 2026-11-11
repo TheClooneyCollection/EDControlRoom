@@ -182,6 +182,7 @@ def _haul_stats(payload: dict[str, Any]) -> HaulStats:
         last_run_elapsed_s=_optional_float(payload.get("last_run_elapsed_s")),
         total_run_elapsed_s=_float(payload.get("total_run_elapsed_s"), 0.0),
         paused=bool(payload.get("paused", False)),
+        tracking=bool(payload.get("tracking", False)),
     )
 
 

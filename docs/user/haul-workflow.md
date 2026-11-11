@@ -12,6 +12,7 @@
 - [Resume Semantics](#resume-semantics)
 - [Multi-Leg Haul](#multi-leg-haul)
 - [Interrupt Behavior](#interrupt-behavior)
+- [Track Only](#track-only)
 - [Haul History](#haul-history)
 - [Related](#related)
 
@@ -118,6 +119,10 @@ The route can come from the normalized JSON schema at `docs/schemas/multi_leg_ha
 
 - First `Ctrl-C` or `Ctrl-D`: finish the current run, stop at station 1 after the return sale, before the next buy.
 - Second `Ctrl-C` or `Ctrl-D`: cancel immediately.
+
+## Track Only
+
+To keep the stats without the routine, pick a route and click **Track only** on the web haul page, or type `haul track` for the selected route. You fly, dock and trade by hand; Control Room reads the journal and sends no keys. It counts the session profit, cargo moved and run times, shows the five stages as you go (a buy, an undock, a jump, docking and a sale), and writes each run to the history like a routine run, tagged `"mode": "tracked"` (routine runs are `"assisted"`). The two kinds share one history. **Stop stats** or `stop` ends tracking. It is refused while a routine runs, and it does not survive a Control Room restart: click **Track only** again.
 
 ## Haul History
 

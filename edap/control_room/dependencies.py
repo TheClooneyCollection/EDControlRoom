@@ -482,6 +482,7 @@ def _copy_haul_stats(haul: HaulStats, *, now: float | None = None) -> HaulStats:
         last_run_elapsed_s=haul.last_run_elapsed_s,
         total_run_elapsed_s=haul.total_run_elapsed_s,
         paused=haul.paused,
+        tracking=haul.tracking,
     )
 
 

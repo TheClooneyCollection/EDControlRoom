@@ -76,6 +76,8 @@ class HaulStats:
     paused: bool = False
     # The haul ended mid-run (an error or stop now); restarting the same haul continues the run.
     suspended: bool = False
+    # Track only: the commander flies and trades by hand; stats come from the journal, no routine runs.
+    tracking: bool = False
 
 
 @dataclass
