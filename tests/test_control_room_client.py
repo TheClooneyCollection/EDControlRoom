@@ -691,7 +691,11 @@ class ControlRoomClientTests(unittest.TestCase):
 
         command_input = _FakeInputWidget()
         _bind_observer_widgets(app, command_input)
-        with patch("edap.control_room.routines_haul.search_trade_routes", return_value=result):
+        with (
+            patch("edap.control_room.routines_haul.search_trade_routes", return_value=result),
+            # The search saves its params as defaults; keep that off the repo's haul_search.toml.
+            patch("edap.control_room.routines_haul.save_haul_search_config"),
+        ):
             app.on_input_submitted(_Submitted("haul search Praea Euq AK-A d25"))
             self.assertEqual(app._prompt_state.haul_prompt_mode, "search")
             self.assertEqual(app._haul_prompt_step, "search_edit")
@@ -767,7 +771,11 @@ class ControlRoomClientTests(unittest.TestCase):
 
         command_input = _FakeInputWidget()
         _bind_observer_widgets(app, command_input)
-        with patch("edap.control_room.routines_haul.search_trade_routes", return_value=result):
+        with (
+            patch("edap.control_room.routines_haul.search_trade_routes", return_value=result),
+            # The search saves its params as defaults; keep that off the repo's haul_search.toml.
+            patch("edap.control_room.routines_haul.save_haul_search_config"),
+        ):
             app.on_input_submitted(_Submitted("haul search"))
             self.assertEqual(app._prompt_state.haul_prompt_mode, "search")
             self.assertEqual(app._haul_prompt_step, "search_edit")
