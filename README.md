@@ -18,7 +18,8 @@
 A control room for Elite Dangerous traders and haulers, on any device on your LAN.
 
 - **Live market data, locally.** Your own EDDN database: about 40 MB for 10,000+ markets.
-- **Routes and Markets pages.** Powered by that database: round trips ranked by profit per hour, and the best deal between any two markets you visited, priced for your ship.
+- **Routes page.** Powered by that database: round trips ranked by profit per hour, near you or galaxy-wide.
+- **Markets page.** The best deal between any two markets you visited, priced for your ship.
 - **Inara search.** Built into the haul page, one click to a route.
 - **Hub.** Every machine in one place: one tab, one database, one haul history (see [Hub](#hub-connected-intelligence)).
 - **Haul history.** Profit per hour by route, commodity and ship.
