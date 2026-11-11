@@ -162,15 +162,15 @@ function renderRoutes(payload) {
   shownRoutes = payload.routes;
   const rows = payload.routes.map((route, index) => `
     <tr>
-      <td>${stationCell(route.station_1)}<br>${stationCell(route.station_2)}</td>
-      <td>${legCell(route.outbound)}</td>
-      <td>${legCell(route.inbound)}</td>
-      <td class="profit">${millions(route.profit_per_hour)}</td>
-      <td>${millions(route.profit_per_trip)}</td>
-      <td>${route.jumps}<span class="route-sub">${route.distance_ly} Ly</span></td>
-      <td>${duration(route.trip_s)}</td>
-      <td>${ageLabel(Math.max(route.station_1.age_s, route.station_2.age_s))}</td>
-      <td>${route.trade_route
+      <td data-label="Stations"><div>${stationCell(route.station_1)}</div><div>${stationCell(route.station_2)}</div></td>
+      <td data-label="Out">${legCell(route.outbound)}</td>
+      <td data-label="Back">${legCell(route.inbound)}</td>
+      <td data-label="Per hour" class="profit">${millions(route.profit_per_hour)}</td>
+      <td data-label="Per trip">${millions(route.profit_per_trip)}</td>
+      <td data-label="Jumps">${route.jumps}<span class="route-sub">${route.distance_ly} Ly</span></td>
+      <td data-label="Est. trip">${duration(route.trip_s)}</td>
+      <td data-label="Data age">${ageLabel(Math.max(route.station_1.age_s, route.station_2.age_s))}</td>
+      <td data-label="Haul">${route.trade_route
         ? `<button class="btn" type="button" data-copy-route="${index}">Copy</button>`
         : `<span class="route-sub">name unknown</span>`}</td>
     </tr>`).join("");

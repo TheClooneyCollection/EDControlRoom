@@ -89,6 +89,23 @@
       color: var(--text-3);
       margin-right: 8px;
     }
+    /* haul-ui.css turns .route-table rows into labelled cards here; drop the wide-table rules. */
+    @media (max-width: 760px) {
+      .route-table {
+        min-width: 0;
+      }
+      .route-table th,
+      .route-table td,
+      .route-table td:nth-child(-n+3) {
+        padding: 4px 0;
+        text-align: left;
+        white-space: normal;
+        border-bottom: 0;
+      }
+      .route-table td > div + div {
+        margin-top: 6px;
+      }
+    }
   </style>
 </head>
 <body>

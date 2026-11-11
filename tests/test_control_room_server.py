@@ -806,6 +806,10 @@ class ControlRoomServerTests(unittest.TestCase):
             self.assertIn(f'id="{element_id}"', page.text)
         for hook in ('"/api/eddn-routes"', '"/api/eddn-status"', "params.max_route_ly"):
             self.assertIn(hook, script.text)
+        # On phones haul-ui.css shows each row as a card labelled from data-label.
+        for label in ("Stations", "Out", "Back", "Per hour", "Haul"):
+            self.assertIn(f'data-label="{label}"', script.text)
+        self.assertIn("@media (max-width: 760px)", page.text)
 
     def test_routes_page_starts_the_surface_checkbox_from_the_haul_search_choice(self) -> None:
         def data_provider() -> ControlRoomDataReadModel:

@@ -1271,23 +1271,21 @@
         overflow-x: auto;
       }
 
+      /* Only the mark fits beside the nav row; a shrunk brand let its name spill over the links. */
       .brand {
-        min-width: 0;
+        flex-shrink: 0;
         margin: 0;
         padding: 0;
         border-bottom: 0;
       }
 
+      .brand > :not(.brand-mark) {
+        display: none;
+      }
+
       .brand-mark {
         width: 28px;
         height: 28px;
-      }
-
-      .brand-name,
-      .brand-sub {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
       }
 
       .nav-label,
