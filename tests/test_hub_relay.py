@@ -31,7 +31,8 @@ PAGE = {"access_token": TOKEN}
 
 def peer_data(routine: str | None = None) -> object:
     data = _base_data_read_model()
-    ship = replace(data.ship, system="Achenar", ship_id=8, ship_type="type9", ship_name="Lugger", cargo_capacity=720)
+    ship = replace(data.ship, system="Achenar", ship_id=8, ship_type="type9", ship_name="Lugger", cargo_capacity=720,
+                   laden_jump_range_ly=31.5)
     return replace(data, ship=ship, routine=replace(data.routine, routine_active=routine is not None,
                                                     active_routine_name=routine))
 
@@ -121,7 +122,9 @@ class RelayTests(unittest.TestCase):
         cls.peer_recent = root / "peer_recent.json"
         save_recent_markets(cls.peer_recent, (market(market_id=GALILEO.market_id), market(market_id=2, station="Abraham")))
         cls.hub_recent = root / "hub_recent.json"
-        save_recent_markets(cls.hub_recent, (market(market_id=5, station="Jameson Memorial", system="Shinrarta"),))
+        # The hub lists the peer's markets beside its own: the peer pushed them up.
+        save_recent_markets(cls.hub_recent, (market(market_id=5, station="Jameson Memorial", system="Shinrarta"),
+                                             market(market_id=GALILEO.market_id), market(market_id=2, station="Abraham")))
         cls.hub_journals = journal(root / "hub_journals", 50)
         cls.peer_journals = journal(root / "peer_journals", 90)
 
@@ -230,27 +233,42 @@ class RelayTests(unittest.TestCase):
         self.r.attach()
         on_peer = {**PAGE, "node": "peer-node"}
         with TestClient(self.hub_app) as hub:
-            peer_markets = hub.get("/api/recent-markets", params=on_peer).json()
-            hub_markets = hub.get("/api/recent-markets", params=PAGE).json()
-            # The peer's Best deal: its markets and cargo, station facts asked back from the hub.
-            deal = hub.get("/api/market-compare", params={**on_peer, "x": GALILEO.market_id, "y": 2}).json()
             config = hub.get("/api/route-compare/config", params=on_peer)
             bad = hub.get("/api/route-compare", params=on_peer)
             stats = hub.get("/api/haul-stats", params={**PAGE, "node": "peer-node", "window": "all"}).json()
             self.r.drop(self.r.links[-1])
-            gone = hub.get("/api/recent-markets", params=on_peer)
+            gone = hub.get("/api/route-compare/config", params=on_peer)
 
-        self.assertEqual([m["station"] for m in peer_markets["markets"]], ["Galileo", "Abraham"])
-        self.assertEqual(peer_markets["cargo_capacity"], 720)
-        self.assertEqual([m["station"] for m in hub_markets["markets"]], ["Jameson Memorial"])
-        self.assertEqual(deal["trip"]["stations"]["x"]["dist_ls"], 505.0)
-        self.assertEqual((deal["trip"]["hub"], deal["measured_ship"]["id"]), ("Home", 8))
         self.assertEqual(config.json(), {"navroute_wait_seconds": 6.0, "compare_retry_attempts": 3})
         self.assertEqual(bad.status_code, 400)
         # Haul history is the hub's own: `node` there filters the central history.
         self.assertEqual(stats["node"], "peer-node")
         self.assertEqual(gone.status_code, 502)
         self.assertEqual(gone.json()["detail"], "Node Deck is unreachable: not linked to the hub")
+
+    def test_markets_are_the_hubs_own_list_priced_for_the_picked_nodes_last_ship(self) -> None:
+        self.r.attach()
+        on_peer = {**PAGE, "node": "peer-node"}
+        with TestClient(self.hub_app) as hub:
+            peer_markets = hub.get("/api/recent-markets", params=on_peer).json()
+            hub_markets = hub.get("/api/recent-markets", params=PAGE).json()
+            deal = hub.get("/api/market-compare", params={**on_peer, "x": GALILEO.market_id, "y": 2}).json()
+            self.r.drop(self.r.links[-1])
+            offline = hub.get("/api/recent-markets", params=on_peer)
+            offline_deal = hub.get("/api/market-compare", params={**on_peer, "x": GALILEO.market_id, "y": 2})
+
+        # One list, whichever node is picked: the hub's own markets and the ones its peers pushed.
+        stations = ["Jameson Memorial", "Galileo", "Abraham"]
+        self.assertEqual([m["station"] for m in hub_markets["markets"]], stations)
+        self.assertEqual([m["station"] for m in peer_markets["markets"]], stations)
+        # Hold and laden range are the picked node's ship; the hub's own otherwise.
+        self.assertEqual((peer_markets["cargo_capacity"], peer_markets["laden_jump_range_ly"]), (720, 31.5))
+        self.assertNotEqual(hub_markets["cargo_capacity"], 720)
+        self.assertEqual(deal["trip"]["stations"]["x"]["dist_ls"], 505.0)
+        self.assertEqual((deal["measured_ship"]["id"], deal["measured_ship"]["laden_jump_range_ly"]), (8, 31.5))
+        # Offline, the node's last reported ship still prices the page.
+        self.assertEqual((offline.status_code, offline.json()["cargo_capacity"]), (200, 720))
+        self.assertEqual((offline_deal.status_code, offline_deal.json()["measured_ship"]["id"]), (200, 8))
 
     def test_command_and_stop_posts_run_on_the_peer_with_its_own_refusals(self) -> None:
         self.r.attach()
@@ -397,11 +415,11 @@ class RelayTests(unittest.TestCase):
         sent: list[dict[str, Any]] = []
         self.peer_relay.link_up(sent.append)
         self.peer_relay.on_frame({"type": "read", "id": "r1", "path": "/api/command", "params": {}})
-        self.peer_relay.on_frame({"type": "read", "id": "r2", "path": "/api/recent-markets", "params": []})
+        self.peer_relay.on_frame({"type": "read", "id": "r2", "path": "/api/route-compare/config", "params": []})
         self.assertEqual([(f["id"], f["status"]) for f in sent if f["type"] == "read_response"],
                          [("r1", 403), ("r2", 400)])
         with self.assertRaises(NodeOffline):
-            self.r.relay.read("nobody", "/api/recent-markets", {})
+            self.r.relay.read("nobody", "/api/route-compare/config", {})
 
     def test_the_node_list_shows_each_nodes_ship_and_routine(self) -> None:
         self.r.attach()
@@ -413,8 +431,10 @@ class RelayTests(unittest.TestCase):
             self.r.drop(self.r.links[-1])
             offline = hub.get("/api/nodes", params=PAGE).json()["nodes"]
 
-        self.assertEqual(first[0]["state"], {"ship": {"id": 7, "type": "cutter", "name": "Home Run"}, "routine": None})
-        self.assertEqual(first[1]["state"], {"ship": {"id": 8, "type": "type9", "name": "Lugger"}, "routine": None})
+        self.assertEqual({key: first[0]["state"]["ship"][key] for key in ("id", "type", "name")},
+                         {"id": 7, "type": "cutter", "name": "Home Run"})
+        self.assertEqual(first[1]["state"], {"ship": {"id": 8, "type": "type9", "name": "Lugger", "cargo_capacity": 720,
+                                                      "laden_jump_range_ly": 31.5}, "routine": None})
         self.assertEqual(hauling[1]["state"]["routine"], "haul")
         self.assertEqual((offline[1]["connected"], offline[1]["state"]), (False, None))
 

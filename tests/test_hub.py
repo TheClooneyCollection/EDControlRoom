@@ -183,7 +183,10 @@ class Rig:
         # The hub's own game's runs, which join the central view under its node id.
         self.own_runs = Path(self.tmp.name) / "own_runs.jsonl"
         self.history = CentralHistory(local=HUB_NODE, local_file=self.own_runs, runs=self.hub_runs)
-        self.store_item = store_item or store_link_item(self.store, self.hub_runs, self.hub_logs.append)
+        # The markets the hub listed on its Markets page.
+        self.recorded_markets: list[Any] = []
+        self.store_item = store_item or store_link_item(self.store, self.hub_runs, self.recorded_markets.append,
+                                                        self.hub_logs.append)
         self.handlers = handlers or {}
         self.outbox = memory_outbox()
         self.relay = HubRelay(log=self.hub_logs.append, read_timeout_s=10.0, slow_read_timeout_s=60.0)
@@ -427,7 +430,9 @@ class LinkTests(unittest.TestCase):
         logs: list[str] = []
         tmp = TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        store_item = store_link_item(store, HubRuns.open(Path(tmp.name) / "runs.jsonl", logs.append), logs.append)
+        listed: list[Any] = []
+        store_item = store_link_item(store, HubRuns.open(Path(tmp.name) / "runs.jsonl", logs.append), listed.append,
+                                     logs.append)
         newer = market("2026-11-10T15:00:00Z", sell_gold=9900)
         store_item(PEER_NODE, "market", roundtrip(snapshot_entry(newer)))
         store_item(PEER_NODE, "market", roundtrip(snapshot_entry(newer)))
@@ -440,6 +445,9 @@ class LinkTests(unittest.TestCase):
         self.assertEqual(store._db.execute("SELECT type FROM station").fetchall(), [("Ocellus",)])
         self.assertEqual(logs, ["Market DB peer market Galileo: written", "Market DB peer market Galileo: already in the DB",
                                 "Market DB peer market Galileo: already in the DB"])
+        # Every market is also offered to the Markets page list, which keeps the newest per station.
+        self.assertEqual([snapshot.timestamp for snapshot in listed],
+                         ["2026-11-10T15:00:00Z", "2026-11-10T15:00:00Z", "2026-11-10T14:00:00Z"])
         for kind, body in (("market", {"station": "x"}), ("station_facts", {"kind": "planet"}), ("ship", {}),
                            ("haul_run", {"schema": 1}), ("haul_run", [1])):
             with self.subTest(kind=kind), self.assertRaises(BadItem):

@@ -29,8 +29,6 @@ from edap.hub.voice import CALLOUT_FRAME, VOICE_MUTE_FRAME, callout_text
 
 # The page reads a hub relays to the node a page looks at; everything else the hub answers itself.
 NODE_READS = frozenset({
-    "/api/recent-markets",
-    "/api/market-compare",
     "/api/route-compare",
     "/api/route-compare/config",
     "/api/spansh-route",
@@ -74,12 +72,14 @@ def relay_error(message_id: Any, error_code: str, error_message: str) -> dict[st
 
 
 def node_state(data: object) -> dict[str, Any]:
-    """What the hub's node picker shows for a node: its ship and the routine it runs."""
+    """What the hub's node picker shows for a node: its ship and the routine it runs. The hub's Markets
+    page prices trips with the ship's hold and laden range."""
     ship = getattr(data, "ship", None)
     routine = getattr(data, "routine", None)
     return {
         "ship": {"id": getattr(ship, "ship_id", None), "type": getattr(ship, "ship_type", None),
-                 "name": getattr(ship, "ship_name", None)},
+                 "name": getattr(ship, "ship_name", None), "cargo_capacity": getattr(ship, "cargo_capacity", None),
+                 "laden_jump_range_ly": getattr(ship, "laden_jump_range_ly", None)},
         "routine": getattr(routine, "active_routine_name", None) if getattr(routine, "routine_active", False) else None,
     }
 

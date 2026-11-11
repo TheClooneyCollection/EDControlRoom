@@ -17,7 +17,7 @@ from edap.hub.peer import NodeHello, iso_utc
 from edap.hub.protocol import ITEM_HAUL_RUN, ITEM_MARKET, ITEM_STATION_FACTS, LinkReply, decode_update, response_frame
 from edap.hub.relay import RELAY_FRAMES, HubRelay
 from edap.hub.voice import CALLOUT_FRAME, HubVoice
-from edap.recent_markets import snapshot_from_entry
+from edap.recent_markets import MarketSnapshot, snapshot_from_entry
 
 
 class BadItem(ValueError):
@@ -103,6 +103,13 @@ class NodeRegistry:
                 }
                 for node in nodes
             ]
+
+    def last_ship(self, node_id: str) -> dict[str, Any] | None:
+        """The ship a node last reported, kept after it goes offline (None before its first report)."""
+        with self._lock:
+            node = self._nodes.get(node_id)
+            ship = node.state.get("ship") if node is not None and node.state is not None else None
+            return ship if isinstance(ship, dict) else None
 
     def connected_peers(self) -> int:
         with self._lock:
@@ -235,9 +242,11 @@ class HubLinkSession:
         return response_frame(request_id, reply)
 
 
-def store_link_item(store: EddnStore, runs: HubRuns, log: Callable[[str], None]) -> ItemSink:
+def store_link_item(store: EddnStore, runs: HubRuns, record_market: Callable[[MarketSnapshot], None],
+                    log: Callable[[str], None]) -> ItemSink:
     """Write a peer's market snapshots and station facts into the hub's store, newest wins, and its
-    haul runs into the central history, once per run key and node."""
+    haul runs into the central history, once per run key and node. `record_market` also lists each
+    market on the hub's Markets page, beside the hub's own."""
 
     def store_item(node: NodeHello, kind: str, body: Any) -> None:
         if kind == ITEM_HAUL_RUN:
@@ -253,6 +262,7 @@ def store_link_item(store: EddnStore, runs: HubRuns, log: Callable[[str], None])
             if snapshot is None:
                 raise BadItem("not a recent market entry")
             result = import_markets(store, (snapshot,))
+            record_market(snapshot)
             if result:
                 log(f"Market DB peer market {snapshot.station}: {'written' if result[0].written else 'already in the DB'}")
             return

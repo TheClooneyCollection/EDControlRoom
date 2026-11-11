@@ -35,7 +35,7 @@ from edap.hub.outbox import Outbox
 from edap.hub.peer import NODE_ID_FILE_NAME, NodeHello, PeerLink, load_node_id, new_node_id, websocket_dialer
 from edap.hub.relay import HubRelay, PeerRelay, node_state
 from edap.hub.voice import HubVoice, callout_text, node_muter
-from edap.recent_markets import load_recent_markets, watch_file
+from edap.recent_markets import load_recent_markets, record_market, watch_file
 from edap.market_db import open_market_store, station_facts_writer
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.tts import NullSpeechBackend, PiperSpeechBackend, build_speech_backend
@@ -238,7 +238,12 @@ def serve_observer_mode(
         # The hub's own game reaches the voice through its broker; a peer's through its link.
         broker.add_listener(lambda message: hub_voice.callout(local_node.node_id, callout_text(message) or ""))
         hub_side = HubSide(registry=NodeRegistry(node, time.time),
-                           store_item=store_link_item(store, hub_runs, hub_logger.info),
+                           store_item=store_link_item(
+                               store, hub_runs,
+                               lambda snapshot: record_market(
+                                   recent_markets_file, snapshot, hub_logger.warning,
+                                   limit=loaded.config.control_room.recent_markets_limit),
+                               hub_logger.info),
                            token=hub_config.token,
                            history=CentralHistory(local=node, local_file=haul_runs_file, runs=hub_runs),
                            relay=hub_relay,

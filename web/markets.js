@@ -95,7 +95,7 @@ async function fetchJson(path, params = {}) {
   const url = new URL(path, window.location.origin);
   Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
   if (accessToken) url.searchParams.set(AUTH_QUERY_PARAMETER_NAME, accessToken);
-  // On a hub, read the node picked in the sidebar (nav.js); hub-owned reads ignore it.
+  // On a hub, the node picked in the sidebar (nav.js): Markets lists the hub's markets for its ship.
   window.EDCRNode.addTo(url.searchParams);
   const response = await fetch(url, { method: "GET" });
   const payload = await response.json();

@@ -93,7 +93,7 @@ All under `[hub]`; defaults in `defaults/hub.toml`.
 Open only the hub's pages. Every page has a **node picker** in the sidebar (on phones, at the top of the ☰ More menu): each machine with its name, ship and running routine, the hub's own game first. The choice is kept per browser; picking another node reloads the page onto it. A node that drops shows as offline, the page says `Node Deck is offline` and picks it up again when it links.
 
 - **Driving a node**: on the picked node, the haul page, Controls, Travel and the command box run on that machine with the same rules as its own pages (busy routines refuse idle-only commands, answers come back unchanged). `POST /api/command` and `/api/stop` take `?node=<node_id>` the same way ([command-api.md](command-api.md)). When the node drops mid-command the page gets `Node Deck is unreachable` instead of waiting.
-- **Markets and routes**: the hub owns the market and station database, so `/routes` and Best deal read it directly, from the picked node's ship and system.
+- **Markets and routes**: the hub owns the market and station database, so `/routes` and Best deal read it directly, from the picked node's ship and system. `/markets` always lists the hub's recent markets: its own and every peer's, which peers push up (`control_room.recent_markets_limit`, default 20). The picked node only sets the ship that prices trips (hold and laden range), and an offline node keeps its last reported ship.
 - **Central history**: the haul page's History panel, `/api/haul-stats` and Best deal's measured profit per hour read every machine's runs. The History panel gets node and ship filters once there are two to pick.
 
 ## TTS on the hub

@@ -9,6 +9,7 @@ from pathlib import Path
 import sqlite3
 import threading
 import time
+from types import SimpleNamespace
 from typing import Any, Awaitable, Callable, Mapping
 
 import httpx
@@ -578,23 +579,46 @@ def build_observer_server_app(
     def read_recent_markets() -> tuple[MarketSnapshot, ...]:
         return load_recent_markets(recent_markets_file) if recent_markets_file is not None else ()
 
-    async def recent_markets(_params: Mapping[str, str]) -> JSONResponse:
+    def markets_ship(params: Mapping[str, str]) -> Any:
+        """The ship the Markets page prices trips for: on a hub the picked node's, as it last reported
+        it (so an offline node keeps its last ship), else this server's own."""
+        node_id = viewed_node(params)
+        reported = hub_side.registry.last_ship(node_id) if hub_side is not None and node_id is not None else None
+        if reported is None:
+            return getattr(data_provider(), "ship", None)
+        return SimpleNamespace(
+            ship_id=reported.get("id"), ship_type=reported.get("type"), ship_name=reported.get("name"),
+            cargo_capacity=reported.get("cargo_capacity"), laden_jump_range_ly=reported.get("laden_jump_range_ly"),
+        )
+
+    async def recent_markets(request: Request) -> JSONResponse:
+        """The Markets page list: on a hub every node's markets, which peers push up (never relayed)."""
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
         snapshots = await asyncio.to_thread(read_recent_markets)
+        ship = markets_ship(request.query_params)
         return JSONResponse(
             {
-                "cargo_capacity": _ship_cargo_capacity(data_provider()),
+                "cargo_capacity": _cargo_capacity(ship),
                 # The ship's laden range from its Loadout: Best deal's blank-field range.
-                "laden_jump_range_ly": getattr(getattr(data_provider(), "ship", None), "laden_jump_range_ly", None),
+                "laden_jump_range_ly": getattr(ship, "laden_jump_range_ly", None),
                 "markets": [_market_snapshot_payload(snapshot) for snapshot in snapshots],
             }
         )
 
-    async def market_compare(params: Mapping[str, str]) -> JSONResponse:
+    async def market_compare(request: Request) -> JSONResponse:
+        """Best deal between two listed markets, for the Markets page's ship (`markets_ship`)."""
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        params = request.query_params
+        ship = markets_ship(params)
         try:
             market_x_id = int(params.get("x", ""))
             market_y_id = int(params.get("y", ""))
             capacity_raw = (params.get("capacity") or "").strip()
-            cargo_capacity = int(capacity_raw) if capacity_raw else _ship_cargo_capacity(data_provider())
+            cargo_capacity = int(capacity_raw) if capacity_raw else _cargo_capacity(ship)
         except ValueError:
             return JSONResponse({"detail": "x and y must be market ids; capacity must be a whole number"}, status_code=400)
         if cargo_capacity < 0:
@@ -603,7 +627,6 @@ def build_observer_server_app(
             search_defaults = await asyncio.to_thread(load_haul_search_config)
         except (OSError, HaulSearchConfigError):
             search_defaults = {}
-        ship = getattr(data_provider(), "ship", None)
         ship_laden = getattr(ship, "laden_jump_range_ly", None)
         try:
             laden = laden_jump_range(params, search_defaults=search_defaults, ship_laden_ly=ship_laden)
@@ -1102,8 +1125,6 @@ def build_observer_server_app(
         "/api/route-compare": route_compare,
         "/api/route-compare/config": route_compare_config,
         "/api/spansh-route": spansh_route,
-        "/api/recent-markets": recent_markets,
-        "/api/market-compare": market_compare,
         "/api/eddn-routes": eddn_routes,
         "/api/journal-ledger": journal_ledger,
     }
@@ -1322,8 +1343,8 @@ def build_observer_server_app(
             Route("/api/route-compare/config", node_read_endpoint("/api/route-compare/config")),
             Route("/api/spansh-route", node_read_endpoint("/api/spansh-route")),
             Route("/api/haul-stats", haul_stats_endpoint),
-            Route("/api/recent-markets", node_read_endpoint("/api/recent-markets")),
-            Route("/api/market-compare", node_read_endpoint("/api/market-compare")),
+            Route("/api/recent-markets", recent_markets),
+            Route("/api/market-compare", market_compare),
             Route("/api/eddn-status", eddn_status_endpoint),
             Route("/api/eddn-routes", node_read_endpoint("/api/eddn-routes")),
             Route("/api/hub-status", hub_status_endpoint),
@@ -1399,7 +1420,11 @@ MEASURED_WINDOW_DEFAULT = "7d"
 
 
 def _ship_cargo_capacity(data: object) -> int:
-    cargo_capacity = getattr(getattr(data, "ship", None), "cargo_capacity", None)
+    return _cargo_capacity(getattr(data, "ship", None))
+
+
+def _cargo_capacity(ship: object) -> int:
+    cargo_capacity = getattr(ship, "cargo_capacity", None)
     return cargo_capacity if isinstance(cargo_capacity, int) and cargo_capacity > 0 else 0
 
 

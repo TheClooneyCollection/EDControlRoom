@@ -74,7 +74,7 @@ The recent-markets file holds market snapshots only; its `places` key goes away.
 The existing pages already talk to their server over the session websocket (`hydrate`, broker events, `command.*` messages). The hub relays that protocol instead of reinventing it:
 
 - A hub page opens its session with `?node=<node_id>`. For the local node nothing changes. For a peer, the hub opens a channel over the peer link; the peer attaches a broker observer for that channel and runs incoming `command.*` messages through its normal handler with the same busy and refusal rules as local.
-- Node-specific HTTP reads a page needs (live haul stats, recent markets, route compare, Spansh route) are relayed as request/response frames, limited to an allowlist. Data the hub owns (markets database, history, routes, Best deal) is answered by the hub directly.
+- Node-specific HTTP reads a page needs (live haul stats, recent markets, route compare, Spansh route) are relayed as request/response frames, limited to an allowlist. Data the hub owns (markets database, history, routes, Best deal) is answered by the hub directly. (Amended after release: recent markets and market compare are hub-owned too; the hub lists every node's pushed markets, and the picked node only sets the ship.)
 - Sidebar node picker: online nodes with name, ship and current routine; the choice is kept per browser.
 - On a peer's own fallback pages, hub-owned data (routes, Best deal facts, history) is fetched from the hub over the link; when the hub is away those panels say so instead of showing stale local data.
 
