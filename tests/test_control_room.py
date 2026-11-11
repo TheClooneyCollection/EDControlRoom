@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import replace
+from functools import cache
 import io
 import json
 import os
@@ -222,8 +223,13 @@ class _FakeVersionSource:
         return self.latest_release
 
 
-class _HarnessApp(ControlRoomApp):
-    # Textual rebuilds the theme's colour system in every App(); the harness never renders, so build it once per theme.
+# The speech backend looks for `say` on PATH in every app; the answer cannot change during a test run.
+_cached_which = cache(shutil.which)
+
+
+class _CachedThemeVariables:
+    """Textual rebuilds the theme's colour system in every App(); test apps never render, so build it once per theme."""
+
     _css_variables_by_theme: dict[str, dict[str, str]] = {}
 
     def get_css_variables(self) -> dict[str, str]:
@@ -233,15 +239,18 @@ class _HarnessApp(ControlRoomApp):
         self.theme_variables = dict(cached)
         return dict(cached)
 
+
+class _HarnessApp(_CachedThemeVariables, ControlRoomApp):
     def __init__(self, ctx: RuntimeContext, *, activity_log_max_lines: int | None = None) -> None:
         self.version_source = _FakeVersionSource()
         self.station_facts: list = []
-        super().__init__(
-            ctx,
-            activity_log_max_lines=activity_log_max_lines,
-            version_source=self.version_source,
-            record_station_facts=self.station_facts.extend,
-        )
+        with patch("edap.tts.which", _cached_which):
+            super().__init__(
+                ctx,
+                activity_log_max_lines=activity_log_max_lines,
+                version_source=self.version_source,
+                record_station_facts=self.station_facts.extend,
+            )
         self._journal_artifact_log_path = ctx.config.control_room.state_file.parent / "control-room-artifact.log"
         self.logged: list[str] = []
         self.exit_calls = 0

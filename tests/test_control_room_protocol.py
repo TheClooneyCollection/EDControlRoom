@@ -19,7 +19,7 @@ from edap.config import (
 )
 from edap.control_room.backend import ControlRoomBackend, LocalControlRoomBackend
 from edap.control_room.app import ControlRoomApp
-from tests.test_control_room import _FakeVersionSource
+from tests.test_control_room import _CachedThemeVariables, _FakeVersionSource
 from edap.control_room.dependencies import LocalControlRoomDataSource
 from edap.control_room.models import ReplaySelection
 from edap.control_room.protocol import (
@@ -125,7 +125,7 @@ def _make_context(journal_dir: Path) -> RuntimeContext:
     )
 
 
-class _ProtocolHarnessApp(ControlRoomApp):
+class _ProtocolHarnessApp(_CachedThemeVariables, ControlRoomApp):
     def __init__(self, ctx: RuntimeContext) -> None:
         super().__init__(ctx, version_source=_FakeVersionSource(), record_station_facts=lambda updates: None)
         self._current_version = "1.2.3"

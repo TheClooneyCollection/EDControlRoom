@@ -19,7 +19,7 @@ from edap.config import (
     TTSConfig,
 )
 from edap.control_room.app import ControlRoomApp
-from tests.test_control_room import _FakeVersionSource
+from tests.test_control_room import _CachedThemeVariables, _FakeVersionSource
 from edap.control_room.client.backend import (
     RemoteObserverBackend,
     RemoteObserverDataSource,
@@ -129,6 +129,10 @@ class _KeyEvent:
 
     def prevent_default(self) -> None:
         self.prevented = True
+
+
+class _ObserverApp(_CachedThemeVariables, ControlRoomApp):
+    pass
 
 
 def _bind_observer_widgets(app: ControlRoomApp, command_input: _FakeInputWidget) -> None:
@@ -333,7 +337,7 @@ class ControlRoomClientTests(unittest.TestCase):
         backend = backend or self._backend()
         data_source = data_source or RemoteObserverDataSource(_data_read_model())
         execution = RemoteObserverExecution(backend)
-        app = ControlRoomApp(
+        app = _ObserverApp(
             _make_observer_context(),
             backend=backend or self._backend(),
             dependencies=ControlRoomDependencies(
