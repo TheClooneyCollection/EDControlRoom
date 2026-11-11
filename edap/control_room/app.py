@@ -924,6 +924,7 @@ class ControlRoomApp(App[None]):
             cargo_count=data.ship.cargo_count,
             cargo_capacity=data.ship.cargo_capacity,
             max_jump_range_ly=data.ship.max_jump_range_ly,
+            laden_jump_range_ly=data.ship.laden_jump_range_ly,
             fsd_type=data.ship.fsd_type,
             supercharge_multiplier=data.ship.supercharge_multiplier,
             cargo_inventory=list(data.ship.cargo_inventory),
@@ -1179,9 +1180,11 @@ class ControlRoomApp(App[None]):
         )
 
     def _laden_jump_range_ly(self) -> float:
-        """The laden jump range Best deal and /routes use: haul_search.toml, else the default."""
+        """The current ship's laden range from its Loadout; haul_search.toml, else the default, before one is known."""
+        if self._ship.laden_jump_range_ly is not None:
+            return self._ship.laden_jump_range_ly
         try:
-            return laden_jump_range({}, search_defaults=load_haul_search_config())
+            return laden_jump_range({}, search_defaults=load_haul_search_config(), ship_laden_ly=None)
         except (OSError, HaulSearchConfigError, ValueError):
             return DEFAULT_LADEN_JUMP_RANGE_LY
 

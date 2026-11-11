@@ -910,7 +910,8 @@ class ControlRoomServerTests(unittest.TestCase):
             return row
 
         def flying_ship_7():
-            return replace(_base_data_read_model(), ship=ShipState(ship_id=7, ship_type="cutter", ship_name="Hauler"))
+            return replace(_base_data_read_model(), ship=ShipState(ship_id=7, ship_type="cutter", ship_name="Hauler",
+                                                                      laden_jump_range_ly=24.5))
 
         with tempfile.TemporaryDirectory() as directory:
             store = Path(directory) / "recent.json"
@@ -959,7 +960,9 @@ class ControlRoomServerTests(unittest.TestCase):
                          {"runs": 2, "profit": 4_000_000, "duration_s": 2400.0, "profit_per_hour": 6_000_000,
                           "loop_s": 1200, "unknown_ship_runs": 1, "laden_jump_range_ly": 21.5})
         self.assertEqual(compared["measured_window"], "all")
-        self.assertEqual(compared["measured_ship"], {"id": 7, "type": "cutter", "name": "Hauler"})
+        # The page's 20 Ly drives the estimate; the ship's own 24.5 Ly is what measured runs compare against.
+        self.assertEqual(compared["measured_ship"],
+                         {"id": 7, "type": "cutter", "name": "Hauler", "laden_jump_range_ly": 24.5})
         self.assertEqual((bad.status_code, bad_window.status_code), (400, 400))
 
     def test_market_compare_asks_ardent_only_for_what_the_store_lacks(self) -> None:

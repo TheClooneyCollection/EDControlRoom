@@ -482,6 +482,8 @@ def build_observer_server_app(
         return JSONResponse(
             {
                 "cargo_capacity": _ship_cargo_capacity(data_provider()),
+                # The ship's laden range from its Loadout: Best deal's blank-field range.
+                "laden_jump_range_ly": getattr(getattr(data_provider(), "ship", None), "laden_jump_range_ly", None),
                 "markets": [_market_snapshot_payload(snapshot) for snapshot in snapshots],
             }
         )
@@ -504,15 +506,18 @@ def build_observer_server_app(
             search_defaults = await asyncio.to_thread(load_haul_search_config)
         except (OSError, HaulSearchConfigError):
             search_defaults = {}
+        ship = getattr(data_provider(), "ship", None)
+        ship_laden = getattr(ship, "laden_jump_range_ly", None)
         try:
-            laden = laden_jump_range(params, search_defaults=search_defaults)
+            laden = laden_jump_range(params, search_defaults=search_defaults, ship_laden_ly=ship_laden)
+            # The current ship's range, even when the page overrides it, so measured runs compare against it.
+            current_laden = laden_jump_range({}, search_defaults=search_defaults, ship_laden_ly=ship_laden)
         except ValueError:
             return JSONResponse({"detail": "laden_jump_range_ly must be a positive number"}, status_code=400)
         window = params.get("window") or MEASURED_WINDOW_DEFAULT
         if window not in MEASURED_WINDOWS:
             return JSONResponse({"detail": f"window must be one of {', '.join(MEASURED_WINDOWS)}"}, status_code=400)
         since, until, _ = parse_window(window, datetime.now(SystemLocalTimezone()))
-        ship = getattr(data_provider(), "ship", None)
 
         def compare() -> dict[str, Any] | None:
             snapshots = read_recent_markets()
@@ -525,7 +530,7 @@ def build_observer_server_app(
             return {
                 **asdict(comparison),
                 **read_trip(market_x, market_y, laden),
-                **read_measured(market_x, market_y, ship, window, since, until),
+                **read_measured(market_x, market_y, ship, current_laden, window, since, until),
             }
 
         payload = await asyncio.to_thread(compare)
@@ -563,7 +568,7 @@ def build_observer_server_app(
         return {"trip": trip}
 
     def read_measured(
-        market_x: MarketSnapshot, market_y: MarketSnapshot, ship: Any,
+        market_x: MarketSnapshot, market_y: MarketSnapshot, ship: Any, current_laden: float,
         window: str, since: datetime | None, until: datetime,
     ) -> dict[str, Any]:
         """Measured profit per hour from this server's own haul history, for the current ship."""
@@ -580,6 +585,7 @@ def build_observer_server_app(
             "measured_window": window,
             "measured_ship": {
                 "id": ship_id, "type": getattr(ship, "ship_type", None), "name": getattr(ship, "ship_name", None),
+                "laden_jump_range_ly": current_laden,
             },
         }
 

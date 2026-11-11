@@ -74,6 +74,7 @@ def bootstrap_ship_state(app: BootstrapHost) -> None:
             app._ship.target = state.target
             app._ship.cargo_capacity = state.cargo_capacity
             app._ship.max_jump_range_ly = state.max_jump_range_ly
+            app._ship.laden_jump_range_ly = state.laden_jump_range_ly
         except Exception:
             pass
         record_journal_facts(app, log)

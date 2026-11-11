@@ -8,6 +8,7 @@ from time import sleep
 from typing import Callable, Iterator
 
 from edap.journal_events import is_manual_launch_control_resumed_event, is_no_fire_zone_exited_event
+from edap.ship_range import loadout_laden_jump_range
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,7 @@ class ShipState:
     target: str | None
     cargo_capacity: int | None
     max_jump_range_ly: float | None
+    laden_jump_range_ly: float | None
     fsd_type: str | None
     supercharge_multiplier: int | None
     fuel_capacity: float | None
@@ -144,6 +146,7 @@ def read_ship_state(log_path: Path) -> ShipState:
         "target": None,
         "cargo_capacity": None,
         "max_jump_range_ly": None,
+        "laden_jump_range_ly": None,
         "fsd_type": None,
         "supercharge_multiplier": None,
         "fuel_capacity": None,
@@ -212,6 +215,7 @@ def read_ship_state(log_path: Path) -> ShipState:
                 max_jump_range = log.get("MaxJumpRange")
                 if isinstance(max_jump_range, (int, float)) and not isinstance(max_jump_range, bool):
                     ship["max_jump_range_ly"] = float(max_jump_range)
+                ship["laden_jump_range_ly"] = loadout_laden_jump_range(log)
                 fsd_item = next(
                     (
                         m.get("Item", "")

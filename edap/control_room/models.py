@@ -24,6 +24,8 @@ class ShipState:
     cargo_count: int = 0
     cargo_capacity: int | None = None
     max_jump_range_ly: float | None = None
+    # From Loadout via edap.ship_range: full hold and full main tank.
+    laden_jump_range_ly: float | None = None
     fsd_type: str | None = None
     supercharge_multiplier: int | None = None
     cargo_inventory: list[dict[str, Any]] = field(default_factory=list)

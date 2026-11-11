@@ -58,8 +58,13 @@ def resolve_route_params(
     return {key: value for key, value in resolved.items() if value}
 
 
-def laden_jump_range(params: Mapping[str, str], *, search_defaults: Mapping[str, str]) -> float:
-    """`laden_jump_range_ly`, else `haul_search.toml`'s max route distance, else the default; /markets shares it."""
+def laden_jump_range(
+    params: Mapping[str, str], *, search_defaults: Mapping[str, str], ship_laden_ly: float | None
+) -> float:
+    """`laden_jump_range_ly`, else the current ship's (`edap.ship_range`), else `haul_search.toml`'s max route
+    distance, else the default; /markets and haul runs share it."""
+    if ship_laden_ly is not None and not (params.get("laden_jump_range_ly") or "").strip():
+        return ship_laden_ly
     raw = _param(params, search_defaults, "laden_jump_range_ly")
     if not raw or raw.lower() == "any":
         return DEFAULT_LADEN_JUMP_RANGE_LY
@@ -89,7 +94,8 @@ def parse_route_query(
     view = value("view") or "near"
     if view not in {"near", "global"}:
         raise ValueError("view must be near or global")
-    laden = laden_jump_range(params, search_defaults=search_defaults)
+    # /routes keeps `haul_search.toml` as its blank-field range, as its page placeholder says.
+    laden = laden_jump_range(params, search_defaults=search_defaults, ship_laden_ly=None)
     jumps = int(number("jumps", DEFAULT_ROUTE_JUMPS))
     # An explicit ly range (the 100 ly+ presets) overrides the jump count.
     max_route_ly = number("max_route_ly", jumps * laden) or jumps * laden

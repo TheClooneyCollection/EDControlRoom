@@ -420,6 +420,7 @@ def _copy_ship_state(ship: ShipState) -> ShipState:
         cargo_count=ship.cargo_count,
         cargo_capacity=ship.cargo_capacity,
         max_jump_range_ly=ship.max_jump_range_ly,
+        laden_jump_range_ly=ship.laden_jump_range_ly,
         fsd_type=ship.fsd_type,
         supercharge_multiplier=ship.supercharge_multiplier,
         cargo_inventory=list(ship.cargo_inventory),

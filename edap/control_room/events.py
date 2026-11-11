@@ -4,6 +4,7 @@ from typing import Any
 
 from edap.journal_events import is_manual_launch_control_resumed_event, is_no_fire_zone_exited_event
 from edap.control_room.models import ShipState
+from edap.ship_range import loadout_laden_jump_range
 
 
 def apply_ship_identity(ship: ShipState, ev: dict[str, Any]) -> None:
@@ -38,6 +39,7 @@ def apply_ship_event(ship: ShipState, ev: dict[str, Any]) -> None:
         max_jump_range = ev.get("MaxJumpRange")
         if isinstance(max_jump_range, (int, float)) and not isinstance(max_jump_range, bool):
             ship.max_jump_range_ly = float(max_jump_range)
+        ship.laden_jump_range_ly = loadout_laden_jump_range(ev)
         fsd_item = next(
             (
                 m.get("Item", "")

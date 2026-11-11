@@ -108,6 +108,8 @@ async function refreshMarkets() {
     markets = payload.markets || [];
     const capacity = document.getElementById("deal-capacity");
     if (!capacity.value && payload.cargo_capacity) capacity.value = String(payload.cargo_capacity);
+    // A blank jump range uses the ship's laden range from its Loadout, else haul_search.toml.
+    if (payload.laden_jump_range_ly) document.getElementById("deal-laden").placeholder = `${payload.laden_jump_range_ly} (ship)`;
     setText("cargo-label", payload.cargo_capacity ? `${payload.cargo_capacity} t` : "-");
     if (!markets.some((market) => market.market_id === selectedMarketId)) {
       selectedMarketId = markets.length ? markets[0].market_id : null;
@@ -251,7 +253,7 @@ function measuredMetric(payload, trip) {
     note = `${count(measured.runs)} completed run${measured.runs === 1 ? "" : "s"} ${span} by ${shipLabel(payload.measured_ship)}, `
       + `${minutes(measured.loop_s)} loop`;
     if (measured.laden_jump_range_ly !== null) {
-      const now = trip && trip.laden_jump_range_ly;
+      const now = payload.measured_ship && payload.measured_ship.laden_jump_range_ly;
       const changed = now && Math.abs(now - measured.laden_jump_range_ly) >= 0.05 ? ` (now ${now} Ly)` : "";
       note += `, flown at ${measured.laden_jump_range_ly} Ly laden${changed}`;
     }
@@ -395,7 +397,7 @@ async function refreshComparison() {
 }
 
 applyWebConfigLabels();
-// A blank jump range falls back to haul_search.toml on the server, as on /routes; show that value.
+// Before the ship is known, a blank jump range falls back to haul_search.toml on the server; show that value.
 const ladenDefault = (WEB_CONFIG.webDefaults || {}).maxRouteDistanceLy;
 if (ladenDefault) document.getElementById("deal-laden").placeholder = `${ladenDefault} (haul search)`;
 document.getElementById("access-token").value = accessToken;
