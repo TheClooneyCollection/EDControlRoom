@@ -861,11 +861,41 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(missing.status_code, 404)
         self.assertEqual(invalid.status_code, 400)
 
-    def test_every_page_links_to_markets_and_routes(self) -> None:
-        for page in ("haul-v1.html", "multi-haul.html", "controls.html", "markets.html", "routes.html"):
-            html = (Path(server_app.__file__).resolve().parents[3] / "web" / page).read_text(encoding="utf-8")
-            self.assertIn('href="/markets"', html, page)
-            self.assertIn('href="/routes"', html, page)
+    def test_every_page_renders_the_one_shared_nav(self) -> None:
+        web_dir = Path(server_app.__file__).resolve().parents[3] / "web"
+        nav = (web_dir / "nav.js").read_text(encoding="utf-8")
+        for href in ("/haul", "/multi-haul", "/markets", "/routes", "/controls", "/travel"):
+            self.assertIn(f'href: "{href}"', nav)
+        self.assertIn('anchor.setAttribute("aria-current", "page")', nav)
+        for page in ("haul-v1.html", "multi-haul.html", "controls.html", "markets.html", "routes.html", "travel.html"):
+            html = (web_dir / page).read_text(encoding="utf-8")
+            self.assertIn('<nav class="site-nav" id="site-nav" aria-label="Pages"></nav>\n'
+                          '      <script src="/assets/nav.js"></script>', html, page)
+            # No page keeps a hand-copied link list that could drift from nav.js again.
+            self.assertNotIn('class="nav-item', html, page)
+
+    def test_travel_page_hosts_the_route_panels_and_its_scripts_are_served(self) -> None:
+        app = build_observer_server_app(data_provider=_base_data_read_model, command_handler=None,
+                                        broker=InMemoryObserverSessionBroker(), auth=SharedAccessTokenAuth("secret-token"))
+        with TestClient(app) as client:
+            page = client.get("/travel")
+            assets = {name: client.get(f"/assets/{name}")
+                      for name in ("travel.js", "nav.js", "active-route.js", "route-compare.js")}
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(page.headers["cache-control"], "no-store")
+        self.assertIn('"authQueryParameterName": "access_token"', page.text)
+        for name, response in assets.items():
+            self.assertEqual(response.status_code, 200, name)
+            self.assertIn(f'src="/assets/{name}"', page.text)
+        # Active route sits above Route Comparison.
+        self.assertLess(page.text.index('id="active-spansh-panel"'), page.text.index('id="route-compare-panel"'))
+        for element_id in ("rc-all-in-one", "rc-switch", "active-spansh-waypoints", "access-token", "activity-list"):
+            self.assertIn(f'id="{element_id}"', page.text)
+        # travel.js loads first so the panels find the websocket bridge the haul page used to provide.
+        self.assertLess(page.text.index('src="/assets/travel.js"'), page.text.index('src="/assets/route-compare.js"'))
+        for hook in ("window.EDCR_HAUL.sendCommand = sendCommand;", "window.EDCR_HAUL.galmapSettleTime",
+                     'new CustomEvent("edcr:hydrate"', 'new CustomEvent("edcr:ship-state"'):
+            self.assertIn(hook, assets["travel.js"].text)
 
     def test_routes_page_and_script_are_served(self) -> None:
         app = build_observer_server_app(data_provider=_base_data_read_model, command_handler=None,

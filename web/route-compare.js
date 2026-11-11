@@ -292,7 +292,7 @@
     }
     const sendCommand = window.EDCR_HAUL && window.EDCR_HAUL.sendCommand;
     if (typeof sendCommand !== "function") {
-      setStatus("Websocket bridge is not ready yet; wait for /haul to connect.", true);
+      setStatus("Websocket bridge is not ready yet; wait for the page to connect.", true);
       return Promise.reject(new Error("no ws bridge"));
     }
     setStatus("Setting in-game destination to " + to + "...", false);
@@ -327,7 +327,7 @@
     const station = stationField ? stationField.value.trim() : "";
     const sendCommand = window.EDCR_HAUL && window.EDCR_HAUL.sendCommand;
     if (typeof sendCommand !== "function") {
-      setStatus("Websocket bridge is not ready yet; wait for /haul to connect.", true);
+      setStatus("Websocket bridge is not ready yet; wait for the page to connect.", true);
       return;
     }
     const galaxyMapSettle = (window.EDCR_HAUL && typeof window.EDCR_HAUL.galmapSettleTime === "function")
@@ -369,7 +369,7 @@
     }
     const sendCommand = window.EDCR_HAUL && window.EDCR_HAUL.sendCommand;
     if (typeof sendCommand !== "function") {
-      setStatus("Websocket bridge is not ready yet; wait for /haul to connect.", true);
+      setStatus("Websocket bridge is not ready yet; wait for the page to connect.", true);
       return;
     }
     const stationField = document.getElementById("rc-station");

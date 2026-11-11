@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ED Control Room - Travel</title>
+  <link rel="stylesheet" href="/assets/haul-ui.css">
+  <style>
+    .travel-summary {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Navigation">
+      <div class="brand">
+        <div class="brand-mark">ED</div>
+        <div>
+          <div class="brand-name">Control Room</div>
+          <div class="brand-sub">haul control</div>
+        </div>
+      </div>
+
+      <nav class="site-nav" id="site-nav" aria-label="Pages"></nav>
+      <script src="/assets/nav.js"></script>
+
+      <div class="chip hub-chip" id="hub-chip" hidden>Hub <strong>-</strong></div>
+
+      <div class="sidebar-foot">
+        <div class="status-row"><span><span class="dot"></span>Runtime</span><span id="status-runtime">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Journal</span><span id="status-journal">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Input target</span><span id="status-input-target">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Version</span><span id="status-version">-</span></div>
+      </div>
+    </aside>
+
+    <div>
+      <header class="topbar">
+        <div>
+          <div class="topbar-title">Travel</div>
+          <div class="topbar-sub">Plan a Spansh route, compare it with the in-game route, and follow the active route.</div>
+        </div>
+        <div class="chips" aria-label="Session status">
+          <div class="chip">Host <strong id="host-label">-</strong></div>
+          <div class="chip">Target <strong id="target-label">-</strong></div>
+          <div class="chip">Role <strong id="role-label">-</strong></div>
+          <div class="token-control">
+            <input class="token-input" id="access-token" type="password" placeholder="Access token" autocomplete="off" aria-label="Access token">
+            <button class="token-button" id="save-token" type="button">Save</button>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <div class="page-head">
+          <div>
+            <h1>Travel</h1>
+            <div class="page-description">
+              Follow the active Spansh route, or fetch a new one and compare it against the route plotted in game.
+            </div>
+          </div>
+        </div>
+
+        <section class="summary-strip travel-summary" aria-label="Current travel summary">
+          <div class="summary-cell">
+            <div class="summary-label">Current system</div>
+            <div class="summary-value" id="summary-system">-</div>
+          </div>
+          <div class="summary-cell">
+            <div class="summary-label">Destination</div>
+            <div class="summary-value" id="summary-destination">-</div>
+          </div>
+        </section>
+
+        <section class="panel route-compare-full" aria-labelledby="active-spansh-title" id="active-spansh-panel">
+          <div class="panel-head">
+            <div class="panel-title" id="active-spansh-title">Active route</div>
+            <div class="panel-action" id="active-spansh-status">Idle</div>
+          </div>
+          <div class="panel-body">
+            <div class="active-spansh-empty" id="active-spansh-empty">
+              No active Spansh route. Fetch or compare one in <strong>Route Comparison</strong> below, then press <strong>Switch to Spansh</strong> to start.
+            </div>
+            <div class="active-spansh-content hidden" id="active-spansh-content">
+              <div class="routine-bar" id="active-spansh-waypoints" aria-label="Nearby waypoints"></div>
+              <div class="active-spansh-line" id="active-spansh-line">
+                <span class="active-spansh-node" id="active-spansh-last">-</span>
+                <span class="active-spansh-arrow">&rarr;</span>
+                <span class="active-spansh-node active-spansh-current" id="active-spansh-current">-</span>
+                <span class="active-spansh-arrow">&rarr;</span>
+                <span class="active-spansh-node" id="active-spansh-next">-</span>
+              </div>
+              <div class="mini-metrics">
+                <div class="metric">
+                  <div class="metric-label">Jumps remaining</div>
+                  <div class="metric-value mono" id="active-spansh-jumps-remaining">-</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">LY remaining</div>
+                  <div class="metric-value mono" id="active-spansh-ly-remaining">-</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">Boosts remaining</div>
+                  <div class="metric-value mono" id="active-spansh-boosts-remaining">-</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel route-compare-full" aria-labelledby="route-compare-title" id="route-compare-panel">
+          <div class="panel-head">
+            <div class="panel-title" id="route-compare-title">Route Comparison</div>
+            <div class="panel-action" id="route-compare-verdict">Idle</div>
+          </div>
+          <div class="panel-body">
+            <div class="form-grid">
+              <div class="field-row">
+                <label>
+                  <span class="field-label">From system</span>
+                  <input class="field" id="rc-from" value="" autocomplete="off">
+                </label>
+                <label>
+                  <span class="field-label">To system</span>
+                  <input class="field" id="rc-to" value="" autocomplete="off">
+                </label>
+                <label>
+                  <span class="field-label">Jump range (LY, unladen)</span>
+                  <input class="field mono" id="rc-range" value="60" inputmode="decimal">
+                </label>
+                <label>
+                  <span class="field-label">Efficiency</span>
+                  <input class="field mono" id="rc-efficiency" value="60" inputmode="numeric">
+                </label>
+                <label>
+                  <span class="field-label">Supercharge <span id="rc-supercharge-hint" class="field-hint"></span></span>
+                  <select class="select" id="rc-supercharge">
+                    <option value="4">Normal (4x)</option>
+                    <option value="6">Overcharge (6x)</option>
+                  </select>
+                </label>
+                <label>
+                  <span class="field-label">Final station (optional)</span>
+                  <input class="field" id="rc-station" value="" autocomplete="off" placeholder="dock here after route">
+                </label>
+                <label>
+                  <span class="field-label">All-in-one NavRoute wait (s)</span>
+                  <input class="field mono" id="rc-navroute-wait" value="" inputmode="decimal" placeholder="6.0">
+                </label>
+                <label>
+                  <span class="field-label">All-in-one compare retries</span>
+                  <input class="field mono" id="rc-compare-retries" value="" inputmode="numeric" placeholder="3">
+                </label>
+              </div>
+              <div class="btn-row action-row">
+                <button class="btn" type="button" id="rc-set-destination" title="Set the To system as the in-game galaxy-map destination">Set in-game route</button>
+                <button class="btn" type="button" id="rc-fetch-spansh" title="Query Spansh only (no comparison)">Fetch Spansh</button>
+                <button class="btn" type="button" id="rc-compare" title="Compare local NavRoute.json against Spansh">Compare</button>
+                <button class="btn primary" type="button" id="rc-all-in-one" title="Set in-game route, then fetch Spansh, then compare">All in one</button>
+                <button class="btn ghost" type="button" id="rc-switch" disabled title="Run Compare or Fetch Spansh first">Switch to Spansh</button>
+              </div>
+            </div>
+            <div id="rc-status" class="rc-status"></div>
+            <div id="rc-results" class="rc-results hidden">
+              <div class="rc-summary" id="rc-summary"></div>
+              <details id="rc-details" class="rc-details">
+                <summary class="rc-details-toggle">Show route detail</summary>
+                <div class="rc-side-by-side">
+                  <div class="rc-side">
+                    <div class="rc-side-head" id="rc-in-game-head">In-game route</div>
+                    <table class="route-table"><thead><tr><th>#</th><th>System</th><th>Class</th><th class="num">+LY</th><th class="num">Total</th></tr></thead><tbody id="rc-in-game-rows"></tbody></table>
+                  </div>
+                  <div class="rc-side">
+                    <div class="rc-side-head" id="rc-spansh-head">Spansh route</div>
+                    <table class="route-table"><thead><tr><th>#</th><th>System</th><th>N?</th><th class="num">+LY</th><th class="num">Total</th></tr></thead><tbody id="rc-spansh-rows"></tbody></table>
+                  </div>
+                </div>
+              </details>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel activity-panel" id="activity-panel" aria-labelledby="activity-title">
+          <button class="panel-head activity-toggle" type="button" id="activity-toggle" aria-expanded="false" aria-controls="activity-list">
+            <span class="panel-title" id="activity-title">Activity</span>
+            <span class="panel-action" id="activity-status">Live</span>
+            <span class="activity-latest" id="activity-latest" aria-hidden="true"><span class="activity-time mono">--:--:--</span><span class="activity-text">Waiting for backend activity.</span></span>
+            <svg class="activity-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="panel-body activity-list" id="activity-list" role="log" aria-live="polite" tabindex="0"></div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    window.EDCR_WEB_CONFIG = {};
+  </script>
+  <script src="/assets/travel.js" defer></script>
+  <script src="/assets/active-route.js" defer></script>
+  <script src="/assets/route-compare.js" defer></script>
+  <script src="/assets/hub-status.js" defer></script>
+  <script src="/assets/activity-dock.js" defer></script>
+</body>
+</html>

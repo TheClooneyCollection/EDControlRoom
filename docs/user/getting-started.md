@@ -57,7 +57,7 @@ Fill in the origin (and optionally destination), max route distance, cargo capac
 
 ### Spansh Route Fetch and Comparison
 
-The route comparison panel fetches a Spansh route between two systems and lays it out beside the in-game route.
+The `/travel` page (sidebar **Ship → Travel**, or **More** on phones) fetches a Spansh route between two systems in its Route Comparison panel and lays it out beside the in-game route. The Active route panel above it tracks jumps, LY and boosts remaining while the route runs.
 
 ![Spansh route fetch and comparison](../assets/spansh-routes.png)
 

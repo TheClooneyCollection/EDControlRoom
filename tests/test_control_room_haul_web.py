@@ -217,7 +217,7 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         css = (web_dir / "haul-ui.css").read_text(encoding="utf-8")
         dock = (web_dir / "activity-dock.js").read_text(encoding="utf-8")
 
-        for page in ("haul-v1.html", "controls.html"):
+        for page in ("haul-v1.html", "controls.html", "travel.html"):
             with self.subTest(page=page):
                 html = (web_dir / page).read_text(encoding="utf-8")
                 self.assertIn('<button class="panel-head activity-toggle" type="button" id="activity-toggle" '
@@ -242,9 +242,30 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         for rule in ("position: sticky;", "top: 0;", "height: 100vh;", "overflow-y: auto;"):
             self.assertIn(rule, sidebar)
 
+    def test_route_panels_live_on_the_travel_page_not_the_haul_page(self) -> None:
+        html = (Path(__file__).resolve().parents[1] / "web" / "haul-v1.html").read_text(encoding="utf-8")
+
+        for gone in ('id="active-spansh-panel"', 'id="route-compare-panel"',
+                     'src="/assets/active-route.js"', 'src="/assets/route-compare.js"'):
+            self.assertNotIn(gone, html)
+
+    def test_phone_nav_shows_four_pages_and_moves_the_rest_behind_more(self) -> None:
+        web_dir = Path(__file__).resolve().parents[1] / "web"
+        nav = (web_dir / "nav.js").read_text(encoding="utf-8")
+        css = (web_dir / "haul-ui.css").read_text(encoding="utf-8")
+
+        primary = re.findall(r'href: "(/[a-z-]+)",\s*label: "[^"]+",\s*mobile: true', nav)
+        self.assertEqual(primary, ["/haul", "/markets", "/routes", "/controls"])
+        self.assertIn('toggle.setAttribute("aria-expanded", String(open));', nav)
+        self.assertIn('event.key === "Escape"', nav)
+        self.assertIn('window.matchMedia("(max-width: 760px)")', nav)
+        phone = css[css.rindex("@media (max-width: 760px)"):]
+        self.assertIn(".nav-desktop-only {\n    display: none;", phone)
+        self.assertIn(".nav-more {\n    display: block;", phone)
+
     def test_activity_text_strips_markup_including_empty_closing_tags(self) -> None:
         web_dir = Path(__file__).resolve().parents[1] / "web"
-        for name in ("haul-ui.js", "controls.js"):
+        for name in ("haul-ui.js", "controls.js", "travel.js"):
             with self.subTest(script=name):
                 source = (web_dir / name).read_text(encoding="utf-8")
                 pattern = re.search(r'function stripMarkup\(value\) \{\s*return String\(value \|\| ""\)\.replace\(/(.+?)/g, ""\);',

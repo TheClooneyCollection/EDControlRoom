@@ -18,25 +18,8 @@
         </div>
       </div>
 
-      <div class="nav-label">Haul</div>
-      <button class="nav-item active" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 12h5l2 5 4-14 2 9h5"/></svg>
-        Two-way haul
-      </button>
-
-      <a class="nav-item link" href="/markets">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 20V10m6 10V4m6 16v-7m4 7H2"/></svg>
-        Markets
-      </a>
-      <a class="nav-item link" href="/routes">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="5" cy="18" r="2"/><circle cx="19" cy="6" r="2"/><path d="M7 18h6a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h6"/></svg>
-        Routes
-      </a>
-      <div class="nav-label">Ship</div>
-      <a class="nav-item link" href="/controls">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        Controls
-      </a>
+      <nav class="site-nav" id="site-nav" aria-label="Pages"></nav>
+      <script src="/assets/nav.js"></script>
 
       <div class="chip hub-chip" id="hub-chip" hidden>Hub <strong>-</strong></div>
 
@@ -206,114 +189,6 @@
               <button class="btn" type="button" data-history-window="all" aria-pressed="false">All</button>
             </div>
             <div id="history-content" aria-live="polite">Loading recorded haul history...</div>
-          </div>
-        </section>
-
-        <section class="panel route-compare-full" aria-labelledby="active-spansh-title" id="active-spansh-panel">
-          <div class="panel-head">
-            <div class="panel-title" id="active-spansh-title">Active route</div>
-            <div class="panel-action" id="active-spansh-status">Idle</div>
-          </div>
-          <div class="panel-body">
-            <div class="active-spansh-empty" id="active-spansh-empty">
-              No active Spansh route. Dispatch one from <strong>Route Comparison</strong> and press <strong>Switch to Spansh</strong> to start.
-            </div>
-            <div class="active-spansh-content hidden" id="active-spansh-content">
-              <div class="routine-bar" id="active-spansh-waypoints" aria-label="Nearby waypoints"></div>
-              <div class="active-spansh-line" id="active-spansh-line">
-                <span class="active-spansh-node" id="active-spansh-last">-</span>
-                <span class="active-spansh-arrow">&rarr;</span>
-                <span class="active-spansh-node active-spansh-current" id="active-spansh-current">-</span>
-                <span class="active-spansh-arrow">&rarr;</span>
-                <span class="active-spansh-node" id="active-spansh-next">-</span>
-              </div>
-              <div class="mini-metrics">
-                <div class="metric">
-                  <div class="metric-label">Jumps remaining</div>
-                  <div class="metric-value mono" id="active-spansh-jumps-remaining">-</div>
-                </div>
-                <div class="metric">
-                  <div class="metric-label">LY remaining</div>
-                  <div class="metric-value mono" id="active-spansh-ly-remaining">-</div>
-                </div>
-                <div class="metric">
-                  <div class="metric-label">Boosts remaining</div>
-                  <div class="metric-value mono" id="active-spansh-boosts-remaining">-</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="panel route-compare-full" aria-labelledby="route-compare-title" id="route-compare-panel">
-          <div class="panel-head">
-            <div class="panel-title" id="route-compare-title">Route Comparison</div>
-            <div class="panel-action" id="route-compare-verdict">Idle</div>
-          </div>
-          <div class="panel-body">
-            <div class="form-grid">
-              <div class="field-row">
-                <label>
-                  <span class="field-label">From system</span>
-                  <input class="field" id="rc-from" value="" autocomplete="off">
-                </label>
-                <label>
-                  <span class="field-label">To system</span>
-                  <input class="field" id="rc-to" value="" autocomplete="off">
-                </label>
-                <label>
-                  <span class="field-label">Jump range (LY, unladen)</span>
-                  <input class="field mono" id="rc-range" value="60" inputmode="decimal">
-                </label>
-                <label>
-                  <span class="field-label">Efficiency</span>
-                  <input class="field mono" id="rc-efficiency" value="60" inputmode="numeric">
-                </label>
-                <label>
-                  <span class="field-label">Supercharge <span id="rc-supercharge-hint" class="field-hint"></span></span>
-                  <select class="select" id="rc-supercharge">
-                    <option value="4">Normal (4x)</option>
-                    <option value="6">Overcharge (6x)</option>
-                  </select>
-                </label>
-                <label>
-                  <span class="field-label">Final station (optional)</span>
-                  <input class="field" id="rc-station" value="" autocomplete="off" placeholder="dock here after route">
-                </label>
-                <label>
-                  <span class="field-label">All-in-one NavRoute wait (s)</span>
-                  <input class="field mono" id="rc-navroute-wait" value="" inputmode="decimal" placeholder="6.0">
-                </label>
-                <label>
-                  <span class="field-label">All-in-one compare retries</span>
-                  <input class="field mono" id="rc-compare-retries" value="" inputmode="numeric" placeholder="3">
-                </label>
-              </div>
-              <div class="btn-row action-row">
-                <button class="btn" type="button" id="rc-set-destination" title="Set the To system as the in-game galaxy-map destination">Set in-game route</button>
-                <button class="btn" type="button" id="rc-fetch-spansh" title="Query Spansh only (no comparison)">Fetch Spansh</button>
-                <button class="btn" type="button" id="rc-compare" title="Compare local NavRoute.json against Spansh">Compare</button>
-                <button class="btn primary" type="button" id="rc-all-in-one" title="Set in-game route, then fetch Spansh, then compare">All in one</button>
-                <button class="btn ghost" type="button" id="rc-switch" disabled title="Run Compare or Fetch Spansh first">Switch to Spansh</button>
-              </div>
-            </div>
-            <div id="rc-status" class="rc-status"></div>
-            <div id="rc-results" class="rc-results hidden">
-              <div class="rc-summary" id="rc-summary"></div>
-              <details id="rc-details" class="rc-details">
-                <summary class="rc-details-toggle">Show route detail</summary>
-                <div class="rc-side-by-side">
-                  <div class="rc-side">
-                    <div class="rc-side-head" id="rc-in-game-head">In-game route</div>
-                    <table class="route-table"><thead><tr><th>#</th><th>System</th><th>Class</th><th class="num">+LY</th><th class="num">Total</th></tr></thead><tbody id="rc-in-game-rows"></tbody></table>
-                  </div>
-                  <div class="rc-side">
-                    <div class="rc-side-head" id="rc-spansh-head">Spansh route</div>
-                    <table class="route-table"><thead><tr><th>#</th><th>System</th><th>N?</th><th class="num">+LY</th><th class="num">Total</th></tr></thead><tbody id="rc-spansh-rows"></tbody></table>
-                  </div>
-                </div>
-              </details>
-            </div>
           </div>
         </section>
 
@@ -542,8 +417,6 @@
     window.EDCR_WEB_CONFIG = {};
   </script>
   <script src="/assets/haul-ui.js" defer></script>
-  <script src="/assets/route-compare.js" defer></script>
-  <script src="/assets/active-route.js" defer></script>
   <script src="/assets/speech.js" defer></script>
   <script src="/assets/hub-status.js" defer></script>
   <script src="/assets/activity-dock.js" defer></script>

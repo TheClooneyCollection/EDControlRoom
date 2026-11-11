@@ -1600,6 +1600,8 @@
     .rc-status.error { color: var(--danger, #f87171); }
 
     .rc-results.hidden { display: none; }
+    .active-spansh-empty.hidden,
+    .active-spansh-content.hidden { display: none; }
 
     .rc-summary {
       margin-top: 12px;
@@ -1851,5 +1853,84 @@
 
   .has-activity-dock .connection-banner {
     bottom: calc(var(--activity-dock-height, 0px) + 16px);
+  }
+}
+
+/* Shared page nav (nav.js). Phones show the main items in the top row and the rest behind "More". */
+.nav-item:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+
+.nav-more {
+  display: none;
+}
+
+.nav-more-toggle {
+  cursor: pointer;
+}
+
+.nav-more-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.nav-more-menu {
+  position: fixed;
+  right: 12px;
+  z-index: 20;
+  display: grid;
+  gap: 2px;
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-1);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+
+.nav-more-menu[hidden] {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  /* Keep the links direct children of the sidebar row, as they were before the nav was shared. */
+  .site-nav {
+    display: contents;
+  }
+
+  .nav-desktop-only {
+    display: none;
+  }
+
+  .nav-more {
+    display: block;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+
+  .nav-more-menu .nav-item {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Fit the four main pages and the More button in one row at phone widths. */
+  .sidebar {
+    gap: 6px;
+  }
+
+  .nav-item {
+    padding: 8px 6px;
+  }
+
+  .nav-more-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 }

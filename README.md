@@ -62,7 +62,6 @@ _(Expand / click the following sections to see the screenshots.)_
 
 - Quick stats strip: home system, current system, destination, cargo, routine, completed runs, session profit.
 - Active routine board with the five haul stages (Buy, Undock, Depart, Transit, Sell) plus session elapsed, current / accumulated credits, cargo moved, and this run / last run / average run times.
-- Active route panel: jumps remaining, LY remaining, boosts remaining for the dispatched Spansh route.
 - Header controls: **Pause**, **Resume**, **Stop after run**, **Stop now**, **Save** the current haul as the default, **Reconnect**, and **Instant off** for the 5-second safety delay.
 
 <img src="docs/assets/quick-stats.png" alt="Web dashboard with haul session stats" width="50%">
@@ -93,10 +92,12 @@ _(Expand / click the following sections to see the screenshots.)_
 <details>
 <summary><strong>Spansh route</strong> — fetch a Spansh route and compare it side-by-side with the in-game route.</summary>
 
+- Lives on the `/travel` page (sidebar **Ship → Travel**; on phones under the **More** menu).
+
 - Inputs: from / to system, jump range (LY, unladen), efficiency, supercharge mode, optional final station, all-in-one navroute wait, and compare retries. From, jump range, and supercharge mode auto-fill from live ship state (current system + Loadout event); wait / retries auto-fill from server config.
 - **Fetch Spansh** to pull a route, **Set in-game route** to plot it in Elite via the galaxy map, **Compare** to diff Spansh vs the plotted route jump-by-jump, or **All in one** to run the full flow.
 - **Switch to Spansh** starts the standalone Spansh route runner: it flies the fetched route waypoint by waypoint, and every time you arrive at a waypoint it automatically sets the galaxy map to the next one.
-- Route detail table shows system, neutron flag, +LY per jump, and cumulative total for both routes side by side. Dashboard's Active route panel tracks jumps remaining / LY remaining / boosts while the runner is active.
+- Route detail table shows system, neutron flag, +LY per jump, and cumulative total for both routes side by side. The Active route panel at the top of `/travel` tracks jumps remaining / LY remaining / boosts while the runner is active.
 
 <img src="docs/assets/spansh-routes.png" alt="Spansh route fetch and comparison panel" width="50%">
 </details>
