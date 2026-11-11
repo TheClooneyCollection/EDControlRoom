@@ -1,6 +1,35 @@
 // Page navigation shared by every page: renders the sidebar links into <nav id="site-nav"> and marks the
 // current page. Desktop shows every item; phones (<= 760px) show the `mobile` items in the top row and put
 // the rest behind a "More" menu. Loaded without defer right after the placeholder so the nav never flashes.
+// On a hub it also shows the node picker (plan 0015): which node's game every page shows.
+
+// The node this browser looks at on a hub; pages add it to their session and node reads.
+// Empty means this server's own game. Peers and standalone servers ignore `node`.
+window.EDCRNode = (() => {
+  const KEY = "edcr.node";
+  let chosen = "";
+  try {
+    chosen = window.localStorage.getItem(KEY) || "";
+  } catch (error) {
+    chosen = "";
+  }
+  return {
+    id: () => chosen,
+    addTo(searchParams) {
+      if (chosen) searchParams.set("node", chosen);
+    },
+    choose(nodeId) {
+      try {
+        if (nodeId) window.localStorage.setItem(KEY, nodeId);
+        else window.localStorage.removeItem(KEY);
+      } catch (error) {
+        // Private windows: the choice lasts until the page reloads.
+      }
+      chosen = nodeId;
+    }
+  };
+})();
+
 (() => {
   const ICON_ATTRS = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"';
   const NAV_GROUPS = [
@@ -111,4 +140,105 @@
     if (!menu.hidden && !more.contains(event.target)) setOpen(false);
   });
   MOBILE_QUERY.addEventListener("change", () => setOpen(false));
+
+  // Node picker, hub only: online nodes with their ship and running routine. Desktop shows it under the
+  // links; phones put it at the top of the More menu. Picking a node reloads the page onto it.
+  const WEB_CONFIG = window.EDCR_WEB_CONFIG || {};
+  const PARAM = WEB_CONFIG.authQueryParameterName || "access_token";
+  const query = new URLSearchParams(window.location.search);
+  const picker = document.createElement("label");
+  picker.className = "node-picker";
+  picker.id = "node-picker";
+  picker.hidden = true;
+  picker.innerHTML = '<span class="node-picker-label">Node</span><select id="node-select" aria-label="Node to show"></select>' +
+    '<span class="node-picker-state" id="node-picker-state"></span>';
+  const select = picker.querySelector("select");
+  const stateText = picker.querySelector(".node-picker-state");
+  let localId = "";
+
+  function placePicker() {
+    if (MOBILE_QUERY.matches) menu.prepend(picker);
+    else nav.after(picker);
+  }
+  placePicker();
+  MOBILE_QUERY.addEventListener("change", placePicker);
+
+  function accessToken() {
+    let stored = "";
+    try {
+      stored = window.localStorage.getItem("edcr.haul.accessToken") || "";
+    } catch (error) {
+      stored = "";
+    }
+    return query.get(PARAM) || query.get("access_token") || stored || WEB_CONFIG.defaultAccessToken || "";
+  }
+
+  async function getJson(path) {
+    const url = new URL(path, window.location.origin);
+    const token = accessToken();
+    if (token) url.searchParams.set(PARAM, token);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }
+
+  function shipText(state) {
+    const ship = state && state.ship ? state.ship : {};
+    return ship.name || ship.type || "";
+  }
+
+  function optionText(node) {
+    const parts = [node.name + (node.local ? " (hub)" : "")];
+    const ship = shipText(node.state);
+    if (ship) parts.push(ship);
+    if (node.state && node.state.routine) parts.push(node.state.routine);
+    return parts.join(" · ");
+  }
+
+  function render(nodes) {
+    const local = nodes.find((node) => node.local);
+    localId = local ? local.node_id : "";
+    const current = window.EDCRNode.id() || localId;
+    const shown = nodes.filter((node) => node.connected || node.node_id === current);
+    select.replaceChildren(...shown.map((node) => {
+      const option = document.createElement("option");
+      option.value = node.node_id;
+      option.textContent = node.connected ? optionText(node) : `${node.name} (offline)`;
+      return option;
+    }));
+    const picked = nodes.find((node) => node.node_id === current);
+    if (!picked) {
+      const option = document.createElement("option");
+      option.value = current;
+      option.textContent = "Unknown node (offline)";
+      select.append(option);
+    }
+    select.value = current;
+    const offline = !picked || !picked.connected;
+    picker.dataset.state = offline ? "down" : "ok";
+    stateText.textContent = offline ? "Offline: pages wait for it" : "";
+    picker.title = picked && picked.connected ? optionText(picked) : "This node is not linked to the hub";
+  }
+
+  async function refreshNodes() {
+    try {
+      const payload = await getJson("/api/nodes");
+      picker.hidden = false;
+      render(payload.nodes || []);
+    } catch (error) {
+      // Not a hub, or the hub is restarting: keep what is shown.
+    }
+  }
+
+  select.addEventListener("change", () => {
+    // The hub's own game is the default, so it is stored as no choice.
+    window.EDCRNode.choose(select.value === localId ? "" : select.value);
+    window.location.reload();
+  });
+
+  getJson("/api/hub-status").then((status) => {
+    if (status.role !== "hub") return;
+    refreshNodes();
+    window.setInterval(refreshNodes, 10000);
+  }).catch(() => {});
 })();

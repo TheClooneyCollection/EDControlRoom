@@ -83,6 +83,9 @@
   }
 
   function withAuth(url) {
+    // On a hub, compare routes for the node picked in the sidebar (nav.js).
+    const node = window.EDCRNode.id();
+    if (node) url += (url.includes("?") ? "&" : "?") + "node=" + encodeURIComponent(node);
     const token = currentToken();
     if (!token) return url;
     const separator = url.includes("?") ? "&" : "?";

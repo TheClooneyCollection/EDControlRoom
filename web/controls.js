@@ -182,6 +182,8 @@ function websocketUrl() {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const params = new URLSearchParams({ client_name: "web-controls" });
   params.set(AUTH_QUERY_PARAMETER_NAME, accessToken);
+  // On a hub, the node picked in the sidebar (nav.js).
+  window.EDCRNode.addTo(params);
   return `${protocol}//${window.location.host}/session?${params.toString()}`;
 }
 

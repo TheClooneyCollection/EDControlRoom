@@ -1765,6 +1765,58 @@
   }
 }
 
+/* Node picker (nav.js), hub only: which node's game every page shows. */
+.node-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 14px 6px 0;
+}
+
+.node-picker[hidden] {
+  display: none;
+}
+
+.node-picker-label {
+  color: var(--text-3);
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.node-picker select {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-2);
+  color: var(--text-1);
+  font-size: 12.5px;
+}
+
+.node-picker[data-state="down"] select {
+  border-color: rgba(214, 91, 91, 0.65);
+  color: var(--red);
+}
+
+.node-picker-state {
+  color: var(--red);
+  font-size: 11px;
+}
+
+.node-picker-state:empty {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  /* At the top of the More menu. */
+  .node-picker {
+    margin: 2px 2px 8px;
+    min-width: 200px;
+  }
+}
+
 /* Activity log bar (activity-dock.js): docked to the bottom of the main column on desktop widths,
    collapsed to the newest entry until clicked. Phones keep the panel in the page flow. */
 .activity-toggle {
