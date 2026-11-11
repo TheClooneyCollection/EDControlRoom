@@ -180,6 +180,8 @@ class RunTotals:
     cost: int
     revenue: int
     profit: int
+    # Haul clock time of these runs (pauses excluded), so a route's profit per hour can be measured.
+    duration_s: float
 
 
 @dataclass(frozen=True)
@@ -277,7 +279,8 @@ def parse_window(text: str, now: datetime) -> tuple[datetime | None, datetime, s
 def _run_totals(rows: list[dict[str, Any]]) -> RunTotals:
     cost = sum(row["cost"] for row in rows)
     revenue = sum(row["revenue"] for row in rows)
-    return RunTotals(len(rows), cost, revenue, revenue - cost)
+    duration = sum(float(row.get("duration_s", 0) or 0) for row in rows)
+    return RunTotals(len(rows), cost, revenue, revenue - cost, duration)
 
 
 def _trade_totals(trades: list[tuple[str, dict[str, Any]]]) -> TradeTotals:

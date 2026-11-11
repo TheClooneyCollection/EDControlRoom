@@ -102,7 +102,7 @@
     }
     .deal-form {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 140px);
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 140px) minmax(0, 160px);
       gap: 10px;
       margin-bottom: 14px;
     }
@@ -113,6 +113,20 @@
       border-radius: var(--radius);
       background: var(--bg-2);
       overflow-wrap: anywhere;
+    }
+    .deal-metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin: 10px 0 4px;
+    }
+    .deal-metric-value {
+      font-size: 15px;
+    }
+    .deal-metric-note {
+      display: block;
+      font-size: 11px;
+      color: var(--text-3);
     }
     .deal-panel h3 {
       margin: 16px 0 6px;
@@ -203,6 +217,10 @@
                 <label class="spansh-field">
                   <span class="field-label">Cargo capacity (t)</span>
                   <input class="field mono" id="deal-capacity" inputmode="numeric" autocomplete="off">
+                </label>
+                <label class="spansh-field">
+                  <span class="field-label">Laden jump range (Ly)</span>
+                  <input class="field mono" id="deal-laden" placeholder="haul_search" inputmode="decimal" autocomplete="off">
                 </label>
               </div>
               <div id="deal-result"></div>

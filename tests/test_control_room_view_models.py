@@ -37,7 +37,7 @@ class ControlRoomViewModelsTests(unittest.TestCase):
         self.assertEqual(view_model.current_balance, 123_456)
 
     def test_today_line_uses_cached_totals_in_active_and_idle_panels(self) -> None:
-        totals = RunTotals(count=3, cost=50, revenue=150, profit=100)
+        totals = RunTotals(count=3, cost=50, revenue=150, profit=100, duration_s=600.0)
         for buying in ("", "gold"):
             model = haul_panel_view_model(HaulStats(station_1_buying=buying),
                                           current_balance=None, today_totals=totals)

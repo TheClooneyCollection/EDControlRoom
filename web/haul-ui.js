@@ -73,7 +73,7 @@ let routes = [];
       ].map(([name, value]) => `<div class="metric"><div class="metric-label">${name}</div><div class="metric-value mono">${value}</div></div>`).join("");
       const expected = completed.expected_count ? `<p>Expected vs actual (${completed.expected_count} completed): ${
         historyMoney(completed.expected_profit)} / ${historyMoney(completed.expected_actual_profit)}; delta ${historyMoney(completed.profit_delta)}</p>` : "";
-      const routes = (runs.routes || []).map((route) => `<tr><td>${escapeHtml(route.station_1)} ↔ ${escapeHtml(route.station_2)}</td><td>${route.completed.count} / ${route.aborted.count}</td><td>${historyMoney(route.all_in.profit)}</td><td>${historyMoney(route.all_in.cost)}</td><td>${historyMoney(route.all_in.revenue)}</td></tr>`);
+      const routes = (runs.routes || []).map((route) => `<tr><td>${escapeHtml(route.station_1)} ↔ ${escapeHtml(route.station_2)}</td><td>${route.completed.count} / ${route.aborted.count}</td><td>${historyMoney(route.completed.duration_s > 0 ? route.completed.profit * 3600 / route.completed.duration_s : null)}</td><td>${historyMoney(route.all_in.profit)}</td><td>${historyMoney(route.all_in.cost)}</td><td>${historyMoney(route.all_in.revenue)}</td></tr>`);
       const commodities = (runs.commodities || []).map((item) => `<tr><td>${escapeHtml(item.commodity)}</td><td>${item.all_in.tons_bought} / ${item.all_in.tons_sold} t</td><td>${historyMoney(item.all_in.cost)}</td><td>${historyMoney(item.all_in.revenue)}</td></tr>`);
       const journal = payload.journal;
       const coverage = journal && journal.coverage;
@@ -87,7 +87,7 @@ let routes = [];
         <p>Completed: ${completed.count} runs; profit ${historyMoney(completed.profit)}; ${historyMoney(completed.profit_per_hour)} / hour; mean ${historyMoney(completed.mean_profit)}; best ${historyMoney(completed.best_profit)}</p>
         <p>Aborted: ${runs.aborted.count} runs; realized profit ${historyMoney(runs.aborted.profit)}</p>
         <p>All-in revenue ${historyMoney(runs.all_in.revenue)}; cost ${historyMoney(runs.all_in.cost)}</p>
-        ${expected}<h3>Routes</h3>${historyTable(["Route", "Completed / Aborted", "Profit", "Cost", "Revenue"], routes)}
+        ${expected}<h3>Routes</h3>${historyTable(["Route", "Completed / Aborted", "Completed / hour", "Profit", "Cost", "Revenue"], routes)}
         <h3>Commodities</h3>${historyTable(["Commodity", "Bought / Sold", "Cost", "Revenue"], commodities)}
         <p class="history-journal"><strong>All trading (journal):</strong> ${journalLine}</p></details>`;
     }

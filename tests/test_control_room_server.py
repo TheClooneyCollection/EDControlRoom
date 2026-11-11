@@ -841,12 +841,16 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(page.status_code, 200)
         self.assertEqual(page.headers["cache-control"], "no-store")
         self.assertIn('src="/assets/markets.js"', page.text)
-        for element_id in ("market-list", "market-table", "show-empty", "deal-x", "deal-y", "deal-capacity"):
+        for element_id in ("market-list", "market-table", "show-empty", "deal-x", "deal-y", "deal-capacity",
+                           "deal-laden"):
             self.assertIn(f'id="{element_id}"', page.text)
         self.assertEqual(script.status_code, 200)
         self.assertEqual(script.headers["cache-control"], "no-store")
         for hook in ('"/api/recent-markets"', '"/api/market-compare"', "ageLabel(market.timestamp)", "/haul#route=",
-                     "const DEAL_CHOICES = 3;", 'name="deal-${leg}"', "tradeRoute(marketX, marketY, out, back)"):
+                     "const DEAL_CHOICES = 3;", 'name="deal-${leg}"', "tradeRoute(marketX, marketY, out, back, perHour)",
+                     '"Profit per ton"', '"Profit per trip", credits(perTrip), "Full-hold round trip"',
+                     '"Profit per hour"', '"Measured per hour"', "perTrip * 3600 / trip.trip_s",
+                     'laden_jump_range_ly: document.getElementById("deal-laden").value.trim()'):
             self.assertIn(hook, script.text)
         self.assertEqual(listing["cargo_capacity"], 256)
         self.assertEqual([m["station"] for m in listing["markets"]], ["Abraham Lincoln", "Galileo"])
@@ -860,6 +864,65 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(smaller["round_trip"]["hold_profit"], 1100 * 10)
         self.assertEqual(missing.status_code, 404)
         self.assertEqual(invalid.status_code, 400)
+        # Both stations are in Sol, so only the never-docked distances are missing; no guess is made.
+        self.assertEqual(comparison["trip"]["missing"],
+                         ["Galileo distance from star", "Abraham Lincoln distance from star"])
+        self.assertIsNone(comparison["trip"]["trip_s"])
+        self.assertEqual(comparison["trip"]["jumps"], 0)
+        self.assertEqual(comparison["trip"]["stations"]["x"]["station_type_source"], "journal")
+        self.assertIsNone(comparison["measured"])
+
+    def test_market_compare_estimates_trip_time_from_the_journal_and_measures_haul_runs(self) -> None:
+        import json
+
+        from edap.eddn.routes import TimeModel
+        from edap.recent_markets import record_journal_events, record_market_json
+        from edap.trade_trip import StationFacts, estimate_trip
+
+        def run(station_1: str, station_2: str, duration_s: float) -> dict:
+            return {"schema": 1, "kind": "two_way", "status": "completed", "started_at": "2026-11-10T09:00:00Z",
+                    "ended_at": "2026-11-10T10:00:00Z", "duration_s": duration_s, "cost": 1_000_000,
+                    "revenue": 3_000_000, "profit": 2_000_000, "legs": [],
+                    "route": {"station_1": station_1, "system_1": None, "station_2": station_2, "system_2": None}}
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = Path(directory) / "recent.json"
+            runs = Path(directory) / "runs.jsonl"
+            runs.write_text(json.dumps(run("Galileo", "Alpha Port", 1500.0)) + "\n"
+                            + json.dumps(run("alpha port", "galileo", 900.0)) + "\n", encoding="utf-8")
+            for market_id, station, system in ((1, "Galileo", "Sol"), (2, "Alpha Port", "Alpha")):
+                record_market_json(store, {"MarketID": market_id, "StationName": station, "StarSystem": system,
+                                           "StationType": "Coriolis", "timestamp": "2026-11-10T10:00:00Z",
+                                           "Items": []}, lambda _: None)
+            record_journal_events(store, [
+                {"event": "Location", "StarSystem": "Sol", "StarPos": [0, 0, 0], "Docked": True, "MarketID": 1,
+                 "StationName": "Galileo", "StationType": "Coriolis", "DistFromStarLS": 500.0},
+                {"event": "FSDJump", "StarSystem": "Alpha", "StarPos": [30.0, 0, 0]},
+                {"event": "Docked", "StarSystem": "Alpha", "MarketID": 2, "StationName": "Alpha Port",
+                 "StationType": "CraterOutpost", "DistFromStarLS": 80.0},
+            ], lambda _: None)
+            app = build_observer_server_app(
+                data_provider=_base_data_read_model, command_handler=None, broker=InMemoryObserverSessionBroker(),
+                auth=SharedAccessTokenAuth("secret-token"), recent_markets_file=store, haul_runs_file=runs,
+            )
+            with TestClient(app) as client:
+                url = "/api/market-compare?x=1&y=2&capacity=10&access_token=secret-token"
+                compared = client.get(f"{url}&laden_jump_range_ly=20").json()
+                bad = client.get(f"{url}&laden_jump_range_ly=-3")
+
+        trip = compared["trip"]
+        expected = estimate_trip(
+            StationFacts("Galileo", "Sol", (0.0, 0.0, 0.0), "j", 500.0, "j", "Coriolis", "j"),
+            StationFacts("Alpha Port", "Alpha", (30.0, 0.0, 0.0), "j", 80.0, "j", "CraterOutpost", "j"),
+            laden_jump_range_ly=20.0, time_model=TimeModel(),
+        )
+        self.assertEqual((trip["jumps"], trip["distance_ly"], trip["missing"]), (2, 30.0, []))
+        self.assertEqual(trip["trip_s"], expected.trip_s)
+        self.assertEqual(trip["laden_jump_range_ly"], 20.0)
+        self.assertEqual(trip["stations"]["y"]["station_type"], "CraterOutpost")
+        self.assertEqual(compared["measured"],
+                         {"runs": 2, "profit": 4_000_000, "duration_s": 2400.0, "profit_per_hour": 6_000_000})
+        self.assertEqual(bad.status_code, 400)
 
     def test_every_page_renders_the_one_shared_nav(self) -> None:
         web_dir = Path(server_app.__file__).resolve().parents[3] / "web"

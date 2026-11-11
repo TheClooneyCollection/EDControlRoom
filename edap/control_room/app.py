@@ -122,6 +122,7 @@ from edap.control_room_state import (
 from edap.binding_conflicts import read_galaxy_map_binding_conflicts
 from edap.binding_lookup import load_binding_lookup
 from edap.binding_names import format_binding_action_hint
+from edap.recent_markets import JOURNAL_PLACE_EVENTS, record_journal_events
 from edap.runtime import RuntimeContext, build_runtime_context, load_config_with_fallback
 from edap.ship_controls import DEFAULT_SHIP_CONTROL_ACTIONS, ShipControls
 from edap.tts import AnnouncementId, TTSAnnouncer, format_credits_short, parse_announcement_id
@@ -1689,6 +1690,8 @@ class ControlRoomApp(App[None]):
         if event in {"Cargo", "MarketBuy", "MarketSell"}:
             _bootstrap.sync_cargo_manifest(self)
 
+        if event in JOURNAL_PLACE_EVENTS:
+            record_journal_events(self._config.control_room.recent_markets_file, [ev], self._log)
         if event in {"Docked", "Market"}:
             self._load_market_json()
 

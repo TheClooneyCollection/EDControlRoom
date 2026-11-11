@@ -26,6 +26,17 @@ This is off by default; turn it on with `enabled = true` under `[eddn]` (see Set
 
 Prices are only as fresh as the last commander who docked there; the **Data age** column shows how old each route's prices are.
 
+## Best deal on the Markets page
+
+The **Best deal** panel on `/markets` compares two stations whose market you opened and shows the numbers Inara's trade route view shows:
+
+- **Profit per ton**: both legs added (Cr/t).
+- **Profit per trip**: a full-hold round trip, the hold capped by the seller's stock.
+- **Profit per hour**: profit per trip over the estimated round-trip time, from the same time model as the Routes page, with the trip time, jumps and distance under it. **Laden jump range** works as on the Routes page (empty falls back to `haul_search.toml`).
+- **Measured per hour**: profit per hour of your completed haul runs between the two stations, either direction.
+
+The estimate needs each system's coordinates and each station's distance from the star and type. They come from the EDDN database when it is on, then from your journal (a station you docked at, a system you jumped to). If one is still unknown the panel shows "-" and names what is missing; it never guesses.
+
 ## Settings
 
 In `config.toml`:

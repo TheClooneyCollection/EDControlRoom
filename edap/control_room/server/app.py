@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import asdict, dataclass, replace
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import logging
 from pathlib import Path
@@ -22,13 +22,27 @@ from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from edap.eddn.game_markets import GameMarketImport
-from edap.eddn.route_query import RouteQueryError, parse_route_query, resolve_route_params, run_route_query
+from edap.eddn.route_query import (
+    RouteQueryError,
+    laden_jump_range,
+    parse_route_query,
+    resolve_route_params,
+    run_route_query,
+)
 from edap.eddn.routes import TimeModel
 from edap.haul_history import load_runs, parse_window, summarize
 from edap.journal_trade_ledger import journal_trade_ledger
 from edap.market_compare import compare_markets
 from edap.hub import HubClient, HubStatus, HubUnreachable, hub_unreachable_detail, with_hub_source
-from edap.recent_markets import MarketSnapshot, load_recent_markets, market_items, snapshot_from_entry
+from edap.recent_markets import (
+    JournalPlaces,
+    MarketSnapshot,
+    load_journal_places,
+    load_recent_markets,
+    market_items,
+    snapshot_from_entry,
+)
+from edap.trade_trip import FactLookup, estimate_trip, gather_facts, journal_lookup, measured_route, store_lookup
 from edap.platform.local_time import SystemLocalTimezone
 from edap.control_room.server.auth import ObserverServerAuth
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
@@ -478,13 +492,66 @@ def build_observer_server_app(
             return JSONResponse({"detail": "x and y must be market ids; capacity must be a whole number"}, status_code=400)
         if cargo_capacity < 0:
             return JSONResponse({"detail": "capacity must not be negative"}, status_code=400)
-        by_id = {snapshot.market_id: snapshot for snapshot in await asyncio.to_thread(read_recent_markets)}
-        market_x = by_id.get(market_x_id)
-        market_y = by_id.get(market_y_id)
-        if market_x is None or market_y is None:
+        try:
+            search_defaults = await asyncio.to_thread(load_haul_search_config)
+        except (OSError, HaulSearchConfigError):
+            search_defaults = {}
+        try:
+            laden = laden_jump_range(params, search_defaults=search_defaults)
+        except ValueError:
+            return JSONResponse({"detail": "laden_jump_range_ly must be a positive number"}, status_code=400)
+
+        def compare() -> dict[str, Any] | None:
+            snapshots = read_recent_markets()
+            by_id = {snapshot.market_id: snapshot for snapshot in snapshots}
+            market_x = by_id.get(market_x_id)
+            market_y = by_id.get(market_y_id)
+            if market_x is None or market_y is None:
+                return None
+            comparison = compare_markets(market_items(market_x), market_items(market_y), cargo_capacity)
+            return {
+                **asdict(comparison),
+                **read_trip(market_x, market_y, snapshots, laden),
+            }
+
+        payload = await asyncio.to_thread(compare)
+        if payload is None:
             return JSONResponse({"detail": "market is not in the recent markets list"}, status_code=404)
-        comparison = compare_markets(market_items(market_x), market_items(market_y), cargo_capacity)
-        return JSONResponse(asdict(comparison))
+        return JSONResponse(payload)
+
+    def read_trip(
+        market_x: MarketSnapshot, market_y: MarketSnapshot, snapshots: tuple[MarketSnapshot, ...], laden: float
+    ) -> dict[str, Any]:
+        """Estimated trip time (EDDN store, then journal, then Ardent) and measured haul profit per hour."""
+        places = load_journal_places(recent_markets_file) if recent_markets_file is not None else JournalPlaces()
+        store = None
+        if eddn_database_file is not None and eddn_database_file.exists():
+            try:
+                store = sqlite3.connect(f"file:{eddn_database_file}?mode=ro", uri=True)
+            except sqlite3.Error:
+                store = None
+        try:
+            sources: list[tuple[str, FactLookup]] = []
+            if store is not None:
+                sources.append(("eddn", store_lookup(store)))
+            sources.append(("journal", journal_lookup(places, snapshots)))
+            facts = [gather_facts(m.market_id, m.station, m.system, sources) for m in (market_x, market_y)]
+        finally:
+            if store is not None:
+                store.close()
+        estimate = estimate_trip(facts[0], facts[1], laden_jump_range_ly=laden, time_model=TimeModel())
+        measured = None
+        if haul_runs_file is not None:
+            try:
+                rows, skipped = load_runs(haul_runs_file)
+                summary = summarize(rows, None, datetime.now(timezone.utc), skipped_lines=skipped)
+                measured = measured_route(summary.routes, market_x, market_y)
+            except (OSError, ValueError):
+                measured = None
+        return {
+            "trip": {**asdict(estimate), "stations": {"x": asdict(facts[0]), "y": asdict(facts[1])}},
+            "measured": asdict(measured) if measured is not None else None,
+        }
 
     async def eddn_status_endpoint(request: Request) -> JSONResponse:
         auth_failure = require_http_auth(request)

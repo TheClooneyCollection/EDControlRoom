@@ -97,14 +97,18 @@ class HaulSummaryTests(unittest.TestCase):
             "profit_per_hour": 260, "mean_profit": 130, "best_profit": 200,
             "expected_count": 1, "expected_profit": 150, "expected_actual_profit": 200, "profit_delta": 50,
         })
-        self.assertEqual(asdict(result.aborted), {"count": 1, "cost": 80, "revenue": 10, "profit": -70})
-        self.assertEqual(asdict(result.all_in), {"count": 3, "cost": 220, "revenue": 410, "profit": 190})
+        self.assertEqual(asdict(result.aborted),
+                         {"count": 1, "cost": 80, "revenue": 10, "profit": -70, "duration_s": 10000})
+        self.assertEqual(asdict(result.all_in),
+                         {"count": 3, "cost": 220, "revenue": 410, "profit": 190, "duration_s": 13600})
         # The total covers aborted runs too, since a stop or relaunch splits a run into aborted halves.
         self.assertEqual(result.all_in_duration_s, 13600)
         self.assertAlmostEqual(result.all_in_profit_per_hour, 190 * 3600 / 13600)
         self.assertEqual(result.skipped_lines, 3)
         self.assertEqual(len(result.routes), 2)
         self.assertEqual(result.routes[0].completed.profit, 260)
+        # Each route keeps its own haul time, so its profit per hour can be measured.
+        self.assertEqual(result.routes[0].completed.duration_s, 3600)
         self.assertEqual(result.routes[1].aborted.profit, -70)
         gold, = result.commodities
         self.assertEqual(asdict(gold.all_in), {"tons_bought": 22, "tons_sold": 15, "cost": 220, "revenue": 410})

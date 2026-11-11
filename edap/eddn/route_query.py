@@ -58,6 +58,17 @@ def resolve_route_params(
     return {key: value for key, value in resolved.items() if value}
 
 
+def laden_jump_range(params: Mapping[str, str], *, search_defaults: Mapping[str, str]) -> float:
+    """`laden_jump_range_ly`, else `haul_search.toml`'s max route distance, else the default; /markets shares it."""
+    raw = _param(params, search_defaults, "laden_jump_range_ly")
+    if not raw or raw.lower() == "any":
+        return DEFAULT_LADEN_JUMP_RANGE_LY
+    laden = float(raw)
+    if not math.isfinite(laden) or laden <= 0:
+        raise ValueError("laden_jump_range_ly must be positive")
+    return laden
+
+
 def parse_route_query(
     params: Mapping[str, str], *, search_defaults: Mapping[str, str], current_system: str, cargo_capacity: int
 ) -> RouteQuery:
@@ -78,9 +89,7 @@ def parse_route_query(
     view = value("view") or "near"
     if view not in {"near", "global"}:
         raise ValueError("view must be near or global")
-    laden = number("laden_jump_range_ly", DEFAULT_LADEN_JUMP_RANGE_LY)
-    if laden <= 0:
-        raise ValueError("laden_jump_range_ly must be positive")
+    laden = laden_jump_range(params, search_defaults=search_defaults)
     jumps = int(number("jumps", DEFAULT_ROUTE_JUMPS))
     # An explicit ly range (the 100 ly+ presets) overrides the jump count.
     max_route_ly = number("max_route_ly", jumps * laden) or jumps * laden

@@ -79,6 +79,26 @@ class TimeModel:
         return self.docked_s + self.travel_base_s + jump_s + self.supercruise_s(dist_ls) + landing_s
 
 
+def jump_count(system_a: str, system_b: str, distance_ly: float, laden_jump_range_ly: float) -> int:
+    """Jumps per leg: none inside one system, else the laden range covers the distance."""
+    if system_a.casefold() == system_b.casefold():
+        return 0
+    return max(1, math.ceil(distance_ly / laden_jump_range_ly - 1e-9))
+
+
+def round_trip_s(
+    time_model: TimeModel,
+    jumps: int,
+    *,
+    a_dist_ls: float | None,
+    a_surface: bool,
+    b_dist_ls: float | None,
+    b_surface: bool,
+) -> float:
+    """A -> B -> A: one leg ending at each station, both with the same jump count."""
+    return time_model.leg_s(jumps, b_dist_ls, surface=b_surface) + time_model.leg_s(jumps, a_dist_ls, surface=a_surface)
+
+
 @dataclass(frozen=True)
 class RouteLeg:
     commodity: str
@@ -227,10 +247,9 @@ def _route(
     # Station 1 is where the bigger hold is bought, so a one-sided route starts at its buy.
     if (inbound.profit if inbound else 0) > (outbound.profit if outbound else 0):
         a, b, outbound, inbound = b, a, inbound, outbound
-    jumps = 0 if a.system.casefold() == b.system.casefold() else max(1, math.ceil(distance / jump_range - 1e-9))
-    trip_s = (
-        time_model.leg_s(jumps, b.dist_ls, surface=b.is_surface)
-        + time_model.leg_s(jumps, a.dist_ls, surface=a.is_surface)
+    jumps = jump_count(a.system, b.system, distance, jump_range)
+    trip_s = round_trip_s(
+        time_model, jumps, a_dist_ls=a.dist_ls, a_surface=a.is_surface, b_dist_ls=b.dist_ls, b_surface=b.is_surface
     )
     return FoundRoute(
         station_1=a, station_2=b, distance_ly=distance, jumps=jumps, outbound=outbound, inbound=inbound,

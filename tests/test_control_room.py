@@ -1360,6 +1360,22 @@ class ControlRoomCommandTests(unittest.TestCase):
                          [(3228, "Pawelczyk Dock", "Coriolis")])
         self.assertEqual(markets[0].items[0]["Name_Localised"], "Gold")
 
+    def test_jumps_and_docking_record_journal_places_live_and_from_the_latest_log(self) -> None:
+        from edap.recent_markets import load_journal_places
+
+        journal_dir = Path(self.tmpdir.name)
+        (journal_dir / "Journal.240101000000.01.log").write_text(
+            json.dumps({"event": "FSDJump", "StarSystem": "HIP 58412", "StarPos": [1.5, 2.0, -3.0]}) + "\n",
+            encoding="utf-8",
+        )
+
+        self.app._bootstrap_ship_state()
+        self.app._handle_event({"event": "Docked", "MarketID": 3228, "StationName": "Pawelczyk Dock",
+                                "StationType": "Coriolis", "StarSystem": "HIP 58412", "DistFromStarLS": 1234.5})
+
+        places = load_journal_places(self.app._config.control_room.recent_markets_file)
+        self.assertEqual((places.system("hip 58412").x, places.station(3228).dist_ls), (1.5, 1234.5))
+
     def test_load_market_json_does_not_seed_when_not_in_station(self) -> None:
         journal_dir = Path(self.tmpdir.name)
         (journal_dir / "Journal.240101000000.01.log").write_text(

@@ -206,8 +206,44 @@ function chosenDeal(leg) {
   return deals.find((deal) => deal.commodity === chosenDeals[leg]) || deals[0] || null;
 }
 
+// Same model as /routes: profit per trip over the estimated round-trip time.
+function estimatedProfitPerHour(perTrip, trip) {
+  return trip && trip.trip_s ? Math.round(perTrip * 3600 / trip.trip_s) : null;
+}
+
+function minutes(seconds) {
+  return `${Math.round(seconds / 60)} min`;
+}
+
+function metric(label, value, note) {
+  return `<div><span class="field-label">${label}</span>
+    <span class="deal-metric-value mono">${value}</span>${note ? `<span class="deal-metric-note">${note}</span>` : ""}</div>`;
+}
+
+// Inara's trade route view: profit per ton, profit per trip and profit per hour, plus our measured runs.
+function dealMetrics(perTon, perTrip, perHour, trip, measured) {
+  let hourNote;
+  if (perHour !== null) {
+    const legs = trip.jumps ? `${trip.jumps} jump${trip.jumps === 1 ? "" : "s"} each way, ${trip.distance_ly} Ly` : "same system";
+    hourNote = `Estimate: ${minutes(trip.trip_s)} round trip, ${legs} at ${trip.laden_jump_range_ly} Ly laden`;
+  } else {
+    const missing = (trip && trip.missing) || [];
+    hourNote = missing.length ? `Missing ${escapeHtml(missing.join(", "))}. Docking there or EDDN data fills it in.` : "No trip estimate.";
+  }
+  const measuredValue = measured ? `${credits(measured.profit_per_hour)}/h` : "-";
+  const measuredNote = measured
+    ? `${count(measured.runs)} completed haul run${measured.runs === 1 ? "" : "s"}, ${minutes(measured.duration_s / measured.runs)} each`
+    : "No completed haul runs on this route.";
+  return `<div class="deal-metrics">
+    ${metric("Profit per ton", `${count(perTon)} Cr/t`, "Both legs added")}
+    ${metric("Profit per trip", credits(perTrip), "Full-hold round trip")}
+    ${metric("Profit per hour", perHour !== null ? `${credits(perHour)}/h` : "-", hourNote)}
+    ${metric("Measured per hour", measuredValue, measuredNote)}
+  </div>`;
+}
+
 // The picked round trip as a /haul route: X is the first station, Y the second.
-function tradeRoute(marketX, marketY, out, back) {
+function tradeRoute(marketX, marketY, out, back, perHour) {
   return {
     index: 0,
     from_station: marketX.station, from_system: marketX.system,
@@ -215,6 +251,7 @@ function tradeRoute(marketX, marketY, out, back) {
     source_buy_commodity: out ? out.name : null,
     target_buy_commodity: back ? back.name : null,
     profit_per_trip: credits((out ? out.hold_profit : 0) + (back ? back.hold_profit : 0)),
+    profit_per_hour: perHour !== null ? credits(perHour) : null,
     from_supply: out ? count(out.stock) : null,
     to_demand: out ? count(out.demand) : null,
     to_supply: back ? count(back.stock) : null,
@@ -238,14 +275,16 @@ function renderComparison() {
     result.innerHTML = `<p class="empty-note">No profitable round trip between these two markets.</p>${legs}`;
     return;
   }
-  shownTradeRoute = tradeRoute(marketX, marketY, out, back);
   const perTon = (out ? out.profit_per_ton : 0) + (back ? back.profit_per_ton : 0);
+  const perTrip = (out ? out.hold_profit : 0) + (back ? back.hold_profit : 0);
+  const perHour = estimatedProfitPerHour(perTrip, payload.trip);
+  shownTradeRoute = tradeRoute(marketX, marketY, out, back, perHour);
   // /haul imports a route from its #route= fragment once it connects.
   const haulUrl = `/haul#route=${encodeURIComponent(JSON.stringify(shownTradeRoute))}`;
   result.innerHTML = `
     <div class="deal-round-trip"><strong>Round trip:</strong> X → Y ${out ? escapeHtml(out.name) : "nothing"},
       Y → X ${back ? escapeHtml(back.name) : "nothing"}.
-      <span class="profit">${count(perTon)} Cr/t, ${shownTradeRoute.profit_per_trip} per full-hold loop.</span>
+      ${dealMetrics(perTon, perTrip, perHour, payload.trip, payload.measured)}
       <div class="deal-actions">
         <button class="btn" type="button" id="deal-copy">Copy route</button>
         <a class="btn" href="${escapeHtml(haulUrl)}">Open in haul</a>
@@ -292,7 +331,8 @@ async function refreshComparison() {
     const payload = await fetchJson("/api/market-compare", {
       x,
       y,
-      capacity: document.getElementById("deal-capacity").value.trim()
+      capacity: document.getElementById("deal-capacity").value.trim(),
+      laden_jump_range_ly: document.getElementById("deal-laden").value.trim()
     });
     if (request !== compareRequest) return;
     const byId = Object.fromEntries(markets.map((market) => [String(market.market_id), market]));
@@ -313,6 +353,9 @@ async function refreshComparison() {
 }
 
 applyWebConfigLabels();
+// A blank jump range falls back to haul_search.toml on the server, as on /routes; show that value.
+const ladenDefault = (WEB_CONFIG.webDefaults || {}).maxRouteDistanceLy;
+if (ladenDefault) document.getElementById("deal-laden").placeholder = `${ladenDefault} (haul search)`;
 document.getElementById("access-token").value = accessToken;
 document.getElementById("save-token").addEventListener("click", () => {
   accessToken = document.getElementById("access-token").value.trim();
@@ -356,6 +399,7 @@ document.getElementById("deal-result").addEventListener("change", (event) => {
 document.getElementById("deal-x").addEventListener("change", refreshComparison);
 document.getElementById("deal-y").addEventListener("change", refreshComparison);
 document.getElementById("deal-capacity").addEventListener("change", refreshComparison);
+document.getElementById("deal-laden").addEventListener("change", refreshComparison);
 refreshMarkets();
 // New market visits and ages stay current without a manual refresh.
 window.setInterval(refreshMarkets, 30000);
