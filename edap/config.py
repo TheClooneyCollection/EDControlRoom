@@ -27,6 +27,7 @@ DEFAULT_CONTROL_ROOM_CONFIG_PATH = Path(__file__).resolve().parent.parent / "def
 DEFAULT_TIMING_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "timing.toml"
 DEFAULT_TTS_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "tts.toml"
 DEFAULT_EDDN_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "eddn.toml"
+DEFAULT_HUB_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "hub.toml"
 DEFAULT_ERROR_MESSAGES_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "error_messages.yaml"
 DEFAULT_MESSAGES_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "messages.yaml"
 
@@ -256,6 +257,19 @@ class EddnConfig:
 
 
 @dataclass(frozen=True)
+class HubConfig:
+    # Empty: no hub, searches and the market DB stay local.
+    url: str = ""
+    token: str = ""
+    timeout_s: float = 10.0
+    search_timeout_s: float = 180.0
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.url)
+
+
+@dataclass(frozen=True)
 class ErrorMessagesConfig:
     templates: dict[str, str] = field(default_factory=dict)
 
@@ -284,6 +298,7 @@ class AppConfig:
     input: InputConfig = field(default_factory=InputConfig)
     tts: TTSConfig = field(default_factory=TTSConfig)
     eddn: EddnConfig = field(default_factory=EddnConfig)
+    hub: HubConfig = field(default_factory=HubConfig)
     messages: MessagesConfig = field(default_factory=default_messages_config)
     error_messages: ErrorMessagesConfig = field(default_factory=default_error_messages_config)
 
@@ -341,6 +356,11 @@ def _load_default_tts_table() -> dict[str, object]:
 @lru_cache(maxsize=1)
 def _load_default_eddn_table() -> dict[str, object]:
     return _load_default_toml_section(DEFAULT_EDDN_CONFIG_PATH, "eddn", "EDDN")
+
+
+@lru_cache(maxsize=1)
+def _load_default_hub_table() -> dict[str, object]:
+    return _load_default_toml_section(DEFAULT_HUB_CONFIG_PATH, "hub", "hub")
 
 
 @lru_cache(maxsize=1)
@@ -444,6 +464,7 @@ def _default_app_config_table() -> dict[str, object]:
         "timing": _load_default_timing_table(),
         "tts": _load_default_tts_table(),
         "eddn": _load_default_eddn_table(),
+        "hub": _load_default_hub_table(),
     }
 
 
@@ -680,6 +701,11 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `eddn.max_age_days` must be positive and finite.")
     if not math.isfinite(config.eddn.status_every_s) or config.eddn.status_every_s < 0:
         raise ConfigError("Config value `eddn.status_every_s` must be zero or positive.")
+    if config.hub.url and not config.hub.url.startswith(("http://", "https://")):
+        raise ConfigError("Config value `hub.url` must start with http:// or https://.")
+    for key, value in (("timeout_s", config.hub.timeout_s), ("search_timeout_s", config.hub.search_timeout_s)):
+        if not math.isfinite(value) or value <= 0:
+            raise ConfigError(f"Config value `hub.{key}` must be positive and finite.")
     if not config.controls.start_hotkey.strip():
         raise ConfigError("Config value `controls.start_hotkey` cannot be empty.")
     if not config.controls.stop_hotkey.strip():
@@ -962,6 +988,8 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     default_control_room = _load_default_control_room_table()
     eddn = _optional_table(raw, "eddn")
     default_eddn = _load_default_eddn_table()
+    hub = _optional_table(raw, "hub")
+    default_hub = _load_default_hub_table()
     default_timing = _load_default_timing_table()
     default_timing_delay = _optional_table(default_timing, "delay")
     default_timing_hold = _optional_table(default_timing, "hold")
@@ -1232,6 +1260,12 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             ).expanduser(),
             max_age_days=_float(eddn, "max_age_days", _float(default_eddn, "max_age_days", 7.0)),
             status_every_s=_float(eddn, "status_every_s", _float(default_eddn, "status_every_s", 30.0)),
+        ),
+        hub=HubConfig(
+            url=_string(hub, "url", _string(default_hub, "url", "")).strip().rstrip("/"),
+            token=_string(hub, "token", _string(default_hub, "token", "")),
+            timeout_s=_float(hub, "timeout_s", _float(default_hub, "timeout_s", 10.0)),
+            search_timeout_s=_float(hub, "search_timeout_s", _float(default_hub, "search_timeout_s", 180.0)),
         ),
         messages=MessagesConfig(
             templates={

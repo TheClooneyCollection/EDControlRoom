@@ -24,6 +24,12 @@
 # max_age_days = 7.0
 # status_every_s = 30.0
 
+[hub]
+# Point this Control Room at a home hub that runs route searches and keeps the market DB
+# (docs/user/hub.md). Peers usually leave [eddn] off.
+# url = "http://192.168.1.20:8765"
+# token = "the hub's --token"
+
 [controls]
 # start_hotkey = "home"
 # stop_hotkey = "end"
