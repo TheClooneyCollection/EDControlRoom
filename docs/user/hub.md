@@ -1,0 +1,71 @@
+# Hub Control Room
+
+Run one Control Room at home as the **hub**. It searches routes (Inara and EDDN) and keeps the market database. Other Control Rooms, the **peers** (a Steam Deck, a travel Mac), point at it: they ask the hub for routes and send it the markets they visit.
+
+## What goes where
+
+| | Hub | Peer |
+|---|---|---|
+| Inara haul search (`/haul`) | runs the browser search | sends the search to the hub |
+| EDDN routes (`/routes`) | searches its database | asks the hub, for the peer's own ship |
+| Markets you open in game | written to its own database | sent to the hub's database only |
+| `haul_search.toml` defaults | used for its own searches | still fill the peer's form and blank `/routes` fields |
+| Flying, hauling, TTS | its own ship | its own ship, nothing changes |
+
+A peer sends its current system, cargo capacity and filled-in search settings with every request, so the hub answers for the peer's ship, not the hub's.
+
+## Set up the hub
+
+1. Turn on the market database in the hub's `config.toml`:
+
+   ```toml
+   [eddn]
+   enabled = true
+   ```
+
+2. Start it with a token of your own, reachable from the peers (see [getting-started.md](getting-started.md)):
+
+   ```bash
+   uv run python3 control_room.py lan --token <hub-token>
+   ```
+
+The hub needs Playwright and Chromium for Inara searches ([install.md](install.md)). It needs no hub settings itself.
+
+## Point a peer at the hub
+
+In the peer's `config.toml`:
+
+```toml
+[hub]
+url = "http://192.168.1.20:8765"   # the address the hub's lan server printed
+token = "<hub-token>"
+```
+
+Restart the peer. Its log says `Hub: searches and market pushes go to ...`. The peer's own `--token` still protects the peer; `[hub].token` is only for talking to the hub.
+
+Peers usually leave `[eddn]` off: the hub listens to EDDN for everyone. `[eddn]` stays independent, so a peer that turns it on keeps a local EDDN listener, but its own visited markets still go only to the hub.
+
+Optional settings: `timeout_s` (default 10 s, routes and market pushes) and `search_timeout_s` (default 180 s, Inara searches).
+
+## Pages on a peer
+
+- `/routes` shows `via hub <host>` after the route count, and the EDDN chip shows the hub's market count.
+- `/haul` search results show `via hub <host>`.
+- When the hub cannot be reached, the page shows `Hub <host> is unreachable: ...` instead of results. Nothing else on the peer stops: routines, hauls and pasted routes keep working.
+
+## Offline behaviour
+
+- Each time the peer records a market (you open the commodities market in game), it sends that market to the hub.
+- If the hub is down, the peer logs the failure and remembers it. The next successful push sends all recent markets (the last 10), so nothing visited while offline is lost as long as it is still in that list.
+- The hub keeps the newest snapshot per station, so a resend never replaces fresher data.
+- At start the peer sends all recent markets once.
+- A failed push is retried at the next market you open, not on a timer.
+- Pushes run in the background with timeouts; a slow or missing hub never blocks the ship.
+
+## API
+
+- `POST /api/haul-search`: JSON body like the websocket `command.search_haul_routes` payload (`system_name`, `cargo_capacity`, `max_route_distance_ly`, ...). Returns `{"result": ...}`; 400 for a bad search, 502 when Inara or the hub fails. It does not save `haul_search.toml`.
+- `GET /api/eddn-routes`: `system`, `capacity` and `laden_jump_range_ly` (and the other filters) override the hub's own ship and settings.
+- `POST /api/markets`: `{"markets": [<recent markets entry>, ...]}`, the shape of `.control_room_recent_markets.json`. Returns `{"results": [{"station", "system", "timestamp", "written"}]}`; 400 for a bad body, 503 when the hub has no EDDN database.
+
+All take the hub's token like every other `/api/*` call.

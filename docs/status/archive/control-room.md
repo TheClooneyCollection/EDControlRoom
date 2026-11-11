@@ -4,6 +4,10 @@ Prepend displaced older status blocks from `docs/status/control-room.md` here.
 
 Legacy pre-split global status history remains in `../../status-archive.md`.
 
+## Archived 2026-11-11 (hub mode)
+
+- Market panel lock semantics are aligned across embedded and `connect`: `market lock` pins the displayed panel to the current market identity, same-market updates still render, and different-market data is held back until unlock.
+
 ## Archived 2026-11-11
 
 - `ControlRoomApp` no longer stores/applies backend snapshots, the backend contract no longer exposes `current_snapshot()`, and `ControlRoomEventSink` uses explicit `publish_data_refresh()` to fan out data-source hydrate messages.

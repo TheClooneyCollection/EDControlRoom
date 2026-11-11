@@ -40,4 +40,6 @@ status_every_s = 30.0    # server log status line; 0 turns it off
 
 Restart the server after changing these.
 
+On a Steam Deck or travel Mac you can skip the listener and ask a home Control Room instead: see [hub.md](hub.md).
+
 `tools/eddn_listen.py` runs the same listener on its own, without the server. Do not run it while the server is listening: both would write the same database.
