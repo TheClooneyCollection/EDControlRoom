@@ -44,7 +44,7 @@ That makes it a direct fit for high-volume A↔B cargo work like community goal 
 <table>
   <tr>
     <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/two-way-haul.png"><img src="docs/assets/screenshots/two-way-haul.png" alt="Two-way haul page"></a><br><sub>New and updated two-way haul</sub></td>
-    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/copy-paste-route.png"><img src="docs/assets/screenshots/copy-paste-route.png" alt="Copy and paste route panel"></a><br><sub>Copy and paste routes to fly and earn credits with friends</sub></td>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/copy-paste-route-wide.png"><img src="docs/assets/screenshots/copy-paste-route-wide.png" alt="Copy and paste route panel"></a><br><sub>Copy and paste routes to fly and earn credits with friends</sub></td>
     <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/markets-best-deal.png"><img src="docs/assets/screenshots/markets-best-deal.png" alt="Markets page with best deal"></a><br><sub>Recent markets and best deals</sub></td>
   </tr>
   <tr>
