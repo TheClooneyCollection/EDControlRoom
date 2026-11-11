@@ -1030,6 +1030,10 @@ class ControlRoomServerTests(unittest.TestCase):
                           '      <script src="/assets/nav.js"></script>', html, page)
             # No page keeps a hand-copied link list that could drift from nav.js again.
             self.assertNotIn('class="nav-item', html, page)
+            # nav.js runs before the page sets EDCR_WEB_CONFIG, so it must not read the config (and its token) yet.
+            self.assertLess(html.index("/assets/nav.js"), html.index("window.EDCR_WEB_CONFIG"), page)
+        self.assertNotIn("const WEB_CONFIG = window.EDCR_WEB_CONFIG", nav)
+        self.assertIn('document.addEventListener("DOMContentLoaded"', nav)
 
     def test_travel_page_hosts_the_route_panels_and_its_scripts_are_served(self) -> None:
         app = build_observer_server_app(data_provider=_base_data_read_model, command_handler=None,

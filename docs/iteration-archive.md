@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `345`
-- Latest generated iteration number: `478`
+- Generated iteration count: `346`
+- Latest generated iteration number: `479`
 
 ## Iteration 134
 
@@ -9853,3 +9853,25 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Live two-machine run, with a macOS peer and a Linux or Windows peer.
 - A stale advert costs one lookup deadline per browse; a shorter lookup deadline than the browse window would trim that if it matters.
+
+## Iteration 479
+
+- When: `2026-11-11 16:06`
+- Area: `control-room`
+- Title: `node-picker-token-fix`
+- Source: [2026-11-11-16-06_control-room_node-picker-token-fix.md](iteration-logs/2026-11-11-16-06_control-room_node-picker-token-fix.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `node-picker-token-fix`
+- Started: `2026-11-11 16:06`
+
+## Summary
+
+- The hub's node picker never showed in a real browser. `nav.js` loads in the sidebar, before the page script that sets `window.EDCR_WEB_CONFIG`, so it captured an empty config, sent `/api/hub-status` and `/api/nodes` without the default access token, got 401 and stayed hidden. The Hub chip still worked because `hub-status.js` is deferred.
+- `nav.js` now reads the config when it makes a request and asks the hub only after the document is parsed. A ship with a blank name shows its type instead of a stray separator.
+
+## Verification
+
+- Headless Chrome against a running hub: the picker lists the hub and a linked peer. A server test pins the script order and the lazy config read.

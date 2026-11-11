@@ -143,8 +143,8 @@ window.EDCRNode = (() => {
 
   // Node picker, hub only: online nodes with their ship and running routine. Desktop shows it under the
   // links; phones put it at the top of the More menu. Picking a node reloads the page onto it.
-  const WEB_CONFIG = window.EDCR_WEB_CONFIG || {};
-  const PARAM = WEB_CONFIG.authQueryParameterName || "access_token";
+  // Pages set EDCR_WEB_CONFIG in a script after this one, so read it when a request is made.
+  const webConfig = () => window.EDCR_WEB_CONFIG || {};
   const query = new URLSearchParams(window.location.search);
   const picker = document.createElement("label");
   picker.className = "node-picker";
@@ -170,13 +170,14 @@ window.EDCRNode = (() => {
     } catch (error) {
       stored = "";
     }
-    return query.get(PARAM) || query.get("access_token") || stored || WEB_CONFIG.defaultAccessToken || "";
+    return query.get(webConfig().authQueryParameterName || "access_token") || query.get("access_token") || stored ||
+      webConfig().defaultAccessToken || "";
   }
 
   async function getJson(path) {
     const url = new URL(path, window.location.origin);
     const token = accessToken();
-    if (token) url.searchParams.set(PARAM, token);
+    if (token) url.searchParams.set(webConfig().authQueryParameterName || "access_token", token);
     const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.json();
@@ -184,7 +185,7 @@ window.EDCRNode = (() => {
 
   function shipText(state) {
     const ship = state && state.ship ? state.ship : {};
-    return ship.name || ship.type || "";
+    return (ship.name || "").trim() || ship.type || "";
   }
 
   function optionText(node) {
@@ -236,7 +237,11 @@ window.EDCRNode = (() => {
     window.location.reload();
   });
 
-  getJson("/api/hub-status").then((status) => {
+  const whenParsed = new Promise((resolve) => {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", resolve, { once: true });
+    else resolve();
+  });
+  whenParsed.then(() => getJson("/api/hub-status")).then((status) => {
     if (status.role !== "hub") return;
     // The hub voice panel (which node the hub voices, Listen here) sits under the picker.
     const voice = document.createElement("script");
