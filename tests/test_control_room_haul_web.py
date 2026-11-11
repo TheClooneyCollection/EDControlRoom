@@ -372,6 +372,14 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn('data-label="Profit / trip">${escapeHtml(route.profitTrip || "-")}</td>', html)
         self.assertIn('colspan="8"', html)
 
+    def test_haul_route_table_shows_inara_supply_levels_as_arrows(self) -> None:
+        html = _haul_web_source()
+
+        self.assertIn('.replace(/\\ue84e\\ufe0e?/g, " ▲")', html)
+        self.assertIn('.replace(/\\ue84d\\ufe0e?/g, " ▼")', html)
+        self.assertIn("Sup ${escapeHtml(marketAmount(route.buyStationSupply))}", html)
+        self.assertIn("Dem ${escapeHtml(marketAmount(route.sellStationDemand))}", html)
+
     def test_haul_route_cards_label_every_column_like_the_table_header(self) -> None:
         web_dir = Path(__file__).resolve().parents[1] / "web"
         html = (web_dir / "haul-v1.html").read_text(encoding="utf-8")

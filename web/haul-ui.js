@@ -150,6 +150,17 @@ let routes = [];
       return skipped ? `Updated; ${skipped} invalid lines skipped` : "Updated";
     }
 
+    // Inara marks supply and demand with its own icon font: U+E84E high, U+E84D low. Show them as arrows and
+    // drop any other private-use glyph, which would render as a box.
+    function marketAmount(value) {
+      return String(value ?? "")
+        .replace(/\ue84e\ufe0e?/g, " ▲")
+        .replace(/\ue84d\ufe0e?/g, " ▼")
+        .replace(/[\ue000-\uf8ff]\ufe0e?/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
     function routeByIndex(index) {
       return routes.find((route) => route.index === index) || routes[0] || null;
     }
@@ -973,12 +984,12 @@ let routes = [];
           <td data-label="Station 1">
             <div class="route-main">${escapeHtml(route.buyStation)}</div>
             <div class="route-sub mono">${escapeHtml(route.buySystem)} / ${escapeHtml(route.buyStationDistance)}${route.buyManualLanding ? " / manual landing" : ""}</div>
-            <div class="route-sub mono">Sup ${escapeHtml(route.buyStationSupply)} / Dem ${escapeHtml(route.buyStationDemand)}</div>
+            <div class="route-sub mono">Sup ${escapeHtml(marketAmount(route.buyStationSupply))} / Dem ${escapeHtml(marketAmount(route.buyStationDemand))}</div>
           </td>
           <td data-label="Station 2">
             <div class="route-main">${escapeHtml(route.sellStation)}</div>
             <div class="route-sub mono">${escapeHtml(route.sellSystem)} / ${escapeHtml(route.sellStationDistance)}${route.sellManualLanding ? " / manual landing" : ""}</div>
-            <div class="route-sub mono">Sup ${escapeHtml(route.sellStationSupply)} / Dem ${escapeHtml(route.sellStationDemand)}</div>
+            <div class="route-sub mono">Sup ${escapeHtml(marketAmount(route.sellStationSupply))} / Dem ${escapeHtml(marketAmount(route.sellStationDemand))}</div>
           </td>
           <td class="num" data-label="Distance">${escapeHtml(route.distanceFromSystem)}</td>
           <td class="num" data-label="Route">${escapeHtml(route.routeDistance)}</td>
