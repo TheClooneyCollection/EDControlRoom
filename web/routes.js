@@ -23,6 +23,9 @@ const FIELD_PARAMS = [
   ["route-station-ls", "max_station_distance_ls"],
   ["route-age", "max_age_hours"]
 ];
+// Filters with a tick box; unticked sends `any`, which turns the filter off instead of using the haul_search value.
+const FILTER_TOGGLES = ["route-min-supply", "route-station-ls", "route-age"];
+const FILTER_TOGGLE_STORAGE_PREFIX = "edcr.routes.filter.";
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -196,6 +199,10 @@ async function search() {
   const request = ++searchRequest;
   const params = { view };
   FIELD_PARAMS.forEach(([id, key]) => {
+    if (FILTER_TOGGLES.includes(id) && !document.getElementById(`${id}-on`).checked) {
+      params[key] = "any";
+      return;
+    }
     const value = document.getElementById(id).value.trim();
     if (value) params[key] = value;
   });
@@ -238,6 +245,33 @@ function pressOnly(selector, button) {
 }
 
 applyWebConfigLabels();
+// Blank fields fall back to haul_search.toml (cargo: the ship) on the server; show those values so they are easy to override.
+[
+  ["route-laden", "maxRouteDistanceLy", "haul search"], ["route-capacity", "cargoCapacity", "ship"],
+  ["route-min-supply", "minSupply", "haul search"], ["route-station-ls", "maxStationDistanceLs", "haul search"],
+  ["route-age", "maxPriceAgeHours", "haul search"]
+].forEach(([id, key, source]) => {
+  const value = (WEB_CONFIG.webDefaults || {})[key];
+  if (value) document.getElementById(id).placeholder = `${value} (${source})`;
+});
+FILTER_TOGGLES.forEach((id) => {
+  const toggle = document.getElementById(`${id}-on`);
+  try {
+    toggle.checked = window.localStorage.getItem(`${FILTER_TOGGLE_STORAGE_PREFIX}${id}`) !== "off";
+  } catch (error) {
+    // Storage can be blocked; the filter then starts on.
+  }
+  document.getElementById(id).disabled = !toggle.checked;
+  toggle.addEventListener("change", () => {
+    document.getElementById(id).disabled = !toggle.checked;
+    try {
+      window.localStorage.setItem(`${FILTER_TOGGLE_STORAGE_PREFIX}${id}`, toggle.checked ? "on" : "off");
+    } catch (error) {
+      // Not remembered; the search below still uses the new state.
+    }
+    search();
+  });
+});
 // Start from the haul search surface choice (`use_surface_stations`) so surface ports are not hidden by default.
 document.getElementById("route-surface").checked = (WEB_CONFIG.webDefaults || {}).allowPlanetary === "true";
 document.getElementById("access-token").value = accessToken;

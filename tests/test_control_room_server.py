@@ -828,6 +828,12 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertIn('"allowPlanetary": "true"', page.text)
         self.assertIn('getElementById("route-surface").checked = (WEB_CONFIG.webDefaults || {}).allowPlanetary === "true"',
                       script.text)
+        # Blank min supply / station distance fall back to haul_search; the placeholders show those values.
+        self.assertIn('["route-min-supply", "minSupply", "haul search"]', script.text)
+        self.assertIn('["route-age", "maxPriceAgeHours", "haul search"]', script.text)
+        self.assertIn('id="route-min-supply-on"', page.text)
+        self.assertIn('params[key] = "any"', script.text)
+        self.assertIn('placeholder = `${value} (${source})`', script.text)
 
     def test_controls_endpoint_serves_button_board(self) -> None:
         broker = InMemoryObserverSessionBroker()

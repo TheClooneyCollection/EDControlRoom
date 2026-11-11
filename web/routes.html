@@ -75,6 +75,19 @@
     .empty-note {
       color: var(--text-2);
     }
+    /* A label that wraps (Max station distance) would push its input below the others. */
+    .routes-form .spansh-field {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+    }
+    .routes-form .field-label input {
+      margin: 0 4px 0 0;
+      vertical-align: middle;
+    }
+    .routes-form .field:disabled {
+      opacity: 0.45;
+    }
     .eddn-log {
       max-height: 220px;
       overflow-y: auto;
@@ -210,15 +223,15 @@
                 <input class="field mono" id="route-capacity" placeholder="Ship" inputmode="numeric" autocomplete="off">
               </label>
               <label class="spansh-field">
-                <span class="field-label">Min supply</span>
+                <span class="field-label"><input type="checkbox" id="route-min-supply-on" checked> Min supply</span>
                 <input class="field mono" id="route-min-supply" placeholder="haul_search" inputmode="numeric" autocomplete="off">
               </label>
               <label class="spansh-field">
-                <span class="field-label">Max station distance (Ls)</span>
+                <span class="field-label"><input type="checkbox" id="route-station-ls-on" checked> Max station distance (Ls)</span>
                 <input class="field mono" id="route-station-ls" placeholder="haul_search" autocomplete="off">
               </label>
               <label class="spansh-field">
-                <span class="field-label">Max data age (h)</span>
+                <span class="field-label"><input type="checkbox" id="route-age-on" checked> Max data age (h)</span>
                 <input class="field mono" id="route-age" placeholder="haul_search" inputmode="decimal" autocomplete="off">
               </label>
             </div>

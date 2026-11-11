@@ -122,6 +122,15 @@ class EddnRouteFinderTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "view"):
             parse_route_query({"view": "x"}, search_defaults={}, current_system="", cargo_capacity=0)
 
+    def test_unticked_filters_send_any_to_turn_off_the_haul_search_value(self) -> None:
+        saved = {"min_supply": "5000", "max_station_distance_ls": "1000", "max_price_age_hours": "8"}
+        ticked = parse_route_query({}, search_defaults=saved, current_system="Sol", cargo_capacity=1).filters
+        unticked = parse_route_query({"min_supply": "any", "max_station_distance_ls": "any", "max_age_hours": "any"},
+                                     search_defaults=saved, current_system="Sol", cargo_capacity=1).filters
+        self.assertEqual((ticked.min_supply, ticked.max_station_distance_ls, ticked.max_age_s), (5000, 1000, 8 * 3600))
+        self.assertEqual((unticked.min_supply, unticked.max_station_distance_ls), (0, None))
+        self.assertGreater(unticked.max_age_s, 365 * 86400)
+
     def test_surface_stations_follow_the_page_then_the_haul_search_choice(self) -> None:
         def include_surface(params: dict[str, str], saved: str) -> bool:
             query = parse_route_query(params, search_defaults={"use_surface_stations": saved}, current_system="Sol", cargo_capacity=1)

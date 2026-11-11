@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `322`
-- Latest generated iteration number: `455`
+- Generated iteration count: `323`
+- Latest generated iteration number: `456`
 
 ## Iteration 134
 
@@ -9134,3 +9134,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - No live validation yet of a restart after a pad-full or other denial.
 - Journal events while suspended (e.g. a manual dock) are not recorded, since tracking only runs while the haul is active; trades are made by the restarted haul, so money is unaffected.
 - A relaunch still aborts an open run; keeping it across relaunch would need the clean-run fields in saved state.
+
+## Iteration 456
+
+- When: `2026-11-11 06:47`
+- Area: `haul`
+- Title: `routes-filter-toggles`
+- Source: [2026-11-11-06-47_____haul_____routes-filter-toggles.md](iteration-logs/2026-11-11-06-47_____haul_____routes-filter-toggles.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `routes-filter-toggles`
+- Started: `2026-11-11 06:47`
+
+## Summary
+
+- `/routes` shows the haul search defaults its blank fields use, and Min supply, Max station distance and Max data age each get a tick box to turn the filter off.
+
+## Changes
+
+- Why: the Min supply field showed only `haul_search`, so the 5000 default that hid Chauhan Dock beryllium (about 4,000 t in stock) was invisible.
+- Placeholders read `<value> (haul search)` for laden jump range (`max_route_distance_ly`), min supply, max station distance and max data age, and `<value> (ship)` for cargo. Web defaults gain `maxPriceAgeHours` from `max_price_age_hours`.
+- Unticked filters send `any`: min supply 0 and no station distance limit as before. `max_age_hours=any` now lifts the age limit (finite `_NO_AGE_LIMIT_S`, since the query is echoed as JSON) instead of falling back to 48 h. Tick state is kept per browser in localStorage; a toggle reruns the search.
+- Form fields are bottom-aligned so the wrapping Max station distance label does not push its input down.
+
+## Follow-ups
+
+- The Max data age placeholder and `any` age need a server restart; until then it shows `haul_search` and `any` means 48 h.

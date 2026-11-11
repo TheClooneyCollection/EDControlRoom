@@ -292,6 +292,7 @@ def _web_form_defaults(app: ControlRoomApp) -> dict[str, str]:
         "minSupply": search_defaults.get("min_supply", ""),
         "minDemand": search_defaults.get("min_demand", ""),
         "maxMarketAge": "",
+        "maxPriceAgeHours": search_defaults.get("max_price_age_hours", ""),
         "requiresLargePad": "true" if min_landing_pad == "large" else "false",
         "allowPlanetary": "false" if use_surface_stations == "no" else "true",
         "surfaceStations": use_surface_stations,
