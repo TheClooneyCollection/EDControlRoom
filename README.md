@@ -1,8 +1,10 @@
-# EDControlRoom
-
-<p align="center">
-  <img src="assets/logos/hyperspace-trail-wordmark.png" alt="EDControlRoom" width="640">
-</p>
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logos/hyperspace-trail-wordmark-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/logos/hyperspace-trail-wordmark-light.png">
+    <img src="assets/logos/hyperspace-trail-wordmark-light.png" alt="EDControlRoom" width="640">
+  </picture>
+</h1>
 
 [![Tests](https://github.com/TheClooneyCollection/EDControlRoom/actions/workflows/tests.yml/badge.svg)](https://github.com/TheClooneyCollection/EDControlRoom/actions/workflows/tests.yml)
 [![Release](https://img.shields.io/github/v/release/TheClooneyCollection/EDControlRoom)](https://github.com/TheClooneyCollection/EDControlRoom/releases/latest)
