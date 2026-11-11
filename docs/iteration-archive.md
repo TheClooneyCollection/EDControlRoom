@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `326`
-- Latest generated iteration number: `459`
+- Generated iteration count: `327`
+- Latest generated iteration number: `460`
 
 ## Iteration 134
 
@@ -9240,7 +9240,7 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 ## Summary
 
-- One home Control Room (the hub) now runs route searches and holds the market DB for peers (Steam Deck, travel Mac). A peer with `[hub] url`/`token` forwards searches with its own ship inputs and pushes the markets it visits to the hub. Not yet tried live between two machines.
+- One home Control Room (the hub) now runs route searches and holds the market DB for peers (other machines). A peer with `[hub] url`/`token` forwards searches with its own ship inputs and pushes the markets it visits to the hub. Not yet tried live between two machines.
 
 ## Changes
 
@@ -9258,3 +9258,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - A failed push is retried only on the next market change, not on a timer.
 - Blank route params a peer cannot resolve fall back to the hub's own `haul_search.toml`.
 - `/routes` display names (Copy / Open in haul) come from the hub's recent markets, not the peer's.
+
+## Iteration 460
+
+- When: `2026-11-11 11:01`
+- Area: `control-room`
+- Title: `hub-lan-binding-docs`
+- Source: [2026-11-11-11-01_control-room_hub-lan-binding-docs.md](iteration-logs/2026-11-11-11-01_control-room_hub-lan-binding-docs.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `hub-lan-binding-docs`
+- Started: `2026-11-11 11:01`
+
+## Summary
+
+- The hub guide now says what `lan` binds and when to use `serve --host 0.0.0.0` instead. Runtime status now notes that routines cannot be driven from a Windows SSH session. Peer examples in the user docs are generic.
+
+## Changes
+
+- `docs/user/hub.md`: `lan` binds only the detected LAN address and `_detect_lan_host` skips `100.64.0.0/10` (VPN and CGNAT ranges), so peers on such a network need `serve --host 0.0.0.0`. Also covers the default `edcr` token and a DHCP reservation for the hub.
+- `docs/status/runtime.md`: new caveat that sshd runs outside the logged-in desktop session, so routines started over SSH cannot reach Elite. Start Control Room on the desktop and drive it through the web pages or `POST /api/command`. Merged two Windows next-step bullets to stay within 20 lines.
+- `docs/user/hub.md`, `docs/user/README.md`, `docs/user/trade-routes.md` and the hub iteration log: peer examples reworded to generic machines.
+
+## Follow-ups
+
+- Try a hub and a peer live: a peer pushes a market and `/routes` works through the hub.

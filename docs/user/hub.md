@@ -1,6 +1,6 @@
 # Hub Control Room
 
-Run one Control Room at home as the **hub**. It searches routes (Inara and EDDN) and keeps the market database. Other Control Rooms, the **peers** (a Steam Deck, a travel Mac), point at it: they ask the hub for routes and send it the markets they visit.
+Run one Control Room at home as the **hub**. It searches routes (Inara and EDDN) and keeps the market database. Other Control Rooms, the **peers** (another PC, a laptop or a handheld), point at it: they ask the hub for routes and send it the markets they visit.
 
 ## What goes where
 
@@ -23,11 +23,13 @@ A peer sends its current system, cargo capacity and filled-in search settings wi
    enabled = true
    ```
 
-2. Start it with a token of your own, reachable from the peers (see [getting-started.md](getting-started.md)):
+2. Start it so the peers can reach it on the LAN (see [getting-started.md](getting-started.md)):
 
    ```bash
    uv run python3 control_room.py lan --token <hub-token>
    ```
+
+   Without `--token` the hub uses the default `edcr` token. `lan` binds only the detected LAN address and skips VPN and CGNAT ranges (`100.64.0.0/10`); for peers on such a network, use `serve --host 0.0.0.0`.
 
 The hub needs Playwright and Chromium for Inara searches ([install.md](install.md)). It needs no hub settings itself.
 
@@ -38,8 +40,10 @@ In the peer's `config.toml`:
 ```toml
 [hub]
 url = "http://192.168.1.20:8765"   # the address the hub's lan server printed
-token = "<hub-token>"
+token = "<hub-token>"   # "edcr" when the hub runs without --token
 ```
+
+Give the hub a fixed LAN address (a DHCP reservation on the router) so this URL keeps working.
 
 Restart the peer. Its log says `Hub: searches and market pushes go to ...`. The peer's own `--token` still protects the peer; `[hub].token` is only for talking to the hub.
 

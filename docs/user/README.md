@@ -11,6 +11,6 @@ Start here if you want to run EDControlRoom.
 7. [trade-routes.md](trade-routes.md): the web Routes page, live EDDN market prices, and how to turn the listener off.
 8. [background-input.md](background-input.md): macOS + CrossOver only, optional. Let routines drive Elite while another Mac app is in front (the wine helper). Agents can set it up with the `edcr-background-input` skill.
 9. [command-api.md](command-api.md): run Control Room commands over HTTP (`POST /api/command`, `POST /api/stop`) from `curl`, scripts, or automation tools.
-10. [hub.md](hub.md): one home Control Room runs route searches and keeps the market DB; a Steam Deck or travel Mac points at it.
+10. [hub.md](hub.md): one home Control Room runs route searches and keeps the market DB; other machines point at it.
 
 Deeper operator references (input timing, market timing, `.binds` file management, remote/multi-client mode) live under [../operators/](../operators/).

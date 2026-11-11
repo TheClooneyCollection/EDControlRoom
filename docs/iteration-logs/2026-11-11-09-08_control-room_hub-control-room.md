@@ -6,7 +6,7 @@
 
 ## Summary
 
-- One home Control Room (the hub) now runs route searches and holds the market DB for peers (Steam Deck, travel Mac). A peer with `[hub] url`/`token` forwards searches with its own ship inputs and pushes the markets it visits to the hub. Not yet tried live between two machines.
+- One home Control Room (the hub) now runs route searches and holds the market DB for peers (other machines). A peer with `[hub] url`/`token` forwards searches with its own ship inputs and pushes the markets it visits to the hub. Not yet tried live between two machines.
 
 ## Changes
 
