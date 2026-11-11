@@ -1,7 +1,8 @@
-// Hub voice (plan 0015 step 7), loaded by nav.js on a hub only. Under the node picker: which node's callouts
-// the hub voices and whether its speakers say them (both hub-wide, saved on the hub), and "Listen here"
-// (per browser). A listening page plays each voiced callout: the hub's Piper WAV, or browser speech when the
-// hub has no Piper. While it listens, speech.js stays quiet, so one device never voices two nodes.
+// Hub voice (plan 0015 step 7), loaded by nav.js on a hub only. Under the node picker: play the picked node's
+// callouts on the hub speakers (hub-wide, saved on the hub) and in this browser (per browser), and mute the
+// node so they play only here. The picked node is the voiced one, hub-wide: picking a node in any hub page
+// voices it (nav.js). A listening page plays each voiced callout: the hub's Piper WAV, or browser speech when
+// the hub has no Piper. While it listens, speech.js stays quiet, so one device never voices two nodes.
 (() => {
   const WEB_CONFIG = window.EDCR_WEB_CONFIG || {};
   const PARAM = WEB_CONFIG.authQueryParameterName || "access_token";
@@ -10,7 +11,7 @@
   const SPEECH_KEY = "edcr.speech";
   const MOBILE_QUERY = window.matchMedia("(max-width: 760px)");
 
-  let settings = { node_id: null, node_name: null, speakers: false, piper: false };
+  let settings = { node_id: "", node_name: "", speakers: false, mute: false, muted: false, local_node_id: "", piper: false };
   let nodes = [];
   let listen = false;
   let socket = null;
@@ -25,20 +26,26 @@
     listen = false;
   }
 
-  window.EDCRHubVoice = { listening: () => listen && Boolean(settings.node_id) };
+  window.EDCRHubVoice = { listening: () => listen };
 
   const panel = document.createElement("div");
   panel.className = "hub-voice";
   panel.id = "hub-voice";
-  panel.innerHTML = '<label class="hub-voice-row"><span class="node-picker-label">Voice</span>' +
-    '<select id="hub-voice-node" aria-label="Node whose callouts the hub voices"></select></label>' +
-    '<label class="hub-voice-check"><input type="checkbox" id="hub-voice-speakers"> Hub speakers</label>' +
-    '<label class="hub-voice-check"><input type="checkbox" id="hub-voice-listen"> Listen here</label>' +
-    '<span class="hub-voice-status" id="hub-voice-status" role="status"></span>';
-  const select = panel.querySelector("#hub-voice-node");
+  panel.innerHTML = '<p class="hub-voice-help">Each machine speaks its own callouts. These play the picked ' +
+    'node\'s callouts here too.</p>' +
+    '<label class="hub-voice-check" id="hub-voice-speakers-row"><input type="checkbox" id="hub-voice-speakers"> ' +
+    'Play on hub speakers</label>' +
+    '<label class="hub-voice-check"><input type="checkbox" id="hub-voice-listen"> Play in this browser</label>' +
+    '<label class="hub-voice-check"><input type="checkbox" id="hub-voice-mute"> <span id="hub-voice-mute-label">Mute the node</span></label>' +
+    '<span class="hub-voice-status" id="hub-voice-status" role="status"></span>' +
+    '<button type="button" class="hub-voice-follow" id="hub-voice-follow" hidden></button>';
+  const speakersRow = panel.querySelector("#hub-voice-speakers-row");
   const speakersBox = panel.querySelector("#hub-voice-speakers");
   const listenBox = panel.querySelector("#hub-voice-listen");
+  const muteBox = panel.querySelector("#hub-voice-mute");
+  const muteLabel = panel.querySelector("#hub-voice-mute-label");
   const statusText = panel.querySelector("#hub-voice-status");
+  const follow = panel.querySelector("#hub-voice-follow");
 
   function place() {
     const picker = document.getElementById("node-picker");
@@ -72,38 +79,53 @@
     return response.json();
   }
 
+  function local() {
+    return settings.node_id === settings.local_node_id;
+  }
+
+  // The node this browser picked; empty means the hub's own game.
+  function picked() {
+    return (window.EDCRNode && window.EDCRNode.id()) || settings.local_node_id;
+  }
+
+  // Another browser picked the voiced node since this page picked its own.
+  function pickedElsewhere() {
+    return Boolean(settings.local_node_id) && picked() !== settings.node_id;
+  }
+
+  function nodeName(nodeId) {
+    const node = nodes.find((item) => item.node_id === nodeId);
+    return node ? node.name : "this node";
+  }
+
   function render() {
-    const shown = nodes.filter((node) => node.connected || node.node_id === settings.node_id);
-    const off = document.createElement("option");
-    off.value = "";
-    off.textContent = "Off";
-    select.replaceChildren(off, ...shown.map((node) => {
-      const option = document.createElement("option");
-      option.value = node.node_id;
-      option.textContent = node.name + (node.local ? " (hub)" : "") + (node.connected ? "" : " (offline)");
-      return option;
-    }));
-    if (settings.node_id && !shown.some((node) => node.node_id === settings.node_id)) {
-      const option = document.createElement("option");
-      option.value = settings.node_id;
-      option.textContent = `${settings.node_name || "Unknown node"} (offline)`;
-      select.append(option);
-    }
-    select.value = settings.node_id || "";
+    const name = settings.node_name || "the node";
+    // The hub's own game already speaks on the hub speakers.
+    speakersRow.hidden = local();
     speakersBox.checked = settings.speakers;
     listenBox.checked = listen;
+    const playing = (settings.speakers && !local()) || listen;
+    muteLabel.textContent = `Mute ${name}`;
+    muteBox.checked = settings.mute;
+    // Mute only while its callouts play here, so none are lost; unticking always works.
+    muteBox.disabled = !playing && !settings.mute;
+    muteBox.parentElement.title = `${name} stops speaking its own callouts; they play only on the hub. ` +
+      "It speaks again when nothing plays them here or its hub link drops.";
+    follow.hidden = !pickedElsewhere();
+    if (!follow.hidden) follow.textContent = `Voice ${nodeName(picked())} instead`;
     statusText.textContent = statusLine();
   }
 
   function statusLine() {
-    if (!settings.node_id) return "The hub voices no node.";
-    const local = settings.node_id === settings.local_node_id;
+    const name = settings.node_name || "The node";
+    const label = pickedElsewhere() ? `${name} (picked in another browser)` : name;
     const where = [];
-    if (settings.speakers) where.push(local ? "hub speakers (its own voice)" : "hub speakers");
-    else if (local) where.push("hub speakers (its own voice)");
-    if (listen) where.push(unlocked ? "here" : "here once you tap the page");
+    if (settings.speakers && !local()) where.push("hub speakers");
+    if (listen) where.push(unlocked ? "this browser" : "this browser once you tap the page");
     const sound = listen && !settings.piper ? " Browser speech: the hub has no Piper." : "";
-    return where.length ? `${settings.node_name}: ${where.join(", ")}.${sound}` : `${settings.node_name}: tick Hub speakers or Listen here.`;
+    if (!where.length) return `${label}: speaks only on its own machine.`;
+    const muted = settings.muted ? ` ${name} is muted.` : "";
+    return `${label}: plays on ${where.join(" and ")}.${muted}${sound}`;
   }
 
   async function save(change) {
@@ -229,7 +251,8 @@
     socket = null;
   }
 
-  select.addEventListener("change", () => save({ node_id: select.value || null }));
+  follow.addEventListener("click", () => save({ node_id: picked() }));
+  muteBox.addEventListener("change", () => save({ mute: muteBox.checked }));
   speakersBox.addEventListener("change", () => save({ speakers: speakersBox.checked }));
   listenBox.addEventListener("change", () => {
     listen = listenBox.checked;

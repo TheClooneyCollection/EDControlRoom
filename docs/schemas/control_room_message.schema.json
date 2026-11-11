@@ -487,7 +487,8 @@
         "message_values": {
           "type": "object",
           "additionalProperties": true
-        }
+        },
+        "muted": { "type": "boolean" }
       }
     },
     "event_active_operator_changed_payload": {

@@ -281,6 +281,24 @@ class TTSHelpersTests(unittest.TestCase):
         self.assertIsNone(announcer.piper_voice)
         self.assertFalse(announcer.configure_piper(PiperVoiceConfig(executable=Path("piper"), model=Path("v.onnx"))))
 
+    def test_a_muted_announcer_skips_callouts_but_still_says_free_text(self) -> None:
+        backend = _FakeBackend()
+        announcer = TTSAnnouncer(
+            TTSConfig(phrases={"arrival": "Arrived at {system_name}.", "undocking": "Undocking."}),
+            platform_name="macos",
+            backend=backend,
+        )
+        self.addCleanup(announcer.close)
+
+        announcer.muted = True
+        announcer.announce(AnnouncementId.ARRIVAL, system_name="Sol")
+        announcer.say("A line from the hub.")
+        announcer.muted = False
+        announcer.announce(AnnouncementId.UNDOCKING)
+        announcer.close()
+
+        self.assertEqual(backend.spoken, ["A line from the hub.", "Undocking."])
+
     def test_announcer_renders_market_level_low_phrase(self) -> None:
         backend = _FakeBackend()
         announcer = TTSAnnouncer(

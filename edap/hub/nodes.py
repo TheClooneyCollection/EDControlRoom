@@ -135,6 +135,7 @@ class HubLinkSession:
         handlers: Mapping[str, RequestHandler],
         relay: HubRelay,
         callout: Callable[[str, str], None],
+        linked: Callable[[str], None],
         send: Callable[[dict[str, Any]], None],
         log: Callable[[str], None],
     ) -> None:
@@ -142,6 +143,8 @@ class HubLinkSession:
         self._relay = relay
         # Hands a peer's callout (node id, text) to the hub voice.
         self._callout = callout
+        # Tells the hub voice a peer linked, so a muted node is muted again.
+        self._linked = linked
         # Sends a frame to this peer outside an answer: the relay's channel and read frames.
         self._send = send
         self._store_item = store_item
@@ -200,6 +203,7 @@ class HubLinkSession:
         self._generation = self._registry.connect(self.hello)
         self._log(f"Peer {self.label} connected (node {node_id}, version {self.hello.version or '?'})")
         self._relay.attach(self.hello, self._generation, self._send)
+        self._linked(node_id)
         return [{"type": "welcome", "node_id": local.node_id, "name": local.name, "version": local.version}]
 
     def _refuse(self, detail: str) -> list[dict[str, Any]]:

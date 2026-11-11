@@ -114,6 +114,8 @@
     });
     window.addEventListener("edcr:announcement", (event) => {
       const text = event.detail && event.detail.message_text;
+      // Muted: the hub plays this node's callouts instead (hub voice, plan 0015).
+      if (event.detail && event.detail.muted) return;
       // A hub page listening to the hub voice (hub-voice.js) plays that node instead.
       const hubVoice = window.EDCRHubVoice;
       if (hubVoice && hubVoice.listening()) return;

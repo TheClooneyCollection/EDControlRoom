@@ -32,7 +32,7 @@ from edap.hub.nodes import BadItem, HubLinkSession, HubSide, NodeRegistry, store
 from edap.hub.outbox import Outbox
 from edap.hub.peer import NodeHello, PeerLink, load_node_id, peer_link_url
 from edap.hub.relay import HubRelay
-from edap.hub.voice import HubVoice
+from edap.hub.voice import HubVoice, node_muter
 from edap.hub.protocol import (
     REQUEST_EDDN_STATUS, HubUnreachable, LinkClosed, LinkReply, decode_update, encode_update,
 )
@@ -189,10 +189,13 @@ class Rig:
         self.relay = HubRelay(log=self.hub_logs.append, read_timeout_s=10.0, slow_read_timeout_s=60.0)
         # What the hub speakers said, and the WAVs Piper made (bytes of the text, so tests read them).
         self.spoken: list[str] = []
+        # Each mute the hub set on its own game.
+        self.hub_mutes: list[bool] = []
         self.voice = HubVoice(
             local_node_id=HUB_NODE.node_id, settings_file=Path(self.tmp.name) / "voice.json",
             speak=lambda text: self.spoken.append(text) is None, synthesize=lambda text: f"WAV {text}".encode(),
             names=lambda node_id: HUB_NODE.name if node_id == HUB_NODE.node_id else self.relay.name(node_id),
+            set_muted=node_muter(HUB_NODE.node_id, self.hub_mutes.append, self.relay.send),
             run_in_background=lambda work: work(), log=self.hub_logs.append,
         )
         self.peer = PeerLink(hello=PEER_NODE, hub_url=lambda: HUB_URL, outbox=self.outbox,
@@ -207,7 +210,8 @@ class Rig:
     def connect(self) -> Loopback:
         link = Loopback(self.peer)
         link.session = HubLinkSession(registry=self.registry, store_item=self.store_item, handlers=self.handlers,
-                                      relay=self.relay, callout=self.voice.callout, send=link.down,
+                                      relay=self.relay, callout=self.voice.callout,
+                                      linked=self.voice.node_linked, send=link.down,
                                       log=self.hub_logs.append)
         self.links.append(link)
         return link

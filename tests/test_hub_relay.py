@@ -90,6 +90,8 @@ class RelayTests(unittest.TestCase):
         self.logs: list[str] = []
         # How the peer runs reads and commands off the link thread; a test may hold them back.
         self.background = run_now
+        # Each mute the hub set on the peer's own callouts.
+        self.peer_mutes: list[bool] = []
         self.peer_relay = PeerRelay(
             open_session=lambda channel_id: self.peer_app.state.open_node_session(channel_id),
             add_listener=self.peer_broker.add_listener,
@@ -97,6 +99,7 @@ class RelayTests(unittest.TestCase):
             answer_read=lambda path, params: self.peer_app.state.answer_node_read(path, params),
             answer_action=lambda path, body: self.peer_app.state.answer_node_action(path, body),
             state=lambda: node_state(peer_data(self.routine)),
+            set_muted=self.peer_mutes.append,
             run_in_background=lambda work: self.background(work),
             log=self.logs.append,
         )
@@ -370,38 +373,84 @@ class RelayTests(unittest.TestCase):
         """The peer speaks a callout, as its Control Room publishes it."""
         self.peer_broker.publish_announcement(AnnouncementEvent(announcement_id="docking_complete", message_text=text))
 
-    def test_the_hub_voices_only_the_chosen_node_and_only_with_the_switch_on(self) -> None:
+    def test_the_hub_voices_the_picked_node_and_its_speakers_only_when_on(self) -> None:
         voice = self.r.voice
         heard: list[dict[str, Any]] = []
         voice.add_listener(heard.append)
         self.callout("Missed while the link is down.")
         link = self.r.attach()
-        self.callout("Docked at Galileo.")  # voice off by default
+        self.callout("Docked at Galileo.")  # nothing picked: the hub's own game is voiced
+        voice.callout("hub-node", "Hub game docked.")
         voice.update({"node_id": "peer-node"})
         self.callout("Undocking,  commander.")
         voice.update({"speakers": True})
         self.callout("Jump initiated.")
-        voice.callout("hub-node", "Hub game docked.")  # not the voiced node
-        voice.update({"node_id": "hub-node"})
+        voice.callout("hub-node", "Hub game docked again.")  # not the voiced node
+        voice.update({"node_id": None})
         voice.callout("hub-node", "Hub game undocking.")
         self.callout("Peer not voiced now.")
         saved = HubVoice(local_node_id="hub-node", settings_file=self.r.tmp_path / "voice.json", speak=self.fail,
-                         synthesize=None, names=str, run_in_background=run_now, log=self.logs.append).settings()
-        voice.update({"node_id": None})
-        self.callout("Voice off again.")
+                         synthesize=None, names=str, set_muted=self.fail, run_in_background=run_now,
+                         log=self.logs.append).settings()
 
         self.assertEqual([frame["text"] for frame in link.sent if frame["type"] == "callout"],
-                         ["Docked at Galileo.", "Undocking,  commander.", "Jump initiated.", "Peer not voiced now.",
-                          "Voice off again."])
+                         ["Docked at Galileo.", "Undocking,  commander.", "Jump initiated.", "Peer not voiced now."])
         # Hub speakers: the voiced peer only, never the hub's own game (it already spoke there).
         self.assertEqual(self.r.spoken, ["Jump initiated."])
         callouts = [(m["node_name"], m["text"], base64.b64decode(m["wav"]).decode()) for m in heard if m["type"] == "callout"]
-        self.assertEqual(callouts, [("Deck", "Undocking, commander.", "WAV Undocking, commander."),
+        self.assertEqual(callouts, [("Home", "Hub game docked.", "WAV Hub game docked."),
+                                    ("Deck", "Undocking, commander.", "WAV Undocking, commander."),
                                     ("Deck", "Jump initiated.", "WAV Jump initiated."),
                                     ("Home", "Hub game undocking.", "WAV Hub game undocking.")])
         self.assertEqual([m["settings"]["node_name"] for m in heard if m["type"] == "settings"],
-                         [None, "Deck", "Deck", "Home", None])
-        self.assertEqual((saved["node_id"], saved["speakers"], saved["piper"]), ("hub-node", True, False))
+                         ["Home", "Deck", "Deck", "Home"])
+        self.assertEqual((saved["node_id"], saved["speakers"], saved["mute"], saved["piper"]),
+                         ("hub-node", True, False, False))
+
+    def test_a_muted_node_plays_only_on_the_hub_and_unmutes_whenever_it_could_be_lost(self) -> None:
+        voice = self.r.voice
+        link = self.r.attach()
+        voice.update({"node_id": "peer-node", "mute": True})  # nothing plays on the hub yet
+        unheard = list(self.peer_mutes)
+        voice.update({"speakers": True})
+        self.callout("Docked at Galileo.")
+        on_the_link = [frame["text"] for frame in link.sent if frame["type"] == "callout"]
+        self.r.drop(link)  # the peer unmutes itself
+        dropped = list(self.peer_mutes)
+        self.r.attach()  # the hub mutes it again
+        relinked = list(self.peer_mutes)
+        voice.update({"speakers": False})  # nothing plays on the hub: unmuted
+        remove = voice.add_listener(lambda message: None)  # a page listens: muted again
+        listening = list(self.peer_mutes)
+        remove()
+        voice.add_listener(lambda message: None)
+        voice.update({"node_id": "hub-node"})  # another node: the peer unmutes and the mute clears
+
+        self.assertEqual(unheard, [])
+        self.assertEqual(on_the_link, ["Docked at Galileo."])
+        self.assertEqual(self.r.spoken, ["Docked at Galileo."])
+        self.assertEqual(dropped, [True, False])
+        self.assertEqual(relinked, [True, False, True])
+        self.assertEqual(listening, [True, False, True, False, True])
+        self.assertEqual(self.peer_mutes, [True, False, True, False, True, False, True, False])
+        self.assertEqual(self.r.hub_mutes, [])
+        self.assertFalse(voice.settings()["mute"])
+        # The hub's own game mutes directly; its speakers do not count, they are its own.
+        voice.update({"mute": True})
+        self.assertEqual((self.r.hub_mutes, voice.settings()["muted"]), ([True], True))
+        voice.update({"mute": False})
+        self.assertEqual(self.r.hub_mutes, [True, False])
+        self.assertIn("The hub voices this node: its own speakers are muted", self.logs)
+
+    def test_a_muted_node_stamps_its_announcements_so_its_pages_stay_quiet(self) -> None:
+        sent: list[dict[str, Any]] = []
+        self.peer_broker.add_listener(sent.append)
+        self.peer_broker.mute_callouts(True)
+        self.callout("Docked.")
+        self.peer_broker.mute_callouts(False)
+        self.callout("Undocking.")
+        self.assertEqual([(m["payload"]["message_text"], m["payload"].get("muted")) for m in sent],
+                         [("Docked.", True), ("Undocking.", None)])
 
     def test_without_piper_pages_get_the_text_to_speak_themselves(self) -> None:
         heard: list[dict[str, Any]] = []
@@ -412,7 +461,8 @@ class RelayTests(unittest.TestCase):
 
         for synthesize in (None, broken):
             voice = HubVoice(local_node_id="hub-node", settings_file=self.r.tmp_path / "voice.json", speak=self.fail,
-                             synthesize=synthesize, names=lambda node_id: "Deck", run_in_background=run_now, log=logs.append)
+                             synthesize=synthesize, names=lambda node_id: "Deck", set_muted=self.fail,
+                             run_in_background=run_now, log=logs.append)
             voice.update({"node_id": "peer-node"})
             voice.add_listener(heard.append)
             voice.callout("peer-node", "Docked.")
@@ -440,7 +490,8 @@ class RelayTests(unittest.TestCase):
                 with hub.websocket_connect("/api/hub-voice/listen") as stranger:
                     stranger.receive_json()
 
-        self.assertEqual((default["node_id"], default["speakers"], default["piper"]), (None, False, True))
+        self.assertEqual((default["node_id"], default["speakers"], default["mute"], default["piper"]),
+                         ("hub-node", False, False, True))
         self.assertEqual(bad.status_code, 400)
         self.assertEqual(first, {"type": "settings", "settings": default})
         self.assertEqual((chosen["node_name"], chosen["speakers"]), ("Deck", True))

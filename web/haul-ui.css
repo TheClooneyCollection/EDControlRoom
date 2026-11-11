@@ -1817,7 +1817,8 @@
   }
 }
 
-/* Hub voice (hub-voice.js), under the node picker: the voiced node, hub speakers, Listen here. */
+/* Hub voice (hub-voice.js), under the node picker: play the picked node on the hub speakers or in this
+   browser, and mute it. */
 .hub-voice {
   display: flex;
   flex-direction: column;
@@ -1825,21 +1826,10 @@
   margin: 10px 6px 0;
 }
 
-.hub-voice-row {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.hub-voice select {
-  width: 100%;
-  min-width: 0;
-  padding: 7px 8px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  background: var(--bg-2);
-  color: var(--text-1);
-  font-size: 12.5px;
+.hub-voice-help {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 11px;
 }
 
 .hub-voice-check {
@@ -1848,6 +1838,26 @@
   gap: 6px;
   color: var(--text-2);
   font-size: 12px;
+}
+
+.hub-voice-check[hidden],
+.hub-voice-follow[hidden] {
+  display: none;
+}
+
+.hub-voice-check:has(input:disabled) {
+  color: var(--text-3);
+}
+
+.hub-voice-follow {
+  align-self: flex-start;
+  padding: 4px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-2);
+  color: var(--text-1);
+  font-size: 11.5px;
+  cursor: pointer;
 }
 
 .hub-voice-status {

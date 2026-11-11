@@ -969,7 +969,8 @@ class ControlRoomApp(App[None]):
 
     def _play_local_announcement(self, event: AnnouncementEvent) -> None:
         parsed_id = parse_announcement_id(event.announcement_id)
-        if parsed_id is None:
+        # Muted: the hub voices this node's callouts instead.
+        if parsed_id is None or event.muted:
             return
         self._tts.announce(parsed_id, **event.message_values)
 

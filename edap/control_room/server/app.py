@@ -907,7 +907,8 @@ def build_observer_server_app(
             future.add_done_callback(lambda done: done.cancelled() or done.exception())
 
         session = HubLinkSession(registry=hub_side.registry, store_item=hub_side.store_item, handlers=link_handlers,
-                                 relay=hub_side.relay, callout=hub_side.voice.callout, send=send_soon,
+                                 relay=hub_side.relay, callout=hub_side.voice.callout,
+                                 linked=hub_side.voice.node_linked, send=send_soon,
                                  log=logging.getLogger("edap.hub").info)
 
         async def answer(frame: dict[str, Any]) -> None:

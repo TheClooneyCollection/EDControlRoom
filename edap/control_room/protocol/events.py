@@ -24,6 +24,8 @@ class AnnouncementEvent:
     announcement_id: str
     message_text: str
     message_values: dict[str, Any] = field(default_factory=dict)
+    # The node's callouts are muted (the hub voices them): clients show the line but do not speak it.
+    muted: bool = False
 
 
 @dataclass(frozen=True)

@@ -402,6 +402,8 @@ class TTSAnnouncer:
         self._commander_name: str | None = None
         self._speaker: QueuedSpeaker | None = None
         self._last_text = ""
+        # Set while the hub voices this node's callouts instead (`edap.hub.voice`); `say` still speaks.
+        self.muted = False
         selected_backend = backend if backend is not None else build_speech_backend(platform_name, config.piper)
         self._backend = selected_backend
         if config.enabled and not isinstance(selected_backend, NullSpeechBackend):
@@ -478,7 +480,8 @@ class TTSAnnouncer:
         if rendered is None:
             return
         self._last_text = rendered
-        self._speaker.enqueue(rendered, collapse_key=message_id)
+        if not self.muted:
+            self._speaker.enqueue(rendered, collapse_key=message_id)
 
     def _resolve_title(self) -> str:
         if self._config.title_mode == "commander":

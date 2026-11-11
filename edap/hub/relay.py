@@ -10,7 +10,8 @@ answered only for `NODE_READS`; `POST /api/command` and `/api/stop` go down as `
 The peer takes these frames only from the link it dialled itself: nothing listens for them on a peer.
 
 Hub to peer: `channel_open` (channel, client_name), `channel_close` (channel), `channel_command`
-(channel, message), `read` (id, path, params), `act` (id, path, body).
+(channel, message), `read` (id, path, params), `act` (id, path, body) and `voice_mute` (muted: whether
+the node stops speaking its own callouts; see `edap.hub.voice`).
 Peer to hub: `channel` (channel, message), `read_response` (id, status, body), `node_state` (state),
 and `callout` (text: each callout the node speaks, for the hub to voice; see `edap.hub.voice`).
 """
@@ -24,7 +25,7 @@ from typing import Any, Callable
 from edap.control_room.server.messages import protocol_message
 from edap.hub.peer import NodeHello
 from edap.hub.protocol import LinkReply
-from edap.hub.voice import CALLOUT_FRAME, callout_text
+from edap.hub.voice import CALLOUT_FRAME, VOICE_MUTE_FRAME, callout_text
 
 # The page reads a hub relays to the node a page looks at; everything else the hub answers itself.
 NODE_READS = frozenset({
@@ -46,7 +47,7 @@ NODE_ACTIONS = frozenset({"/api/command", "/api/stop"})
 SLOW_COMMANDS = frozenset({"command.search_haul_routes", "command.dispatch_route_all_in_one",
                            "command.dispatch_spansh_route"})
 # Frames from the hub that belong to the relay.
-HUB_RELAY_FRAMES = frozenset({"channel_open", "channel_close", "channel_command", "read", "act"})
+HUB_RELAY_FRAMES = frozenset({"channel_open", "channel_close", "channel_command", "read", "act", VOICE_MUTE_FRAME})
 # Frames from a peer that belong to the relay.
 RELAY_FRAMES = frozenset({"channel", "read_response", "node_state"})
 
@@ -156,6 +157,18 @@ class HubRelay:
         with self._lock:
             return self._names.get(node_id, node_id)
 
+    def send(self, node_id: str, frame: dict[str, Any]) -> bool:
+        """Send one frame to a linked peer; False when it is not linked or the link closed."""
+        with self._lock:
+            link = self._links.get(node_id)
+            if link is None:
+                return False
+            try:
+                link.send(frame)
+            except Exception:  # The link is going down.
+                return False
+        return True
+
     def open_channel(self, node_id: str, client_name: str, deliver: Deliver, end: End) -> str:
         """Start streaming the node's session to a page; raises NodeOffline when it is not linked."""
         with self._lock:
@@ -259,7 +272,8 @@ class PeerRelay:
     `open_session` gives a new channel's first messages (connection ready, hydrate); `add_listener`
     attaches a broker listener and returns its remover; `answer_command` runs one session command
     for a channel and gives its answer (None for none); `answer_read` answers one allowlisted read;
-    `answer_action` runs one allowlisted action; `run_in_background` runs work off the link thread,
+    `answer_action` runs one allowlisted action; `set_muted` mutes or unmutes this node's own
+    callouts (the hub voices them instead; unmuted whenever the link drops); `run_in_background` runs work off the link thread,
     which must keep reading frames (a read or command may itself ask the hub). A channel's commands
     run one at a time in order, as on a local session.
     """
@@ -273,6 +287,7 @@ class PeerRelay:
         answer_read: Callable[[str, dict[str, str]], LinkReply],
         answer_action: Callable[[str, Any], LinkReply],
         state: Callable[[], dict[str, Any]],
+        set_muted: Callable[[bool], None],
         run_in_background: Callable[[Callable[[], None]], None],
         log: Callable[[str], None],
     ) -> None:
@@ -282,6 +297,8 @@ class PeerRelay:
         self._answer_read = answer_read
         self._answer_action = answer_action
         self._state = state
+        self._set_muted = set_muted
+        self._muted = False
         self._run_in_background = run_in_background
         self._log = log
         self._lock = threading.RLock()
@@ -308,7 +325,8 @@ class PeerRelay:
             self._open(channel_id)
 
     def link_down(self) -> None:
-        """The link closed: every hub page channel goes with it."""
+        """The link closed: every hub page channel goes with it, and the node speaks its own callouts again."""
+        self._mute(False)
         with self._lock:
             self._send = None
             self._early.clear()
@@ -327,7 +345,9 @@ class PeerRelay:
 
     def on_frame(self, frame: dict[str, Any]) -> None:
         kind = frame.get("type")
-        if kind == "channel_open":
+        if kind == VOICE_MUTE_FRAME:
+            self._mute(frame.get("muted") is True)
+        elif kind == "channel_open":
             self._open(str(frame.get("channel")))
         elif kind == "channel_close":
             with self._lock:
@@ -350,6 +370,15 @@ class PeerRelay:
             path = str(frame.get("path"))
             body = frame.get("body")
             self._run_in_background(lambda: self._act(read_id, path, body))
+
+    def _mute(self, muted: bool) -> None:
+        with self._lock:
+            if muted == self._muted:
+                return
+            self._muted = muted
+            self._set_muted(muted)
+        self._log("The hub voices this node: its own speakers are muted" if muted
+                  else "This node speaks its own callouts again")
 
     def _queue_command(self, channel_id: str, message: Any) -> None:
         with self._lock:

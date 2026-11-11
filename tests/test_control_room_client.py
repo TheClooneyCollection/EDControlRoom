@@ -501,6 +501,20 @@ class ControlRoomClientTests(unittest.TestCase):
             "16:44:02  Executing dest sol in 5.0s...",
         )
 
+    def test_observer_app_does_not_speak_a_muted_nodes_callouts(self) -> None:
+        app = self._app(backend=self._backend())
+        spoken: list[str] = []
+        app._tts = SimpleNamespace(announce=lambda message_id, **values: spoken.append(message_id.value))
+
+        for muted in (True, False):
+            payload = {"announcement_id": "undocking", "message_text": "Undocking.", "message_values": {}}
+            if muted:
+                payload["muted"] = True
+            app._apply_backend_event(event_from_message({"message_type": "event.announcement_emitted",
+                                                         "payload": payload}))
+
+        self.assertEqual(spoken, ["undocking"])
+
     def test_observer_app_replay_browser_runs_locally_from_remote_history(self) -> None:
         backend = self._backend()
         app = self._app(backend=backend)

@@ -17,6 +17,7 @@ def event_from_message(
             announcement_id=str(payload["announcement_id"]),
             message_text=str(payload["message_text"]),
             message_values={str(key): value for key, value in values_mapping.items()},
+            muted=payload.get("muted") is True,
         )
     return None
 

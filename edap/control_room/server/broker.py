@@ -40,6 +40,9 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
         # Callbacks that get every broadcast as a protocol message: a peer streams them to hub pages.
         self._listeners: dict[str, Callable[[dict[str, Any]], None]] = {}
         self._server_state = server_state or ControlRoomServerState()
+        # Set while the hub voices this node with its speakers muted (`edap.hub.voice`): announcements
+        # carry `muted`, so this node's pages and TUIs do not speak them either.
+        self._callouts_muted = False
 
     def register_observer(self, client_name: str) -> ObserverSession:
         session = ObserverSession(
@@ -112,18 +115,19 @@ class InMemoryObserverSessionBroker(ControlRoomEventSink):
             }
         )
 
+    def mute_callouts(self, muted: bool) -> None:
+        self._callouts_muted = muted
+
     def publish_announcement(self, event: AnnouncementEvent) -> None:
         self._server_state.record_announcement(event)
-        self._broadcast(
-            {
-                "message_type": "event.announcement_emitted",
-                "payload": {
-                    "announcement_id": event.announcement_id,
-                    "message_text": event.message_text,
-                    "message_values": event.message_values,
-                },
-            }
-        )
+        payload: dict[str, Any] = {
+            "announcement_id": event.announcement_id,
+            "message_text": event.message_text,
+            "message_values": event.message_values,
+        }
+        if self._callouts_muted or event.muted:
+            payload["muted"] = True
+        self._broadcast({"message_type": "event.announcement_emitted", "payload": payload})
 
     def publish_data_message(self, message: dict[str, Any]) -> None:
         self._broadcast(message)

@@ -34,7 +34,7 @@ from edap.hub.nodes import HubSide, NodeRegistry, store_link_item
 from edap.hub.outbox import Outbox
 from edap.hub.peer import NODE_ID_FILE_NAME, NodeHello, PeerLink, load_node_id, new_node_id, websocket_dialer
 from edap.hub.relay import HubRelay, PeerRelay, node_state
-from edap.hub.voice import HubVoice, callout_text
+from edap.hub.voice import HubVoice, callout_text, node_muter
 from edap.recent_markets import load_recent_markets, watch_file
 from edap.market_db import open_market_store, station_facts_writer
 from edap.runtime import build_runtime_context, load_config_with_fallback
@@ -93,6 +93,12 @@ def serve_observer_mode(
             version=get_current_version(),
         )
     peer_link: PeerLink | None = None
+
+    def mute_own_callouts(muted: bool) -> None:
+        # The hub voices this node: its speaker, pages and TUIs stay quiet but callouts still go up the link.
+        runtime_host.mute_callouts(muted)
+        broker.mute_callouts(muted)
+
     if node is not None and hub_config.enabled:
         # Hub pages looking at this peer. The app is built further down; these run only once the link is up.
         peer_relay = PeerRelay(
@@ -102,6 +108,7 @@ def serve_observer_mode(
             answer_read=lambda path, params: app.state.answer_node_read(path, params),
             answer_action=lambda path, body: app.state.answer_node_action(path, body),
             state=lambda: node_state(data_provider()),
+            set_muted=mute_own_callouts,
             run_in_background=lambda work: threading.Thread(target=work, name="hub-relay", daemon=True).start(),
             log=hub_logger.info,
         )
@@ -220,12 +227,14 @@ def serve_observer_mode(
             # Piper only: the platform voices cannot write a file, so pages then speak the text themselves.
             synthesize=speech_backend.synthesize_wav if isinstance(speech_backend, PiperSpeechBackend) else None,
             names=lambda node_id: local_node.name if node_id == local_node.node_id else hub_relay.name(node_id),
+            set_muted=node_muter(node.node_id, mute_own_callouts, hub_relay.send),
             run_in_background=voice_worker.submit,
             log=hub_logger.info,
         )
         voice_settings = hub_voice.settings()
-        hub_logger.info("Hub voice: %s, hub speakers %s (%s)", voice_settings["node_name"] or "off",
-                        "on" if voice_settings["speakers"] else "off", hub_config.voice_file)
+        hub_logger.info("Hub voice: %s, hub speakers %s, mute %s (%s)", voice_settings["node_name"],
+                        "on" if voice_settings["speakers"] else "off", "on" if voice_settings["mute"] else "off",
+                        hub_config.voice_file)
         # The hub's own game reaches the voice through its broker; a peer's through its link.
         broker.add_listener(lambda message: hub_voice.callout(local_node.node_id, callout_text(message) or ""))
         hub_side = HubSide(registry=NodeRegistry(node, time.time),

@@ -188,6 +188,10 @@ class HeadlessControlRoomHost(ControlRoomApp):
         """Speak a line on this host's speaker queue, after the callouts already queued; False when speech is off."""
         return self._tts.say(text)
 
+    def mute_callouts(self, muted: bool) -> None:
+        """Stop or resume speaking this node's own callouts; the hub voices them meanwhile."""
+        self._tts.muted = muted
+
     def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> bool:
         """Run one command; returns False when it was refused because a routine was already running."""
         resolved = raw_input

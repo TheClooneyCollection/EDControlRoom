@@ -23,6 +23,7 @@ from edap.hub.protocol import (
     ITEM_HAUL_RUN, ITEM_MARKET, ITEM_STATION_FACTS, PEER_LINK_PATH, HubUnreachable, LinkClosed, LinkConnection, LinkReply,
     encode_update,
 )
+from edap.hub.voice import VOICE_MUTE_FRAME
 from edap.recent_markets import MarketSnapshot, snapshot_entry
 
 # Seconds between redials while the hub stays away; the last one repeats.
@@ -227,7 +228,7 @@ class PeerLink:
         kind = frame.get("type")
         # Hub pages looking at and driving this node (`edap.hub.relay.HUB_RELAY_FRAMES`); they arrive
         # only here, on the link this peer dialled to its own hub.
-        if kind in {"channel_open", "channel_close", "channel_command", "read", "act"}:
+        if kind in {"channel_open", "channel_close", "channel_command", "read", "act", VOICE_MUTE_FRAME}:
             with self._lock:
                 self._last_contact = self._now()
             self._relay.on_frame(frame)

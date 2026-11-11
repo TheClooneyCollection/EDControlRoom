@@ -231,9 +231,22 @@ window.EDCRNode = (() => {
     }
   }
 
-  select.addEventListener("change", () => {
+  select.addEventListener("change", async () => {
     // The hub's own game is the default, so it is stored as no choice.
     window.EDCRNode.choose(select.value === localId ? "" : select.value);
+    // The picked node is also the one the hub voices (hub-voice.js), hub-wide.
+    try {
+      const url = new URL("/api/hub-voice", window.location.origin);
+      const token = accessToken();
+      if (token) url.searchParams.set(webConfig().authQueryParameterName || "access_token", token);
+      await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ node_id: select.value })
+      });
+    } catch (error) {
+      // The hub is restarting: the voice stays on the node picked before.
+    }
     window.location.reload();
   });
 
@@ -243,7 +256,7 @@ window.EDCRNode = (() => {
   });
   whenParsed.then(() => getJson("/api/hub-status")).then((status) => {
     if (status.role !== "hub") return;
-    // The hub voice panel (which node the hub voices, Listen here) sits under the picker.
+    // The hub voice panel (play the picked node's callouts on the hub, mute it) sits under the picker.
     const voice = document.createElement("script");
     voice.src = "/assets/hub-voice.js";
     document.head.append(voice);
