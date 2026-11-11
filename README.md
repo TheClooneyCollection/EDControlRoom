@@ -16,6 +16,7 @@ Live-validated on **macOS** (Elite through CrossOver), **Windows** (community-va
 ## Contents
 
 - [The Idea](#the-idea)
+- [Screenshots](#screenshots)
 - [What You Get](#what-you-get)
 - [Quick Start](#quick-start)
 - [Steam Deck](#steam-deck)
@@ -37,6 +38,21 @@ That makes it a direct fit for high-volume A↔B cargo work like community goal 
 **See it in action:** [live stream demo — co-pilot handling a station cycle](https://www.youtube.com/live/YKbz7xtc22Q?t=6014s)
 
 <a href="https://www.youtube.com/live/YKbz7xtc22Q?t=6014s"><img src="docs/assets/haul-vr.png" alt="Hauling in VR with EDControlRoom's help — click to watch on YouTube" width="50%"></a>
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/two-way-haul.png"><img src="docs/assets/two-way-haul.png" alt="Two-way haul page"></a><br><sub>New and updated two-way haul</sub></td>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/copy-paste-route.png"><img src="docs/assets/copy-paste-route.png" alt="Copy and paste route panel"></a><br><sub>Copy and paste routes to fly and earn credits with friends</sub></td>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/markets-best-deal.png"><img src="docs/assets/markets-best-deal.png" alt="Markets page with best deal"></a><br><sub>Recent markets and best deals</sub></td>
+  </tr>
+  <tr>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/eddn-routes.png"><img src="docs/assets/eddn-routes.png" alt="EDDN routes page"></a><br><sub>Routes powered by a local EDDN database</sub></td>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/quick-controls.png"><img src="docs/assets/quick-controls.png" alt="Controls page"></a><br><sub>Quick controls</sub></td>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/travel-page.png"><img src="docs/assets/travel-page.png" alt="Travel page"></a><br><sub>A dedicated travel page to plan long routes</sub></td>
+  </tr>
+</table>
 
 ## What You Get
 
