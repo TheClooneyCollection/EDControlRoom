@@ -223,6 +223,16 @@ class _FakeVersionSource:
 
 
 class _HarnessApp(ControlRoomApp):
+    # Textual rebuilds the theme's colour system in every App(); the harness never renders, so build it once per theme.
+    _css_variables_by_theme: dict[str, dict[str, str]] = {}
+
+    def get_css_variables(self) -> dict[str, str]:
+        cached = self._css_variables_by_theme.get(self.theme)
+        if cached is None:
+            cached = self._css_variables_by_theme[self.theme] = super().get_css_variables()
+        self.theme_variables = dict(cached)
+        return dict(cached)
+
     def __init__(self, ctx: RuntimeContext, *, activity_log_max_lines: int | None = None) -> None:
         self.version_source = _FakeVersionSource()
         self.station_facts: list = []
