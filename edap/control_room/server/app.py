@@ -199,6 +199,7 @@ def build_observer_server_app(
     eddn_status: Callable[[], dict[str, Any]] | None = None,
     eddn_database_file: Path | None = None,
     import_markets: Callable[[tuple[MarketSnapshot, ...]], list[GameMarketImport]] | None = None,
+    ardent_lookup: FactLookup | None = None,
     hub: HubClient | None = None,
     hub_status: HubStatus | None = None,
     route_compare_navroute_wait_seconds: float = 6.0,
@@ -535,6 +536,9 @@ def build_observer_server_app(
             if store is not None:
                 sources.append(("eddn", store_lookup(store)))
             sources.append(("journal", journal_lookup(places, snapshots)))
+            if ardent_lookup is not None:
+                # Asked only for what the store and journal lack; a failed lookup just leaves "-".
+                sources.append(("ardent", ardent_lookup))
             facts = [gather_facts(m.market_id, m.station, m.system, sources) for m in (market_x, market_y)]
         finally:
             if store is not None:

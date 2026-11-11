@@ -924,6 +924,47 @@ class ControlRoomServerTests(unittest.TestCase):
                          {"runs": 2, "profit": 4_000_000, "duration_s": 2400.0, "profit_per_hour": 6_000_000})
         self.assertEqual(bad.status_code, 400)
 
+    def test_market_compare_asks_ardent_only_for_what_the_journal_lacks(self) -> None:
+        from edap.recent_markets import record_journal_events, record_market_json
+        from edap.trade_trip import PartialFacts
+
+        asked: list[str] = []
+
+        def ardent(market_id: int, station: str, system: str) -> PartialFacts:
+            asked.append(station)
+            if system == "Down":
+                return PartialFacts()
+            return PartialFacts(coords=(40.0, 0.0, 0.0), dist_ls=100.0, station_type="Orbis")
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = Path(directory) / "recent.json"
+            for market_id, station, system in ((1, "Galileo", "Sol"), (2, "Far Port", "Far"), (3, "Dark", "Down")):
+                record_market_json(store, {"MarketID": market_id, "StationName": station, "StarSystem": system,
+                                           "StationType": "Coriolis", "timestamp": f"2026-11-10T10:0{market_id}:00Z",
+                                           "Items": []}, lambda _: None)
+            record_journal_events(store, [
+                {"event": "Location", "StarSystem": "Sol", "StarPos": [0, 0, 0], "Docked": True, "MarketID": 1,
+                 "StationName": "Galileo", "StationType": "Coriolis", "DistFromStarLS": 500.0},
+            ], lambda _: None)
+            app = build_observer_server_app(
+                data_provider=_base_data_read_model, command_handler=None, broker=InMemoryObserverSessionBroker(),
+                auth=SharedAccessTokenAuth("secret-token"), recent_markets_file=store, ardent_lookup=ardent,
+            )
+            with TestClient(app) as client:
+                url = "/api/market-compare?capacity=10&laden_jump_range_ly=20&access_token=secret-token"
+                filled = client.get(f"{url}&x=1&y=2").json()["trip"]
+                down = client.get(f"{url}&x=1&y=3").json()["trip"]
+
+        self.assertEqual(asked, ["Far Port", "Dark"])
+        self.assertEqual((filled["jumps"], filled["missing"]), (2, []))
+        self.assertIsNotNone(filled["trip_s"])
+        self.assertEqual(filled["stations"]["x"]["dist_ls_source"], "journal")
+        self.assertEqual((filled["stations"]["y"]["coords_source"], filled["stations"]["y"]["dist_ls_source"]),
+                         ("ardent", "ardent"))
+        # Market.json still knows the type; a failed Ardent lookup only leaves the rest missing.
+        self.assertEqual(down["missing"], ["Down coordinates", "Dark distance from star"])
+        self.assertIsNone(down["trip_s"])
+
     def test_every_page_renders_the_one_shared_nav(self) -> None:
         web_dir = Path(server_app.__file__).resolve().parents[3] / "web"
         nav = (web_dir / "nav.js").read_text(encoding="utf-8")

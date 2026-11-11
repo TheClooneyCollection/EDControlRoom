@@ -18,12 +18,14 @@ from edap.control_room.server.sink import (
     FanoutControlRoomEventSink,
     ServerActivityLogSink,
 )
+from edap.ardent import ArdentLookup, httpx_fetch_json, store_saver
 from edap.eddn.game_markets import import_markets
 from edap.eddn.listener import open_zmq_socket
 from edap.eddn.service import EddnService, start_eddn_service
 from edap.hub import HubClient, HubMarketPusher, HubStatus, httpx_transport, run_hub_heartbeat, watch_recent_markets
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.tts import NullSpeechBackend, build_speech_backend
+from edap.version import REPOSITORY_NAME, get_current_version
 
 
 def serve_observer_mode(
@@ -127,6 +129,14 @@ def serve_observer_mode(
         ).start()
     elif eddn is not None:
         eddn.import_game_markets_every(recent_markets_file, 5.0, logging.getLogger("edap.eddn").info)
+    ardent_logger = logging.getLogger("edap.ardent")
+    ardent_lookup = ArdentLookup(
+        httpx_fetch_json(f"{REPOSITORY_NAME}/{get_current_version()} (Best deal lookups)"),
+        now=time.time,
+        # With an EDDN store the rows land there, so /routes gains them too; else they stay in memory.
+        save=store_saver(eddn.store.apply, eddn.store.commit) if eddn is not None else (lambda updates: None),
+        log=ardent_logger.info,
+    )
     broker.server_state.set_selected_trade_route(runtime_host._saved_state.selected_trade_route)
     broker.server_state.set_running_trade_route(runtime_host._saved_state.running_trade_route)
     app = build_observer_server_app(
@@ -141,6 +151,7 @@ def serve_observer_mode(
         eddn_status=eddn.status if eddn is not None else None,
         eddn_database_file=eddn_config.database_file if eddn is not None else None,
         import_markets=(lambda markets: import_markets(eddn.store, markets)) if eddn is not None else None,
+        ardent_lookup=ardent_lookup,
         hub=hub,
         hub_status=hub_status,
         route_compare_navroute_wait_seconds=loaded.config.control_room.route_compare_navroute_wait_seconds,

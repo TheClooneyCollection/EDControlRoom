@@ -35,7 +35,7 @@ The **Best deal** panel on `/markets` compares two stations whose market you ope
 - **Profit per hour**: profit per trip over the estimated round-trip time, from the same time model as the Routes page, with the trip time, jumps and distance under it. **Laden jump range** works as on the Routes page (empty falls back to `haul_search.toml`).
 - **Measured per hour**: profit per hour of your completed haul runs between the two stations, either direction.
 
-The estimate needs each system's coordinates and each station's distance from the star and type. They come from the EDDN database when it is on, then from your journal (a station you docked at, a system you jumped to). If one is still unknown the panel shows "-" and names what is missing; it never guesses.
+The estimate needs each system's coordinates and each station's distance from the star and type. They come from the EDDN database when it is on, then from your journal (a station you docked at, a system you jumped to), then from the [Ardent Insight](https://ardent-insight.com) API. Ardent answers are kept in the EDDN database, which helps the Routes page too. If Ardent is slow or down (3 second limit, tried again after 10 minutes) or one is still unknown, the panel shows "-" and names what is missing; it never guesses.
 
 ## Settings
 

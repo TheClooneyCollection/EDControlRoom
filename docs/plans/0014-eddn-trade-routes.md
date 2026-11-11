@@ -2,7 +2,7 @@
 
 ## Status
 
-In progress: slices 1 and 2 (listener, store, `tools/eddn_listen.py`) are built, the server runs the listener when `eddn.enabled` (`GET /api/eddn-status`), and the route finder, profit/hour ranking (uncalibrated time model) and `/routes` page (`GET /api/eddn-routes`, computed on request) are built, with journal-fitted trip times and in-game names (from recent markets) so a route copies into `/haul`. Open: Ardent lookups, background global cache if bubble-scale search gets slow. Phase 1 below; "Good Deals / Exceptional Routes" alerts are a later phase.
+In progress: slices 1 and 2 (listener, store, `tools/eddn_listen.py`) are built, the server runs the listener when `eddn.enabled` (`GET /api/eddn-status`), and the route finder, profit/hour ranking (uncalibrated time model) and `/routes` page (`GET /api/eddn-routes`, computed on request) are built, with journal-fitted trip times and in-game names (from recent markets) so a route copies into `/haul`. Slice 3 is built for the `/markets` Best deal (2026-11-11, `edap/ardent.py`): coordinates, distance-to-arrival, pad and station type are fetched on demand and written into the `system`/`station` tables, so `/routes` gains them for those systems. Open: `/routes` itself does not call Ardent for markets without coordinates (it would mean one lookup per uncovered system per search), background global cache if bubble-scale search gets slow. Phase 1 below; "Good Deals / Exceptional Routes" alerts are a later phase.
 
 ## Why
 
@@ -37,6 +37,8 @@ A new `commodity/3` message for a market replaces all its `price` rows in one tr
 
 When a station or system in a candidate route lacks coordinates, pad size or distance-to-arrival, fetch it from Ardent Insight API on demand and cache it in the same tables. No bulk import in phase 1.
 
+Built for Best deal: `GET /v2/system/name/{name}/stations` (`marketId`, `stationName`, `stationType`, `distanceToArrival`, `maxLandingPadSize` 1/2/3, `systemAddress`, `systemX/Y/Z`, `updatedAt`), falling back to `GET /v2/system/name/{name}` for coordinates when no station is listed. 3 s timeout per request, one fetch per system per server run, a failure is retried after 10 minutes, rows go into the store (newest `updatedAt` wins) or, without EDDN, an in-memory cache. Checked live 2026-11-11.
+
 ### 4. Route finder
 
 - Two-station round trips (A buys X sells at B, B buys Y sells at A; one-sided allowed), using the same shape as `TradeRoute` so a found route can be selected and run by the existing haul flow.
@@ -66,7 +68,7 @@ Every route is ranked by estimated profit per hour, not profit per trip. Jump co
 
 ## Open points to confirm while building
 
-- Exact Ardent endpoints and rate limits.
+- Ardent rate limits (none enforced per research 0009; we send a `EDControlRoom/<version>` User-Agent).
 - Global recompute interval (start with 10 minutes) and top N (start with 50).
 - Whether Inara search stays as a fallback once `/routes` is trusted.
 
