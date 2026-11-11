@@ -44,13 +44,13 @@ That makes it a direct fit for high-volume A↔B cargo work like community goal 
 <table>
   <tr>
     <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/two-way-haul.png"><img src="docs/assets/screenshots/two-way-haul.png" alt="Two-way haul page"></a><br><sub>Two-way haul with live stats and history</sub></td>
-    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/copy-paste-route-wide.png"><img src="docs/assets/screenshots/copy-paste-route-wide.png" alt="Copy and paste route panel"></a><br><sub>Share routes with friends</sub></td>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/copy-paste-route-wide.png"><img src="docs/assets/screenshots/copy-paste-route-wide.png" alt="Copy and paste route panel"></a><br><sub>Shareable routes</sub></td>
     <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/markets-best-deal.png"><img src="docs/assets/screenshots/markets-best-deal.png" alt="Markets page with best deal"></a><br><sub>Recent markets and best deals</sub></td>
   </tr>
   <tr>
-    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/eddn-routes.png"><img src="docs/assets/screenshots/eddn-routes.png" alt="EDDN routes page"></a><br><sub>Routes from live EDDN prices</sub></td>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/eddn-routes.png"><img src="docs/assets/screenshots/eddn-routes.png" alt="EDDN routes page"></a><br><sub>Routes powered by a local EDDN database</sub></td>
     <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/quick-controls.png"><img src="docs/assets/screenshots/quick-controls.png" alt="Controls page"></a><br><sub>Quick controls</sub></td>
-    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/travel-page.png"><img src="docs/assets/screenshots/travel-page.png" alt="Travel page"></a><br><sub>Plan long routes</sub></td>
+    <td width="33%" align="center" valign="top"><a href="docs/assets/screenshots/travel-page.png"><img src="docs/assets/screenshots/travel-page.png" alt="Travel page"></a><br><sub>Long route planning</sub></td>
   </tr>
 </table>
 
