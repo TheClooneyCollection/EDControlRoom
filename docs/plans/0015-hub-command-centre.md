@@ -2,7 +2,7 @@
 
 ## Status
 
-Designed (2026-11-11). Built: step 1 (roles and data ownership, 2026-11-11), step 2 (peer link and outbox, 2026-11-11), step 3 (ship on every run, 2026-11-11), step 4 (central history, 2026-11-11), step 5 (see a node, 2026-11-11), step 6 (drive a node, 2026-11-11), step 7 (TTS on the hub, 2026-11-11). One feature: it replaces today's hub mode (`docs/user/hub.md`) as a whole and is released only when every build step below is done. The end state is designed here at once; no step keeps the old hub mode working alongside it.
+Designed (2026-11-11). Built: step 1 (roles and data ownership, 2026-11-11), step 2 (peer link and outbox, 2026-11-11), step 3 (ship on every run, 2026-11-11), step 4 (central history, 2026-11-11), step 5 (see a node, 2026-11-11), step 6 (drive a node, 2026-11-11), step 7 (TTS on the hub, 2026-11-11), step 8 (discovery and docs, 2026-11-11). All build steps are done; the live run with two machines (Validation) is pending and is done by the user before the branch lands. One feature: it replaces today's hub mode (`docs/user/hub.md`) as a whole and is released only when every build step below is done. The end state is designed here at once; no step keeps the old hub mode working alongside it.
 
 ## Why
 
@@ -95,6 +95,8 @@ The node keeps speaking its callouts. It also sends each callout's text up the l
 ### Discovery
 
 The hub advertises `_edcr._tcp.local` over mDNS with its port and a TXT record (`role=hub`, version, hub name). A peer with no `url` browses for it and connects. The token still has to match. The peer remembers the hub it first connected to and logs loudly if a different one appears, so a stray advertiser on the LAN cannot quietly take over. New dependency: `zeroconf`.
+
+As built: the TXT record also carries the hub's node id, which the hub sends in `welcome`. The peer remembers the first hub that welcomes it in `.control_room_known_hub.json` next to its config, dials only that hub afterwards, logs and ignores any other hub, and refuses a welcome with another id; deleting the file switches hubs. With two hubs and none remembered it does not guess. A peer with `url` skips discovery and the remembered hub. The hub advertises its `lan` bind address (or the detected LAN address for `0.0.0.0`) and never a loopback bind.
 
 ## Build steps
 
