@@ -839,11 +839,11 @@ class ControlRoomServerTests(unittest.TestCase):
             record_market_json(store, market(1, "Galileo", "2026-11-10T10:00:00Z", [
                 {"Name": "$gold_name;", "Name_Localised": "Gold", "BuyPrice": 9000, "Stock": 100, "Demand": 0},
                 {"Name": "$tea_name;", "Name_Localised": "Tea", "SellPrice": 2000, "Demand": 40},
-            ]), lambda _: None)
+            ]), lambda _: None, limit=10)
             record_market_json(store, market(2, "Abraham Lincoln", "2026-11-10T11:00:00Z", [
                 {"Name": "$gold_name;", "Name_Localised": "Gold", "SellPrice": 9600, "Demand": 500},
                 {"Name": "$tea_name;", "Name_Localised": "Tea", "BuyPrice": 1500, "Stock": 1000},
-            ]), lambda _: None)
+            ]), lambda _: None, limit=10)
             app = build_observer_server_app(
                 data_provider=data_provider,
                 command_handler=None,
@@ -927,7 +927,7 @@ class ControlRoomServerTests(unittest.TestCase):
             for market_id, station, system in ((1, "Galileo", "Sol"), (2, "Alpha Port", "Alpha")):
                 record_market_json(store, {"MarketID": market_id, "StationName": station, "StarSystem": system,
                                            "StationType": "Coriolis", "timestamp": "2026-11-10T10:00:00Z",
-                                           "Items": []}, lambda _: None)
+                                           "Items": []}, lambda _: None, limit=10)
             database = _facts_db(directory, store, [
                 {"event": "Location", "timestamp": "2026-11-10T10:30:00Z", "StarSystem": "Sol", "SystemAddress": 10,
                  "StarPos": [0, 0, 0], "Docked": True, "MarketID": 1, "StationName": "Galileo",
@@ -987,7 +987,7 @@ class ControlRoomServerTests(unittest.TestCase):
             for market_id, station, system in ((1, "Galileo", "Sol"), (2, "Far Port", "Far"), (3, "Dark", "Down")):
                 record_market_json(store, {"MarketID": market_id, "StationName": station, "StarSystem": system,
                                            "StationType": "Coriolis", "timestamp": f"2026-11-10T10:0{market_id}:00Z",
-                                           "Items": []}, lambda _: None)
+                                           "Items": []}, lambda _: None, limit=10)
             database = _facts_db(directory, store, [
                 {"event": "Location", "timestamp": "2026-11-10T10:30:00Z", "StarSystem": "Sol", "SystemAddress": 10,
                  "StarPos": [0, 0, 0], "Docked": True, "MarketID": 1, "StationName": "Galileo",

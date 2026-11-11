@@ -93,6 +93,7 @@ class LoadConfigTests(unittest.TestCase):
             self.assertFalse(config.control_room.clear_session_on_launch)
             self.assertEqual(config.control_room.route_compare_navroute_wait_seconds, 6.0)
             self.assertEqual(config.control_room.route_compare_compare_retry_attempts, 3)
+            self.assertEqual(config.control_room.recent_markets_limit, 20)
             self.assertTrue(config.tts.enabled)
             self.assertEqual(config.tts.title_mode, "commander_name")
             self.assertEqual(config.tts.title, "commander")

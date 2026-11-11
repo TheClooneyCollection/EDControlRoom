@@ -13,8 +13,10 @@ import tempfile
 import threading
 from typing import Any, Callable
 
-RECENT_MARKETS_LIMIT = 10
 _SCHEMA = 1
+# One recent-markets file is read, changed and saved under this, so the hub's own captures and its peers'
+# pushed markets never drop each other's stations.
+_RECORD_LOCK = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -72,7 +74,7 @@ def record_snapshot(
     snapshots: tuple[MarketSnapshot, ...],
     snapshot: MarketSnapshot,
     *,
-    limit: int = RECENT_MARKETS_LIMIT,
+    limit: int,
 ) -> tuple[MarketSnapshot, ...]:
     """Return snapshots newest first, one per station; a stale snapshot changes nothing."""
     existing = next((s for s in snapshots if s.market_id == snapshot.market_id), None)
@@ -174,20 +176,24 @@ def save_recent_markets(path: Path, snapshots: tuple[MarketSnapshot, ...]) -> No
         raise
 
 
-def record_market_json(path: Path, data: dict[str, Any], log: Callable[[str], None]) -> bool:
+def record_market_json(path: Path, data: dict[str, Any], log: Callable[[str], None], *, limit: int) -> bool:
     """Store a Market.json payload; True when the store changed."""
     snapshot = snapshot_from_market_json(data)
-    if snapshot is None:
-        return False
-    current = load_recent_markets(path)
-    updated = record_snapshot(current, snapshot)
-    if updated == current:
-        return False
-    try:
-        save_recent_markets(path, updated)
-    except OSError as exc:
-        log(f"Warning: failed to save recent markets to {path}: {exc}")
-        return False
+    return snapshot is not None and record_market(path, snapshot, log, limit=limit)
+
+
+def record_market(path: Path, snapshot: MarketSnapshot, log: Callable[[str], None], *, limit: int) -> bool:
+    """Store one market snapshot (this game's, or on a hub one a peer pushed); True when the store changed."""
+    with _RECORD_LOCK:
+        current = load_recent_markets(path)
+        updated = record_snapshot(current, snapshot, limit=limit)
+        if updated == current:
+            return False
+        try:
+            save_recent_markets(path, updated)
+        except OSError as exc:
+            log(f"Warning: failed to save recent markets to {path}: {exc}")
+            return False
     return True
 
 

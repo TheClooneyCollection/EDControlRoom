@@ -113,7 +113,8 @@ def load_market_json(app: BootstrapHost) -> None:
             data: dict[str, Any] = json.load(fh)
     except Exception:
         return
-    record_market_json(app._config.control_room.recent_markets_file, data, app._log)
+    record_market_json(app._config.control_room.recent_markets_file, data, app._log,
+                       limit=app._config.control_room.recent_markets_limit)
 
     station = data.get("StationName", "?")
     system = data.get("StarSystem", "?")

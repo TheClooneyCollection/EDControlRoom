@@ -2,6 +2,8 @@
 haul_runs_file = ".control_room_haul_runs.jsonl"
 state_file = ".control_room_state.json"
 recent_markets_file = ".control_room_recent_markets.json"
+# Stations the Markets page lists, newest first; a hub lists its peers' markets here too.
+recent_markets_limit = 20
 history_limit = 20
 activity_log_max_lines = 2000
 command_delay_seconds = 5.0

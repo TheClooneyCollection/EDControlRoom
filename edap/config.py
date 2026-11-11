@@ -219,6 +219,8 @@ class ControlRoomConfig:
     clear_session_on_launch: bool = False
     route_compare_navroute_wait_seconds: float = 6.0
     route_compare_compare_retry_attempts: int = 3
+    # Stations the Markets page lists; a hub keeps its peers' markets in the same list.
+    recent_markets_limit: int = 20
 
 
 @dataclass(frozen=True)
@@ -868,6 +870,8 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `control_room.route_compare_navroute_wait_seconds` must be non-negative.")
     if config.control_room.route_compare_compare_retry_attempts < 1:
         raise ConfigError("Config value `control_room.route_compare_compare_retry_attempts` must be at least 1.")
+    if config.control_room.recent_markets_limit < 1:
+        raise ConfigError("Config value `control_room.recent_markets_limit` must be at least 1.")
     if config.tts.title_mode not in VALID_TTS_TITLE_MODES:
         supported = ", ".join(sorted(VALID_TTS_TITLE_MODES))
         raise ConfigError(f"Config value `tts.title_mode` must be one of: {supported}.")
@@ -1269,6 +1273,9 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
                 control_room,
                 "route_compare_compare_retry_attempts",
                 _integer(default_control_room, "route_compare_compare_retry_attempts", 3),
+            ),
+            recent_markets_limit=_integer(
+                control_room, "recent_markets_limit", _integer(default_control_room, "recent_markets_limit", 20)
             ),
         ),
         tts=TTSConfig(
