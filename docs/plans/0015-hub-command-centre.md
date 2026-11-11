@@ -2,7 +2,7 @@
 
 ## Status
 
-Designed (2026-11-11). Built: step 1 (roles and data ownership, 2026-11-11), step 2 (peer link and outbox, 2026-11-11), step 3 (ship on every run, 2026-11-11), step 4 (central history, 2026-11-11), step 5 (see a node, 2026-11-11), step 6 (drive a node, 2026-11-11). One feature: it replaces today's hub mode (`docs/user/hub.md`) as a whole and is released only when every build step below is done. The end state is designed here at once; no step keeps the old hub mode working alongside it.
+Designed (2026-11-11). Built: step 1 (roles and data ownership, 2026-11-11), step 2 (peer link and outbox, 2026-11-11), step 3 (ship on every run, 2026-11-11), step 4 (central history, 2026-11-11), step 5 (see a node, 2026-11-11), step 6 (drive a node, 2026-11-11), step 7 (TTS on the hub, 2026-11-11). One feature: it replaces today's hub mode (`docs/user/hub.md`) as a whole and is released only when every build step below is done. The end state is designed here at once; no step keeps the old hub mode working alongside it.
 
 ## Why
 
