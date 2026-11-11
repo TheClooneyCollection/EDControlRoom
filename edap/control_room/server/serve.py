@@ -27,7 +27,7 @@ from edap.eddn.listener import open_zmq_socket
 from edap.eddn.service import EddnService, start_eddn_service
 from edap.haul_history import load_runs
 from edap.hub.discovery import (
-    BROWSE_S, KNOWN_HUB_FILE_NAME, DiscoveredHub, KnownHub, advert_properties, zeroconf_advertise, zeroconf_browse,
+    BROWSE_S, KNOWN_HUB_FILE_NAME, DiscoveredHub, KnownHub, advert_properties, lan_browse, zeroconf_advertise,
 )
 from edap.hub.history import CentralHistory, HubRuns
 from edap.hub.nodes import HubSide, NodeRegistry, store_link_item
@@ -114,7 +114,7 @@ def serve_observer_mode(
         else:
             # Found over mDNS; the first hub that welcomes this peer is remembered and the only one dialled.
             known_hub = KnownHub(Path(loaded.config_path).parent / KNOWN_HUB_FILE_NAME, hub_logger.warning)
-            discovered = DiscoveredHub(browse=zeroconf_browse(BROWSE_S), known=known_hub, dial=dial,
+            discovered = DiscoveredHub(browse=lan_browse(sys.platform, BROWSE_S), known=known_hub, dial=dial,
                                        log=hub_logger.warning)
             hub_url = lambda: discovered.url
             connect = discovered

@@ -7,6 +7,7 @@ from tempfile import TemporaryDirectory
 
 from edap.hub.discovery import (
     DiscoveredHub, HubAdvert, KnownHub, NoHubFound, advert_from_record, advert_properties, advertise_address,
+    dnssd_browse,
 )
 from edap.hub.peer import PeerLink
 from tests.test_hub import HUB_NODE, PEER_NODE, QuietRelay, rig
@@ -117,3 +118,65 @@ class DiscoveryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# Recorded from macOS `dns-sd` against local adverts, with host names and addresses made generic.
+DNSSD_BROWSE = """Browsing for _edcr._tcp.local
+DATE: ---Wed 11 Nov 2026---
+14:27:11.445  ...STARTING...
+Timestamp     A/R    Flags  if Domain               Service Type         Instance Name
+14:27:11.446  Add        3  14 local.               _edcr._tcp.          Gone Hub
+14:27:11.446  Add        3   1 local.               _edcr._tcp.          Desk Hub
+14:27:11.446  Add        3  14 local.               _edcr._tcp.          Desk Hub
+14:27:11.446  Add        3  14 local.               _edcr._tcp.          Silent Hub
+14:27:11.446  Add        2  14 local.               _edcr._tcp.          Not A Hub
+14:27:12.101  Rmv        0  14 local.               _edcr._tcp.          Gone Hub
+"""
+DNSSD_LOOKUPS = {
+    "Desk Hub": """Lookup Desk Hub._edcr._tcp.local
+DATE: ---Wed 11 Nov 2026---
+14:27:09.935  ...STARTING...
+14:27:09.935  Desk\\032Hub._edcr._tcp.local. can be reached at hub-host.local.:8765 (interface 14) Flags: 1
+ role=hub id=hub-node name=Café\\ Desk\\\\1 note=a=b\\x07 version=1.2.3
+""",
+    "Not A Hub": """Lookup Not A Hub._edcr._tcp.local
+14:27:09.935  Not\\032A\\032Hub._edcr._tcp.local. can be reached at other-host.local.:9000 (interface 14)
+ role=peer id=peer-node
+""",
+    "Silent Hub": """Lookup Silent Hub._edcr._tcp.local
+DATE: ---Wed 11 Nov 2026---
+14:27:09.935  ...STARTING...
+""",
+}
+DNSSD_ADDRESSES = """DATE: ---Wed 11 Nov 2026---
+14:26:36.947  ...STARTING...
+Timestamp     A/R  Flags         IF  Hostname                               Address                                      TTL
+14:26:36.947  Add  40000003       1  hub-host.local.                        127.0.0.1                                    4500
+14:26:36.947  Add  40000002      14  hub-host.local.                        192.168.1.20                                 4500
+"""
+
+
+class DnssdBrowseTests(unittest.TestCase):
+    def test_a_mac_peer_finds_hubs_through_dns_sd_and_resolves_their_lan_address(self) -> None:
+        runs: list[tuple[list[str], float, bool]] = []
+
+        def run(args: list[str], seconds: float, done) -> str:
+            output = {"-B": DNSSD_BROWSE, "-L": DNSSD_LOOKUPS.get(args[2], ""), "-G": DNSSD_ADDRESSES}[args[1]]
+            runs.append((args, seconds, done(output)))
+            return output
+
+        found = dnssd_browse(3.0, run)()
+        self.assertEqual(found, [HubAdvert("hub-node", "Café Desk\\1", "1.2.3", "192.168.1.20", 8765)])
+        # The browse listens for its whole window; a lookup or address stops as soon as it has answered,
+        # and one that never answers (Silent Hub) runs out its deadline and is skipped.
+        self.assertEqual(runs, [
+            (["dns-sd", "-B", "_edcr._tcp", "local"], 3.0, False),
+            (["dns-sd", "-L", "Desk Hub", "_edcr._tcp", "local"], 3.0, True),
+            (["dns-sd", "-G", "v4", "hub-host.local."], 3.0, True),
+            (["dns-sd", "-L", "Silent Hub", "_edcr._tcp", "local"], 3.0, False),
+            (["dns-sd", "-L", "Not A Hub", "_edcr._tcp", "local"], 3.0, True),
+            (["dns-sd", "-G", "v4", "other-host.local."], 3.0, True),
+        ])
+
+    def test_no_dns_sd_output_finds_no_hub(self) -> None:
+        self.assertEqual(dnssd_browse(3.0, lambda args, seconds, done: "")(), [])
