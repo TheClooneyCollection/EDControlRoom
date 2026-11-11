@@ -539,6 +539,20 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             {"event": "SupercruiseEntry", "StarSystem": _SYSTEM_1},
         ], destination), TransitResumeState.ARRIVED_IN_DESTINATION_SYSTEM)
 
+    def test_denied_dock_request_resumes_near_station_instead_of_waiting_for_docked(self) -> None:
+        destination = _station_1_leg()
+        for denial in ("DockingDenied", "DockingTimeout", "DockingCancelled"):
+            for station, expected in ((_STATION_1, TransitResumeState.POST_DROP_NEAR_STATION), (_STATION_2, TransitResumeState.NONE)):
+                self.assertEqual(detect_transit_resume_state([
+                    {"event": "SupercruiseExit", "BodyType": "Station", "StarSystem": _SYSTEM_1},
+                    {"event": "DockingRequested", "StationName": station},
+                    {"event": denial, "StationName": station, "Reason": "TooLarge"},
+                ], destination), expected)
+        self.assertEqual(detect_transit_resume_state([
+            {"event": "DockingDenied", "StationName": _STATION_1},
+            {"event": "DockingRequested", "StationName": _STATION_1},
+        ], destination), TransitResumeState.AWAITING_DOCKED)
+
     def test_transit_after_undocking_destination_requests_dock_without_drop_wait(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             journal_dir = Path(tmp)

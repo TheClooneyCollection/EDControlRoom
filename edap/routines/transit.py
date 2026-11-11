@@ -163,6 +163,16 @@ def detect_transit_resume_state(events: list[dict], destination: TransitDestinat
     for event in reversed(events):
         evt_name = str(event.get("event", ""))
 
+        # A denied, timed-out or cancelled request leaves the ship near the station with no
+        # request pending; the DockingRequested logged before it must not read as one.
+        if evt_name in {"DockingDenied", "DockingTimeout", "DockingCancelled"}:
+            station_name = str(event.get("StationName", "")).lower()
+            return (
+                TransitResumeState.POST_DROP_NEAR_STATION
+                if destination_station and station_name == destination_station
+                else TransitResumeState.NONE
+            )
+
         if evt_name in {"DockingRequested", "DockingGranted"}:
             station_name = str(event.get("StationName", "")).lower()
             return (
