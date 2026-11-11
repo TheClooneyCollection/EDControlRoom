@@ -1,6 +1,10 @@
 # EDControlRoom
 
 [![Tests](https://github.com/TheClooneyCollection/EDControlRoom/actions/workflows/tests.yml/badge.svg)](https://github.com/TheClooneyCollection/EDControlRoom/actions/workflows/tests.yml)
+[![Release](https://img.shields.io/github/v/release/TheClooneyCollection/EDControlRoom)](https://github.com/TheClooneyCollection/EDControlRoom/releases/latest)
+[![License](https://img.shields.io/github/license/TheClooneyCollection/EDControlRoom)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
+[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Steam%20Deck-lightgrey)](#quick-start)
 [![Discord](https://img.shields.io/badge/Discord-join%20chat-5865F2?logo=discord&logoColor=white)](https://discord.gg/73YSUBhfRG)
 
 <table>
