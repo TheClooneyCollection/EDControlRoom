@@ -110,7 +110,8 @@ def ship_data(system: str = "Sol", cargo_capacity: int = 784) -> object:
 def server(**options: object):
     options.setdefault("data_provider", ship_data)
     options.setdefault("broker", InMemoryObserverSessionBroker())
-    return build_observer_server_app(command_handler=None, auth=SharedAccessTokenAuth(TOKEN), **options)
+    options.setdefault("command_handler", None)
+    return build_observer_server_app(auth=SharedAccessTokenAuth(TOKEN), **options)
 
 
 def roundtrip(frame: Any) -> Any:

@@ -102,7 +102,7 @@ let routes = [];
       const commodities = (runs.commodities || []).map((item) => `<tr><td>${escapeHtml(item.commodity)}</td><td>${item.all_in.tons_bought} / ${item.all_in.tons_sold} t</td><td>${historyMoney(item.all_in.cost)}</td><td>${historyMoney(item.all_in.revenue)}</td></tr>`);
       const journal = payload.journal;
       const coverage = journal && journal.coverage;
-      const journalLine = journal ? `${payload.journal_node ? `${escapeHtml(payload.journal_node)}: ` : ""}Trade profit ${historyMoney(journal.profit)}; balance change ${historyMoney(journal.net_balance_change)}. Coverage: ${coverage.files} files, ${escapeHtml(coverage.first_event_at || "unknown")} to ${escapeHtml(coverage.last_event_at || "unknown")}${coverage.window_start_before_oldest_journal ? "; window predates oldest journal" : ""}; ${coverage.skipped_lines} skipped / ${coverage.unreadable_files} unreadable.` : payload.node !== "all" && payload.journal_node ? `Journal ledger only for ${escapeHtml(payload.journal_node)}, this server's own game.` : "Journal data unavailable on this server.";
+      const journalLine = journal ? `${payload.journal_node ? `${escapeHtml(payload.journal_node)}: ` : ""}Trade profit ${historyMoney(journal.profit)}; balance change ${historyMoney(journal.net_balance_change)}. Coverage: ${coverage.files} files, ${escapeHtml(coverage.first_event_at || "unknown")} to ${escapeHtml(coverage.last_event_at || "unknown")}${coverage.window_start_before_oldest_journal ? "; window predates oldest journal" : ""}; ${coverage.skipped_lines} skipped / ${coverage.unreadable_files} unreadable.` : payload.node !== "all" && payload.journal_node ? `Journal ledger only for ${escapeHtml(payload.journal_node)}, the game this page shows.` : "Journal data unavailable on this server.";
       const content = document.getElementById("history-content");
       // The panel re-renders on refresh; keep Details open if the user opened it.
       const detailsOpen = content.querySelector(".history-details")?.open ? " open" : "";
@@ -128,6 +128,8 @@ let routes = [];
       url.searchParams.set("window", historyWindow);
       url.searchParams.set("node", historyNode);
       url.searchParams.set("ship", historyShip);
+      // `node` filters the history; the journal ledger is the one of the node this page looks at.
+      if (window.EDCRNode.id()) url.searchParams.set("view_node", window.EDCRNode.id());
       if (accessToken) url.searchParams.set(AUTH_QUERY_PARAMETER_NAME, accessToken);
       try {
         const response = await fetch(url, { method: "GET" });

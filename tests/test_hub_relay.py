@@ -1,6 +1,7 @@
-"""Plan 0015 step 5: hub pages look at a peer through the link (no sockets, an in-memory link)."""
+"""Plan 0015 steps 5 and 6: hub pages look at and drive a peer through the link (no sockets, an in-memory link)."""
 from __future__ import annotations
 
+import json
 import unittest
 from dataclasses import replace
 from pathlib import Path
@@ -9,6 +10,7 @@ from typing import Any
 from unittest.mock import patch
 
 from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from edap.control_room.protocol import ActivityLogEntry
 from edap.control_room.server.broker import InMemoryObserverSessionBroker
@@ -16,7 +18,7 @@ from edap.eddn.store import EddnStore
 from edap.hub.nodes import HubSide
 from edap.hub.relay import HubRelay, NodeOffline, PeerRelay, node_state
 from edap.recent_markets import save_recent_markets
-from tests.test_control_room_server import _base_data_read_model
+from tests.test_control_room_server import _base_data_read_model, _CommandHandlerRecorder
 from tests.test_hub import GALILEO, HUB_TOKEN, PEER_NODE, SOL, TOKEN, market, rig, server
 
 PAGE = {"access_token": TOKEN}
@@ -38,6 +40,27 @@ def run_now(work) -> None:
     work()
 
 
+class PeerCommands(_CommandHandlerRecorder):
+    """The peer's command handler; `during` runs inside each command, so a test can pull the cable then."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.during = lambda raw_input: None
+
+    def submit_input(self, raw_input: str, *, skip_delay: bool | None = None) -> bool:
+        self.during(raw_input)
+        return super().submit_input(raw_input, skip_delay=skip_delay)
+
+
+def journal(directory: Path, total_sale: int) -> Path:
+    """A journal folder with one sale bought at 10 per ton."""
+    directory.mkdir()
+    (directory / "Journal.2020-01-01T000000.01.log").write_text(json.dumps({
+        "event": "MarketSell", "timestamp": "2020-01-01T01:00:00Z", "Type": "gold", "Count": 1,
+        "TotalSale": total_sale, "AvgPricePaid": 10}) + "\n", encoding="utf-8")
+    return directory
+
+
 class RelayTests(unittest.TestCase):
     """A hub app and a peer app joined by the in-memory link, as a hub page sees them."""
 
@@ -55,32 +78,42 @@ class RelayTests(unittest.TestCase):
         save_recent_markets(cls.peer_recent, (market(market_id=GALILEO.market_id), market(market_id=2, station="Abraham")))
         cls.hub_recent = root / "hub_recent.json"
         save_recent_markets(cls.hub_recent, (market(market_id=5, station="Jameson Memorial", system="Shinrarta"),))
+        cls.hub_journals = journal(root / "hub_journals", 50)
+        cls.peer_journals = journal(root / "peer_journals", 90)
 
     def setUp(self) -> None:
         self.routine: str | None = None
         self.peer_broker = InMemoryObserverSessionBroker()
+        self.commands = PeerCommands()
         self.logs: list[str] = []
+        # How the peer runs reads and commands off the link thread; a test may hold them back.
+        self.background = run_now
         self.peer_relay = PeerRelay(
             open_session=lambda channel_id: self.peer_app.state.open_node_session(channel_id),
             add_listener=self.peer_broker.add_listener,
+            answer_command=lambda channel_id, message: self.peer_app.state.answer_node_command(channel_id, message),
             answer_read=lambda path, params: self.peer_app.state.answer_node_read(path, params),
+            answer_action=lambda path, body: self.peer_app.state.answer_node_action(path, body),
             state=lambda: node_state(peer_data(self.routine)),
-            run_in_background=run_now,
+            run_in_background=lambda work: self.background(work),
             log=self.logs.append,
         )
         self.r = rig(self, peer_relay=self.peer_relay)
         self.hub_app = server(data_provider=hub_data, market_database_file=self.database,
                               recent_markets_file=self.hub_recent, ardent_lookup=None,
+                              journal_dir=self.hub_journals,
                               hub_side=HubSide(self.r.registry, self.r.store_item, HUB_TOKEN, self.r.history, self.r.relay))
         self.r.handlers.update(self.hub_app.state.link_handlers)
         self.peer_app = server(data_provider=lambda: peer_data(self.routine), broker=self.peer_broker,
-                               peer_link=self.r.peer, recent_markets_file=self.peer_recent)
+                               peer_link=self.r.peer, recent_markets_file=self.peer_recent,
+                               command_handler=self.commands,
+                               journal_dir=self.peer_journals)
 
     def activity(self, text: str) -> None:
         self.peer_broker.publish_activity_log(ActivityLogEntry(entry_id=text, timestamp="2026-11-11T09:00:00Z",
                                                                message_text=text))
 
-    def test_a_hub_page_sees_the_peers_session_and_its_commands_are_refused(self) -> None:
+    def test_a_hub_page_sees_the_peers_session_and_drives_it(self) -> None:
         self.r.attach()
         with TestClient(self.hub_app) as hub:
             with hub.websocket_connect("/session", params={**PAGE, "node": "peer-node", "client_name": "web-haul"}) as page:
@@ -90,8 +123,15 @@ class RelayTests(unittest.TestCase):
                 self.activity("Undocked at Galileo")
                 event = page.receive_json()
                 page.send_json({"message_type": "command.submit_input", "message_id": "m1",
-                                "payload": {"raw_input": "undock"}})
-                refused = page.receive_json()
+                                "payload": {"raw_input": "say hello", "skip_delay": True}})
+                ran = page.receive_json()
+                page.send_json({"message_type": "command.cancel_active_routine", "message_id": "m2",
+                                "payload": {"mode": "after_run"}})
+                stopped = page.receive_json()
+                page.send_json({"message_type": "command.request_active_operator", "message_id": "m3"})
+                operator = page.receive_json()
+                page.send_json({"message_type": "command.fly_to_the_moon", "message_id": "m4"})
+                bad = page.receive_json()
             with hub.websocket_connect("/session", params={**PAGE, "node": "hub-node"}) as local:
                 local.receive_json()
                 local_hydrate = local.receive_json()
@@ -99,10 +139,17 @@ class RelayTests(unittest.TestCase):
         self.assertEqual((ready["message_type"], ready["payload"]["client_role"]), ("event.connection_ready", "observer"))
         self.assertEqual(hydrate["payload"]["ship"]["system"], "Achenar")
         self.assertEqual(event["payload"]["entry"]["message_text"], "Undocked at Galileo")
-        self.assertEqual((refused["message_type"], refused["correlation_message_id"]), ("response.error", "m1"))
-        self.assertEqual(refused["payload"]["error_code"], "node_view_only")
-        self.assertEqual(refused["payload"]["error_message"],
-                         "Deck is view-only from the hub for now: run commands on its own pages.")
+        # The peer ran them through its own handler; the answers come back as a local page gets them.
+        self.assertEqual(self.commands.submitted_inputs, [("say hello", True)])
+        self.assertEqual(self.commands.cancel_modes, ["after_run"])
+        self.assertEqual((ran["message_type"], ran["correlation_message_id"], ran["payload"]["message_text"]),
+                         ("response.success", "m1", "Command accepted."))
+        self.assertEqual((stopped["correlation_message_id"], stopped["payload"]["message_text"]),
+                         ("m2", "Routine stop-after-run requested."))
+        self.assertEqual((operator["correlation_message_id"], operator["payload"]["error_code"]),
+                         ("m3", "unsupported_message_type"))
+        self.assertEqual((bad["correlation_message_id"], bad["payload"]["error_message"]),
+                         ("m4", "Unsupported message type: command.fly_to_the_moon"))
         # The page left: the peer dropped its listener; the node state listener stays.
         self.assertEqual(self.peer_relay.channels(), 0)
         self.assertEqual(len(self.peer_broker._listeners), 1)
@@ -143,8 +190,6 @@ class RelayTests(unittest.TestCase):
             config = hub.get("/api/route-compare/config", params=on_peer)
             bad = hub.get("/api/route-compare", params=on_peer)
             stats = hub.get("/api/haul-stats", params={**PAGE, "node": "peer-node", "window": "all"}).json()
-            command = hub.post("/api/command", params=on_peer, json={"raw_input": "undock"})
-            stop = hub.post("/api/stop", params=on_peer)
             self.r.drop(self.r.links[-1])
             gone = hub.get("/api/recent-markets", params=on_peer)
 
@@ -157,10 +202,119 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(bad.status_code, 400)
         # Haul history is the hub's own: `node` there filters the central history.
         self.assertEqual(stats["node"], "peer-node")
-        self.assertEqual([c.status_code for c in (command, stop)], [403, 403])
-        self.assertIn("view-only from the hub", command.json()["detail"])
         self.assertEqual(gone.status_code, 502)
         self.assertEqual(gone.json()["detail"], "Node Deck is unreachable: not linked to the hub")
+
+    def test_command_and_stop_posts_run_on_the_peer_with_its_own_refusals(self) -> None:
+        self.r.attach()
+        on_peer = {**PAGE, "node": "peer-node"}
+        with TestClient(self.hub_app) as hub:
+            ran = hub.post("/api/command", params=on_peer, json={"raw_input": "say hello"})
+            idle_stop = hub.post("/api/stop", params=on_peer)
+            self.routine = "haul"
+            self.commands.accept_inputs = False
+            busy = hub.post("/api/command", params=on_peer, json={"raw_input": "undock"})
+            stop = hub.post("/api/stop", params=on_peer, json={"mode": "after_run"})
+            empty = hub.post("/api/command", params=on_peer, json={"raw_input": " "})
+            self.r.drop(self.r.links[-1])
+            gone = hub.post("/api/command", params=on_peer, json={"raw_input": "undock"})
+
+        self.assertEqual((ran.status_code, ran.json()["accepted"]), (200, True))
+        self.assertEqual((idle_stop.status_code, idle_stop.json()["detail"]), (409, "No routine is running."))
+        self.assertEqual((busy.status_code, busy.json()["detail"]),
+                         (409, "Refused: haul is already running. Stop it or wait for it to finish."))
+        self.assertEqual((stop.status_code, stop.json()["stopped_routine_name"]), (200, "haul"))
+        self.assertEqual(empty.status_code, 400)
+        self.assertEqual(self.commands.submitted_inputs, [("say hello", None), ("undock", None)])
+        self.assertEqual(self.commands.cancel_modes, ["after_run"])
+        self.assertEqual((gone.status_code, gone.json()["detail"]), (502, "Node Deck is unreachable: not linked to the hub"))
+
+    def test_a_command_cut_off_or_unanswered_gets_an_error_instead_of_a_hang(self) -> None:
+        link = self.r.attach()
+        self.commands.during = lambda raw_input: self.r.drop(link)
+        held: list[Any] = []
+        with patch("edap.control_room.server.app.NODE_RETRY_S", 60.0), TestClient(self.hub_app) as hub:
+            with hub.websocket_connect("/session", params={**PAGE, "node": "peer-node"}) as page:
+                page.receive_json()
+                page.receive_json()
+                page.send_json({"message_type": "command.submit_input", "message_id": "m1",
+                                "payload": {"raw_input": "undock"}})
+                cut = page.receive_json()
+                offline = page.receive_json()
+                page.send_json({"message_type": "command.submit_input", "message_id": "m2",
+                                "payload": {"raw_input": "undock"}})
+                while_offline = page.receive_json()
+            self.r.attach()
+            self.background = held.append
+            with patch.object(self.r.relay, "command_timeout_s", return_value=0.002), \
+                    hub.websocket_connect("/session", params={**PAGE, "node": "peer-node"}) as page:
+                page.receive_json()
+                page.receive_json()
+                page.send_json({"message_type": "command.submit_input", "message_id": "m3",
+                                "payload": {"raw_input": "undock"}})
+                late = page.receive_json()
+
+        self.assertEqual((cut["message_type"], cut["correlation_message_id"]), ("response.error", "m1"))
+        self.assertEqual((cut["payload"]["error_code"], cut["payload"]["error_message"]),
+                         ("node_unreachable", "Node Deck is unreachable: the link closed"))
+        self.assertEqual(offline["message_type"], "event.activity_log_appended")
+        self.assertEqual((while_offline["correlation_message_id"], while_offline["payload"]["error_message"]),
+                         ("m2", "Node Deck is unreachable: not linked to the hub"))
+        self.assertEqual((late["correlation_message_id"], late["payload"]["error_message"]),
+                         ("m3", "Node Deck is unreachable: no answer in 0.002 s"))
+        self.assertEqual(len(held), 1)
+
+    def test_a_channels_commands_run_one_at_a_time_in_order(self) -> None:
+        sent: list[dict[str, Any]] = []
+        held: list[Any] = []
+        self.background = held.append
+        self.peer_relay.link_up(sent.append)
+        self.peer_relay.on_frame({"type": "channel_open", "channel": "c1", "client_name": "web"})
+        for number in (1, 2):
+            self.peer_relay.on_frame({"type": "channel_command", "channel": "c1", "message": {
+                "message_type": "command.submit_input", "message_id": f"m{number}",
+                "payload": {"raw_input": f"say {number}"}}})
+        self.peer_relay.on_frame({"type": "channel_command", "channel": "c1",
+                                  "message": {"message_type": "event.hydrate", "message_id": "m3"}})
+        self.peer_relay.on_frame({"type": "channel_command", "channel": "c9", "message": {}})
+        self.assertEqual(len(held), 1)
+        held.pop()()
+        answers = [f["message"] for f in sent if f["type"] == "channel" and "correlation_message_id" in f["message"]]
+        self.assertEqual([(a["correlation_message_id"], a["message_type"]) for a in answers],
+                         [("m1", "response.success"), ("m2", "response.success"), ("m3", "response.error")])
+        self.assertEqual(answers[2]["payload"]["error_code"], "invalid_command")
+        self.assertEqual(self.commands.submitted_inputs, [("say 1", None), ("say 2", None)])
+        self.assertEqual(self.logs, ["Hub command for channel c9, which is not open here: dropped"])
+
+    def test_only_the_hub_sends_commands_down_never_a_peer_up(self) -> None:
+        link = self.r.attach()
+        self.assertEqual(link.session.receive({"type": "channel_command", "channel": "c1", "message": {
+            "message_type": "command.submit_input", "message_id": "m1", "payload": {"raw_input": "undock"}}}), [])
+        self.assertEqual(link.session.receive({"type": "act", "id": "a1", "path": "/api/command",
+                                               "body": {"raw_input": "undock"}}), [])
+        self.assertEqual(self.r.relay.act("peer-node", "/api/eddn-routes", {}).status, 403)
+        # Nothing on a peer listens for the hub's frames: it gets them only on the link it dialled.
+        with TestClient(self.peer_app) as peer, self.assertRaises(WebSocketDisconnect) as refused:
+            peer.websocket_connect("/api/peer-link", params=PAGE).__enter__()
+        self.assertEqual(refused.exception.code, 4404)
+        self.assertEqual(self.commands.submitted_inputs, [])
+
+    def test_the_haul_journal_ledger_is_the_viewed_nodes(self) -> None:
+        self.r.attach()
+        with TestClient(self.hub_app) as hub:
+            def stats(**params: str) -> dict[str, Any]:
+                return hub.get("/api/haul-stats", params={**PAGE, "window": "all", **params}).json()
+
+            own = stats()
+            viewed = stats(view_node="peer-node")
+            filtered_away = stats(view_node="peer-node", node="hub-node")
+            self.r.drop(self.r.links[-1])
+            offline = stats(view_node="peer-node")
+
+        self.assertEqual((own["journal_node"], own["journal"]["sell_margin"]), ("Home", 40))
+        self.assertEqual((viewed["journal_node"], viewed["journal"]["sell_margin"]), ("Deck", 80))
+        self.assertEqual((filtered_away["journal_node"], filtered_away["journal"]), ("Deck", None))
+        self.assertEqual((offline["journal_node"], offline["journal"]), ("Deck", None))
 
     def test_only_allowlisted_reads_reach_a_peer(self) -> None:
         self.r.attach()

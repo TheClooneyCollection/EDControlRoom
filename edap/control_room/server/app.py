@@ -35,7 +35,7 @@ from edap.market_compare import compare_markets
 from edap.hub.history import ALL, filter_runs, history_options, parse_node_filter, parse_ship_filter
 from edap.hub.nodes import HubLinkSession, HubSide, RequestHandler
 from edap.hub.peer import PeerLink, hub_unreachable_detail, with_hub_source
-from edap.hub.relay import NODE_READS, NodeOffline, node_state
+from edap.hub.relay import NODE_ACTIONS, NODE_READS, NodeOffline, node_state, relay_error
 from edap.hub.protocol import (
     PEER_LINK_PATH,
     REQUEST_EDDN_ROUTES,
@@ -478,16 +478,41 @@ def build_observer_server_app(
             **history_options(rows, own_node if hub_side is not None else None),
         })
 
-    def with_journal(payload: dict[str, Any], window: str, node: str) -> dict[str, Any]:
-        """The trade ledger from this machine's own journals: shown for every node or this one only."""
+    def own_journal(window: str) -> dict[str, Any] | None:
+        """The trade ledger from this machine's own journals, or None without one."""
         since, until, _ = parse_window(window, datetime.now(SystemLocalTimezone()))
+        ledger = journal_trade_ledger(journal_dir, since, until) if journal_dir is not None else None
+        return asdict(ledger) if ledger is not None and ledger.available else None
+
+    def with_journal(payload: dict[str, Any], window: str, node: str, viewed: str | None) -> dict[str, Any]:
+        """The trade ledger of the node a page looks at (`viewed`, a peer, or this machine for None):
+        shown for every node or that one only. A peer's ledger comes over the link."""
+        if viewed is not None:
+            assert relay is not None
+            journal = None
+            if node in {ALL, viewed}:
+                try:
+                    reply = relay.read(viewed, "/api/journal-ledger", {"window": window})
+                except NodeOffline:
+                    reply = LinkReply(502, None)
+                journal = reply.body.get("journal") if reply.status == 200 and isinstance(reply.body, dict) else None
+            return {**payload, "journal": journal, "journal_node": relay.name(viewed)}
         ours = node == ALL or (own_node is not None and node == own_node.node_id)
-        ledger = journal_trade_ledger(journal_dir, since, until) if ours and journal_dir is not None else None
         return {
             **payload,
-            "journal": asdict(ledger) if ledger is not None and ledger.available else None,
+            "journal": own_journal(window) if ours else None,
             "journal_node": own_node.name if own_node is not None else None,
         }
+
+    async def journal_ledger(params: Mapping[str, str]) -> JSONResponse:
+        """This machine's journal ledger for a window: a hub page looking at this peer asks for it."""
+        window = params.get("window", "today")
+        try:
+            return JSONResponse({"window": window, "journal": await asyncio.to_thread(own_journal, window)})
+        except ValueError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=400)
+        except OSError as exc:
+            return JSONResponse({"detail": f"Cannot read the journal ledger: {exc}"}, status_code=503)
 
     async def haul_stats_endpoint(request: Request) -> JSONResponse:
         auth_failure = require_http_auth(request)
@@ -516,7 +541,9 @@ def build_observer_server_app(
         if reply.status != 200 or not isinstance(reply.body, dict):
             return link_reply_response(reply)
         try:
-            return JSONResponse(await asyncio.to_thread(with_journal, reply.body, body["window"], node))
+            # `node` is the history filter; `view_node` is the node the page looks at (its ledger).
+            viewed = viewed_node({"node": params.get("view_node", "")})
+            return JSONResponse(await asyncio.to_thread(with_journal, reply.body, body["window"], node, viewed))
         except (OSError, ValueError) as exc:
             return JSONResponse({"detail": f"Cannot read haul statistics: {exc}"}, status_code=503)
 
@@ -881,14 +908,7 @@ def build_observer_server_app(
             return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
         return JSONResponse(payload)
 
-    async def command_endpoint(request: Request) -> JSONResponse:
-        auth_failure = require_http_auth(request) or refuse_node_command(request.query_params)
-        if auth_failure is not None:
-            return auth_failure
-        try:
-            body = await request.json()
-        except ValueError:
-            return JSONResponse({"detail": "body must be JSON"}, status_code=400)
+    async def run_command(body: Any) -> JSONResponse:
         raw_input = body.get("raw_input") if isinstance(body, dict) else None
         if not isinstance(raw_input, str) or not raw_input.strip():
             return JSONResponse({"detail": "raw_input must be a non-empty command string"}, status_code=400)
@@ -917,16 +937,7 @@ def build_observer_server_app(
             return JSONResponse(payload, status_code=409)
         return JSONResponse(payload)
 
-    async def stop_endpoint(request: Request) -> JSONResponse:
-        auth_failure = require_http_auth(request) or refuse_node_command(request.query_params)
-        if auth_failure is not None:
-            return auth_failure
-        body: object = {}
-        if await request.body():
-            try:
-                body = await request.json()
-            except ValueError:
-                return JSONResponse({"detail": "body must be JSON"}, status_code=400)
+    async def stop_routine(body: Any) -> JSONResponse:
         mode = body.get("mode", "now") if isinstance(body, dict) else None
         if mode not in {"now", "after_run"}:
             return JSONResponse({"detail": "mode must be now or after_run"}, status_code=400)
@@ -1003,13 +1014,6 @@ def build_observer_server_app(
             return None
         return node_id
 
-    def refuse_node_command(params: Mapping[str, str]) -> JSONResponse | None:
-        node_id = viewed_node(params)
-        if node_id is None:
-            return None
-        assert relay is not None
-        return JSONResponse({"detail": view_only_detail(relay.name(node_id)), "node": node_id}, status_code=403)
-
     # Page reads that answer for the node a page looks at; a hub relays them to a peer, and the peer
     # answers them here too. Hub-owned data (history, EDDN status, hub status) is not among them.
     node_reads: dict[str, Callable[[Mapping[str, str]], Awaitable[JSONResponse]]] = {
@@ -1019,8 +1023,66 @@ def build_observer_server_app(
         "/api/recent-markets": recent_markets,
         "/api/market-compare": market_compare,
         "/api/eddn-routes": eddn_routes,
+        "/api/journal-ledger": journal_ledger,
     }
     assert node_reads.keys() == NODE_READS
+    # Page actions that run on the node a page drives (plan 0015 step 6); the body is JSON.
+    node_actions: dict[str, Callable[[Any], Awaitable[JSONResponse]]] = {
+        "/api/command": run_command,
+        "/api/stop": stop_routine,
+    }
+    assert node_actions.keys() == NODE_ACTIONS
+
+    def node_action_endpoint(path: str, *, empty_body: object | None) -> Callable[[Request], Awaitable[JSONResponse]]:
+        """POST `path` here, or on the node a hub page drives. `empty_body` stands in for no body (None: required)."""
+        act = node_actions[path]
+
+        async def endpoint(request: Request) -> JSONResponse:
+            auth_failure = require_http_auth(request)
+            if auth_failure is not None:
+                return auth_failure
+            body = empty_body
+            if body is None or await request.body():
+                try:
+                    body = await request.json()
+                except ValueError:
+                    return JSONResponse({"detail": "body must be JSON"}, status_code=400)
+            node_id = viewed_node(request.query_params)
+            if node_id is None:
+                return await act(body)
+            assert relay is not None
+            try:
+                reply = await asyncio.to_thread(relay.act, node_id, path, body)
+            except NodeOffline as exc:
+                return JSONResponse({"detail": f"Node {relay.name(node_id)} is unreachable: {exc}", "node": node_id},
+                                    status_code=502)
+            return link_reply_response(reply)
+
+        return endpoint
+
+    def answer_node_action(path: str, body: Any) -> LinkReply:
+        """A hub page's command or stop on this peer, on a thread of its own, as if posted here."""
+        response = asyncio.run(node_actions[path](body))
+        return LinkReply(response.status_code, json.loads(bytes(response.body)))
+
+    def answer_node_command(channel_id: str, message: dict[str, Any]) -> dict[str, Any] | None:
+        """A hub page's session command on this peer, through the same handler as a local page's."""
+        if message.get("message_type") == "command.request_active_operator":
+            # Hub pages are not sessions on this server; they all drive it alike.
+            return relay_error(message.get("message_id"), "unsupported_message_type",
+                               "Hub pages do not claim the operator role on a node.")
+        return asyncio.run(_handle_session_message_async(
+            message,
+            session_id=channel_id,
+            client_role="observer",
+            command_handler=command_handler,
+            broker=broker,
+            data_provider=data_provider,
+            journal_dir=journal_dir,
+            peer_link=peer_link,
+            route_compare_navroute_wait_seconds=route_compare_navroute_wait_seconds,
+            route_compare_compare_retry_attempts=route_compare_compare_retry_attempts,
+        ))
 
     def node_read_endpoint(path: str) -> Callable[[Request], Awaitable[JSONResponse]]:
         read = node_reads[path]
@@ -1054,19 +1116,35 @@ def build_observer_server_app(
         return session_start_messages(session_id, data_provider, broker, client_role="observer")
 
     async def relayed_session(websocket: WebSocket, node_id: str, client_name: str) -> None:
-        """Stream a peer's session to a hub page. While the peer is away the page stays connected, is
-        told so once, and gets a fresh hydrate when the peer links again."""
+        """Stream a peer's session to a hub page and send the page's commands to it. While the peer is
+        away the page stays connected, is told so once, and gets a fresh hydrate when the peer links
+        again. A command the peer does not answer in time, or that is cut off by the link closing,
+        gets a `node_unreachable` error, so the page never waits on it."""
         assert relay is not None
         await websocket.accept()
         loop = asyncio.get_running_loop()
         # Session messages, or the reason the channel ended (a str).
         queue: asyncio.Queue[dict[str, Any] | str] = asyncio.Queue()
+        send_lock = asyncio.Lock()
+        # Commands sent to the node and not answered yet: message id -> their timeout.
+        pending: dict[str, asyncio.TimerHandle] = {}
+
+        async def send(message: dict[str, Any]) -> None:
+            async with send_lock:
+                await websocket.send_json(message)
 
         def deliver(message: dict[str, Any]) -> None:
             loop.call_soon_threadsafe(queue.put_nowait, message)
 
         def end(detail: str) -> None:
             loop.call_soon_threadsafe(queue.put_nowait, detail)
+
+        def unreachable(message_id: str, detail: str) -> dict[str, Any]:
+            return relay_error(message_id, "node_unreachable", f"Node {relay.name(node_id)} is unreachable: {detail}")
+
+        def expire(message_id: str, timeout_s: float) -> None:
+            if pending.pop(message_id, None) is not None:
+                queue.put_nowait(unreachable(message_id, f"no answer in {timeout_s:g} s"))
 
         channel_id: str | None = None
 
@@ -1078,7 +1156,7 @@ def build_observer_server_app(
                     channel_id = relay.open_channel(node_id, client_name, deliver, end)
                 except NodeOffline as exc:
                     if not told_offline:
-                        await websocket.send_json(node_offline_message(relay.name(node_id), str(exc)))
+                        await send(node_offline_message(relay.name(node_id), str(exc)))
                         told_offline = True
                     await asyncio.sleep(NODE_RETRY_S)
                     continue
@@ -1087,32 +1165,46 @@ def build_observer_server_app(
                     item = await queue.get()
                     if isinstance(item, str):
                         channel_id = None
-                        await websocket.send_json(node_offline_message(relay.name(node_id), item))
+                        for message_id, timer in list(pending.items()):
+                            timer.cancel()
+                            await send(unreachable(message_id, item))
+                        pending.clear()
+                        await send(node_offline_message(relay.name(node_id), item))
                         told_offline = True
                         break
-                    await websocket.send_json(item)
+                    answered = item.get("correlation_message_id")
+                    timer = pending.pop(answered, None) if isinstance(answered, str) else None
+                    if timer is not None:
+                        timer.cancel()
+                    await send(item)
                 await asyncio.sleep(NODE_RETRY_S)
 
-        async def refuse_commands() -> None:
+        async def forward_commands() -> None:
             while True:
                 message = await websocket.receive_json()
-                if isinstance(message, dict) and str(message.get("message_type", "")).startswith("command."):
-                    message_id = message.get("message_id")
-                    await websocket.send_json(protocol_message(
-                        "response.error",
-                        {
-                            "error_code": "node_view_only",
-                            "error_message": view_only_detail(relay.name(node_id)),
-                            "recommended_action": "Pick this hub's own node, or open the node's own pages.",
-                            "retryable": False,
-                        },
-                        correlation_message_id=str(message_id) if message_id is not None else None,
-                    ))
+                if not isinstance(message, dict) or not str(message.get("message_type", "")).startswith("command."):
+                    continue
+                message_id = message.get("message_id")
+                message_id = str(message_id) if message_id is not None else None
+                if channel_id is None:
+                    if message_id is not None:
+                        await send(unreachable(message_id, "not linked to the hub"))
+                    continue
+                if message_id is not None:
+                    timeout_s = relay.command_timeout_s(str(message["message_type"]))
+                    pending[message_id] = loop.call_later(timeout_s, expire, message_id, timeout_s)
+                try:
+                    await asyncio.to_thread(relay.command, channel_id, message)
+                except NodeOffline as exc:
+                    timer = pending.pop(message_id, None) if message_id is not None else None
+                    if timer is not None:
+                        timer.cancel()
+                        await send(unreachable(message_id, str(exc)))
 
-        tasks = {asyncio.create_task(pump()), asyncio.create_task(refuse_commands())}
+        tasks = {asyncio.create_task(pump()), asyncio.create_task(forward_commands())}
         try:
-            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-            for task in pending:
+            done, pending_tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            for task in pending_tasks:
                 task.cancel()
             for task in done:
                 task.result()
@@ -1121,6 +1213,8 @@ def build_observer_server_app(
         finally:
             for task in tasks:
                 task.cancel()
+            for timer in pending.values():
+                timer.cancel()
             if channel_id is not None:
                 relay.close_channel(channel_id)
 
@@ -1148,8 +1242,8 @@ def build_observer_server_app(
             Route("/api/eddn-routes", node_read_endpoint("/api/eddn-routes")),
             Route("/api/hub-status", hub_status_endpoint),
             Route("/api/nodes", nodes_endpoint),
-            Route("/api/command", command_endpoint, methods=["POST"]),
-            Route("/api/stop", stop_endpoint, methods=["POST"]),
+            Route("/api/command", node_action_endpoint("/api/command", empty_body=None), methods=["POST"]),
+            Route("/api/stop", node_action_endpoint("/api/stop", empty_body={}), methods=["POST"]),
             Route(HAUL_WEB_ASSET_URL_PATH, haul_web_asset),
             WebSocketRoute("/session", session),
             WebSocketRoute(PEER_LINK_PATH, peer_link_endpoint),
@@ -1159,6 +1253,8 @@ def build_observer_server_app(
     app.state.link_handlers = link_handlers
     # A peer answers hub pages' channels and reads with these (`edap.hub.relay.PeerRelay`).
     app.state.answer_node_read = answer_node_read
+    app.state.answer_node_command = answer_node_command
+    app.state.answer_node_action = answer_node_action
     app.state.open_node_session = open_node_session
     app.add_middleware(
         CORSMiddleware,
@@ -1177,10 +1273,6 @@ def build_observer_server_app(
 
 # Seconds between a hub page's tries to reach a node that is offline.
 NODE_RETRY_S = 2.0
-
-
-def view_only_detail(node_name: str) -> str:
-    return f"{node_name} is view-only from the hub for now: run commands on its own pages."
 
 
 def node_offline_message(node_name: str, detail: str) -> dict[str, Any]:

@@ -92,9 +92,11 @@ def serve_observer_mode(
         peer_relay = PeerRelay(
             open_session=lambda channel_id: app.state.open_node_session(channel_id),
             add_listener=broker.add_listener,
+            answer_command=lambda channel_id, message: app.state.answer_node_command(channel_id, message),
             answer_read=lambda path, params: app.state.answer_node_read(path, params),
+            answer_action=lambda path, body: app.state.answer_node_action(path, body),
             state=lambda: node_state(data_provider()),
-            run_in_background=lambda work: threading.Thread(target=work, name="hub-read", daemon=True).start(),
+            run_in_background=lambda work: threading.Thread(target=work, name="hub-relay", daemon=True).start(),
             log=hub_logger.info,
         )
         peer_link = PeerLink(

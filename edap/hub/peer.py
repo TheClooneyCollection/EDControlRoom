@@ -217,7 +217,9 @@ class PeerLink:
 
     def on_frame(self, frame: dict[str, Any]) -> None:
         kind = frame.get("type")
-        if kind in {"channel_open", "channel_close", "read"}:
+        # Hub pages looking at and driving this node (`edap.hub.relay.HUB_RELAY_FRAMES`); they arrive
+        # only here, on the link this peer dialled to its own hub.
+        if kind in {"channel_open", "channel_close", "channel_command", "read", "act"}:
             with self._lock:
                 self._last_contact = self._now()
             self._relay.on_frame(frame)
