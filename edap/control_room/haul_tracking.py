@@ -6,7 +6,7 @@ from typing import Any, Callable, Protocol
 from edap.control_room.models import HaulStats, RuntimeUIState, ShipState
 from edap.control_room.rendering import fmt_duration
 from edap.control_room_state import ControlRoomState
-from edap.haul_history import abort_run, close_run, record_event, utc_timestamp
+from edap.haul_history import abort_run, close_run, record_event, snapshot_duration, utc_timestamp
 from edap.tts import AnnouncementId, format_credits_short
 
 _CREDIT_AMOUNT_RE = re.compile(
@@ -44,9 +44,20 @@ def start_haul_stats(
         and app._ship.station
         and app._ship.station.lower() == station_1.lower()
     )
-    abort_run(app._haul_stats, "new haul started over stale run", utc_timestamp(None), app._time_fn())
     previous = app._haul_stats
-    if not previous.session_active:
+    if previous.suspended and previous.current_run is not None and _same_haul(
+        previous, (station_1_buying, station_2_buying, station_1, station_2)
+    ):
+        previous.suspended = False
+        previous.active = True
+        previous.paused = True
+        previous.expected_profit_per_trip = parse_credit_amount(expected_profit_per_trip_text)
+        previous.expected_profit_per_trip_text = expected_profit_per_trip_text
+        app._log("[green]Continuing the haul run left open when the haul ended.[/]")
+        resume_haul_stats(app)
+        return
+    abort_run(app._haul_stats, "new haul started over stale run", utc_timestamp(None), app._time_fn())
+    if not previous.session_active or previous.suspended:
         previous = HaulStats(pending_runs=previous.pending_runs)
     started_at = app._time_fn()
     expected_profit_per_trip = parse_credit_amount(expected_profit_per_trip_text)
@@ -81,8 +92,33 @@ def start_haul_stats(
     app._save_saved_state()
 
 
+def _same_haul(stats: HaulStats, haul: tuple[str, str, str, str]) -> bool:
+    current = (stats.station_1_buying, stats.station_2_buying, stats.station_1, stats.station_2)
+    return all(a.casefold() == b.casefold() for a, b in zip(current, haul))
+
+
+def suspend_haul_stats(app: HaulTrackingHost) -> None:
+    """End a haul but keep its in-progress run open, so restarting the same haul continues it.
+
+    Timers freeze as for a pause; a different haul, `clear` or a relaunch still aborts the run.
+    """
+    stats = app._haul_stats
+    if stats.current_run is None or not stats.active:
+        stop_haul_stats(app)
+        return
+    pause_haul_stats(app)
+    snapshot_duration(stats, app._time_fn())
+    stats.paused = False
+    stats.active = False
+    stats.suspended = True
+    app._log("[yellow]Haul run kept open; start the same haul again to continue it.[/]")
+    app._refresh_haul_stats()
+    app._save_saved_state()
+
+
 def stop_haul_stats(app: HaulTrackingHost) -> None:
     stats = app._haul_stats
+    stats.suspended = False
     now = app._time_fn()
     if stats.session_started_at is not None:
         stats.session_elapsed_s = max(0.0, now - stats.session_started_at)

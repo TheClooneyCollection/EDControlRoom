@@ -102,6 +102,7 @@ def record_history_entry(app: PersistenceHost, entry: CommandHistoryEntry) -> No
 def clear_session_stats(app: PersistenceHost) -> None:
     abort_run(app._haul_stats, "stats cleared / new session", utc_timestamp(None), app._time_fn())
     stats = app._haul_stats
+    stats.suspended = False
     now_fn = app._time_fn
     now = now_fn() if callable(now_fn) else 0.0
     stats.session_started_at = now if stats.active and not stats.paused else None

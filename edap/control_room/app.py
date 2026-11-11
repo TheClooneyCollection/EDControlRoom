@@ -1502,6 +1502,9 @@ class ControlRoomApp(App[None]):
     def _stop_haul_stats(self) -> None:
         _haul_tracking.stop_haul_stats(self)
 
+    def _suspend_haul_stats(self) -> None:
+        _haul_tracking.suspend_haul_stats(self)
+
     def _pause_haul_stats(self) -> None:
         _haul_tracking.pause_haul_stats(self)
 

@@ -68,6 +68,8 @@ class HaulStats:
     last_run_elapsed_s: float | None = None
     total_run_elapsed_s: float = 0.0
     paused: bool = False
+    # The haul ended mid-run (an error or stop now); restarting the same haul continues the run.
+    suspended: bool = False
 
 
 @dataclass

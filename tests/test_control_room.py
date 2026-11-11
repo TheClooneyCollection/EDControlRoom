@@ -4933,6 +4933,46 @@ class HaulRunHistoryTests(unittest.TestCase):
         row, = self.rows()
         self.assertEqual(row["duration_s"], 20)
 
+    def suspend_mid_run(self) -> None:
+        from edap.control_room.workers import clear_routine
+        self.event("MarketBuy", "Alpha", 0, Type="gold", Count=5, TotalCost=50)
+        self.event("Undocked", "Alpha", 2)
+        self.event("MarketSell", "Beta", 10, Type="gold", Count=5, TotalSale=100)
+        self.event("MarketBuy", "Beta", 11, Type="silver", Count=5, TotalCost=20)
+        self.event("Undocked", "Beta", 12)
+        # The haul ends on an error, e.g. docking denied until the retries ran out.
+        self.app._time_fn = lambda: 115.0
+        self.app._active_routine_name = "haul"
+        clear_routine(self.app)
+
+    def test_restarting_the_same_haul_continues_the_run_it_ended_in(self) -> None:
+        self.suspend_mid_run()
+        self.assertEqual(self.rows(), [])
+        self.assertTrue(self.app._haul_stats.suspended)
+        self.app._time_fn = lambda: 130.0
+        self.start()
+        self.event("Docked", "Alpha", 38, StationName="Alpha")
+        self.event("MarketSell", "Alpha", 39, Type="silver", Count=5, TotalSale=70)
+        row, = self.rows()
+        self.assertEqual(row["status"], "completed")
+        self.assertFalse(row["partial_start"])
+        self.assertEqual((row["cost"], row["revenue"], row["profit"]), (70, 170, 100))
+        # 102-115 before the haul ended, then 130-138; the 15 s gap is not run time.
+        self.assertEqual(row["duration_s"], 21)
+        self.assertEqual(self.app._haul_stats.completed_runs, 1)
+
+    def test_a_different_haul_still_aborts_the_open_run(self) -> None:
+        self.suspend_mid_run()
+        self.app._time_fn = lambda: 130.0
+        self.app._start_haul_stats(station_1_buying="Gold", station_2_buying="Silver",
+                                    station_1="Alpha", station_2="Gamma",
+                                    expected_profit_per_trip_text="100")
+        row, = self.rows()
+        self.assertEqual(row["status"], "aborted")
+        self.assertEqual(row["duration_s"], 13)
+        self.assertEqual(row["profit"], 30)
+        self.assertFalse(self.app._haul_stats.suspended)
+
     def test_unplanned_station_trade_is_preserved_with_unknown_expectation(self) -> None:
         self.app._haul_stats.expected_profit_per_trip = None
         self.event("MarketBuy", "Other station", 0, Type="gold", Count=1, TotalCost=10)
