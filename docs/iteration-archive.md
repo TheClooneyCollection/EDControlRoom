@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `357`
-- Latest generated iteration number: `490`
+- Generated iteration count: `358`
+- Latest generated iteration number: `491`
 
 ## Iteration 134
 
@@ -10098,6 +10098,35 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 ## Iteration 488
 
+- When: `2026-11-11 22:06`
+- Area: `docs`
+- Title: `save-hyperspace-logo-assets`
+- Source: [2026-11-11-22-06_____docs_____save-hyperspace-logo-assets.md](iteration-logs/2026-11-11-22-06_____docs_____save-hyperspace-logo-assets.md)
+
+# Iteration Log
+
+- Area: `docs`
+- Title: `save-hyperspace-logo-assets`
+- Started: `2026-11-11 22:06`
+
+## Summary
+
+- Saved the user's selected Hyperspace Trail v2 logo family in `assets/logos/`.
+
+## Changes
+
+- Copied the amber icon, horizontal wordmark, and original monochrome master without modifying the images; `cmp` verified all three copies.
+- Published only the README banner and its required image in commit `8fa52c5`, per the user's requested push scope; other working changes were excluded.
+- Generated transparent light/dark wordmark variants; imagegen alpha extraction left speckles and broken white lettering on the first attempts.
+- Commit `c20ec50` centers the README logo and serves `hyperspace-trail-wordmark-light.png` / `-dark.png` per color scheme.
+- Commit `770867d` adds the icon and monochrome masters. The imagegen concept drafts in `output/` were discarded.
+
+## Follow-ups
+
+- If the light/dark wordmarks show artifacts on GitHub, regenerate cleaner transparent versions.
+
+## Iteration 489
+
 - When: `2026-11-11 22:12`
 - Area: `control-room`
 - Title: `haul-track-only-mode`
@@ -10122,7 +10151,7 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - No automatic detection of a hand-flown loop; the user asked for the manual button first.
 - Not yet tried live or in a browser.
 
-## Iteration 489
+## Iteration 490
 
 - When: `2026-11-11 22:31`
 - Area: `control-room`
@@ -10141,7 +10170,7 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - New regression fixture `tests/fixtures/journal/two_way_haul_hand_flown.jsonl`: 42 events cut from that journal, only Docked, Undocked, MarketBuy, MarketSell, StartJump, SupercruiseEntry and SupercruiseExit with an allowlist of game-data fields (no commander, chat or ship identity), dates moved to 2026-01-01. `test_haul_track_replays_a_real_hand_flown_journal` checks the phase timeline, the stats and the three tracked run rows.
 - Fix found by the fixture: `ship.station` clears only on SupercruiseExit or a Music NoTrack while undocking, so a StartJump right after Undocked could still see the station just left and point the phase at the wrong station. `_track_phase` now reads the station only on station events (buy, sell, undock, dock) and keeps the target station in flight.
 
-## Iteration 490
+## Iteration 491
 
 - When: `2026-11-12 05:52`
 - Area: `docs`
