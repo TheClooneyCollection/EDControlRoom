@@ -13,7 +13,7 @@ Near-term work should optimize for:
 
 ## Current Direction
 
-The immediate product goal is not a full rewrite and not a full-featured autopilot. The macOS MVP portability milestone is complete. Current work focuses on the follow-up plans: CV pipeline validation, journal-driven routines, and a diagnostics dashboard.
+The immediate product goal is not a full rewrite and not a full-featured autopilot. The macOS MVP portability milestone is complete. Current work focuses on journal-driven routines (haul, travel), the Control Room web surface, and the hub. Computer vision is out of scope: routines read the journal and `Status.json`, never the screen.
 
 See [docs/status/README.md](docs/status/README.md) for the maintained status entrypoint, current area breakdown, and which area files to read before resuming work.
 
