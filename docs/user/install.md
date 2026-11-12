@@ -21,7 +21,7 @@ EDControlRoom needs Python 3.12 and, on macOS/Linux, the `uv` package manager.
 1. Install `uv` if you do not have it: <https://docs.astral.sh/uv/getting-started/installation/>.
 2. Clone this repo and `cd` into it.
 3. Run `uv sync`.
-4. Grant your terminal **Accessibility** permission in System Settings so it can send key input to Elite. Grant **Screen Recording** as well if you plan to use capture-based diagnostics.
+4. Grant your terminal **Accessibility** permission in System Settings so it can send key input to Elite.
 5. Start Elite Dangerous through CrossOver.
 
 ## Windows

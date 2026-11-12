@@ -18,14 +18,11 @@ warnings.filterwarnings(
 
 from edap.config import (
     AppConfig,
-    CaptureConfig,
-    CaptureRegionConfig,
     ControlRoomConfig,
     ControlsConfig,
     MarketBuyHoldSegmentConfig,
     PathsConfig,
     RuntimeConfig,
-    ScreenConfig,
     TTSConfig,
 )
 from edap.control_room.protocol.events import AnnouncementEvent
@@ -110,17 +107,6 @@ def _make_config(journal_dir: Path) -> AppConfig:
             haul_two_way_open_nav_panel_after_hyperspace_arrival=True,
             haul_two_way_nav_panel_open_delay_seconds=3.0,
         ),
-        screen=ScreenConfig(
-            resolution_width=1920,
-            resolution_height=1080,
-            scale=1.0,
-            capture_debug_path=None,
-            capture=CaptureConfig(
-                mode="fullscreen",
-                base_region=CaptureRegionConfig(0.0, 0.0, 1.0, 1.0),
-                regions={},
-            ),
-        ),
         runtime=RuntimeConfig(platform="macos", debug=False),
         timing=_make_timing_config(),
         control_room=ControlRoomConfig(
@@ -166,7 +152,6 @@ def _make_context(journal_dir: Path) -> RuntimeContext:
         journal=resolved,
         bindings=resolved,
         input_controller=None,
-        screen_capture=None,
         timing_sampler=TimingSampler(_make_timing_config()),
         binding_lookup=None,
         config_path=journal_dir / "config.toml",
@@ -193,7 +178,6 @@ def _make_context_with_tts(journal_dir: Path) -> RuntimeContext:
         journal=ctx.journal,
         bindings=ctx.bindings,
         input_controller=ctx.input_controller,
-        screen_capture=ctx.screen_capture,
         timing_sampler=ctx.timing_sampler,
         binding_lookup=ctx.binding_lookup,
         config_path=ctx.config_path,

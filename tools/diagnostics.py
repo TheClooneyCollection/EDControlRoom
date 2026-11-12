@@ -22,11 +22,6 @@ def main() -> int:
         help="Path to config TOML file",
     )
     parser.add_argument(
-        "--capture-screen",
-        action="store_true",
-        help="Capture a full-screen debug image using the configured resolution and scale",
-    )
-    parser.add_argument(
         "--send-test-key",
         action="store_true",
         help="Send a synthetic test key through the active input backend",
@@ -74,7 +69,6 @@ def main() -> int:
         sys.stderr.write(f"Invalid config: {exc}\n")
         return 2
     options = DiagnosticsOptions(
-        capture_screen=args.capture_screen,
         send_test_key=args.send_test_key,
         test_key=args.test_key,
         test_modifier=args.test_modifier,

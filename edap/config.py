@@ -22,7 +22,6 @@ DEFAULT_PATHS_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" 
 DEFAULT_INPUT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "input.toml"
 DEFAULT_RUNTIME_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "runtime.toml"
 DEFAULT_CONTROLS_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "controls.toml"
-DEFAULT_SCREEN_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "screen.toml"
 DEFAULT_CONTROL_ROOM_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "control_room.toml"
 DEFAULT_TIMING_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "timing.toml"
 DEFAULT_TTS_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "tts.toml"
@@ -32,7 +31,6 @@ DEFAULT_ERROR_MESSAGES_CONFIG_PATH = Path(__file__).resolve().parent.parent / "d
 DEFAULT_MESSAGES_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "messages.yaml"
 
 VALID_PLATFORMS = {"linux", "macos", "windows"}
-VALID_CAPTURE_MODES = {"fullscreen", "region"}
 VALID_TTS_TITLE_MODES = {"commander", "custom", "commander_name"}
 VALID_MARKET_BUY_HOLD_SEGMENT_FUNCTIONS = {"flat", "linear", "log"}
 VALID_HUB_ROLES = {"hub", "peer", "standalone"}
@@ -113,30 +111,6 @@ class HaulRoutineDefaults:
     haul_two_way_open_nav_panel_after_hyperspace_arrival: bool
     haul_two_way_nav_panel_open_delay_seconds: float
     market_critical_level_multiplier: float
-
-
-@dataclass(frozen=True)
-class ScreenConfig:
-    resolution_width: int
-    resolution_height: int
-    scale: float
-    capture_debug_path: Path | None
-    capture: "CaptureConfig"
-
-
-@dataclass(frozen=True)
-class CaptureRegionConfig:
-    left: float
-    top: float
-    right: float
-    bottom: float
-
-
-@dataclass(frozen=True)
-class CaptureConfig:
-    mode: str
-    base_region: CaptureRegionConfig
-    regions: dict[str, CaptureRegionConfig]
 
 
 @dataclass(frozen=True)
@@ -312,7 +286,6 @@ def default_messages_config() -> MessagesConfig:
 class AppConfig:
     paths: PathsConfig
     controls: ControlsConfig
-    screen: ScreenConfig
     runtime: RuntimeConfig
     timing: "TimingConfig"
     control_room: ControlRoomConfig
@@ -357,11 +330,6 @@ def _load_default_runtime_table() -> dict[str, object]:
 @lru_cache(maxsize=1)
 def _load_default_controls_table() -> dict[str, object]:
     return _load_default_toml_section(DEFAULT_CONTROLS_CONFIG_PATH, "controls", "controls")
-
-
-@lru_cache(maxsize=1)
-def _load_default_screen_table() -> dict[str, object]:
-    return _load_default_toml_section(DEFAULT_SCREEN_CONFIG_PATH, "screen", "screen")
 
 
 @lru_cache(maxsize=1)
@@ -484,7 +452,6 @@ def _default_app_config_table() -> dict[str, object]:
         "runtime": _load_default_runtime_table(),
         "input": _load_default_input_table(),
         "controls": _load_default_controls_table(),
-        "screen": _load_default_screen_table(),
         "control_room": _load_default_control_room_table(),
         "timing": _load_default_timing_table(),
         "tts": _load_default_tts_table(),
@@ -649,18 +616,6 @@ def _validate_path_shape(path: Path | None, *, key: str, should_be_dir: bool) ->
         raise ConfigError(f"Config path `{key}` must point to a file: {path}")
 
 
-def _capture_region(
-    raw: dict[str, object],
-    defaults: tuple[float, float, float, float],
-) -> CaptureRegionConfig:
-    return CaptureRegionConfig(
-        left=_float(raw, "left", defaults[0]),
-        top=_float(raw, "top", defaults[1]),
-        right=_float(raw, "right", defaults[2]),
-        bottom=_float(raw, "bottom", defaults[3]),
-    )
-
-
 def _market_buy_hold_segments(raw: dict[str, object], key: str) -> tuple[MarketBuyHoldSegmentConfig, ...]:
     value = raw.get(key)
     if value is None:
@@ -689,22 +644,6 @@ def _market_buy_hold_segments(raw: dict[str, object], key: str) -> tuple[MarketB
             )
         )
     return tuple(segments)
-
-
-def _validate_capture_region(region: CaptureRegionConfig, *, key: str) -> None:
-    for name, value in (
-        ("left", region.left),
-        ("top", region.top),
-        ("right", region.right),
-        ("bottom", region.bottom),
-    ):
-        if value < 0 or value > 1:
-            raise ConfigError(f"Config value `{key}.{name}` must be between 0.0 and 1.0.")
-
-    if region.left >= region.right:
-        raise ConfigError(f"Config region `{key}` must have left < right.")
-    if region.top >= region.bottom:
-            raise ConfigError(f"Config region `{key}` must have top < bottom.")
 
 
 def _timing_channel(
@@ -832,15 +771,6 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `controls.haul_post_sell_settle_seconds` must be non-negative.")
     if config.controls.haul_two_way_nav_panel_open_delay_seconds < 0:
         raise ConfigError("Config value `controls.haul_two_way_nav_panel_open_delay_seconds` must be non-negative.")
-    if config.screen.resolution_width <= 0:
-        raise ConfigError("Config value `screen.resolution_width` must be greater than 0.")
-    if config.screen.resolution_height <= 0:
-        raise ConfigError("Config value `screen.resolution_height` must be greater than 0.")
-    if config.screen.scale <= 0:
-        raise ConfigError("Config value `screen.scale` must be greater than 0.")
-    if config.screen.capture.mode not in VALID_CAPTURE_MODES:
-        supported = ", ".join(sorted(VALID_CAPTURE_MODES))
-        raise ConfigError(f"Config value `screen.capture.mode` must be one of: {supported}.")
     if config.runtime.platform.lower() not in VALID_PLATFORMS:
         supported = ", ".join(sorted(VALID_PLATFORMS))
         raise ConfigError(
@@ -890,16 +820,6 @@ def validate_config(config: AppConfig) -> AppConfig:
 
     _validate_path_shape(config.paths.journal_dir, key="paths.journal_dir", should_be_dir=True)
     _validate_path_shape(config.paths.bindings_file, key="paths.bindings_file", should_be_dir=False)
-    if config.screen.capture_debug_path and config.screen.capture_debug_path.exists():
-        if config.screen.capture_debug_path.is_dir():
-            raise ConfigError(
-                "Config value `screen.capture_debug_path` must point to a file, not a directory."
-            )
-    _validate_capture_region(config.screen.capture.base_region, key="screen.capture.base_region")
-    for name, region in config.screen.capture.regions.items():
-        if not name.strip():
-            raise ConfigError("Config section `screen.capture.regions` cannot contain an empty name.")
-        _validate_capture_region(region, key=f"screen.capture.regions.{name}")
 
     return config
 
@@ -939,8 +859,6 @@ def _minimal_config_text(home_system: str) -> str:
         "[paths]",
         "",
         "[controls]",
-        "",
-        "[screen]",
         "",
         "[runtime]",
         "",
@@ -1011,9 +929,6 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     controls = _require_table(raw, "controls")
     controls_market = _optional_table(controls, "market")
     controls_flat = _flatten_table(controls)
-    screen = _require_table(raw, "screen")
-    screen_capture = _optional_table(screen, "capture")
-    screen_capture_regions = _optional_table(screen_capture, "regions")
     runtime = _require_table(raw, "runtime")
     control_room = _optional_table(raw, "control_room")
     tts = _optional_table(raw, "tts")
@@ -1025,8 +940,6 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     timing_typing = _optional_table(timing, "typing")
     default_controls = _load_default_controls_table()
     default_controls_flat = _flatten_table(default_controls)
-    default_screen = _load_default_screen_table()
-    default_screen_capture = _optional_table(default_screen, "capture")
     default_runtime = _load_default_runtime_table()
     default_tts = _load_default_tts_table()
     default_control_room = _load_default_control_room_table()
@@ -1040,28 +953,6 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     default_timing_typing = _optional_table(default_timing, "typing")
     default_messages = _load_default_messages_table()
     default_error_messages = _load_default_error_messages_table()
-
-    capture_regions: dict[str, CaptureRegionConfig] = {
-        "center": CaptureRegionConfig(
-            left=1 / 3,
-            top=1 / 3,
-            right=2 / 3,
-            bottom=2 / 3,
-        ),
-        "compass": CaptureRegionConfig(
-            left=5 / 16,
-            top=5 / 8,
-            right=2 / 4,
-            bottom=15 / 16,
-        ),
-    }
-    for name, region_raw in screen_capture_regions.items():
-        if not isinstance(name, str) or not isinstance(region_raw, dict):
-            raise ConfigError("Config section `screen.capture.regions` must contain named tables.")
-        capture_regions[name] = _capture_region(
-            region_raw,
-            (0.0, 0.0, 1.0, 1.0),
-        )
 
     config = AppConfig(
         input=_input_config(raw),
@@ -1198,20 +1089,6 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
                 "haul_two_way_nav_panel_open_delay_seconds",
                 _float(default_controls_flat, "haul_two_way_nav_panel_open_delay_seconds", 0.0),
                 aliases=("haul.two_way.nav_panel_open_delay_seconds",),
-            ),
-        ),
-        screen=ScreenConfig(
-            resolution_width=_integer(screen, "resolution_width", _integer(default_screen, "resolution_width", 0)),
-            resolution_height=_integer(screen, "resolution_height", _integer(default_screen, "resolution_height", 0)),
-            scale=_float(screen, "scale", _float(default_screen, "scale", 0.0)),
-            capture_debug_path=_optional_path(screen.get("capture_debug_path")),
-            capture=CaptureConfig(
-                mode=_string(screen_capture, "mode", _string(default_screen_capture, "mode", "")),
-                base_region=_capture_region(
-                    screen_capture,
-                    (0.0, 0.0, 1.0, 1.0),
-                ),
-                regions=capture_regions,
             ),
         ),
         runtime=RuntimeConfig(

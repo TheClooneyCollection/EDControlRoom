@@ -4,7 +4,6 @@ from dataclasses import asdict, dataclass
 from time import sleep
 
 from edap.bindings import read_bindings
-from edap.capture import build_capture_layout
 from edap.config import AppConfig
 from edap.runtime import RuntimeContext, build_runtime_context, legacy_path_summary
 from edap.state import get_latest_journal_log, read_ship_state
@@ -12,7 +11,6 @@ from edap.state import get_latest_journal_log, read_ship_state
 
 @dataclass(frozen=True)
 class DiagnosticsOptions:
-    capture_screen: bool = False
     send_test_key: bool = False
     test_key: str = "space"
     test_modifier: str | None = None
@@ -22,7 +20,7 @@ class DiagnosticsOptions:
 
 
 def run_diagnostics(config: AppConfig, options: DiagnosticsOptions) -> dict[str, object]:
-    runtime = build_runtime_context(config, include_screen_capture=options.capture_screen)
+    runtime = build_runtime_context(config)
     try:
         effective_journal_dir = runtime.journal.effective_path
         effective_bindings_file = runtime.bindings.effective_path
@@ -54,7 +52,6 @@ def run_diagnostics(config: AppConfig, options: DiagnosticsOptions) -> dict[str,
                 },
             },
             "options": asdict(options),
-            "capture_layout": build_capture_layout(config.screen).to_dict(),
         }
 
         if effective_journal_dir and effective_journal_dir.exists():
@@ -89,9 +86,6 @@ def run_diagnostics(config: AppConfig, options: DiagnosticsOptions) -> dict[str,
                 "reason": runtime.bindings.effective["reason"],
             }
 
-        if options.capture_screen:
-            result["screen_capture"] = run_screen_capture_diagnostic(config, runtime)
-
         if options.send_test_key:
             result["input_test"] = run_input_diagnostic(config, options, runtime)
 
@@ -104,42 +98,6 @@ def run_diagnostics(config: AppConfig, options: DiagnosticsOptions) -> dict[str,
     finally:
         if runtime.input_controller is not None:
             runtime.input_controller.close()
-
-
-def run_screen_capture_diagnostic(config: AppConfig, runtime: RuntimeContext | None = None) -> dict[str, object]:
-    runtime = runtime or build_runtime_context(config, include_screen_capture=True)
-    if runtime.screen_capture is None:
-        runtime = build_runtime_context(config, include_screen_capture=True)
-    screen_capture = runtime.screen_capture
-    if screen_capture is None:
-        return {"status": "unsupported"}
-
-    capture_layout = build_capture_layout(config.screen)
-    base_bounds = capture_layout.base_bounds
-    image = screen_capture.capture_region(
-        base_bounds.left,
-        base_bounds.top,
-        base_bounds.right,
-        base_bounds.bottom,
-    )
-
-    output_path = config.screen.capture_debug_path
-    saved_path = None
-    if output_path is not None:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        image.save(output_path)
-        saved_path = str(output_path)
-
-    return {
-        "status": "ok",
-        "mode": capture_layout.mode,
-        "reference_width": capture_layout.reference_width,
-        "reference_height": capture_layout.reference_height,
-        "captured_bounds": base_bounds.to_dict(),
-        "width": getattr(image, "width", base_bounds.width),
-        "height": getattr(image, "height", base_bounds.height),
-        "saved_path": saved_path,
-    }
 
 
 def run_input_diagnostic(

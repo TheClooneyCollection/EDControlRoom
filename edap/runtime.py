@@ -11,7 +11,6 @@ from edap.timing import TimingSampler
 if TYPE_CHECKING:
     from edap.platform.input.base import InputController
     from edap.platform.paths.base import GamePaths
-    from edap.platform.screen.base import ScreenCapture
 
 
 @dataclass(frozen=True)
@@ -57,7 +56,6 @@ class RuntimeContext:
     journal: ResolvedPath
     bindings: ResolvedPath
     input_controller: InputController | None
-    screen_capture: ScreenCapture | None
     timing_sampler: TimingSampler
     binding_lookup: BindingLookup | None = None
     config_path: Path = DEFAULT_CONFIG_PATH
@@ -74,12 +72,6 @@ def build_input_controller(platform_name: str, *, input_config: InputConfig, tim
     from edap.platform.input.factory import build_input_controller as _build_input_controller
 
     return _build_input_controller(platform_name, input_config=input_config, timing_sampler=timing_sampler)
-
-
-def build_screen_capture(platform_name: str) -> ScreenCapture | None:
-    from edap.platform.screen.factory import build_screen_capture as _build_screen_capture
-
-    return _build_screen_capture(platform_name)
 
 
 def load_config_with_fallback(path: Path | str = DEFAULT_CONFIG_PATH) -> LoadedConfig:
@@ -108,7 +100,6 @@ def build_runtime_context(
     config_path: Path | str = DEFAULT_CONFIG_PATH,
     used_example_config_fallback: bool = False,
     actions: Iterable[str] | None = None,
-    include_screen_capture: bool = False,
 ) -> RuntimeContext:
     timing_sampler = TimingSampler(config.timing)
     game_paths = build_game_paths(config.runtime.platform)
@@ -128,7 +119,6 @@ def build_runtime_context(
         journal=journal,
         bindings=bindings,
         input_controller=build_input_controller(config.runtime.platform, input_config=config.input, timing_sampler=timing_sampler),
-        screen_capture=build_screen_capture(config.runtime.platform) if include_screen_capture else None,
         timing_sampler=timing_sampler,
         binding_lookup=binding_lookup,
     )

@@ -23,15 +23,12 @@ from edap.actions import ActionDispatchResult
 from edap.binding_lookup import build_binding_lookup
 from edap.config import (
     AppConfig,
-    CaptureConfig,
-    CaptureRegionConfig,
     ControlRoomConfig,
     ControlsConfig,
     MarketBuyHoldSegmentConfig,
     PathsConfig,
     PiperVoiceConfig,
     RuntimeConfig,
-    ScreenConfig,
     TTSConfig,
 )
 from edap.control_room import error_text
@@ -104,17 +101,6 @@ def _make_config(journal_dir: Path, *, activity_log_max_lines: int = 2000) -> Ap
             haul_two_way_open_nav_panel_after_hyperspace_arrival=True,
             haul_two_way_nav_panel_open_delay_seconds=3.0,
         ),
-        screen=ScreenConfig(
-            resolution_width=1920,
-            resolution_height=1080,
-            scale=1.0,
-            capture_debug_path=None,
-            capture=CaptureConfig(
-                mode="fullscreen",
-                base_region=CaptureRegionConfig(0.0, 0.0, 1.0, 1.0),
-                regions={},
-            ),
-        ),
         runtime=RuntimeConfig(platform="macos", debug=False),
         timing=_make_timing_config(),
         control_room=ControlRoomConfig(
@@ -152,7 +138,6 @@ def _make_context(
         journal=resolved,
         bindings=resolved,
         input_controller=input_controller,
-        screen_capture=None,
         timing_sampler=TimingSampler(_make_timing_config()),
         binding_lookup=None,
         config_path=config_path or journal_dir / "config.toml",
@@ -2442,7 +2427,6 @@ manual_landing = true
         self.app._config = self.app._config.__class__(
             paths=self.app._config.paths,
             controls=self.app._config.controls,
-            screen=self.app._config.screen,
             runtime=self.app._config.runtime,
             timing=self.app._config.timing,
             control_room=ControlRoomConfig(
@@ -3256,8 +3240,6 @@ class ControlRoomDispatchTests(unittest.TestCase):
 
 [controls]
 
-[screen]
-
 [runtime]
 """.strip() + "\n",
             encoding="utf-8",
@@ -3294,7 +3276,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
     def test_voice_set_switches_model_and_tuning_then_save_writes_config(self) -> None:
         cori, jenny, _ = self._piper_app_voice()
         config_path = Path(self.tmpdir.name) / "config.toml"
-        config_path.write_text("[paths]\n\n[controls]\n\n[screen]\n\n[runtime]\n\n[tts.piper]\n# keep me\nmodel = 'old.onnx'\n", encoding="utf-8")
+        config_path.write_text("[paths]\n\n[controls]\n\n[runtime]\n\n[tts.piper]\n# keep me\nmodel = 'old.onnx'\n", encoding="utf-8")
         self.app._config_path = config_path
 
         self.app._dispatch_command("voice set model=en_GB-jenny_dioco-medium length_scale=0.85 volume=1.4")
@@ -3361,8 +3343,6 @@ class ControlRoomDispatchTests(unittest.TestCase):
 
 [controls]
 
-[screen]
-
 [runtime]
 """.strip() + "\n",
             encoding="utf-8",
@@ -3402,8 +3382,6 @@ class ControlRoomDispatchTests(unittest.TestCase):
 [paths]
 
 [controls]
-
-[screen]
 
 [runtime]
 """.strip() + "\n",
@@ -3879,7 +3857,6 @@ class ControlRoomDispatchTests(unittest.TestCase):
                 journal=ctx.journal,
                 bindings=ctx.bindings,
                 input_controller=ctx.input_controller,
-                screen_capture=ctx.screen_capture,
                 timing_sampler=ctx.timing_sampler,
                 binding_lookup=ctx.binding_lookup,
                 config_path=ctx.config_path,
@@ -3931,7 +3908,6 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.app._config = AppConfig(
             paths=self.app._config.paths,
             controls=self.app._config.controls,
-            screen=self.app._config.screen,
             runtime=self.app._config.runtime,
             timing=self.app._config.timing,
             control_room=ControlRoomConfig(
@@ -3991,7 +3967,6 @@ class ControlRoomDispatchTests(unittest.TestCase):
             journal=self.app._ctx.journal,
             bindings=resolved,
             input_controller=None,
-            screen_capture=None,
             timing_sampler=self.app._ctx.timing_sampler,
             binding_lookup=build_binding_lookup(bindings={}, actions=[]),
             config_path=self.app._ctx.config_path,
@@ -4112,7 +4087,6 @@ class ControlRoomDispatchTests(unittest.TestCase):
             journal=self.app._ctx.journal,
             bindings=resolved,
             input_controller=None,
-            screen_capture=None,
             timing_sampler=self.app._ctx.timing_sampler,
             binding_lookup=lookup,
             config_path=self.app._ctx.config_path,
@@ -4154,7 +4128,6 @@ class ControlRoomDispatchTests(unittest.TestCase):
             journal=self.app._ctx.journal,
             bindings=resolved,
             input_controller=None,
-            screen_capture=None,
             timing_sampler=self.app._ctx.timing_sampler,
             binding_lookup=lookup,
             config_path=self.app._ctx.config_path,
@@ -4192,7 +4165,6 @@ class ControlRoomDispatchTests(unittest.TestCase):
             journal=self.app._ctx.journal,
             bindings=resolved,
             input_controller=None,
-            screen_capture=None,
             timing_sampler=self.app._ctx.timing_sampler,
             binding_lookup=lookup,
             config_path=self.app._ctx.config_path,
@@ -4297,7 +4269,6 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.app._config = self.app._config.__class__(
             paths=self.app._config.paths,
             controls=self.app._config.controls,
-            screen=self.app._config.screen,
             runtime=self.app._config.runtime,
             timing=self.app._config.timing,
             control_room=ControlRoomConfig(
@@ -4335,7 +4306,6 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.app._config = self.app._config.__class__(
             paths=self.app._config.paths,
             controls=self.app._config.controls,
-            screen=self.app._config.screen,
             runtime=self.app._config.runtime,
             timing=self.app._config.timing,
             control_room=ControlRoomConfig(
@@ -4374,7 +4344,6 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.app._config = self.app._config.__class__(
             paths=self.app._config.paths,
             controls=self.app._config.controls,
-            screen=self.app._config.screen,
             runtime=self.app._config.runtime,
             timing=self.app._config.timing,
             control_room=ControlRoomConfig(
@@ -4411,7 +4380,6 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.app._config = self.app._config.__class__(
             paths=self.app._config.paths,
             controls=self.app._config.controls,
-            screen=self.app._config.screen,
             runtime=self.app._config.runtime,
             timing=self.app._config.timing,
             control_room=ControlRoomConfig(
@@ -4450,7 +4418,6 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.app._config = self.app._config.__class__(
             paths=self.app._config.paths,
             controls=self.app._config.controls,
-            screen=self.app._config.screen,
             runtime=self.app._config.runtime,
             timing=self.app._config.timing,
             control_room=ControlRoomConfig(
@@ -4491,7 +4458,6 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.app._config = self.app._config.__class__(
             paths=self.app._config.paths,
             controls=self.app._config.controls,
-            screen=self.app._config.screen,
             runtime=self.app._config.runtime,
             timing=self.app._config.timing,
             control_room=ControlRoomConfig(
@@ -4548,7 +4514,6 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.app._config = self.app._config.__class__(
             paths=self.app._config.paths,
             controls=self.app._config.controls,
-            screen=self.app._config.screen,
             runtime=self.app._config.runtime,
             timing=self.app._config.timing,
             control_room=ControlRoomConfig(
@@ -4574,7 +4539,6 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.app._config = self.app._config.__class__(
             paths=self.app._config.paths,
             controls=self.app._config.controls,
-            screen=self.app._config.screen,
             runtime=self.app._config.runtime,
             timing=self.app._config.timing,
             control_room=ControlRoomConfig(

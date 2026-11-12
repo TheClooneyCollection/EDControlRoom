@@ -6,11 +6,10 @@ Low-level validation and utility entrypoints live under `tools/`. Exploratory pr
 
 ```sh
 uv run python3 tools/diagnostics.py
-uv run python3 tools/diagnostics.py --capture-screen
 uv run python3 tools/diagnostics.py --send-test-key --test-key j --delay-seconds 5
 ```
 
-`tools/diagnostics.py` validates config loading, journal path resolution, bindings parsing, screen capture, and synthetic input delivery.
+`tools/diagnostics.py` validates config loading, journal path resolution, bindings parsing, and synthetic input delivery.
 
 `--send-test-key` is a raw input-backend check. It sends the literal key you pass through the active platform backend and does not look up an Elite action from the `.binds` file. Use it to answer "can EDControlRoom inject input at all on this machine?" not "does `SetSpeedZero` resolve and fire correctly?".
 
@@ -42,10 +41,8 @@ uv run python3 tools/ship_controls.py --sequence "SetSpeedZero; RollLeftButton t
 ## Scratch Probes
 
 ```sh
-uv run python3 tools/scratch/scratch_cv.py --save-debug /tmp/cv-debug.png
 uv run python3 tools/scratch/scratch_inara_trade_routes.py "https://inara.cz/elite/market-traderoutes/?..."
 uv run python3 tools/scratch/scratch_inara_trade_routes.py "https://inara.cz/elite/market-traderoutes/?..." --show-browser
-uv run python3 tools/scratch/scratch_rebake.py destination --delay 3 --open
 uv run python3 tools/scratch/scratch_market.py --raw
 uv run python3 tools/scratch/scratch_cgevent.py x --modifier ctrl --hold 0.2
 ```

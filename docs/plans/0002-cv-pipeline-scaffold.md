@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned, not started.
+Dropped. EDControlRoom does not use computer vision; the screen-capture seam and templates were removed.
 
 ## Why
 

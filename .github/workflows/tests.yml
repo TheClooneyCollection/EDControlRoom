@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync
       - name: Validate iteration log filenames
         run: uv run python3 tools/iteration_logs.py validate
       - name: Guard generated iteration archive
@@ -45,7 +45,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync
       - name: Run tests
         run: uv run python -m unittest discover -s tests
 
@@ -61,7 +61,7 @@ jobs:
       # The guard times the suite, so compile bytecode first: a fresh runner otherwise spends
       # ~2s of the 5s budget compiling .pyc files for dependencies and the repo.
       - name: Install dependencies
-        run: uv sync --extra dev --compile-bytecode
+        run: uv sync --compile-bytecode
       - name: Precompile project bytecode
         run: uv run python3 -m compileall -q edap tests tools control_room.py
       - name: Guard full test-suite timing

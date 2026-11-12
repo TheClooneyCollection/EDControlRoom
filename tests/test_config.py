@@ -6,7 +6,6 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from edap.capture import build_capture_layout
 from edap.config import ConfigError, default_runtime_platform, load_config, save_home_system, save_piper_voice
 
 
@@ -39,8 +38,6 @@ class LoadConfigTests(unittest.TestCase):
 
 [controls]
 
-[screen]
-
 [runtime]
 """.strip(),
             )
@@ -71,9 +68,6 @@ class LoadConfigTests(unittest.TestCase):
             self.assertTrue(config.controls.haul_two_way_auto_hyperspace_engage)
             self.assertTrue(config.controls.haul_two_way_open_nav_panel_after_hyperspace_arrival)
             self.assertEqual(config.controls.haul_two_way_nav_panel_open_delay_seconds, 3.0)
-            self.assertEqual(config.screen.resolution_width, 1920)
-            self.assertEqual(config.screen.capture.mode, "fullscreen")
-            self.assertIn("center", config.screen.capture.regions)
             self.assertEqual(config.runtime.platform, "macos")
             self.assertTrue(config.timing.enabled)
             self.assertEqual(config.timing.distribution, "log_normal")
@@ -155,8 +149,6 @@ class LoadConfigTests(unittest.TestCase):
 
 [controls]
 
-[screen]
-
 [runtime]
 
 [error_messages.templates.station_mismatch]
@@ -184,8 +176,6 @@ message = "Market data says {market_station}; docked station says {docked_statio
 [paths]
 
 [controls]
-
-[screen]
 
 [runtime]
 
@@ -215,8 +205,6 @@ dest_usage = "Usage: dest <system or station name>"
 
 [controls]
 
-[screen]
-
 [runtime]
 
 [control_room]
@@ -239,8 +227,6 @@ haul_runs_file = 'custom-runs.jsonl'
 [paths]
 
 [controls]
-
-[screen]
 
 [runtime]
 
@@ -274,8 +260,6 @@ min_seconds = 0.03
 
 [controls]
 
-[screen]
-
 [runtime]
 
 [control_room]
@@ -296,8 +280,6 @@ clear_session_on_launch = true
 [paths]
 
 [controls]
-
-[screen]
 
 [runtime]
 
@@ -333,8 +315,6 @@ command_delay_seconds = 5.0
 
 [controls]
 
-[screen]
-
 [runtime]
 
 [error_messages.templates]
@@ -358,8 +338,6 @@ route_mismatch_suggestion = "Retry with the corrected route."
 [paths]
 
 [controls]
-
-[screen]
 
 [runtime]
 
@@ -409,8 +387,6 @@ buy_top_up_max_attempts = 7
 auto_hyperspace_engage = false
 nav_panel_open_delay_seconds = 4.0
 
-[screen]
-
 [runtime]
 """.strip(),
             )
@@ -439,8 +415,6 @@ nav_panel_open_delay_seconds = 4.0
 
 [controls]
 
-[screen]
-
 [runtime]
 
 [control_room]
@@ -461,8 +435,6 @@ check_for_updates = false
 [paths]
 
 [controls]
-
-[screen]
 
 [runtime]
 
@@ -486,8 +458,6 @@ activity_log_max_lines = 500
 
 [controls]
 
-[screen]
-
 [runtime]
 """.strip(),
             )
@@ -506,8 +476,6 @@ activity_log_max_lines = 500
 [paths]
 
 [controls]
-
-[screen]
 
 [runtime]
 
@@ -532,8 +500,6 @@ title = ""
 
 [controls]
 
-[screen]
-
 [runtime]
 
 [tts]
@@ -554,8 +520,6 @@ title_mode = "invalid"
 
 [controls]
 
-[screen]
-
 [runtime]
 
 [tts]
@@ -574,7 +538,7 @@ title = ""
             executable = temp_path / "piper"
             model = temp_path / "voice.onnx"
             executable.write_text("", encoding="utf-8")
-            base = "[paths]\n\n[controls]\n\n[screen]\n\n[runtime]\n\n[tts.piper]\n"
+            base = "[paths]\n\n[controls]\n\n[runtime]\n\n[tts.piper]\n"
 
             _write_config(config_path, base + f"executable = '{executable}'\n")
             with self.assertRaisesRegex(ConfigError, "needs both `executable` and `model`"):
@@ -597,7 +561,7 @@ title = ""
             model = temp_path / "voice.onnx"
             executable.write_text("", encoding="utf-8")
             model.write_text("", encoding="utf-8")
-            base = f"[paths]\n\n[controls]\n\n[screen]\n\n[runtime]\n\n[tts.piper]\nexecutable = '{executable}'\nmodel = '{model}'\n"
+            base = f"[paths]\n\n[controls]\n\n[runtime]\n\n[tts.piper]\nexecutable = '{executable}'\nmodel = '{model}'\n"
 
             _write_config(config_path, base + "length_scale = 0\n")
             with self.assertRaisesRegex(ConfigError, "tts.piper.length_scale"):
@@ -628,8 +592,6 @@ title = ""
 [paths]
 
 [controls]
-
-[screen]
 
 [runtime]
 """.strip(),
@@ -666,8 +628,6 @@ title = ""
 [controls]
 continuous_action_hold_seconds = 0.0
 
-[screen]
-
 [runtime]
 """.strip(),
             )
@@ -685,8 +645,6 @@ continuous_action_hold_seconds = 0.0
 
 [controls]
 minimum_action_hold_seconds = 0.0
-
-[screen]
 
 [runtime]
 """.strip(),
@@ -707,8 +665,6 @@ minimum_action_hold_seconds = 0.0
 minimum_action_hold_seconds = 0.15
 continuous_action_hold_seconds = 0.1
 
-[screen]
-
 [runtime]
 """.strip(),
             )
@@ -725,8 +681,6 @@ continuous_action_hold_seconds = 0.1
 [paths]
 
 [controls]
-
-[screen]
 
 [runtime]
 
@@ -748,8 +702,6 @@ command_delay_seconds = -0.1
 
 [controls]
 
-[screen]
-
 [runtime]
 
 [timing]
@@ -769,8 +721,6 @@ distribution = "uniform"
 [paths]
 
 [controls]
-
-[screen]
 
 [runtime]
 
@@ -793,8 +743,6 @@ max_factor = 1.1
 
 [controls]
 
-[screen]
-
 [runtime]
 
 [control_room]
@@ -814,8 +762,6 @@ status_refresh_seconds = -0.1
 [paths]
 
 [controls]
-
-[screen]
 
 [runtime]
 
@@ -838,8 +784,6 @@ activity_log_max_lines = 0
 [controls]
 market_critical_level_multiplier = 0
 
-[screen]
-
 [runtime]
 """.strip(),
             )
@@ -860,8 +804,6 @@ start = 50
 function = "flat"
 hold_seconds = 1.0
 
-[screen]
-
 [runtime]
 """.strip(),
             )
@@ -881,8 +823,6 @@ hold_seconds = 1.0
 start = 0
 function = "curveball"
 
-[screen]
-
 [runtime]
 """.strip(),
             )
@@ -900,8 +840,6 @@ function = "curveball"
 
 [controls.market]
 buy_max_hold_seconds = 0
-
-[screen]
 
 [runtime]
 """.strip(),
@@ -934,8 +872,6 @@ function = "log"
 base_seconds = -1.5
 multiplier = 0.8
 
-[screen]
-
 [runtime]
 """.strip(),
             )
@@ -960,8 +896,6 @@ start = 0
 function = "log"
 multiplier = 0
 
-[screen]
-
 [runtime]
 """.strip(),
             )
@@ -980,8 +914,6 @@ multiplier = 0
 [controls.market]
 sell_quantity_restore_taps = 0
 
-[screen]
-
 [runtime]
 """.strip(),
             )
@@ -989,7 +921,7 @@ sell_quantity_restore_taps = 0
             with self.assertRaisesRegex(ConfigError, "market_sell_quantity_restore_taps"):
                 load_config(config_path)
 
-    def test_loads_capture_region_overrides(self) -> None:
+    def test_ignores_legacy_screen_table(self) -> None:
         with TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "config.toml"
             _write_config(
@@ -1001,37 +933,17 @@ sell_quantity_restore_taps = 0
 
 [screen]
 resolution_width = 2560
-resolution_height = 1440
-scale = 2.0
 
 [screen.capture]
 mode = "region"
-left = 0.1
-top = 0.2
-right = 0.9
-bottom = 0.8
-
-[screen.capture.regions.nav]
-left = 0.25
-top = 0.5
-right = 0.75
-bottom = 0.9
 
 [runtime]
 """.strip(),
             )
 
             config = load_config(config_path)
-            layout = build_capture_layout(config.screen)
 
-            self.assertEqual(config.screen.capture.mode, "region")
-            self.assertEqual(layout.reference_width, 5120)
-            self.assertEqual(layout.reference_height, 2880)
-            self.assertEqual(layout.base_bounds.left, 512)
-            self.assertEqual(layout.base_bounds.top, 576)
-            self.assertEqual(layout.base_bounds.right, 4608)
-            self.assertEqual(layout.base_bounds.bottom, 2304)
-            self.assertEqual(layout.named_regions["nav"].width, 2048)
+            self.assertFalse(hasattr(config, "screen"))
 
     def test_rejects_unsupported_platform(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -1042,8 +954,6 @@ bottom = 0.9
 [paths]
 
 [controls]
-
-[screen]
 
 [runtime]
 platform = "plan9"
@@ -1067,8 +977,6 @@ bindings_file = '{bindings_dir}'
 
 [controls]
 
-[screen]
-
 [runtime]
 """.strip(),
             )
@@ -1086,56 +994,13 @@ bindings_file = '{bindings_dir}'
 
 [controls]
 
-[screen]
-resolution_width = true
-
 [runtime]
+
+[control_room]
+history_limit = true
 """.strip(),
             )
 
-            with self.assertRaisesRegex(ConfigError, "resolution_width"):
+            with self.assertRaisesRegex(ConfigError, "history_limit"):
                 load_config(config_path)
 
-    def test_rejects_invalid_capture_mode(self) -> None:
-        with TemporaryDirectory() as temp_dir:
-            config_path = Path(temp_dir) / "config.toml"
-            _write_config(
-                config_path,
-                """
-[paths]
-
-[controls]
-
-[screen]
-
-[screen.capture]
-mode = "weird"
-
-[runtime]
-""".strip(),
-            )
-
-            with self.assertRaisesRegex(ConfigError, "screen.capture.mode"):
-                load_config(config_path)
-
-    def test_rejects_out_of_range_capture_region(self) -> None:
-        with TemporaryDirectory() as temp_dir:
-            config_path = Path(temp_dir) / "config.toml"
-            _write_config(
-                config_path,
-                """
-[paths]
-
-[controls]
-
-[screen]
-
-[screen.capture]
-left = 1.1
-
-[runtime]
-""".strip(),
-            )
-
-            with self.assertRaisesRegex(ConfigError, "screen.capture.base_region.left"):
-                load_config(config_path)

@@ -35,8 +35,6 @@ class RuntimeTests(unittest.TestCase):
 
 [controls]
 
-[screen]
-
 [runtime]
 """.strip(),
                 encoding="utf-8",
@@ -68,8 +66,6 @@ bindings_file = '{bindings_file}'
 
 [controls]
 
-[screen]
-
 [runtime]
 """.strip(),
                 encoding="utf-8",
@@ -78,9 +74,6 @@ bindings_file = '{bindings_file}'
 
             with patch("edap.runtime.build_game_paths", return_value=None), patch(
                 "edap.runtime.build_input_controller",
-                return_value=object(),
-            ), patch(
-                "edap.runtime.build_screen_capture",
                 return_value=object(),
             ), patch(
                 "edap.runtime.load_binding_lookup",
@@ -110,8 +103,6 @@ bindings_file = '{bindings_file}'
 
 [controls]
 
-[screen]
-
 [runtime]
 """.strip(),
                 encoding="utf-8",
@@ -125,9 +116,6 @@ bindings_file = '{bindings_file}'
             with patch("edap.runtime.build_game_paths", return_value=game_paths), patch(
                 "edap.runtime.build_input_controller",
                 return_value=None,
-            ), patch(
-                "edap.runtime.build_screen_capture",
-                return_value=None,
             ):
                 runtime = build_runtime_context(config)
 
@@ -136,20 +124,6 @@ bindings_file = '{bindings_file}'
         self.assertEqual(runtime.bindings.cli_source_status(), "auto_detected")
         self.assertEqual(runtime.bindings.effective_path, auto_bindings_file)
         self.assertIsNone(runtime.binding_lookup)
-
-    def test_build_runtime_context_skips_screen_capture_by_default(self) -> None:
-        config = load_config("config.example.toml")
-
-        with patch("edap.runtime.build_game_paths", return_value=None), patch(
-            "edap.runtime.build_input_controller",
-            return_value=object(),
-        ), patch(
-            "edap.runtime.build_screen_capture",
-        ) as build_screen_capture_mock:
-            runtime = build_runtime_context(config, actions=["SetSpeedZero"])
-
-        self.assertIsNone(runtime.screen_capture)
-        build_screen_capture_mock.assert_not_called()
 
     def test_build_runtime_context_reports_missing_configured_bindings(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -163,8 +137,6 @@ bindings_file = '{missing_bindings}'
 
 [controls]
 
-[screen]
-
 [runtime]
 """.strip(),
                 encoding="utf-8",
@@ -173,9 +145,6 @@ bindings_file = '{missing_bindings}'
 
             with patch("edap.runtime.build_game_paths", return_value=None), patch(
                 "edap.runtime.build_input_controller",
-                return_value=None,
-            ), patch(
-                "edap.runtime.build_screen_capture",
                 return_value=None,
             ):
                 runtime = build_runtime_context(config, actions=["SetSpeedZero"])
@@ -194,8 +163,6 @@ bindings_file = '{missing_bindings}'
 
 [controls]
 
-[screen]
-
 [runtime]
 platform = "windows"
 """.strip(),
@@ -203,10 +170,7 @@ platform = "windows"
             )
             config = load_config(config_path)
 
-            with patch("edap.runtime.build_game_paths", return_value=None), patch(
-                "edap.runtime.build_screen_capture",
-                return_value=None,
-            ):
+            with patch("edap.runtime.build_game_paths", return_value=None):
                 runtime = build_runtime_context(config)
 
         self.assertIsInstance(runtime.input_controller, WindowsInputController)
@@ -221,8 +185,6 @@ platform = "windows"
 
 [controls]
 
-[screen]
-
 [runtime]
 platform = "linux"
 """.strip(),
@@ -230,10 +192,7 @@ platform = "linux"
             )
             config = load_config(config_path)
 
-            with patch("edap.runtime.build_game_paths", return_value=None), patch(
-                "edap.runtime.build_screen_capture",
-                return_value=None,
-            ):
+            with patch("edap.runtime.build_game_paths", return_value=None):
                 runtime = build_runtime_context(config)
 
         self.assertIsInstance(runtime.input_controller, LinuxUinputController)
