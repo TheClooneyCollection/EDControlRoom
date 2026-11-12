@@ -141,8 +141,12 @@ async function refreshStatus() {
 }
 
 function stationCell(station) {
-  const details = [station.system, station.dist_ls == null ? null : `${count(Math.round(station.dist_ls))} Ls`]
-    .filter(Boolean).join(" · ");
+  // `ly_from_system` is the distance from the current (or searched) system; null when it has no coordinates.
+  const details = [
+    station.system,
+    station.dist_ls == null ? null : `${count(Math.round(station.dist_ls))} Ls`,
+    station.ly_from_system == null ? null : `${station.ly_from_system.toFixed(1)} Ly away`
+  ].filter(Boolean).join(" · ");
   return `${escapeHtml(station.station)}<span class="route-sub">${escapeHtml(details)}</span>`;
 }
 
@@ -163,7 +167,8 @@ function renderRoutes(payload) {
   const table = document.getElementById("route-table");
   const query = payload.query;
   const reach = range.jumps ? `${query.jumps} jumps (${query.max_route_ly.toFixed(1)} Ly)` : `${query.max_route_ly} Ly`;
-  const where = query.view === "near" ? `near ${query.system}` : "anywhere";
+  const away = payload.distance_system ? ` (Ly away from ${payload.distance_system})` : "";
+  const where = query.view === "near" ? `near ${query.system}${away}` : `anywhere${away}`;
   const source = payload.hub ? ` via hub ${payload.hub}` : "";
   setText("routes-status", `${payload.routes.length} routes ${where}, ${reach}, from ${count(payload.markets_considered)} markets${source}`);
   if (!payload.routes.length) {

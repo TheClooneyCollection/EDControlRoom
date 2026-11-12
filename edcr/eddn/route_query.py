@@ -155,16 +155,16 @@ def run_route_query(
     """Search and build the payload; `display_names` maps EDDN keys to in-game names for haul."""
     db = sqlite3.connect(f"file:{database_file}?mode=ro", uri=True)
     try:
-        origin = None
-        if query.view == "near":
-            if not query.system:
-                raise RouteQueryError("No current system; pass system= or use the global view.")
-            origin = db.execute(
-                "SELECT x, y, z FROM system WHERE name = ? COLLATE NOCASE ORDER BY updated_at DESC LIMIT 1",
-                (query.system,),
-            ).fetchone()
-            if origin is None:
-                raise RouteQueryError(f"{query.system} has no coordinates in the EDDN database yet.")
+        near = query.view == "near"
+        if near and not query.system:
+            raise RouteQueryError("No current system; pass system= or use the global view.")
+        # The global view searches anywhere but still shows how far each station is from the system, when known.
+        origin = db.execute(
+            "SELECT x, y, z FROM system WHERE name = ? COLLATE NOCASE ORDER BY updated_at DESC LIMIT 1",
+            (query.system,),
+        ).fetchone() if query.system else None
+        if near and origin is None:
+            raise RouteQueryError(f"{query.system} has no coordinates in the EDDN database yet.")
         markets = load_route_markets(db, query.filters, now=now)
     finally:
         db.close()
@@ -174,24 +174,29 @@ def run_route_query(
         max_route_ly=query.max_route_ly,
         laden_jump_range_ly=query.laden_jump_range_ly,
         time_model=time_model,
-        origin=origin,
-        origin_radius_ly=query.origin_radius_ly if origin is not None else None,
+        origin=origin if near else None,
+        origin_radius_ly=query.origin_radius_ly if near else None,
         limit=query.limit,
     )
     return {
         "query": asdict(query),
         "generated_at": now,
         "markets_considered": len(markets),
-        "routes": [route_payload(route, display_names=display_names, now=now) for route in routes],
+        # The system each station's `ly_from_system` is measured from; None when it has no coordinates.
+        "distance_system": query.system if origin is not None else None,
+        "routes": [route_payload(route, display_names=display_names, now=now, origin=origin) for route in routes],
     }
 
 
-def route_payload(route: FoundRoute, *, display_names: Mapping[str, str], now: float) -> dict[str, Any]:
+def route_payload(
+    route: FoundRoute, *, display_names: Mapping[str, str], now: float, origin: tuple[float, float, float] | None
+) -> dict[str, Any]:
     def station(market) -> dict[str, Any]:
         return {
             "market_id": market.market_id, "station": market.station, "system": market.system,
             "type": market.station_type, "dist_ls": market.dist_ls, "is_surface": market.is_surface,
             "age_s": max(0.0, now - market.updated_at),
+            "ly_from_system": None if origin is None else round(math.dist(origin, (market.x, market.y, market.z)), 2),
         }
 
     def leg(trade: RouteLeg | None) -> dict[str, Any] | None:

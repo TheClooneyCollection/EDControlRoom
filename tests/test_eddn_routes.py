@@ -185,6 +185,25 @@ class EddnRoutesApiTests(unittest.TestCase):
             )
             self.assertFalse(named["routes"][0]["trade_route"]["to_manual_landing"])
 
+            def global_view(system: str) -> dict:
+                return run_route_query(
+                    path, parse_route_query({"view": "global"}, search_defaults={}, current_system=system,
+                                            cargo_capacity=1137),
+                    time_model=TimeModel(), display_names={}, now=NOW,
+                )
+
+            from_alpha = global_view("alpha")
+            self.assertEqual(from_alpha["distance_system"], "alpha")
+            self.assertEqual(
+                [(route["station_1"]["ly_from_system"], route["station_2"]["ly_from_system"])
+                 for route in from_alpha["routes"]],
+                [(10.0, 0.0)],
+            )
+            # An unknown current system still searches anywhere, just without distances.
+            unknown_system = global_view("Nowhere")
+            self.assertIsNone(unknown_system["distance_system"])
+            self.assertIsNone(unknown_system["routes"][0]["station_1"]["ly_from_system"])
+
             app = build_observer_server_app(
                 data_provider=lambda: type("Data", (), {"ship": ShipState(system="Nowhere", cargo_capacity=1137)})(),
                 command_handler=None, broker=InMemoryObserverSessionBroker(),
