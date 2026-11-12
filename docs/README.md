@@ -37,3 +37,4 @@
 - [research/](research/): deeper research and behavior-reference material.
 - [design/](design/): design notes.
 - [devlog/](devlog/): older session-style notes.
+- [project-timeline.md](project-timeline.md): project stages, releases and representative commits from first commit to now.
