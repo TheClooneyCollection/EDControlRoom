@@ -5168,6 +5168,8 @@ class HaulRunHistoryTests(unittest.TestCase):
         self.suspend_mid_run()
         self.assertEqual(self.rows(), [])
         self.assertTrue(self.app._haul_stats.suspended)
+        self.app._ship.status = "in_space"
+        self.app._ship.station = None
         self.app._time_fn = lambda: 130.0
         self.start()
         self.event("Docked", "Alpha", 38, StationName="Alpha")
@@ -5178,6 +5180,39 @@ class HaulRunHistoryTests(unittest.TestCase):
         self.assertEqual((row["cost"], row["revenue"], row["profit"]), (70, 170, 100))
         # 102-115 before the haul ended, then 130-138; the 15 s gap is not run time.
         self.assertEqual(row["duration_s"], 21)
+        self.assertEqual(self.app._haul_stats.completed_runs, 1)
+
+    def test_continuing_after_docking_at_station_one_by_hand_completes_on_the_sale(self) -> None:
+        self.suspend_mid_run()
+        # Docked at Alpha by hand while the haul was ended, so no `Docked` reached the stats.
+        self.app._time_fn = lambda: 130.0
+        self.start()
+        self.event("MarketSell", "Alpha", 39, Type="silver", Count=5, TotalSale=70)
+        row, = self.rows()
+        self.assertEqual(row["status"], "completed")
+        self.assertEqual(row["profit"], 100)
+        # The run time stops where the haul ended; the hand-flown docking is not counted.
+        self.assertEqual(row["duration_s"], 13)
+        self.assertEqual(self.app._haul_stats.completed_runs, 1)
+
+    def test_continuing_a_run_already_sold_at_station_one_completes_it_at_once(self) -> None:
+        from edcr.control_room.workers import clear_routine
+        self.suspend_mid_run()
+        self.app._time_fn = lambda: 130.0
+        self.start()
+        self.app._haul_stats.docked_back_at_station_1 = False  # as before the fix: the sale did not close the run
+        self.event("MarketSell", "Alpha", 39, Type="silver", Count=5, TotalSale=70)
+        self.app._time_fn = lambda: 145.0
+        self.app._active_routine_name = "haul"
+        clear_routine(self.app)
+        self.app._haul_stats.docked_back_at_station_1 = False
+        self.assertEqual(self.rows(), [])
+
+        self.start()
+
+        row, = self.rows()
+        self.assertEqual(row["status"], "completed")
+        self.assertEqual(row["profit"], 100)
         self.assertEqual(self.app._haul_stats.completed_runs, 1)
 
     def test_a_different_haul_still_aborts_the_open_run(self) -> None:

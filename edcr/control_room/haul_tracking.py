@@ -67,7 +67,13 @@ def start_haul_stats(
         previous.expected_profit_per_trip = parse_credit_amount(expected_profit_per_trip_text)
         previous.expected_profit_per_trip_text = expected_profit_per_trip_text
         app._log("[green]Continuing the haul run left open when the haul ended.[/]")
+        # Docking back at station 1 by hand while the haul was ended logs no `Docked` here.
+        returned = at_station_1 and previous.clean_run_active and not previous.docked_back_at_station_1
+        if returned:
+            previous.docked_back_at_station_1 = True
         resume_haul_stats(app)
+        if returned and _sold_at_station_1_on_return(previous):
+            finalize_completed_haul_run(app)
         return
     abort_run(app._haul_stats, "new haul started over stale run", utc_timestamp(None), app._time_fn())
     if not previous.session_active or previous.suspended:
@@ -104,6 +110,13 @@ def start_haul_stats(
     )
     app._refresh_haul_stats()
     app._save_saved_state()
+
+
+def _sold_at_station_1_on_return(stats: HaulStats) -> bool:
+    legs = (stats.current_run or {}).get("legs") or []
+    station_1, station_2 = stats.station_1.casefold(), stats.station_2.casefold()
+    visited_2 = any(leg["station"].casefold() == station_2 for leg in legs[:-1])
+    return bool(legs) and visited_2 and legs[-1]["station"].casefold() == station_1 and bool(legs[-1]["sells"])
 
 
 def _same_haul(stats: HaulStats, haul: tuple[str, str, str, str]) -> bool:
