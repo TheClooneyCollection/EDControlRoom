@@ -2272,6 +2272,21 @@ manual_landing = true
         self.assertFalse(stats.tracking)
         self.assertIsNone(self.app._runtime_state.haul_phase)
 
+    def test_every_routine_stop_ends_haul_tracking(self) -> None:
+        self.app._trade_routes = TradeRoutesData(system_name="Sol", routes=[TradeRoute(
+            index=1, from_station="Pawelczyk Dock", from_system="Sol", to_station="Hutton Orbital",
+            to_system="Alpha Centauri", source_buy_commodity="Aluminium", target_buy_commodity="",
+        )])
+        self.app._selected_trade_route_index = 1
+        for mode in ("now", "after_run", "toggle"):
+            self.app._cmd_haul("track", raw_command="haul track")
+            self.assertTrue(self.app._haul_stats.tracking)
+
+            self.app._cancel_active_routine("Web stop", stop_mode=mode)
+
+            self.assertFalse(self.app._haul_stats.active, mode)
+            self.assertFalse(self.app._haul_stats.tracking, mode)
+
     def test_haul_track_replays_a_real_hand_flown_journal(self) -> None:
         # Three loops from a real journal, cut down to the haul events and fields (no commander or chat data).
         from datetime import datetime

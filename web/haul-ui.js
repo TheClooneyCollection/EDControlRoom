@@ -22,6 +22,7 @@ let routes = [];
     let lastHydratedRouteKey = "";
     const hydratedFieldValues = new Map();
     let currentRoutine = {};
+    let haulTracking = false;
     let reconnectDelayMs = RECONNECT_INITIAL_DELAY_MS;
     let reconnectTimer = null;
     let reconnectCountdownTimer = null;
@@ -582,8 +583,9 @@ let routes = [];
       instantToggle.textContent = instantMode ? "Instant on" : "Instant off";
       instantToggle.classList.toggle("on", instantMode);
       instantToggle.setAttribute("aria-pressed", instantMode ? "true" : "false");
-      document.getElementById("stop-after-run").disabled = !active || !routineActive;
-      document.getElementById("stop-now").disabled = !active || !routineActive;
+      // Track only runs no routine; its stop buttons end the tracking.
+      document.getElementById("stop-after-run").disabled = !active || !(routineActive || haulTracking);
+      document.getElementById("stop-now").disabled = !active || !(routineActive || haulTracking);
       document.getElementById("pause-haul").disabled = !active || !routineActive || currentRoutine.active_routine_name !== "haul" || Boolean(currentRoutine.haul_pause_requested);
       document.getElementById("resume-haul").disabled = !active || !routineActive || currentRoutine.active_routine_name !== "haul" || (!currentRoutine.haul_pause_requested && !currentRoutine.haul_paused);
       document.getElementById("clear-haul-stats").disabled = !active;
@@ -1091,6 +1093,7 @@ let routes = [];
       const activity = payload.activity_log || {};
       const serverStatus = payload.server_status || {};
       currentRoutine = routine;
+      haulTracking = Boolean(haulSession.tracking && haulSession.active);
       setText("status-runtime", serverStatus.runtime_platform || WEB_CONFIG.runtimePlatform || "-");
       setText("status-journal", serverStatus.journal_source_status || WEB_CONFIG.journalStatus || "-");
       setText("status-input-target", serverStatus.input_target_summary || WEB_CONFIG.inputTargetSummary || "-");
@@ -1347,7 +1350,7 @@ let routes = [];
         appendActivity("Connect to the backend before stopping routines.", "Haul", "warning");
         return;
       }
-      if (!currentRoutine.routine_active) {
+      if (!currentRoutine.routine_active && !haulTracking) {
         appendActivity("No active routine to stop.", "Haul", "warning");
         return;
       }

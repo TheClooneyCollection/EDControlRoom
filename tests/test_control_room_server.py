@@ -650,7 +650,10 @@ class ControlRoomServerTests(unittest.TestCase):
         recorder = _CommandHandlerRecorder()
         busy = lambda: replace(_base_data_read_model(), routine=replace(_base_data_read_model().routine,
                                                                        routine_active=True, active_routine_name="haul"))
+        tracking = lambda: replace(_base_data_read_model(), haul_session=replace(_base_data_read_model().haul_session,
+                                                                                 active=True, tracking=True))
         for provider, body, status, modes in ((busy, None, 200, ["now"]), (busy, {"mode": "after_run"}, 200, ["after_run"]),
+                                              (tracking, None, 200, ["now"]),
                                               (busy, {"mode": "toggle"}, 400, []), (_base_data_read_model, None, 409, [])):
             recorder.cancel_modes.clear()
             app = build_observer_server_app(data_provider=provider, command_handler=recorder,

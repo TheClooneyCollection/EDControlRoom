@@ -1861,6 +1861,8 @@ class ControlRoomApp(App[None]):
         self.call_from_thread(self._exit_haul_pause, station_index)
 
     def _cancel_active_routine(self, source: str, *, stop_mode: RoutineStopMode = "toggle") -> None:
+        if self._stop_haul_tracking(source):
+            return
         if stop_mode == "after_run":
             self._request_deferred_haul_stop(source)
             return
@@ -1961,6 +1963,14 @@ class ControlRoomApp(App[None]):
         else:
             self._log(f"[yellow]{escape(source)} received — cancelling active routine immediately.[/]")
         self._routine_worker.cancel()
+
+    def _stop_haul_tracking(self, source: str) -> bool:
+        # Track only runs no routine, so every stop (now, after run, Ctrl-C) ends the tracking instead.
+        if self._routine_active or not (self._haul_stats.tracking and self._haul_stats.active):
+            return False
+        self._stop_haul_stats()
+        self._log(f"[yellow]{escape(source)} received — stopped tracking the haul.[/]")
+        return True
 
     def _clear_pending_haul_stop(self) -> None:
         self._haul_stop_requested = False

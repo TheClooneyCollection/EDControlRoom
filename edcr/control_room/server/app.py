@@ -1048,8 +1048,10 @@ def build_observer_server_app(
             return JSONResponse({"detail": "mode must be now or after_run"}, status_code=400)
         if command_handler is None:
             return JSONResponse({"detail": "command execution is not available on this server"}, status_code=503)
-        routine = data_provider().routine
-        if not routine.routine_active:
+        data = data_provider()
+        routine = data.routine
+        tracking = data.haul_session.tracking and data.haul_session.active
+        if not routine.routine_active and not tracking:
             return JSONResponse(
                 {"accepted": False, "routine_active": False, "active_routine_name": None,
                  "detail": "No routine is running."},
@@ -1061,7 +1063,7 @@ def build_observer_server_app(
             {
                 "accepted": True,
                 "mode": mode,
-                "stopped_routine_name": routine.active_routine_name,
+                "stopped_routine_name": routine.active_routine_name if routine.routine_active else "haul tracking",
                 "routine_active": after.routine_active,
                 "active_routine_name": after.active_routine_name,
             }

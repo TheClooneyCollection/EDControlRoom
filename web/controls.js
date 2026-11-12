@@ -12,6 +12,7 @@ let reconnectTimer = null;
 let clientRole = "observer";
 let commandSequence = 1;
 let currentRoutine = {};
+let haulTracking = false;
 let webDefaults = { galaxyMapSettle: "2.0", ...(WEB_CONFIG.webDefaults || {}) };
 let homeSystem = "";
 let voiceState = {};
@@ -82,8 +83,9 @@ function updateButtons() {
   document.querySelectorAll("button[data-needs-idle]").forEach((button) => {
     button.disabled = !operator || active;
   });
+  // Track only runs no routine; the stop buttons end the tracking.
   document.querySelectorAll("button[data-needs-active]").forEach((button) => {
-    button.disabled = !operator || !active;
+    button.disabled = !operator || !(active || haulTracking);
   });
   document.querySelectorAll("button[data-needs-haul]").forEach((button) => {
     button.disabled = !operator || !haulActive;
@@ -101,7 +103,7 @@ function updateButtons() {
   const instant = document.getElementById("toggle-instant");
   instant.disabled = !operator;
   instant.setAttribute("aria-checked", currentRoutine.instant_mode ? "true" : "false");
-  const label = active ? `Busy: ${routineLabel(currentRoutine)}` : "Idle";
+  const label = active ? `Busy: ${routineLabel(currentRoutine)}` : haulTracking ? "Tracking haul" : "Idle";
   document.querySelectorAll(".busy-state").forEach((element) => {
     element.textContent = label;
     element.classList.toggle("busy", active);
@@ -172,6 +174,8 @@ function applyHydrate(payload) {
   currentShip = ship;
   applyVoice(payload.voice || {});
   currentRoutine = payload.routine || {};
+  const haulSession = payload.haul_session || {};
+  haulTracking = Boolean(haulSession.tracking && haulSession.active);
   updateButtons();
   activityEntries.clear();
   ((payload.activity_log || {}).entries || []).forEach(addActivityEntry);
