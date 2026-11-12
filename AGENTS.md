@@ -51,6 +51,7 @@ Use [docs/iteration-logs/](docs/iteration-logs/) for concise per-iteration notes
 - Do not use the bare system interpreter for test runs; the repo's `uv` environment is the required test entrypoint.
 - After implementing any feature or code change, run the full suite with `uv run python3 -m unittest discover -s tests` before wrapping up.
 - After implementing any feature or code change, use the runtime reported by the preceding `uv run python3 -m unittest discover -s tests` command as the timing check and keep the full-suite runtime at or under `0.0006` seconds per executed test. If that command reports a runtime slower than `tests_run * 0.0006` seconds, run `UV_CACHE_DIR=/private/tmp/uv-cache uv run python3 tools/report_test_timing.py --top 10 --sort slowest` to identify what is dragging runtime down.
+- Scripted or headless checks against a live Control Room or hub connect with the shared token as the active operator, so they can change the node's state: opening `/haul#route=…` selects that route and saves it on the viewed node. For a look-only check, open `/haul` without a `#route=` fragment. To view a hub peer, pass `node=<node_id>` (not `view_node`); the IDs come from `/api/nodes`.
 
 ### GitHub Actions Checks
 

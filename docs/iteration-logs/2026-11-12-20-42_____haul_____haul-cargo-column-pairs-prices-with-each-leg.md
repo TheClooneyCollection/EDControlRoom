@@ -16,6 +16,8 @@
 - Routes saved before prices existed show the commodity and `Sup · Dem` only. A leg with no commodity is left out; no commodity at all shows `No buy commodity`.
 - A route shown on `/haul` after a hydrate is the node's saved copy: one saved before `daacf4f` has null prices until it is selected again (re-opened from `/routes` or `/markets`).
 
+- A headless `/haul#route=…` check against the live hub ran as active operator and re-saved forge's selected route (same route, now with prices). `AGENTS.md` Testing now warns about this.
+
 ## Follow-ups
 
 - Full suite runs about 0.79s for 1171 tests, still over the 0.70s budget as before.
