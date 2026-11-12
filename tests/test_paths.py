@@ -8,9 +8,9 @@ import os
 import unittest
 from unittest.mock import patch
 
-from edap.platform.paths.linux import LinuxGamePaths
-from edap.platform.paths.macos import MacOSGamePaths
-from edap.platform.paths.windows import WindowsGamePaths
+from edcr.platform.paths.linux import LinuxGamePaths
+from edcr.platform.paths.macos import MacOSGamePaths
+from edcr.platform.paths.windows import WindowsGamePaths
 
 
 class _TestableMacOSGamePaths(MacOSGamePaths):

@@ -4,10 +4,10 @@ from pathlib import Path
 from types import SimpleNamespace
 import unittest
 
-from edap.config import PiperVoiceConfig
-from edap.control_room.dependencies import LocalControlRoomDataSource
-from edap.control_room.models import HaulStats, MarketData, RuntimeUIState, ShipState
-from edap.control_room.protocol.data_messages import (
+from edcr.config import PiperVoiceConfig
+from edcr.control_room.dependencies import LocalControlRoomDataSource
+from edcr.control_room.models import HaulStats, MarketData, RuntimeUIState, ShipState
+from edcr.control_room.protocol.data_messages import (
     CONTROL_ROOM_HYDRATE,
     DATA_MESSAGE_SCHEMA,
     DATA_MESSAGE_VERSION,
@@ -15,9 +15,9 @@ from edap.control_room.protocol.data_messages import (
     hydrate_message,
     is_control_room_data_message,
 )
-from edap.control_room.protocol.events import ActivityLogEntry
-from edap.control_room_state import ControlRoomState
-from edap.inara.trade_routes import TradeRoute
+from edcr.control_room.protocol.events import ActivityLogEntry
+from edcr.control_room_state import ControlRoomState
+from edcr.inara.trade_routes import TradeRoute
 
 
 class ControlRoomDataMessagesTests(unittest.TestCase):

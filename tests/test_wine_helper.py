@@ -8,12 +8,12 @@ import unittest
 import subprocess
 from unittest import mock
 
-from edap.binding_lookup import KEY_ALIASES, normalize_internal_key_name
-from edap.config import ConfigError, InputConfig, WineHelperConfig, load_config, validate_wine_helper
-from edap.platform.input.macos import MacOSInputController
-from edap.platform.input.scancodes import resolve_scancode
-from edap.platform.input.wine_helper import BurstAborted, FocusFailed, HelperError, build_wine_helper, check_crossover_match, load_or_create_token, wine_executable
-from edap.timing import no_jitter_timing_sampler
+from edcr.binding_lookup import KEY_ALIASES, normalize_internal_key_name
+from edcr.config import ConfigError, InputConfig, WineHelperConfig, load_config, validate_wine_helper
+from edcr.platform.input.macos import MacOSInputController
+from edcr.platform.input.scancodes import resolve_scancode
+from edcr.platform.input.wine_helper import BurstAborted, FocusFailed, HelperError, build_wine_helper, check_crossover_match, load_or_create_token, wine_executable
+from edcr.timing import no_jitter_timing_sampler
 from tests.fixtures.wine_helper import helper_client, unexpected
 
 
@@ -279,7 +279,7 @@ class HelperProtocolTests(unittest.TestCase):
         self.assertEqual(controller.current_target().mode, 'foreground')
 
     def test_factory_selects_configured_helper_without_launching_it(self):
-        from edap.platform.input.factory import build_input_controller
+        from edcr.platform.input.factory import build_input_controller
         controller = build_input_controller('macos', input_config=InputConfig(target='wine_helper', wine_helper=CONFIG),
                                             timing_sampler=no_jitter_timing_sampler())
         self.assertEqual(controller.current_target().mode, 'wine_helper')
@@ -341,7 +341,7 @@ class HelperLifecycleTests(unittest.TestCase):
                                sleeper=waits.append, clock=lambda: 0)
         client.start()
         self.assertEqual(launches, [[CONFIG.wine_path, '--bottle', 'Test', CONFIG.helper_path,
-                                    '--port', '47811', '--token', TOKEN, '--log', r'C:\edap\helper.log', '--max-hold-s', '30.0']])
+                                    '--port', '47811', '--token', TOKEN, '--log', r'C:\edcr\helper.log', '--max-hold-s', '30.0']])
         self.assertEqual(waits, [.05])
         client.close()
         self.assertEqual(server.requests[-2:], [{'op': 'release_all'}, {'op': 'bye'}])
@@ -349,7 +349,7 @@ class HelperLifecycleTests(unittest.TestCase):
 
     def test_managed_helper_launches_outside_the_terminal_so_ctrl_c_cannot_reach_it(self):
         client = build_wine_helper(replace(CONFIG, launch='managed'))
-        with mock.patch('edap.platform.input.wine_helper.subprocess.Popen') as popen:
+        with mock.patch('edcr.platform.input.wine_helper.subprocess.Popen') as popen:
             client._popen(['wine'])
         popen.assert_called_once_with(['wine'], stdin=subprocess.DEVNULL, start_new_session=True)
 
@@ -413,7 +413,7 @@ class HelperLifecycleTests(unittest.TestCase):
 class HelperConfigTests(unittest.TestCase):
     def test_defaults_keep_foreground_and_required_launch_config_is_explicit(self):
         self.assertEqual(InputConfig().target, 'foreground')
-        self.assertEqual(WineHelperConfig().helper_path, r'C:\edap\edap_input_helper.exe')
+        self.assertEqual(WineHelperConfig().helper_path, r'C:\edcr\edcr_input_helper.exe')
         for config, key in [(WineHelperConfig(), 'wine_path'), (WineHelperConfig(wine_path='wine'), 'bottle')]:
             with self.subTest(key=key), self.assertRaisesRegex(ConfigError, f'input.wine_helper.{key}'):
                 validate_wine_helper(config, selected=True)
@@ -427,9 +427,9 @@ class HelperConfigTests(unittest.TestCase):
     def test_config_parses_windows_literal_path_and_token_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'config.toml'
-            path.write_text("[input]\ntarget='wine_helper'\n[input.wine_helper]\nwine_path='/apps/wine'\nbottle='Test'\nhelper_path='C:\\edap\\custom.exe'\ntoken_file='private.token'\n", encoding='utf-8')
+            path.write_text("[input]\ntarget='wine_helper'\n[input.wine_helper]\nwine_path='/apps/wine'\nbottle='Test'\nhelper_path='C:\\edcr\\custom.exe'\ntoken_file='private.token'\n", encoding='utf-8')
             config = load_config(path)
-            self.assertEqual(config.input.wine_helper.helper_path, r'C:\edap\custom.exe')
+            self.assertEqual(config.input.wine_helper.helper_path, r'C:\edcr\custom.exe')
             self.assertEqual(config.input.wine_helper.token_file, Path('private.token'))
 
     def test_watchdog_must_outlast_longest_market_buy_hold(self):

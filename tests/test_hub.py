@@ -19,25 +19,25 @@ warnings.filterwarnings(
 
 from starlette.websockets import WebSocketDisconnect
 
-from edap.config import ConfigError, load_config, with_hub_role
-from edap.control_room.models import ShipState
-from edap.control_room.server.app import _handle_session_message_async, build_observer_server_app
-from edap.control_room.server.auth import SharedAccessTokenAuth
-from edap.control_room.server.broker import InMemoryObserverSessionBroker
-from edap.eddn.messages import StationInfo, SystemPosition
-from edap.eddn.route_query import parse_route_query, resolve_route_params
-from edap.eddn.store import EddnStore
-from edap.hub.history import CentralHistory, HubRuns
-from edap.hub.nodes import BadItem, HubLinkSession, HubSide, NodeRegistry, store_link_item
-from edap.hub.outbox import Outbox
-from edap.hub.peer import NodeHello, PeerLink, load_node_id, peer_link_url
-from edap.hub.relay import HubRelay
-from edap.hub.voice import HubVoice, node_muter
-from edap.hub.protocol import (
+from edcr.config import ConfigError, load_config, with_hub_role
+from edcr.control_room.models import ShipState
+from edcr.control_room.server.app import _handle_session_message_async, build_observer_server_app
+from edcr.control_room.server.auth import SharedAccessTokenAuth
+from edcr.control_room.server.broker import InMemoryObserverSessionBroker
+from edcr.eddn.messages import StationInfo, SystemPosition
+from edcr.eddn.route_query import parse_route_query, resolve_route_params
+from edcr.eddn.store import EddnStore
+from edcr.hub.history import CentralHistory, HubRuns
+from edcr.hub.nodes import BadItem, HubLinkSession, HubSide, NodeRegistry, store_link_item
+from edcr.hub.outbox import Outbox
+from edcr.hub.peer import NodeHello, PeerLink, load_node_id, peer_link_url
+from edcr.hub.relay import HubRelay
+from edcr.hub.voice import HubVoice, node_muter
+from edcr.hub.protocol import (
     REQUEST_EDDN_STATUS, HubUnreachable, LinkClosed, LinkReply, decode_update, encode_update,
 )
-from edap.inara.trade_routes import TradeRoute, TradeRouteSearchResult
-from edap.recent_markets import MarketSnapshot, save_recent_markets, snapshot_entry, snapshot_from_market_json
+from edcr.inara.trade_routes import TradeRoute, TradeRouteSearchResult
+from edcr.recent_markets import MarketSnapshot, save_recent_markets, snapshot_entry, snapshot_from_market_json
 from tests.shared_loop import TestClient
 from tests.test_eddn import memory_store, prices
 
@@ -612,8 +612,8 @@ class LinkedServerTests(unittest.TestCase):
         peer = self.peer_app(data_provider=lambda: ship_data(system="Achenar", cargo_capacity=720))
         params = {"access_token": TOKEN}
         with (
-            patch("edap.control_room.server.app.load_haul_search_config", return_value=saved),
-            patch("edap.control_room.server.app.parse_route_query", side_effect=spy),
+            patch("edcr.control_room.server.app.load_haul_search_config", return_value=saved),
+            patch("edcr.control_room.server.app.parse_route_query", side_effect=spy),
             TestClient(peer) as client,
         ):
             routes = client.get("/api/eddn-routes", params={**params, "jumps": "2", "min_supply": "any"})
@@ -641,7 +641,7 @@ class LinkedServerTests(unittest.TestCase):
         self.r.attach()
         params = {"access_token": TOKEN, "window": "all"}
         with (
-            patch("edap.control_room.server.app.journal_trade_ledger", return_value=Ledger(True, 1)) as ledger,
+            patch("edcr.control_room.server.app.journal_trade_ledger", return_value=Ledger(True, 1)) as ledger,
             TestClient(self.hub_app) as hub, TestClient(self.peer_app(journal_dir=Path("journals"))) as peer,
         ):
             every = hub.get("/api/haul-stats", params=params).json()
@@ -700,8 +700,8 @@ class LinkedServerTests(unittest.TestCase):
             ))
 
         with (
-            patch("edap.control_room.server.app.search_trade_routes", return_value=result) as inara,
-            patch("edap.control_room.server.app.save_haul_search_config") as save_defaults,
+            patch("edcr.control_room.server.app.search_trade_routes", return_value=result) as inara,
+            patch("edcr.control_room.server.app.save_haul_search_config") as save_defaults,
         ):
             self.r.attach()
             found = search()
@@ -718,8 +718,8 @@ class LinkedServerTests(unittest.TestCase):
     def test_a_bad_search_from_a_peer_is_refused_by_the_hub(self) -> None:
         answer = self.hub_app.state.link_handlers["haul_search"]
         with (
-            patch("edap.control_room.server.app.search_trade_routes", side_effect=RuntimeError("Inara is down")),
-            self.assertLogs("edap.control_room.server.app", "ERROR"),
+            patch("edcr.control_room.server.app.search_trade_routes", side_effect=RuntimeError("Inara is down")),
+            self.assertLogs("edcr.control_room.server.app", "ERROR"),
         ):
             not_an_object = answer([])
             failed = answer({})

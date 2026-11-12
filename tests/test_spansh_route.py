@@ -6,13 +6,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from edap.actions import ActionDispatchResult
-from edap.routines._base import RoutineResult
-from edap.routines.callbacks import noop_announce, noop_progress
-from edap.routines.runtime import RoutineRuntime, RoutineTiming, RoutineTravelSettings
-from edap.routines.spansh_route import fly_spansh_route
-from edap.routing.types import Route, RouteWaypoint, SpanshMetadata
-from edap.tts import AnnouncementId
+from edcr.actions import ActionDispatchResult
+from edcr.routines._base import RoutineResult
+from edcr.routines.callbacks import noop_announce, noop_progress
+from edcr.routines.runtime import RoutineRuntime, RoutineTiming, RoutineTravelSettings
+from edcr.routines.spansh_route import fly_spansh_route
+from edcr.routing.types import Route, RouteWaypoint, SpanshMetadata
+from edcr.tts import AnnouncementId
 from tests.fakes import FakeShipControls, FakeWatcher
 
 
@@ -193,12 +193,12 @@ class SpanshRouteTests(unittest.TestCase):
             ])
             runtime = _runtime(journal_dir, FakeShipControls(), watcher)
             with patch(
-                "edap.routines.spansh_route.undock_and_route_to_system",
+                "edcr.routines.spansh_route.undock_and_route_to_system",
                 return_value=_ok_result("undock_and_route_to_system"),
             ) as undock_mock, patch(
-                "edap.routines.spansh_route.depart_system_to_route"
+                "edcr.routines.spansh_route.depart_system_to_route"
             ) as depart_mock, patch(
-                "edap.routines.spansh_route.set_galaxy_map_destination_for_transit",
+                "edcr.routines.spansh_route.set_galaxy_map_destination_for_transit",
                 return_value=True,
             ) as set_map_mock:
                 result = fly_spansh_route(
@@ -230,17 +230,17 @@ class SpanshRouteTests(unittest.TestCase):
             ])
             runtime = _runtime(journal_dir, FakeShipControls(), watcher)
             with patch(
-                "edap.routines.spansh_route.read_ship_position"
+                "edcr.routines.spansh_route.read_ship_position"
             ) as position_mock, patch(
-                "edap.routines.spansh_route.undock_and_route_to_system"
+                "edcr.routines.spansh_route.undock_and_route_to_system"
             ) as undock_mock, patch(
-                "edap.routines.spansh_route.depart_system_to_route",
+                "edcr.routines.spansh_route.depart_system_to_route",
                 return_value=_ok_result("depart_system"),
             ) as depart_mock, patch(
-                "edap.routines.spansh_route.set_galaxy_map_destination_for_transit",
+                "edcr.routines.spansh_route.set_galaxy_map_destination_for_transit",
                 return_value=True,
             ) as set_map_mock:
-                from edap.routines.transit import ShipPosition
+                from edcr.routines.transit import ShipPosition
                 position_mock.return_value = ShipPosition(status="normal_space", station="", system="Sol")
                 result = fly_spansh_route(
                     runtime,
@@ -263,7 +263,7 @@ class SpanshRouteTests(unittest.TestCase):
                 dispatch=ActionDispatchResult(action="undock", status="error", reason="stuck"),
             )
             with patch(
-                "edap.routines.spansh_route.undock_and_route_to_system",
+                "edcr.routines.spansh_route.undock_and_route_to_system",
                 return_value=failure,
             ):
                 result = fly_spansh_route(

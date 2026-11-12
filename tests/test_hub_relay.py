@@ -15,13 +15,13 @@ from starlette.websockets import WebSocketDisconnect
 from textual import work
 from textual.app import App
 
-from edap.control_room.protocol import ActivityLogEntry
-from edap.control_room.protocol.events import AnnouncementEvent
-from edap.control_room.server.broker import InMemoryObserverSessionBroker
-from edap.eddn.store import EddnStore
-from edap.hub.relay import HubRelay, NodeOffline, PeerRelay, node_state
-from edap.hub.voice import HubVoice
-from edap.recent_markets import save_recent_markets
+from edcr.control_room.protocol import ActivityLogEntry
+from edcr.control_room.protocol.events import AnnouncementEvent
+from edcr.control_room.server.broker import InMemoryObserverSessionBroker
+from edcr.eddn.store import EddnStore
+from edcr.hub.relay import HubRelay, NodeOffline, PeerRelay, node_state
+from edcr.hub.voice import HubVoice
+from edcr.recent_markets import save_recent_markets
 from tests.shared_loop import TestClient
 from tests.test_control_room_server import _base_data_read_model, _CommandHandlerRecorder
 from tests.test_hub import GALILEO, HUB_TOKEN, PEER_NODE, SOL, TOKEN, market, rig, server
@@ -208,7 +208,7 @@ class RelayTests(unittest.TestCase):
 
     def test_the_page_is_told_when_the_node_goes_offline_and_sees_it_again_when_it_links(self) -> None:
         link = self.r.attach()
-        with patch("edap.control_room.server.app.NODE_RETRY_S", 0.001), TestClient(self.hub_app) as hub:
+        with patch("edcr.control_room.server.app.NODE_RETRY_S", 0.001), TestClient(self.hub_app) as hub:
             with hub.websocket_connect("/session", params={**PAGE, "node": "peer-node"}) as page:
                 page.receive_json()
                 page.receive_json()
@@ -300,7 +300,7 @@ class RelayTests(unittest.TestCase):
         self.background = lambda work: threading.Thread(target=work, daemon=True).start()
         self.commands.during = lambda raw_input: self.r.drop(link)
         held: list[Any] = []
-        with patch("edap.control_room.server.app.NODE_RETRY_S", 60.0), TestClient(self.hub_app) as hub:
+        with patch("edcr.control_room.server.app.NODE_RETRY_S", 60.0), TestClient(self.hub_app) as hub:
             with hub.websocket_connect("/session", params={**PAGE, "node": "peer-node"}) as page:
                 page.receive_json()
                 page.receive_json()

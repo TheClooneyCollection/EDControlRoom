@@ -4,13 +4,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from edap.control_room_state import (
+from edcr.control_room_state import (
     CommandHistoryEntry,
     ControlRoomState,
     load_control_room_state,
     save_control_room_state,
 )
-from edap.inara.trade_routes import TradeRoute, manual_landing_from_payload
+from edcr.inara.trade_routes import TradeRoute, manual_landing_from_payload
 
 
 class ControlRoomStateTests(unittest.TestCase):

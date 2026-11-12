@@ -4,11 +4,11 @@ from tests.fixtures.wine_helper import helper_client
 
 import unittest
 
-from edap.actions import ActionDispatchResult, ActionDispatcher
-from edap.binding_lookup import build_binding_lookup
-from edap.bindings import Binding
-from edap.platform.input.macos import MODIFIER_FLAGS, MacOSInputController
-from edap.timing import no_jitter_timing_sampler
+from edcr.actions import ActionDispatchResult, ActionDispatcher
+from edcr.binding_lookup import build_binding_lookup
+from edcr.bindings import Binding
+from edcr.platform.input.macos import MODIFIER_FLAGS, MacOSInputController
+from edcr.timing import no_jitter_timing_sampler
 
 
 class FakeInputController:

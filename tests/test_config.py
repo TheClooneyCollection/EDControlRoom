@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from edap.config import ConfigError, default_runtime_platform, load_config, save_home_system, save_piper_voice
+from edcr.config import ConfigError, default_runtime_platform, load_config, save_home_system, save_piper_voice
 
 
 def _write_config(path: Path, content: str) -> None:
@@ -42,7 +42,7 @@ class LoadConfigTests(unittest.TestCase):
 """.strip(),
             )
 
-            with patch("edap.config.default_runtime_platform", return_value="macos"):
+            with patch("edcr.config.default_runtime_platform", return_value="macos"):
                 config = load_config(config_path)
 
             self.assertIsNone(config.paths.journal_dir)
@@ -462,7 +462,7 @@ activity_log_max_lines = 500
 """.strip(),
             )
 
-            with patch("edap.config.default_runtime_platform", return_value="windows"):
+            with patch("edcr.config.default_runtime_platform", return_value="windows"):
                 config = load_config(config_path)
 
             self.assertEqual(config.runtime.platform, "windows")
@@ -598,22 +598,22 @@ title = ""
             )
 
             with patch(
-                "edap.config.default_runtime_platform",
+                "edcr.config.default_runtime_platform",
                 side_effect=ConfigError("Config value `runtime.platform` must be set explicitly on this host."),
             ):
                 with self.assertRaisesRegex(ConfigError, "runtime.platform"):
                     load_config(config_path)
 
     def test_default_runtime_platform_maps_supported_hosts(self) -> None:
-        with patch("edap.config.sys.platform", "darwin"):
+        with patch("edcr.config.sys.platform", "darwin"):
             self.assertEqual(default_runtime_platform(), "macos")
-        with patch("edap.config.sys.platform", "linux"):
+        with patch("edcr.config.sys.platform", "linux"):
             self.assertEqual(default_runtime_platform(), "linux")
-        with patch("edap.config.sys.platform", "win32"):
+        with patch("edcr.config.sys.platform", "win32"):
             self.assertEqual(default_runtime_platform(), "windows")
 
     def test_default_runtime_platform_rejects_unsupported_host(self) -> None:
-        with patch("edap.config.sys.platform", "freebsd13"):
+        with patch("edcr.config.sys.platform", "freebsd13"):
             with self.assertRaisesRegex(ConfigError, "runtime.platform"):
                 default_runtime_platform()
 

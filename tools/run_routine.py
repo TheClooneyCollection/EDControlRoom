@@ -11,17 +11,17 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from edap.binding_lookup import BindingLookup
-from edap.config import ConfigError, DEFAULT_CONFIG_PATH
-from edap.progress_controls import ProgressShipControls
-from edap.routines import auto_zero_throttle_on_arrival, dock, haul_loop_two_way, jump, market_buy, market_sell, set_gal_map_destination, station_refuel_menu, undock
-from edap.routines.haul_support import HaulMarketSettings, HaulRuntime, HaulTiming, HaulTravelSettings
-from edap.routines.haul_two_way import StationLeg, TwoWayHaulRoute
-from edap.runtime import build_runtime_context, load_config_with_fallback
-from edap.ship_controls import ShipControls
-from edap.status import read_status
-from edap.state import JournalWatcher
-from edap.timing import TimingSampler
+from edcr.binding_lookup import BindingLookup
+from edcr.config import ConfigError, DEFAULT_CONFIG_PATH
+from edcr.progress_controls import ProgressShipControls
+from edcr.routines import auto_zero_throttle_on_arrival, dock, haul_loop_two_way, jump, market_buy, market_sell, set_gal_map_destination, station_refuel_menu, undock
+from edcr.routines.haul_support import HaulMarketSettings, HaulRuntime, HaulTiming, HaulTravelSettings
+from edcr.routines.haul_two_way import StationLeg, TwoWayHaulRoute
+from edcr.runtime import build_runtime_context, load_config_with_fallback
+from edcr.ship_controls import ShipControls
+from edcr.status import read_status
+from edcr.state import JournalWatcher
+from edcr.timing import TimingSampler
 
 
 ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL = "auto_zero_throttle_on_arrival"
@@ -472,7 +472,7 @@ def main() -> int:
             "CycleNextPanel", "CyclePreviousPanel", "HeadLookReset",
         ]
     elif args.routine == ROUTINE_SET_GAL_MAP_DESTINATION:
-        # Keep this list in sync with edap/routines/galaxy_map.py.
+        # Keep this list in sync with edcr/routines/galaxy_map.py.
         # The routine uses a direct held Enter for search commit plus these
         # binding-driven actions, including CamZoomIn for the Odyssey plot flow.
         routine_actions = ["GalaxyMapOpen", "UI_Up", "UI_Select", "UI_Right", "CamZoomIn"]

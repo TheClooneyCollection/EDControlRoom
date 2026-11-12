@@ -5,20 +5,20 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from edap.actions import ActionDispatchResult
-from edap.config import default_haul_routine_defaults
-from edap.control_room.routines_travel import parse_travel_command
-from edap.routines._base import RoutineResult
-from edap.routines.callbacks import noop_progress
-from edap.routines.haul_support import (
+from edcr.actions import ActionDispatchResult
+from edcr.config import default_haul_routine_defaults
+from edcr.control_room.routines_travel import parse_travel_command
+from edcr.routines._base import RoutineResult
+from edcr.routines.callbacks import noop_progress
+from edcr.routines.haul_support import (
     HaulMarketSettings,
     HaulRuntime,
     HaulTravelSettings,
     build_haul_runtime,
     build_haul_timing,
 )
-from edap.routines.travel import TravelDestination, travel_to_station
-from edap.tts import AnnouncementId
+from edcr.routines.travel import TravelDestination, travel_to_station
+from edcr.tts import AnnouncementId
 from tests.fakes import FakeShipControls, FakeWatcher
 
 
@@ -118,7 +118,7 @@ class TravelRoutineTests(unittest.TestCase):
             )
             runtime = _runtime(journal_dir, controls=controls, announcements=announcements)
 
-            with patch("edap.routines.transit.dock") as dock_mock:
+            with patch("edcr.routines.transit.dock") as dock_mock:
                 dock_mock.return_value = RoutineResult(
                     action="dock",
                     dispatch=ActionDispatchResult(action="dock", status="ok"),
@@ -153,8 +153,8 @@ class TravelRoutineTests(unittest.TestCase):
             runtime = _runtime(journal_dir, controls=controls, watcher=watcher)
 
             with (
-                patch("edap.routines.transit.set_gal_map_destination") as set_route_mock,
-                patch("edap.routines.travel._travel_transit") as transit_mock,
+                patch("edcr.routines.transit.set_gal_map_destination") as set_route_mock,
+                patch("edcr.routines.travel._travel_transit") as transit_mock,
             ):
                 set_route_mock.return_value = RoutineResult(
                     action="set_dest",
@@ -183,7 +183,7 @@ class TravelRoutineTests(unittest.TestCase):
             journal_dir = Path(tmp)
             runtime = _runtime(journal_dir, watcher=watcher, progress=progress)
 
-            with patch("edap.routines.transit.dock") as dock_mock:
+            with patch("edcr.routines.transit.dock") as dock_mock:
                 result = travel_to_station(
                     runtime,
                     destination=TravelDestination(system="Sol"),

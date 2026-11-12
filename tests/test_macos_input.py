@@ -5,14 +5,14 @@ from tests.fixtures.wine_helper import helper_client
 import unittest
 from unittest.mock import patch
 
-from edap.platform.input.macos import (
+from edcr.platform.input.macos import (
     KEY_CODES,
     MODIFIER_FLAGS,
     MacOSInputController,
     _find_pid_in_ps_output,
     _make_default_pid_poster,
 )
-from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler, no_jitter_timing_sampler
+from edcr.timing import TimingChannelConfig, TimingConfig, TimingSampler, no_jitter_timing_sampler
 
 
 class FakeBackend:
@@ -57,11 +57,11 @@ class MacOSInputControllerTests(unittest.TestCase):
             return {"keycode": keycode, "down": down}
 
         with (
-            patch("edap.platform.input.macos.CGEventSourceCreate", fake_source_create),
-            patch("edap.platform.input.macos.CGEventCreateKeyboardEvent", fake_keyboard_event),
-            patch("edap.platform.input.macos.CGEventPostToPid", lambda pid, event: posted.append((pid, event))),
-            patch("edap.platform.input.macos.kCGEventSourceStateCombinedSessionState", "combined"),
-            patch("edap.platform.input.macos.kCGEventSourceStateHIDSystemState", "hid"),
+            patch("edcr.platform.input.macos.CGEventSourceCreate", fake_source_create),
+            patch("edcr.platform.input.macos.CGEventCreateKeyboardEvent", fake_keyboard_event),
+            patch("edcr.platform.input.macos.CGEventPostToPid", lambda pid, event: posted.append((pid, event))),
+            patch("edcr.platform.input.macos.kCGEventSourceStateCombinedSessionState", "combined"),
+            patch("edcr.platform.input.macos.kCGEventSourceStateHIDSystemState", "hid"),
         ):
             poster = _make_default_pid_poster()
             poster(4242, KEY_CODES["a"], True, 0, None)

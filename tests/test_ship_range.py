@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from edap.ship_range import fsd_max_fuel_per_jump, loadout_laden_jump_range
+from edcr.ship_range import fsd_max_fuel_per_jump, loadout_laden_jump_range
 
 # A real Loadout (Panther Mk II, 7A SCO drive), cut to the fields the formula reads.
 PANTHER = {"event": "Loadout", "Ship": "panthermkii", "UnladenMass": 1753.599976, "CargoCapacity": 1137,

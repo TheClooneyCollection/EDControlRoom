@@ -10,7 +10,7 @@ Labels: **[obs]** = observed in the 2026-11-07 AHK experiment. **[repo]** = read
   - Wine reported `fg=explorer.exe` (the desktop) for the Win32 foreground.
   - `WinActivate` changed it to `EliteDangerous64.exe` with no macOS focus theft.
   - Both `SendEvent` (keybd_event) and `SendInput` then reached Elite (journal `Music GalaxyMap` / `Starport`).
-- **[obs]** `ControlSend` (window messages only) had no effect, so Elite reads **raw input**. This also predicts that the native Windows `PostMessageW` hwnd path (`edap/platform/input/windows.py:343-364`) will not work for Elite. Worth recording in runtime status.
+- **[obs]** `ControlSend` (window messages only) had no effect, so Elite reads **raw input**. This also predicts that the native Windows `PostMessageW` hwnd path (`edcr/platform/input/windows.py:343-364`) will not work for Elite. Worth recording in runtime status.
 - **[obs]** `Status.json` `GuiFocus` lags or does not update for the galaxy map. Verify with the journal `Music` event instead.
 - **[inf]** AHK's `WinActivate` is more than `SetForegroundWindow`:
   - It falls back to `AttachThreadInput`.
@@ -20,18 +20,18 @@ Labels: **[obs]** = observed in the 2026-11-07 AHK experiment. **[repo]** = read
 ## 1. Where it plugs in **[repo]**
 
 - Semantic path:
-  1. `ActionDispatcher.tap_action` (`edap/actions.py:41-65`) resolves a binding through `BindingLookup`.
-  2. That yields a `NormalizedBinding(key, modifier)` with internal names like `m` / `left_control` (`edap/binding_lookup.py:120-145`).
+  1. `ActionDispatcher.tap_action` (`edcr/actions.py:41-65`) resolves a binding through `BindingLookup`.
+  2. That yields a `NormalizedBinding(key, modifier)` with internal names like `m` / `left_control` (`edcr/binding_lookup.py:120-145`).
   3. It calls `InputController.tap_key(key, modifier, hold_s)`.
-- Abstract interface: `edap/platform/input/base.py`, which already has `InputTargetState(mode=...)` plus `set_foreground_target` / `set_pid_target` / `auto_target`.
-- macOS backend: `MacOSInputController` (`edap/platform/input/macos.py:251-372`). It chooses a poster per target mode in `_dispatch_event`. Today the modes are `foreground` (HID tap) and `pid` (`CGEventPostToPid`, which is known not to work for CrossOver).
+- Abstract interface: `edcr/platform/input/base.py`, which already has `InputTargetState(mode=...)` plus `set_foreground_target` / `set_pid_target` / `auto_target`.
+- macOS backend: `MacOSInputController` (`edcr/platform/input/macos.py:251-372`). It chooses a poster per target mode in `_dispatch_event`. Today the modes are `foreground` (HID tap) and `pid` (`CGEventPostToPid`, which is known not to work for CrossOver).
 - Windows backend: it already owns **scan-code** knowledge in `KEY_CODES` (with extended keys at `windows.py:147`). That is exactly what the helper needs.
-- Construction: `edap/platform/input/factory.py` and `edap/runtime.py:73-76,130`, with no input config today. Config dataclasses live in `edap/config.py` (`RuntimeConfig` at `:137`), and defaults in `defaults/*.toml`.
+- Construction: `edcr/platform/input/factory.py` and `edcr/runtime.py:73-76,130`, with no input config today. Config dataclasses live in `edcr/config.py` (`RuntimeConfig` at `:137`), and defaults in `defaults/*.toml`.
 
 **Proposal: add a third macOS target mode, `wine_helper`, beside `foreground` and `pid`.** Do not add a new top-level platform. Routines, bindings lookup and timing stay unchanged.
 
 - `MacOSInputController` receives a required `WineHelperClient`-like poster callable, via the same pattern as `pid_poster`. In `wine_helper` mode it sends **scan-code** events instead of mac keycodes.
-- Move the scan-code table out of `windows.py` into a shared pure module, e.g. `edap/platform/input/scancodes.py`, used by both `windows.py` and the helper client. That gives one source of truth for Elite key names → set-1 scan codes plus the extended flag.
+- Move the scan-code table out of `windows.py` into a shared pure module, e.g. `edcr/platform/input/scancodes.py`, used by both `windows.py` and the helper client. That gives one source of truth for Elite key names → set-1 scan codes plus the extended flag.
 
 ## 2. Helper choice: compiled Win32 exe (recommended) vs AHK v2
 
@@ -44,7 +44,7 @@ Labels: **[obs]** = observed in the 2026-11-07 AHK experiment. **[repo]** = read
 | Reviewability / tests | C source in the repo, protocol tested from Python | script in the repo |
 | Ships as | binary built locally by a `tools/` script (don't commit the .exe) | text file plus a third-party exe |
 
-Recommendation: **C exe**, source at e.g. `tools/wine_input_helper/edap_input_helper.c`, built by `tools/build_wine_input_helper.py`. Keep the AHK `bgtest.ahk` as the manual diagnostic only.
+Recommendation: **C exe**, source at e.g. `tools/wine_input_helper/edcr_input_helper.c`, built by `tools/build_wine_input_helper.py`. Keep the AHK `bgtest.ahk` as the manual diagnostic only.
 
 ## 3. IPC
 
@@ -60,7 +60,7 @@ Recommendation: **C exe**, source at e.g. `tools/wine_input_helper/edap_input_he
 - Auth: any local process could otherwise drive the game, so the helper requires a random token.
   - Python generates the token at launch.
   - It passes the token as a CLI arg, which is visible in `ps`. That is acceptable for local single-user use.
-  - Alternative: write it to `C:\edap\token` with 0600 perms. Pick one and document it.
+  - Alternative: write it to `C:\edcr\token` with 0600 perms. Pick one and document it.
 
 ## 4. Message format
 
@@ -115,10 +115,10 @@ Launch command (fish/sh), using the CrossOver app that **currently runs the bott
 
 ```sh
 "$HOME/Applications/CrossOver Preview.app/Contents/SharedSupport/CrossOver/bin/wine" --bottle Test \
-  'C:\edap\edap_input_helper.exe' --port 47811 --token <random> --log 'C:\edap\helper.log'
+  'C:\edcr\edcr_input_helper.exe' --port 47811 --token <random> --log 'C:\edcr\helper.log'
 ```
 
-- Install step: `tools/install_wine_input_helper.py --bottle Test` copies the built exe to `<bottle>/drive_c/edap/`. That is the only bottle write, and it is explicit and operator-run.
+- Install step: `tools/install_wine_input_helper.py --bottle Test` copies the built exe to `<bottle>/drive_c/edcr/`. That is the only bottle write, and it is explicit and operator-run.
 - Lifecycle modes (config `input.wine_helper.launch`):
   - `managed` (default once validated): Control Room starts the helper with `subprocess.Popen` when the operator selects the mode.
     - The operator command is `set_input wine_helper` (decided). Managed launch also starts the helper at Control Room startup when `input.target = "wine_helper"` is configured.
@@ -134,7 +134,7 @@ Launch command (fish/sh), using the CrossOver app that **currently runs the bott
 - Health:
   - The TCP connection is the liveness signal.
   - On any send error, reconnect once, then fail loudly.
-  - `status` feeds the diagnostics output (`edap/diagnostics.py`) and the Control Room status line.
+  - `status` feeds the diagnostics output (`edcr/diagnostics.py`) and the Control Room status line.
 - Orphans: if Control Room dies, the helper sees the disconnect and runs `release_all`. It then idles and accepts a new client, so the next Control Room reuses it.
 
 ## 7. Failure modes and fallbacks
@@ -161,7 +161,7 @@ target = "foreground"
 [input.wine_helper]
 wine_path = ""            # required, e.g. "~/Applications/CrossOver Preview.app/Contents/SharedSupport/CrossOver/bin/wine"
 bottle = ""               # required, e.g. "Test"
-helper_path = 'C:\edap\edap_input_helper.exe'
+helper_path = 'C:\edcr\edcr_input_helper.exe'
 process_name = "EliteDangerous64.exe"
 port = 47811
 launch = "managed"        # managed | manual
@@ -171,7 +171,7 @@ max_hold_s = 10.0         # helper watchdog
 ```
 
 - Empty `wine_path` / `bottle` with `target = "wine_helper"` is a validation error that names the key, following the explicit-config rule. There is no guessing.
-- Validate in `edap/config.py` next to the other `_validate_*` helpers. Use TOML literal strings for the Windows paths in tests (AGENTS.md).
+- Validate in `edcr/config.py` next to the other `_validate_*` helpers. Use TOML literal strings for the Windows paths in tests (AGENTS.md).
 - Runtime selection: `build_input_controller` takes the input config, and the mac controller starts in the configured mode. Control Room commands can still switch at runtime.
 
 ## 9. Testing
@@ -191,10 +191,10 @@ Unit tests (fast; all doubles are explicit test-local fakes; no default no-op ca
 - Keep each test cheap (the suite budget is 0.0006 s per test): no real sockets or sleeps in unit tests.
 - Optional: a small protocol-conformance test of the C helper that runs only when an env var is set (manual, not in CI).
 
-Manual verification (`edap/ship_controls.py` is the human test surface):
+Manual verification (`edcr/ship_controls.py` is the human test surface):
 
 1. Build, install, launch the helper (managed or manual), Elite docked.
-2. Frontmost: ghostty. Run `ShipControls.galaxy_map_open()` (`edap/ship_controls.py:226`) through the harness.
+2. Frontmost: ghostty. Run `ShipControls.galaxy_map_open()` (`edcr/ship_controls.py:226`) through the harness.
 3. Expect a journal `Music` → `GalaxyMap`. Run it again with a delay, expect `Starport`. Expect no macOS focus change.
 4. Toggle CrossOver frontmost then away (macdrv resets fg to the desktop). Repeat step 3: `focus` must report `set_foreground`.
 5. Kill the helper while holding a key with a long hold. Confirm the key is released.

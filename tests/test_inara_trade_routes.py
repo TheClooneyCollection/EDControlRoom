@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from edap.inara.trade_routes import (
+from edcr.inara.trade_routes import (
     _extract_key_value_pairs,
     _emit_debug,
     _row_to_route,

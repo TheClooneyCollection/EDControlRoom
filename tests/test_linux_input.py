@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from edap.platform.input.linux import KEY_NAMES, LinuxInputController
-from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler, no_jitter_timing_sampler
+from edcr.platform.input.linux import KEY_NAMES, LinuxInputController
+from edcr.timing import TimingChannelConfig, TimingConfig, TimingSampler, no_jitter_timing_sampler
 
 
 class FakeBackend:

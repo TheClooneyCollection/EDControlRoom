@@ -64,7 +64,7 @@ From the EDControlRoom checkout:
 uv run python3 tools/build_wine_input_helper.py
 ```
 
-This compiles `tools/wine_input_helper/edap_input_helper.c` to `build/wine_input_helper/edap_input_helper.exe`. The `build/` folder is git-ignored; no `.exe` is ever committed. Rebuild after pulling changes to the helper source.
+This compiles `tools/wine_input_helper/edcr_input_helper.c` to `build/wine_input_helper/edcr_input_helper.exe`. The `build/` folder is git-ignored; no `.exe` is ever committed. Rebuild after pulling changes to the helper source.
 
 ## 2. Install it into your bottle
 
@@ -72,7 +72,7 @@ This compiles `tools/wine_input_helper/edap_input_helper.c` to `build/wine_input
 uv run python3 tools/install_wine_input_helper.py --bottle Test
 ```
 
-Replace `Test` with your bottle name. This copies the exe to `<bottle>/drive_c/edap/edap_input_helper.exe`, which Windows sees as `C:\edap\edap_input_helper.exe`. It only writes into an existing bottle. Use `--bottles-dir` if your bottles are not in `~/Library/Application Support/CrossOver/Bottles`.
+Replace `Test` with your bottle name. This copies the exe to `<bottle>/drive_c/edcr/edcr_input_helper.exe`, which Windows sees as `C:\edcr\edcr_input_helper.exe`. It only writes into an existing bottle. Use `--bottles-dir` if your bottles are not in `~/Library/Application Support/CrossOver/Bottles`.
 
 ## 3. Configure the input table
 
@@ -94,7 +94,7 @@ Other keys, with their defaults (see `defaults/input.toml`):
 
 | Key | Default | Meaning |
 |---|---|---|
-| `helper_path` | `'C:\edap\edap_input_helper.exe'` | Where the installer put the helper, as a Windows path |
+| `helper_path` | `'C:\edcr\edcr_input_helper.exe'` | Where the installer put the helper, as a Windows path |
 | `process_name` | `"EliteDangerous64.exe"` | The game process to send input to |
 | `port` | `47811` | Loopback port for the helper |
 | `launch` | `"managed"` | `managed`: Control Room starts and stops the helper. `manual`: you start it yourself and Control Room only connects. |
@@ -164,10 +164,10 @@ In Control Room this shows as `Input to Elite failed: ...`.
 **`wine helper transport failed; reconnected and released all keys; interrupted input burst aborted (not replayed).`**
 The connection dropped mid-burst. The helper reconnected and released every key, but the interrupted action was not repeated. Re-run the step.
 
-**`edap_input_helper.exe` uses about 100% CPU after Control Room quits.**
+**`edcr_input_helper.exe` uses about 100% CPU after Control Room quits.**
 - **Cause:** a helper started by an older Control Room shared its terminal, so pressing Ctrl-C to quit sent it a SIGINT too. Under CrossOver that leaves it spinning and unable to exit, even on `bye`. Control Room now starts the helper in its own session.
-- **Fix:** `pkill -KILL -f edap_input_helper.exe`, then tap any key that may be held (for example LeftCtrl) once in Elite.
+- **Fix:** `pkill -KILL -f edcr_input_helper.exe`, then tap any key that may be held (for example LeftCtrl) once in Elite.
 
 **Stuck keys.** The helper releases all held keys when Control Room disconnects or quits, when Elite closes, when the helper exits normally, and when any key is held past `max_hold_s`. If the helper is force-killed, it cannot clean up. Tap the stuck key once in Elite, or run `set_input wine_helper`, which releases everything when it connects.
 
-**Check the helper log.** The helper writes `C:\edap\helper.log` inside the bottle (`<bottle>/drive_c/edap/helper.log`). It records connections and which focus step worked.
+**Check the helper log.** The helper writes `C:\edcr\helper.log` inside the bottle (`<bottle>/drive_c/edcr/helper.log`). It records connections and which focus step worked.

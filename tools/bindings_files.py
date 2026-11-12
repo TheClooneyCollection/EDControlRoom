@@ -18,7 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from edap.bindings_inventory import (
+from edcr.bindings_inventory import (
     DEFAULT_BACKUP_DIR,
     BindingsFileEntry,
     PresetFileEntry,
@@ -30,8 +30,8 @@ from edap.bindings_inventory import (
     list_default_preset_files,
     restore_bindings_file,
 )
-from edap.config import ConfigError, DEFAULT_CONFIG_PATH
-from edap.runtime import build_runtime_context, load_config_with_fallback
+from edcr.config import ConfigError, DEFAULT_CONFIG_PATH
+from edcr.runtime import build_runtime_context, load_config_with_fallback
 
 
 class _SelectableEntry(Protocol):

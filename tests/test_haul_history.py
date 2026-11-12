@@ -10,7 +10,7 @@ from tempfile import TemporaryDirectory
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import unittest
 
-from edap.haul_history import parse_window, summarize
+from edcr.haul_history import parse_window, summarize
 from tools.haul_stats import main
 
 UTC = timezone.utc
@@ -69,7 +69,7 @@ class HaulWindowTests(unittest.TestCase):
         self.assertEqual(parse_window("week", now)[0].day, 19)
 
     def test_system_timezone_adapter_matches_native_conversion_at_each_date(self):
-        from edap.platform.local_time import SystemLocalTimezone
+        from edcr.platform.local_time import SystemLocalTimezone
         zone = SystemLocalTimezone()
         # Compare against OS conversion rather than assume the machine's zone.
         for month in (1, 4, 7, 10, 11):
@@ -184,7 +184,7 @@ class HaulStatsCliTests(unittest.TestCase):
 
 class TodayHaulCacheTests(unittest.TestCase):
     def test_cache_reads_only_on_start_invalidation_or_local_date_change(self):
-        from edap.haul_stats_cache import TodayHaulCache
+        from edcr.haul_stats_cache import TodayHaulCache
         with TemporaryDirectory() as directory:
             path = Path(directory) / "history.jsonl"
             cache = TodayHaulCache()

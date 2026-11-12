@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from edap.control_room.view_actions import MarketPanelViewActions, TradeRoutePickerViewActions
-from edap.inara.trade_routes import TradeRoute
+from edcr.control_room.view_actions import MarketPanelViewActions, TradeRoutePickerViewActions
+from edcr.inara.trade_routes import TradeRoute
 
 
 class _MarketDependencies:

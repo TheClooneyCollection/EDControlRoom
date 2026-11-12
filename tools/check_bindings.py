@@ -10,11 +10,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from edap.binding_conflicts import read_galaxy_map_binding_conflicts
-from edap.binding_lookup import load_binding_lookup
-from edap.bindings import AUTOPILOT_OPTIONAL_BINDINGS, AUTOPILOT_REQUIRED_BINDINGS, REQUIRED_BINDINGS
-from edap.config import AppConfig, ConfigError, DEFAULT_CONFIG_PATH
-from edap.runtime import RuntimeContext, build_runtime_context, load_config_with_fallback
+from edcr.binding_conflicts import read_galaxy_map_binding_conflicts
+from edcr.binding_lookup import load_binding_lookup
+from edcr.bindings import AUTOPILOT_OPTIONAL_BINDINGS, AUTOPILOT_REQUIRED_BINDINGS, REQUIRED_BINDINGS
+from edcr.config import AppConfig, ConfigError, DEFAULT_CONFIG_PATH
+from edcr.runtime import RuntimeContext, build_runtime_context, load_config_with_fallback
 
 
 def main(

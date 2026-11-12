@@ -25,7 +25,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from edap.inara.trade_routes import TradeRoute, fetch_trade_routes
+from edcr.inara.trade_routes import TradeRoute, fetch_trade_routes
 
 _DEFAULT_PROFILE_DIR = _REPO_ROOT / "artifacts" / "playwright" / "inara-profile"
 

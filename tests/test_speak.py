@@ -4,8 +4,8 @@ import unittest
 from unittest.mock import patch
 
 from tools import speak
-from edap.config import ConfigError
-from edap.tts import NullSpeechBackend
+from edcr.config import ConfigError
+from edcr.tts import NullSpeechBackend
 
 
 class _FakeBackend:

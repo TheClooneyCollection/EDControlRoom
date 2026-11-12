@@ -3,10 +3,10 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 
-from edap.actions import ActionDispatchResult
-from edap.routines.hardpoints import retract_hardpoints_before_jump
-from edap.routines.jump import jump
-from edap.routines.transit import engage_hyperspace_after_escape
+from edcr.actions import ActionDispatchResult
+from edcr.routines.hardpoints import retract_hardpoints_before_jump
+from edcr.routines.jump import jump
+from edcr.routines.transit import engage_hyperspace_after_escape
 from tests.fakes import FakeShipControls, FakeWatcher
 
 
@@ -141,7 +141,7 @@ class HardpointFlowTests(unittest.TestCase):
     def test_pre_jump_status_reader_requires_real_flags(self):
         import tempfile
         from pathlib import Path
-        from edap.status import read_status
+        from edcr.status import read_status
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp)
             for text in ('{}', '{"Flags": null}', '{"Flags": "0"}', '[]'):
@@ -150,9 +150,9 @@ class HardpointFlowTests(unittest.TestCase):
                     self.assertIsNone(read_status(path, require_flags=True))
 
     def test_hardpoint_dispatch_uses_the_configured_semantic_binding(self):
-        from edap.binding_lookup import build_binding_lookup
-        from edap.bindings import Binding
-        from edap.progress_controls import ProgressShipControls
+        from edcr.binding_lookup import build_binding_lookup
+        from edcr.bindings import Binding
+        from edcr.progress_controls import ProgressShipControls
         from tests.test_ship_controls import FakeInputController, _build_controls
         lookup = build_binding_lookup(
             bindings={"DeployHardpointToggle": Binding(key="K")},
@@ -166,7 +166,7 @@ class HardpointFlowTests(unittest.TestCase):
     def test_timeout_config_is_loaded_and_rejects_unbounded_values(self):
         import tempfile
         from pathlib import Path
-        from edap.config import ConfigError, load_config
+        from edcr.config import ConfigError, load_config
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.toml"
             path.write_text('[controls.hardpoints]\nretract_timeout_seconds = 2.5\n', encoding="utf-8")
@@ -180,7 +180,7 @@ class HardpointFlowTests(unittest.TestCase):
     def test_travel_aborts_before_fsd_from_dock_normal_space_and_supercruise(self):
         import tempfile
         from pathlib import Path
-        from edap.routines.travel import TravelDestination, travel_to_station
+        from edcr.routines.travel import TravelDestination, travel_to_station
         from tests.test_travel import _runtime
         for phase in ("docked", "normal_space", "supercruise"):
             with self.subTest(phase=phase), tempfile.TemporaryDirectory() as tmp:
@@ -217,7 +217,7 @@ class HardpointFlowTests(unittest.TestCase):
     def test_normal_space_travel_warns_and_jumps_when_status_is_corrupt(self):
         import tempfile
         from pathlib import Path
-        from edap.routines.travel import TravelDestination, travel_to_station
+        from edcr.routines.travel import TravelDestination, travel_to_station
         from tests.test_travel import _runtime
         with tempfile.TemporaryDirectory() as tmp:
             journal_dir = Path(tmp)

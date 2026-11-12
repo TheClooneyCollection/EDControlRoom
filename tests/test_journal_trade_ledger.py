@@ -7,8 +7,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from edap.journal_trade_ledger import journal_trade_ledger
-from edap.control_room.rendering import journal_ledger_lines
+from edcr.journal_trade_ledger import journal_trade_ledger
+from edcr.control_room.rendering import journal_ledger_lines
 from tools.haul_stats import main
 
 SINCE = datetime(2026, 11, 9, tzinfo=timezone.utc)

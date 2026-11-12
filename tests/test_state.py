@@ -6,7 +6,7 @@ from time import time
 import os
 import unittest
 
-from edap.state import JournalWatcher, get_latest_journal_log, read_ship_state
+from edcr.state import JournalWatcher, get_latest_journal_log, read_ship_state
 
 
 def _write_lines(path: Path, lines: list[str]) -> None:

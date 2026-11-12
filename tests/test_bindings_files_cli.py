@@ -10,7 +10,7 @@ from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
 from tools import bindings_files
-from edap.bindings_inventory import BindingsFileEntry
+from edcr.bindings_inventory import BindingsFileEntry
 
 
 CUSTOM_XML = """<?xml version="1.0" encoding="UTF-8" ?>

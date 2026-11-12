@@ -63,6 +63,6 @@ jobs:
       - name: Install dependencies
         run: uv sync --compile-bytecode
       - name: Precompile project bytecode
-        run: uv run python3 -m compileall -q edap tests tools control_room.py
+        run: uv run python3 -m compileall -q edcr tests tools control_room.py
       - name: Guard full test-suite timing
         run: uv run python3 tools/check_test_timing.py discover --start-directory tests --max-seconds 5

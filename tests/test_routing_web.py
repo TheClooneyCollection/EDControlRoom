@@ -4,14 +4,14 @@ import json
 import unittest
 from pathlib import Path
 
-from edap.routing.types import Route
-from edap.routing.web import (
+from edcr.routing.types import Route
+from edcr.routing.web import (
     available_fixtures,
     build_live_comparison,
     comparison_to_payload,
     load_fixture_comparison,
 )
-from edap.spansh_router import parse_spansh_result
+from edcr.spansh_router import parse_spansh_result
 
 FIXTURES = Path(__file__).parent / "fixtures" / "routing"
 
@@ -67,7 +67,7 @@ class LiveComparisonTests(unittest.TestCase):
 
         def fake_read(path: Path) -> Route:
             self.assertEqual(path.name, "NavRoute.json")
-            from edap.routing.navroute import read_navroute
+            from edcr.routing.navroute import read_navroute
             return read_navroute(FIXTURES / "navroute_hd232819_xinca.json")
 
         comparison = build_live_comparison(

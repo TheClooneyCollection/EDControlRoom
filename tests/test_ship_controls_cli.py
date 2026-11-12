@@ -7,9 +7,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tools import ship_controls
-from edap.config import load_config
-from edap.runtime import LoadedConfig
-from edap.timing import TimingSampler
+from edcr.config import load_config
+from edcr.runtime import LoadedConfig
+from edcr.timing import TimingSampler
 
 
 class _InputController:

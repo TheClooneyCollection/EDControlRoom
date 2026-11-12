@@ -4,7 +4,7 @@ target = "foreground"
 [input.wine_helper]
 wine_path = ""
 bottle = ""
-helper_path = 'C:\edap\edap_input_helper.exe'
+helper_path = 'C:\edcr\edcr_input_helper.exe'
 process_name = "EliteDangerous64.exe"
 port = 47811
 launch = "managed"

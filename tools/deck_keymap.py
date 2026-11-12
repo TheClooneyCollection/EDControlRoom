@@ -9,10 +9,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from edap.binding_editor import apply_slot_change, parse_bindings_tree, write_bindings
-from edap.config import ConfigError, DEFAULT_CONFIG_PATH
-from edap.deck_keymap import DECK_KEYMAP, plan_deck_keymap
-from edap.runtime import build_runtime_context, load_config_with_fallback
+from edcr.binding_editor import apply_slot_change, parse_bindings_tree, write_bindings
+from edcr.config import ConfigError, DEFAULT_CONFIG_PATH
+from edcr.deck_keymap import DECK_KEYMAP, plan_deck_keymap
+from edcr.runtime import build_runtime_context, load_config_with_fallback
 
 
 def main(argv: list[str] | None = None) -> int:

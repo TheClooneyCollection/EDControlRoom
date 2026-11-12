@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from edap.iteration_logs import (
+from edcr.iteration_logs import (
     AREA_WIDTH,
     LEGACY_SESSION_BASELINE,
     build_iteration_log_filename,

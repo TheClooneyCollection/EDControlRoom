@@ -10,10 +10,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from edap.config import load_config
-from edap.eddn.listener import EddnListener, open_zmq_socket
-from edap.eddn.service import status_line
-from edap.eddn.store import EddnStore
+from edcr.config import load_config
+from edcr.eddn.listener import EddnListener, open_zmq_socket
+from edcr.eddn.service import status_line
+from edcr.eddn.store import EddnStore
 
 
 def main(argv: list[str] | None) -> int:

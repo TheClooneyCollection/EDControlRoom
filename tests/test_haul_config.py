@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from edap.haul_config import HaulConfigError, load_haul_config
+from edcr.haul_config import HaulConfigError, load_haul_config
 
 
 class HaulConfigTests(unittest.TestCase):

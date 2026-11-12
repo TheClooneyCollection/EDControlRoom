@@ -16,7 +16,7 @@ warnings.filterwarnings(
 )
 
 
-from edap.config import (
+from edcr.config import (
     AppConfig,
     ControlRoomConfig,
     ControlsConfig,
@@ -25,9 +25,9 @@ from edap.config import (
     RuntimeConfig,
     TTSConfig,
 )
-from edap.control_room.protocol.events import AnnouncementEvent
-from edap.control_room.protocol.sink import ControlRoomEventSink
-from edap.control_room.dependencies import (
+from edcr.control_room.protocol.events import AnnouncementEvent
+from edcr.control_room.protocol.sink import ControlRoomEventSink
+from edcr.control_room.dependencies import (
     ActivityLogReadModel,
     CommandHistoryReadModel,
     ControlRoomDataReadModel,
@@ -35,10 +35,10 @@ from edap.control_room.dependencies import (
     ServerStatusReadModel,
     SessionReadModel,
 )
-from edap.control_room.models import HaulStats, MarketData, ShipState
-from edap.control_room.protocol import ActivityLogEntry
-from edap.control_room.server import app as server_app
-from edap.control_room.server.app import (
+from edcr.control_room.models import HaulStats, MarketData, ShipState
+from edcr.control_room.protocol import ActivityLogEntry
+from edcr.control_room.server import app as server_app
+from edcr.control_room.server.app import (
     BROWSER_PROBE_URL_PATH,
     CONTROL_ROOM_MESSAGE_SCHEMA,
     HAUL_WEB_ENTRY_URL_PATH,
@@ -52,20 +52,20 @@ from edap.control_room.server.app import (
     _render_haul_web_html,
     build_observer_server_app,
 )
-from edap.control_room.server.auth import SharedAccessTokenAuth
-from edap.control_room.server.broker import InMemoryObserverSessionBroker
-from edap.control_room.server.commands import ObserverSessionCommandHandler
-from edap.control_room.server.host import HeadlessControlRoomHost
+from edcr.control_room.server.auth import SharedAccessTokenAuth
+from edcr.control_room.server.broker import InMemoryObserverSessionBroker
+from edcr.control_room.server.commands import ObserverSessionCommandHandler
+from edcr.control_room.server.host import HeadlessControlRoomHost
 from tests.shared_loop import TestClient
 from tests.test_control_room import _FakeVersionSource
-from edap.control_room.server.sink import DataHydrateFanoutSink, ServerActivityLogSink
-from edap.control_room.server.state import ControlRoomServerState
-from edap.inara.trade_routes import TradeRoute, TradeRouteSearchResult
-from edap.routing.route_cache import RouteRequestKey
-from edap.routing.types import Route, RouteWaypoint, SpanshMetadata
-from edap.runtime import ResolvedPath, RuntimeContext
-from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler
-from edap.tts import AnnouncementId, NullSpeechBackend
+from edcr.control_room.server.sink import DataHydrateFanoutSink, ServerActivityLogSink
+from edcr.control_room.server.state import ControlRoomServerState
+from edcr.inara.trade_routes import TradeRoute, TradeRouteSearchResult
+from edcr.routing.route_cache import RouteRequestKey
+from edcr.routing.types import Route, RouteWaypoint, SpanshMetadata
+from edcr.runtime import ResolvedPath, RuntimeContext
+from edcr.timing import TimingChannelConfig, TimingConfig, TimingSampler
+from edcr.tts import AnnouncementId, NullSpeechBackend
 
 
 def _make_timing_config() -> TimingConfig:
@@ -124,9 +124,9 @@ def _make_config(journal_dir: Path) -> AppConfig:
 
 def _facts_db(directory: str, recent_markets: Path, events: list[dict]) -> Path:
     """A market store holding our recorded markets (with their Market.json types) and these journal events."""
-    from edap.eddn.game_markets import import_game_markets
-    from edap.eddn.messages import journal_event_updates
-    from edap.eddn.store import EddnStore
+    from edcr.eddn.game_markets import import_game_markets
+    from edcr.eddn.messages import journal_event_updates
+    from edcr.eddn.store import EddnStore
 
     path = Path(directory) / "markets.sqlite3"
     store = EddnStore.open(path)
@@ -809,7 +809,7 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(response.headers["cache-control"], "no-store")
 
     def test_markets_page_lists_recent_markets_and_compares_two(self) -> None:
-        from edap.recent_markets import record_market_json
+        from edcr.recent_markets import record_market_json
 
         def market(market_id: int, station: str, timestamp: str, items: list[dict]) -> dict:
             return {"MarketID": market_id, "StationName": station, "StarSystem": "Sol", "StationType": "Orbis",
@@ -885,9 +885,9 @@ class ControlRoomServerTests(unittest.TestCase):
     def test_market_compare_estimates_trip_time_from_the_store_and_measures_haul_runs(self) -> None:
         import json
 
-        from edap.eddn.routes import TimeModel
-        from edap.recent_markets import record_market_json
-        from edap.trade_trip import StationFacts, estimate_trip
+        from edcr.eddn.routes import TimeModel
+        from edcr.recent_markets import record_market_json
+        from edcr.trade_trip import StationFacts, estimate_trip
 
         def run(station_1: str, station_2: str, duration_s: float, ship_id: int | None) -> dict:
             row = {"schema": 1, "kind": "two_way", "status": "completed", "started_at": "2026-11-10T09:00:00Z",
@@ -955,8 +955,8 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual((bad.status_code, bad_window.status_code), (400, 400))
 
     def test_market_compare_asks_ardent_only_for_what_the_store_lacks(self) -> None:
-        from edap.recent_markets import record_market_json
-        from edap.trade_trip import PartialFacts
+        from edcr.recent_markets import record_market_json
+        from edcr.trade_trip import PartialFacts
 
         asked: list[str] = []
 
@@ -1274,8 +1274,8 @@ class ControlRoomServerTests(unittest.TestCase):
         )
 
         with (
-            patch("edap.control_room.server.app.search_trade_routes", return_value=result) as search,
-            patch("edap.control_room.server.app.save_haul_search_config") as save_defaults,
+            patch("edcr.control_room.server.app.search_trade_routes", return_value=result) as search,
+            patch("edcr.control_room.server.app.save_haul_search_config") as save_defaults,
         ):
             response = _handle_session_message(
                 {
@@ -1341,8 +1341,8 @@ class ControlRoomServerTests(unittest.TestCase):
             )
 
         with (
-            patch("edap.control_room.server.app.search_trade_routes", return_value=result) as inara,
-            patch("edap.control_room.server.app.save_haul_search_config"),
+            patch("edcr.control_room.server.app.search_trade_routes", return_value=result) as inara,
+            patch("edcr.control_room.server.app.save_haul_search_config"),
         ):
             response = search("yes_exclude_odyssey")
             invalid = search("sometimes")
@@ -1358,8 +1358,8 @@ class ControlRoomServerTests(unittest.TestCase):
         observer = broker.register_observer("bridge-ipad")
 
         with (
-            patch("edap.control_room.server.app.search_trade_routes") as search,
-            patch("edap.control_room.server.app.save_haul_search_config"),
+            patch("edcr.control_room.server.app.search_trade_routes") as search,
+            patch("edcr.control_room.server.app.save_haul_search_config"),
         ):
             search.return_value = TradeRouteSearchResult(
                 system_name="Sol",
@@ -1484,8 +1484,8 @@ class ControlRoomServerTests(unittest.TestCase):
             return result
 
         with (
-            patch("edap.control_room.server.app.search_trade_routes", side_effect=fake_search_trade_routes),
-            patch("edap.control_room.server.app.save_haul_search_config"),
+            patch("edcr.control_room.server.app.search_trade_routes", side_effect=fake_search_trade_routes),
+            patch("edcr.control_room.server.app.save_haul_search_config"),
         ):
             with TestClient(app) as client:
                 with client.websocket_connect(

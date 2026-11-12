@@ -5,11 +5,11 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from edap.hub.discovery import (
+from edcr.hub.discovery import (
     DiscoveredHub, HubAdvert, KnownHub, NoHubFound, advert_from_record, advert_properties, advertise_address,
     dnssd_browse,
 )
-from edap.hub.peer import PeerLink
+from edcr.hub.peer import PeerLink
 from tests.test_hub import HUB_NODE, PEER_NODE, QuietRelay, rig
 
 HOME = HubAdvert(hub_id=HUB_NODE.node_id, name="Home", version="1.0.0", address="192.168.1.20", port=8765)

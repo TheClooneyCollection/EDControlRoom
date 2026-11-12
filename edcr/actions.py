@@ -1,0 +1,101 @@
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+from time import sleep
+from typing import Callable
+
+from edcr.binding_lookup import BindingLookup, BindingLookupResult, NormalizedBinding
+from edcr.platform.input.base import InputController
+
+
+@dataclass(frozen=True)
+class ActionDispatchResult:
+    action: str
+    status: str
+    binding: NormalizedBinding | None = None
+    repeat: int = 0
+    hold_s: float = 0.0
+    reason: str | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        payload = asdict(self)
+        if self.binding is not None:
+            payload["binding"] = self.binding.to_dict()
+        return payload
+
+
+class ActionDispatcher:
+    def __init__(
+        self,
+        binding_lookup: BindingLookup,
+        input_controller: InputController,
+        *,
+        repeat_delay_s: float = 0.1,
+        sleeper: Callable[[float], None] = sleep,
+    ) -> None:
+        self._binding_lookup = binding_lookup
+        self._input_controller = input_controller
+        self._repeat_delay_s = repeat_delay_s
+        self._sleeper = sleeper
+
+    def tap_action(self, action: str, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        if repeat < 1:
+            raise ValueError("repeat must be at least 1")
+        if hold_s < 0:
+            raise ValueError("hold_s must be non-negative")
+
+        resolved = self._binding_lookup.resolve(action)
+        if resolved.status != "ok" or resolved.binding is None:
+            return self._result_from_lookup(resolved, repeat=repeat, hold_s=hold_s)
+
+        for index in range(repeat):
+            self._input_controller.tap_key(
+                resolved.binding.key,
+                modifier=resolved.binding.modifier,
+                hold_s=hold_s,
+            )
+            if index < repeat - 1:
+                self._sleeper(self._repeat_delay_s)
+        return ActionDispatchResult(
+            action=action,
+            status="ok",
+            binding=resolved.binding,
+            repeat=repeat,
+            hold_s=hold_s,
+        )
+
+    def type_text(self, text: str, char_delay_s: float = 0.05) -> None:
+        self._input_controller.type_text(text, char_delay_s=char_delay_s)
+
+    def tap_key(self, key: str, modifier: str | None = None, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        if repeat < 1:
+            raise ValueError("repeat must be at least 1")
+        if hold_s < 0:
+            raise ValueError("hold_s must be non-negative")
+
+        for index in range(repeat):
+            self._input_controller.tap_key(key, modifier=modifier, hold_s=hold_s)
+            if index < repeat - 1:
+                self._sleeper(self._repeat_delay_s)
+        return ActionDispatchResult(
+            action=f"raw:{key}",
+            status="ok",
+            binding=NormalizedBinding(key=key, modifier=modifier),
+            repeat=repeat,
+            hold_s=hold_s,
+        )
+
+    def _result_from_lookup(
+        self,
+        resolved: BindingLookupResult,
+        repeat: int,
+        hold_s: float,
+    ) -> ActionDispatchResult:
+        return ActionDispatchResult(
+            action=resolved.action,
+            status=resolved.status,
+            binding=resolved.binding,
+            repeat=repeat,
+            hold_s=hold_s,
+            reason=resolved.reason,
+        )

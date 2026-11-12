@@ -5,7 +5,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from edap.config import (
+from edcr.config import (
     AppConfig,
     ControlRoomConfig,
     ControlsConfig,
@@ -14,22 +14,22 @@ from edap.config import (
     RuntimeConfig,
     TTSConfig,
 )
-from edap.control_room.backend import ControlRoomBackend, LocalControlRoomBackend
-from edap.control_room.app import ControlRoomApp
+from edcr.control_room.backend import ControlRoomBackend, LocalControlRoomBackend
+from edcr.control_room.app import ControlRoomApp
 from tests.test_control_room import _CachedThemeVariables, _FakeVersionSource
-from edap.control_room.dependencies import LocalControlRoomDataSource
-from edap.control_room.models import ReplaySelection
-from edap.control_room.protocol import (
+from edcr.control_room.dependencies import LocalControlRoomDataSource
+from edcr.control_room.models import ReplaySelection
+from edcr.control_room.protocol import (
     ActivityLogEntry,
     build_activity_log_entry,
 )
-from edap.control_room.protocol.events import ActivityLogAppendedEvent, AnnouncementEvent
-from edap.control_room.protocol.sink import ControlRoomEventSink
-from edap.control_room_state import CommandHistoryEntry
-from edap.inara.trade_routes import TradeRoute
-from edap.runtime import ResolvedPath, RuntimeContext
-from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler
-from edap.tts import AnnouncementId
+from edcr.control_room.protocol.events import ActivityLogAppendedEvent, AnnouncementEvent
+from edcr.control_room.protocol.sink import ControlRoomEventSink
+from edcr.control_room_state import CommandHistoryEntry
+from edcr.inara.trade_routes import TradeRoute
+from edcr.runtime import ResolvedPath, RuntimeContext
+from edcr.timing import TimingChannelConfig, TimingConfig, TimingSampler
+from edcr.tts import AnnouncementId
 
 
 def _make_timing_config() -> TimingConfig:

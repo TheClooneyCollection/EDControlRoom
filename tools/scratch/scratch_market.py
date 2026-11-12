@@ -28,7 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from edap.runtime import build_runtime_context, load_config_with_fallback
+from edcr.runtime import build_runtime_context, load_config_with_fallback
 
 _BRACKET_LABEL = {0: "none", 1: "low", 2: "med", 3: "high"}
 

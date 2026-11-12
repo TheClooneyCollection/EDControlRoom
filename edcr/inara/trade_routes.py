@@ -1,0 +1,560 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, UTC
+import math
+import re
+import urllib.parse
+from pathlib import Path
+from typing import Any, Callable, Mapping
+
+from edcr.haul_search_config import DEFAULT_HAUL_SEARCH_DEFAULTS_PATH, load_haul_search_config
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_DEFAULT_PROFILE_DIR = _REPO_ROOT / "artifacts" / "playwright" / "inara-profile"
+_BASE_TRADE_ROUTES_URL = "https://inara.cz/elite/market-traderoutes/"
+
+# These parameters are the operator-supplied starting defaults from the initial
+# Praea Euq AK-A d25 experiment. The `pi14`/`pi15` passthrough defaults remain
+# pinned until the remaining Powerplay mapping is confirmed live.
+DEFAULT_TRADE_ROUTE_QUERY_PARAMS: dict[str, str] = {
+    "pi14": "0",
+    "pi15": "0",
+}
+
+DEFAULT_TRADE_ROUTE_SEARCH_PARAMS: dict[str, str] = load_haul_search_config(DEFAULT_HAUL_SEARCH_DEFAULTS_PATH)
+
+_LANDING_PAD_TO_QUERY = {
+    "small": "1",
+    "medium": "2",
+    "large": "3",
+}
+_LANDING_PAD_FROM_QUERY = {value: key for key, value in _LANDING_PAD_TO_QUERY.items()}
+
+_SURFACE_STATIONS_TO_QUERY = {
+    "yes_with_odyssey": "0",
+    "no": "1",
+    "yes_exclude_odyssey": "2",
+}
+_SURFACE_STATIONS_FROM_QUERY = {
+    value: key for key, value in _SURFACE_STATIONS_TO_QUERY.items()
+}
+_SURFACE_STATIONS_ALIASES = {
+    "no": "no",
+    "n": "no",
+    "yes": "yes_with_odyssey",
+    "y": "yes_with_odyssey",
+    "yes_with_odyssey": "yes_with_odyssey",
+    "with_odyssey": "yes_with_odyssey",
+    "odyssey": "yes_with_odyssey",
+    "yes_exclude_odyssey": "yes_exclude_odyssey",
+    "exclude_odyssey": "yes_exclude_odyssey",
+    "without_odyssey": "yes_exclude_odyssey",
+}
+
+
+def parse_surface_stations(value: str, *, default: str) -> str | None:
+    """Inara's surface station choice (`no`, `yes_with_odyssey`, `yes_exclude_odyssey`), or None if unknown."""
+    raw = value.strip().lower().replace(" ", "_").replace("-", "_")
+    if not raw:
+        return default
+    return _SURFACE_STATIONS_ALIASES.get(raw)
+
+_ORDER_BY_TO_QUERY = {
+    "best_profit": "0",
+    "last_update": "1",
+    "route_distance": "2",
+    "distance": "3",
+    "best_profit_per_hour_estimate": "4",
+}
+_ORDER_BY_FROM_QUERY = {value: key for key, value in _ORDER_BY_TO_QUERY.items()}
+
+_ENDPOINT_RE = re.compile(r"^(FROM|TO)\s+(.+?)\s+\|\s+(.+)$")
+_FIELD_LABEL_RE = re.compile(r"^[A-Z][A-Z0-9 %/+.-]*(?: [A-Z0-9 %/+.-]+)*$")
+_FIELD_LABELS = (
+    "PROFIT PER HOUR",
+    "PROFIT PER TRIP",
+    "PROFIT PER UNIT",
+    "ROUTE DISTANCE",
+    "STATION DISTANCE",
+    "SELL PRICE",
+    "BUY PRICE",
+    "UPDATED",
+    "DISTANCE",
+    "SUPPLY",
+    "DEMAND",
+    "MARGIN",
+    "SELL",
+    "BUY",
+)
+
+_FIELD_ALIASES = {
+    "PROFIT PER LOAD": "PROFIT PER TRIP",
+    "LOAD PROFIT": "PROFIT PER TRIP",
+    "TRIP PROFIT": "PROFIT PER TRIP",
+    "ROUTE PROFIT": "PROFIT PER TRIP",
+    "PROFIT/HOUR": "PROFIT PER HOUR",
+    "HOURLY PROFIT": "PROFIT PER HOUR",
+}
+
+
+@dataclass(frozen=True)
+class TradeRoute:
+    index: int
+    from_station: str
+    from_system: str
+    to_station: str
+    to_system: str
+    source_buy_commodity: str | None = None
+    target_buy_commodity: str | None = None
+    from_station_distance: str | None = None
+    to_station_distance: str | None = None
+    distance_from_system: str | None = None
+    route_distance: str | None = None
+    profit_per_unit: str | None = None
+    profit_per_trip: str | None = None
+    profit_per_hour: str | None = None
+    from_supply: str | None = None
+    from_demand: str | None = None
+    to_supply: str | None = None
+    to_demand: str | None = None
+    updated: str | None = None
+    from_manual_landing: bool = False
+    to_manual_landing: bool = False
+    raw_text: str = ""
+    url_links: tuple[str, ...] = ()
+
+
+def route_flag_from_payload(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def manual_landing_from_payload(payload: Mapping[str, object], side: str) -> bool:
+    """The `from` or `to` manual landing flag; `<side>_on_land` is its old name in saved routes."""
+    return route_flag_from_payload(payload.get(f"{side}_manual_landing", payload.get(f"{side}_on_land")))
+
+
+@dataclass(frozen=True)
+class TradeRouteSearchResult:
+    system_name: str
+    query_url: str
+    searched_at: str
+    routes: tuple[TradeRoute, ...]
+
+
+DebugHook = Callable[..., None]
+
+
+def trade_route_search_defaults() -> dict[str, str]:
+    return dict(DEFAULT_TRADE_ROUTE_SEARCH_PARAMS)
+
+
+def _as_bool_string(value: str) -> str:
+    return "true" if value.strip().lower() in {"1", "true", "y", "yes"} else "false"
+
+
+def _normalize_max_station_distance_ls(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized == "any":
+        return "0"
+    if normalized == "0":
+        return "any"
+    return value.strip()
+
+
+def _ceil_route_distance_ly(value: str) -> str:
+    # Inara truncates `pi2` to an integer, so 17.2 Ly would drop a 17.05 Ly route.
+    try:
+        distance = float(value)
+    except ValueError:
+        return value
+    if not math.isfinite(distance):
+        return value
+    return str(math.ceil(distance))
+
+
+def _clean_search_params(params: Mapping[str, str] | None) -> dict[str, str]:
+    cleaned = trade_route_search_defaults()
+    if params is None:
+        return cleaned
+    for key, value in params.items():
+        if value is None:
+            continue
+        cleaned[str(key)] = str(value).strip()
+    cleaned["include_round_trips"] = _as_bool_string(cleaned.get("include_round_trips", "true"))
+    cleaned["max_station_distance_ls"] = _normalize_max_station_distance_ls(
+        cleaned.get("max_station_distance_ls", "")
+    )
+    return cleaned
+
+
+def build_trade_route_query_params(search_params: Mapping[str, str] | None = None) -> dict[str, str]:
+    params = _clean_search_params(search_params)
+    query_params = dict(DEFAULT_TRADE_ROUTE_QUERY_PARAMS)
+    query_params["pi10"] = params["cargo_capacity"]
+    query_params["pi2"] = _ceil_route_distance_ly(params["max_route_distance_ly"])
+    query_params["pi5"] = params["max_price_age_hours"]
+    query_params["pi3"] = _LANDING_PAD_TO_QUERY.get(params["min_landing_pad"], "3")
+    query_params["pi9"] = params["max_station_distance_ls"]
+    query_params["pi4"] = _SURFACE_STATIONS_TO_QUERY.get(params["use_surface_stations"], "1")
+    query_params["pi7"] = params["min_supply"]
+    query_params["pi12"] = params["min_demand"]
+    query_params["pi1"] = _ORDER_BY_TO_QUERY.get(params["order_by"], "4")
+    if params["include_round_trips"] == "true":
+        query_params["pi8"] = "1"
+    else:
+        query_params.pop("pi8", None)
+    return query_params
+
+
+def parse_trade_routes_url(query_url: str) -> tuple[str, dict[str, str]]:
+    parsed = urllib.parse.urlparse(query_url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("Inara trade-route URL must start with http:// or https://.")
+    if parsed.netloc.lower() != "inara.cz":
+        raise ValueError("Only inara.cz trade-route URLs are supported.")
+    if not parsed.path.rstrip("/").endswith("/elite/market-traderoutes"):
+        raise ValueError("URL must point to Inara's /elite/market-traderoutes page.")
+
+    query = urllib.parse.parse_qs(parsed.query)
+    system_name = (query.get("ps1", [""])[0] or "").strip()
+    if not system_name:
+        raise ValueError("Inara trade-route URL is missing the ps1 source-system parameter.")
+
+    return system_name, {
+        "cargo_capacity": (query.get("pi10", [""])[0] or DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["cargo_capacity"]).strip(),
+        "max_route_distance_ly": (query.get("pi2", [""])[0] or DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["max_route_distance_ly"]).strip(),
+        "max_price_age_hours": (query.get("pi5", [""])[0] or DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["max_price_age_hours"]).strip(),
+        "min_landing_pad": _LANDING_PAD_FROM_QUERY.get(
+            (query.get("pi3", [""])[0] or "").strip(),
+            DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["min_landing_pad"],
+        ),
+        "max_station_distance_ls": _normalize_max_station_distance_ls(
+            (query.get("pi9", [""])[0] or DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["max_station_distance_ls"]).strip()
+        ),
+        "use_surface_stations": _SURFACE_STATIONS_FROM_QUERY.get(
+            (query.get("pi4", [""])[0] or "").strip(),
+            DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["use_surface_stations"],
+        ),
+        "min_supply": (query.get("pi7", [""])[0] or DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["min_supply"]).strip(),
+        "min_demand": (query.get("pi12", [""])[0] or DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["min_demand"]).strip(),
+        "include_round_trips": "true" if (query.get("pi8", [""])[0] or "").strip() == "1" else "false",
+        "order_by": _ORDER_BY_FROM_QUERY.get(
+            (query.get("pi1", [""])[0] or "").strip(),
+            DEFAULT_TRADE_ROUTE_SEARCH_PARAMS["order_by"],
+        ),
+    }
+
+
+def _load_sync_playwright() -> Any:
+    try:
+        from playwright.sync_api import sync_playwright
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "Playwright is not installed. Run `uv sync --extra browsing` and "
+            "`uv run playwright install chromium` first."
+        ) from exc
+    return sync_playwright
+
+
+def _clean_line(line: str) -> str:
+    line = line.replace("\xa0", " ").replace("\u200b", "").strip()
+    return re.sub(r"\s+", " ", line)
+
+
+def _clean_endpoint_part(value: str) -> str:
+    value = _clean_line(value)
+    value = re.sub(r"[\ue000-\uf8ff\ufe0e\ufe0f]", "", value)
+    value = re.sub(r"^[^\w]+", "", value)
+    value = re.sub(r"\s+[^\w]+$", "", value)
+    return value.strip()
+
+
+def _extract_key_value_pairs(lines: list[str]) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    idx = 0
+    while idx + 1 < len(lines):
+        label = lines[idx]
+        canonical_label = _FIELD_ALIASES.get(label, label)
+        if _FIELD_LABEL_RE.fullmatch(label):
+            fields[canonical_label] = lines[idx + 1]
+            idx += 2
+            continue
+        idx += 1
+    for line in lines:
+        for label in _FIELD_LABELS:
+            prefix = f"{label} "
+            if line.startswith(prefix):
+                fields[label] = line[len(prefix):].strip()
+                break
+        else:
+            for alias, canonical_label in _FIELD_ALIASES.items():
+                prefix = f"{alias} "
+                if line.startswith(prefix):
+                    fields[canonical_label] = line[len(prefix):].strip()
+                    break
+    return fields
+
+
+def _extract_repeated_field_values(lines: list[str], label: str) -> list[str]:
+    values: list[str] = []
+    prefix = f"{label} "
+    for index, line in enumerate(lines):
+        if line == label and index + 1 < len(lines):
+            next_line = lines[index + 1]
+            if not _FIELD_LABEL_RE.fullmatch(next_line):
+                values.append(next_line)
+        elif line.startswith(prefix):
+                values.append(line[len(prefix):].strip())
+    return values
+
+
+def _extract_trade_commodity_values(lines: list[str], label: str) -> list[str]:
+    values: list[str] = []
+    prefix = f"{label} "
+    metric_prefix = f"{label} PRICE "
+    for index, line in enumerate(lines):
+        if line == label and index + 1 < len(lines):
+            next_line = lines[index + 1]
+            if not _FIELD_LABEL_RE.fullmatch(next_line):
+                values.append(next_line)
+        elif line.startswith(metric_prefix):
+            continue
+        elif line.startswith(prefix):
+            values.append(line[len(prefix):].strip())
+    return values
+
+
+def _row_to_route(row: dict[str, Any]) -> TradeRoute:
+    lines = [_clean_line(line) for line in row.get("lines", []) if _clean_line(line)]
+    fields = _extract_key_value_pairs(lines)
+
+    from_station = "?"
+    from_system = "?"
+    to_station = "?"
+    to_system = "?"
+    for index, line in enumerate(lines):
+        match = _ENDPOINT_RE.match(line)
+        if not match:
+            continue
+        side, station, system = match.groups()
+        if side == "FROM":
+            from_station = _clean_endpoint_part(station)
+            from_system = _clean_endpoint_part(system)
+        else:
+            to_station = _clean_endpoint_part(station)
+            to_system = _clean_endpoint_part(system)
+    buy_commodities = _extract_trade_commodity_values(lines, "BUY")
+    station_distances = _extract_repeated_field_values(lines, "STATION DISTANCE")
+    supply_values = _extract_repeated_field_values(lines, "SUPPLY")
+    demand_values = _extract_repeated_field_values(lines, "DEMAND")
+
+    return TradeRoute(
+        index=int(row.get("index", 0) or 0),
+        from_station=from_station,
+        from_system=from_system,
+        to_station=to_station,
+        to_system=to_system,
+        source_buy_commodity=buy_commodities[0] if buy_commodities else None,
+        target_buy_commodity=buy_commodities[-1] if len(buy_commodities) > 1 else None,
+        from_station_distance=station_distances[0] if station_distances else None,
+        to_station_distance=station_distances[1] if len(station_distances) > 1 else None,
+        distance_from_system=fields.get("DISTANCE"),
+        route_distance=fields.get("ROUTE DISTANCE"),
+        profit_per_unit=fields.get("PROFIT PER UNIT"),
+        profit_per_trip=fields.get("PROFIT PER TRIP"),
+        profit_per_hour=fields.get("PROFIT PER HOUR"),
+        from_supply=supply_values[0] if supply_values else None,
+        from_demand=demand_values[0] if demand_values else None,
+        to_supply=supply_values[1] if len(supply_values) > 1 else None,
+        to_demand=demand_values[1] if len(demand_values) > 1 else None,
+        updated=fields.get("UPDATED"),
+        raw_text=str(row.get("text", "")),
+        url_links=tuple(str(link) for link in row.get("links", [])),
+    )
+
+
+def _extract_rows(page: Any) -> list[dict[str, Any]]:
+    return page.locator("div.mainblock.traderoutebox").evaluate_all(
+        """
+        (nodes) => nodes.map((node, index) => ({
+          index: index + 1,
+          text: (node.innerText || "").replace(/\\u00a0/g, " ").trim(),
+          lines: (node.innerText || "")
+            .replace(/\\u00a0/g, " ")
+            .split(/\\n+/)
+            .map((line) => line.trim())
+            .filter(Boolean),
+          links: Array.from(node.querySelectorAll("a[href]"), (anchor) => anchor.href),
+        }))
+        """
+    )
+
+
+def _emit_debug(debug_hook: DebugHook | None, event: str, /, **fields: object) -> None:
+    if debug_hook is None:
+        return
+    debug_hook(event, **fields)
+
+
+def _challenge_present(page: Any) -> bool:
+    text = page.locator("body").inner_text(timeout=1000)
+    return "Access check required" in text or "Confirm and continue" in text
+
+
+def _wait_for_route_rows(
+    page: Any,
+    timeout_seconds: float,
+    *,
+    show_browser: bool,
+    debug_hook: DebugHook | None = None,
+) -> list[dict[str, Any]]:
+    import time
+
+    deadline = time.monotonic() + max(timeout_seconds, 0.0)
+    challenge_logged = False
+    attempt = 0
+    while time.monotonic() < deadline:
+        attempt += 1
+        rows = _extract_rows(page)
+        first_row = rows[0] if rows else None
+        _emit_debug(
+            debug_hook,
+            "inara_wait_rows_poll",
+            attempt=attempt,
+            row_count=len(rows),
+            first_row_text=(str(first_row.get("text", "")) if first_row is not None else ""),
+        )
+        if rows:
+            return rows
+        if not challenge_logged and _challenge_present(page):
+            challenge_logged = True
+            _emit_debug(debug_hook, "inara_wait_rows_challenge_detected", attempt=attempt)
+            if show_browser:
+                print(
+                    "Inara access check detected. Complete it in the opened browser window; "
+                    "the fetch will keep waiting for route rows."
+                )
+            else:
+                raise RuntimeError(
+                    "Inara access check detected in headless mode. Retry with a visible browser "
+                    "session to complete the check first."
+                )
+        page.wait_for_timeout(1000)
+    raise RuntimeError("Timed out waiting for Inara trade route rows.")
+
+
+def build_trade_routes_url(
+    system_name: str,
+    *,
+    query_params: dict[str, str] | None = None,
+) -> str:
+    params = build_trade_route_query_params(query_params)
+    params["ps1"] = system_name
+    return f"{_BASE_TRADE_ROUTES_URL}?{urllib.parse.urlencode(params)}"
+
+
+def fetch_trade_routes(
+    query_url: str,
+    *,
+    timeout_seconds: float = 20.0,
+    profile_dir: Path | None = None,
+    show_browser: bool = False,
+    browser_path: str | None = None,
+    debug_hook: DebugHook | None = None,
+) -> tuple[TradeRoute, ...]:
+    sync_playwright = _load_sync_playwright()
+    resolved_profile_dir = profile_dir or _DEFAULT_PROFILE_DIR
+    resolved_profile_dir.mkdir(parents=True, exist_ok=True)
+    _emit_debug(
+        debug_hook,
+        "inara_fetch_start",
+        query_url=query_url,
+        timeout_seconds=timeout_seconds,
+        profile_dir=str(resolved_profile_dir),
+        show_browser=show_browser,
+        browser_path=browser_path,
+    )
+
+    with sync_playwright() as playwright:
+        context = playwright.chromium.launch_persistent_context(
+            user_data_dir=str(resolved_profile_dir),
+            headless=not show_browser,
+            executable_path=browser_path,
+        )
+        try:
+            page = context.pages[0] if context.pages else context.new_page()
+            page.goto(query_url, wait_until="domcontentloaded")
+            rows = _wait_for_route_rows(
+                page,
+                timeout_seconds,
+                show_browser=show_browser,
+                debug_hook=debug_hook,
+            )
+            first_row = rows[0] if rows else None
+            _emit_debug(
+                debug_hook,
+                "inara_fetch_rows_ready",
+                row_count=len(rows),
+                first_row_text=(str(first_row.get("text", "")) if first_row is not None else ""),
+            )
+            routes: list[TradeRoute] = []
+            for row in rows:
+                route = _row_to_route(row)
+                routes.append(route)
+                _emit_debug(
+                    debug_hook,
+                    "inara_row_transformed",
+                    route_index=route.index,
+                    profit_per_unit=route.profit_per_unit,
+                    profit_per_trip=route.profit_per_trip,
+                    profit_per_hour=route.profit_per_hour,
+                    raw_text=route.raw_text,
+                )
+            return tuple(routes)
+        finally:
+            context.close()
+
+
+def search_trade_routes(
+    system_name: str,
+    *,
+    timeout_seconds: float = 20.0,
+    profile_dir: Path | None = None,
+    show_browser: bool = False,
+    browser_path: str | None = None,
+    query_params: dict[str, str] | None = None,
+    debug_hook: DebugHook | None = None,
+) -> TradeRouteSearchResult:
+    query_url = build_trade_routes_url(system_name, query_params=query_params)
+    routes = fetch_trade_routes(
+        query_url,
+        timeout_seconds=timeout_seconds,
+        profile_dir=profile_dir,
+        show_browser=show_browser,
+        browser_path=browser_path,
+        debug_hook=debug_hook,
+    )
+    result = TradeRouteSearchResult(
+        system_name=system_name,
+        query_url=query_url,
+        searched_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        routes=routes,
+    )
+    first_route = routes[0] if routes else None
+    _emit_debug(
+        debug_hook,
+        "inara_search_complete",
+        system_name=system_name,
+        query_url=query_url,
+        route_count=len(routes),
+        first_route_profit_per_trip=(
+            first_route.profit_per_trip if first_route is not None else None
+        ),
+        first_route_profit_per_hour=(
+            first_route.profit_per_hour if first_route is not None else None
+        ),
+    )
+    return result

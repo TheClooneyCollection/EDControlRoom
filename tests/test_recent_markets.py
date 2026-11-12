@@ -5,8 +5,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from edap.market_compare import compare_markets
-from edap.recent_markets import (
+from edcr.market_compare import compare_markets
+from edcr.recent_markets import (
     commodity_key,
     load_recent_markets,
     market_items,

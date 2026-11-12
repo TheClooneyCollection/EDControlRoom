@@ -19,9 +19,9 @@ from control_room import (
     _cargo_summary_lines,
     main,
 )
-from edap.actions import ActionDispatchResult
-from edap.binding_lookup import build_binding_lookup
-from edap.config import (
+from edcr.actions import ActionDispatchResult
+from edcr.binding_lookup import build_binding_lookup
+from edcr.config import (
     AppConfig,
     ControlRoomConfig,
     ControlsConfig,
@@ -31,33 +31,33 @@ from edap.config import (
     RuntimeConfig,
     TTSConfig,
 )
-from edap.control_room import error_text
-from edap.control_room import commands as control_room_commands
-from edap.control_room import prompts as control_room_prompts
-from edap.control_room.app import (
+from edcr.control_room import error_text
+from edcr.control_room import commands as control_room_commands
+from edcr.control_room import prompts as control_room_prompts
+from edcr.control_room.app import (
     DEFAULT_OBSERVER_ACCESS_TOKEN,
     ActivityLog,
     _JOURNAL_ARTIFACT_LOG_FLUSH_EVERY,
     _detect_lan_host,
 )
-from edap.control_room.backend import ControlRoomBackendEventHandler
-from edap.platform.input.wine_helper import FOCUS_FAILED_MESSAGE, FocusFailed
-from edap.control_room.failure_messages import describe_routine_exception, describe_routine_failure
-from edap.control_room.events import apply_ship_event
-from edap.control_room import rendering as control_room_rendering
-from edap.control_room.haul_tracking import parse_credit_amount
-from edap.control_room.models import HaulStats, MarketData, PromptState, ShipState, TradeRoutesData
-from edap.control_room.protocol import ActivityLogEntry
-from edap.control_room_state import CommandHistoryEntry
-from edap.routines import RoutineResult
-from edap.runtime import ResolvedPath, RuntimeContext
-from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler
-from edap.tts import AnnouncementId, NullSpeechBackend, PiperSpeechBackend, TTSAnnouncer
-from edap.control_room.workers import PendingRoutineCancelled, RoutineCancelled, run_routine_thread
-from edap.haul_config import DEFAULT_HAUL_CONFIG_PATH
-from edap.inara.trade_routes import TradeRoute, TradeRouteSearchResult
-from edap.platform.input.base import InputTargetState
-from edap.version import GitHubRelease
+from edcr.control_room.backend import ControlRoomBackendEventHandler
+from edcr.platform.input.wine_helper import FOCUS_FAILED_MESSAGE, FocusFailed
+from edcr.control_room.failure_messages import describe_routine_exception, describe_routine_failure
+from edcr.control_room.events import apply_ship_event
+from edcr.control_room import rendering as control_room_rendering
+from edcr.control_room.haul_tracking import parse_credit_amount
+from edcr.control_room.models import HaulStats, MarketData, PromptState, ShipState, TradeRoutesData
+from edcr.control_room.protocol import ActivityLogEntry
+from edcr.control_room_state import CommandHistoryEntry
+from edcr.routines import RoutineResult
+from edcr.runtime import ResolvedPath, RuntimeContext
+from edcr.timing import TimingChannelConfig, TimingConfig, TimingSampler
+from edcr.tts import AnnouncementId, NullSpeechBackend, PiperSpeechBackend, TTSAnnouncer
+from edcr.control_room.workers import PendingRoutineCancelled, RoutineCancelled, run_routine_thread
+from edcr.haul_config import DEFAULT_HAUL_CONFIG_PATH
+from edcr.inara.trade_routes import TradeRoute, TradeRouteSearchResult
+from edcr.platform.input.base import InputTargetState
+from edcr.version import GitHubRelease
 from rich.text import Text
 from textual.widgets import Static
 
@@ -229,7 +229,7 @@ class _HarnessApp(_CachedThemeVariables, ControlRoomApp):
     def __init__(self, ctx: RuntimeContext, *, activity_log_max_lines: int | None = None) -> None:
         self.version_source = _FakeVersionSource()
         self.station_facts: list = []
-        with patch("edap.tts.which", _cached_which):
+        with patch("edcr.tts.which", _cached_which):
             super().__init__(
                 ctx,
                 activity_log_max_lines=activity_log_max_lines,
@@ -511,21 +511,21 @@ class ControlRoomCliTests(unittest.TestCase):
                 return ("192.168.1.42", 53621)
 
         fake_socket = FakeSocket()
-        with patch("edap.control_room.app.socket.socket", return_value=fake_socket), patch(
-            "edap.control_room.app.socket.getaddrinfo",
+        with patch("edcr.control_room.app.socket.socket", return_value=fake_socket), patch(
+            "edcr.control_room.app.socket.getaddrinfo",
             return_value=[],
-        ), patch("edap.control_room.app._iter_ifconfig_ipv4", return_value=[]):
+        ), patch("edcr.control_room.app._iter_ifconfig_ipv4", return_value=[]):
             self.assertEqual(_detect_lan_host(), "192.168.1.42")
         self.assertEqual(fake_socket.address, ("8.8.8.8", 80))
 
     def test_detect_lan_host_falls_back_to_hostname_address(self) -> None:
-        with patch("edap.control_room.app.socket.socket") as socket_factory, patch(
-            "edap.control_room.app.socket.getaddrinfo",
+        with patch("edcr.control_room.app.socket.socket") as socket_factory, patch(
+            "edcr.control_room.app.socket.getaddrinfo",
             return_value=[
                 (None, None, None, None, ("127.0.0.1", 0)),
                 (None, None, None, None, ("10.0.0.12", 0)),
             ],
-        ), patch("edap.control_room.app._iter_ifconfig_ipv4", return_value=[]):
+        ), patch("edcr.control_room.app._iter_ifconfig_ipv4", return_value=[]):
             socket_factory.return_value.__enter__.return_value.connect.side_effect = OSError("no route")
             self.assertEqual(_detect_lan_host(), "10.0.0.12")
 
@@ -545,31 +545,31 @@ class ControlRoomCliTests(unittest.TestCase):
             def getsockname(self):
                 return ("198.19.0.1", 53621)
 
-        with patch("edap.control_room.app.socket.socket", return_value=FakeSocket()), patch(
-            "edap.control_room.app.socket.getaddrinfo",
+        with patch("edcr.control_room.app.socket.socket", return_value=FakeSocket()), patch(
+            "edcr.control_room.app.socket.getaddrinfo",
             return_value=[],
         ), patch(
-            "edap.control_room.app._iter_ifconfig_ipv4",
+            "edcr.control_room.app._iter_ifconfig_ipv4",
             return_value=["127.0.0.1", "198.19.0.1", "192.168.0.107"],
         ):
             self.assertEqual(_detect_lan_host(), "192.168.0.107")
 
     def test_detect_lan_host_prefers_rfc1918_over_public(self) -> None:
-        with patch("edap.control_room.app.socket.socket") as socket_factory, patch(
-            "edap.control_room.app.socket.getaddrinfo",
+        with patch("edcr.control_room.app.socket.socket") as socket_factory, patch(
+            "edcr.control_room.app.socket.getaddrinfo",
             return_value=[
                 (None, None, None, None, ("203.0.113.5", 0)),
                 (None, None, None, None, ("192.168.5.10", 0)),
             ],
-        ), patch("edap.control_room.app._iter_ifconfig_ipv4", return_value=[]):
+        ), patch("edcr.control_room.app._iter_ifconfig_ipv4", return_value=[]):
             socket_factory.return_value.__enter__.return_value.connect.side_effect = OSError("no route")
             self.assertEqual(_detect_lan_host(), "192.168.5.10")
 
     def test_serve_lan_passes_detected_host(self) -> None:
         with patch("sys.argv", ["control_room.py", "serve", "--lan", "--token", "1001"]), patch(
-            "edap.control_room.app._detect_lan_host",
+            "edcr.control_room.app._detect_lan_host",
             return_value="192.168.1.42",
-        ), patch("edap.control_room.server.serve.serve_observer_mode") as serve:
+        ), patch("edcr.control_room.server.serve.serve_observer_mode") as serve:
             main()
 
         serve.assert_called_once_with(
@@ -585,9 +585,9 @@ class ControlRoomCliTests(unittest.TestCase):
 
     def test_lan_alias_passes_detected_host(self) -> None:
         with patch("sys.argv", ["control_room.py", "lan", "--token", "1001"]), patch(
-            "edap.control_room.app._detect_lan_host",
+            "edcr.control_room.app._detect_lan_host",
             return_value="192.168.1.42",
-        ), patch("edap.control_room.server.serve.serve_observer_mode") as serve:
+        ), patch("edcr.control_room.server.serve.serve_observer_mode") as serve:
             main()
 
         serve.assert_called_once_with(
@@ -604,9 +604,9 @@ class ControlRoomCliTests(unittest.TestCase):
     def test_hub_and_peer_serve_on_the_lan_with_that_role(self) -> None:
         for mode in ("hub", "peer"):
             with self.subTest(mode=mode), patch("sys.argv", ["control_room.py", mode]), patch(
-                "edap.control_room.app._detect_lan_host",
+                "edcr.control_room.app._detect_lan_host",
                 return_value="192.168.1.42",
-            ), patch("edap.control_room.server.serve.serve_observer_mode") as serve:
+            ), patch("edcr.control_room.server.serve.serve_observer_mode") as serve:
                 main()
 
             serve.assert_called_once_with(
@@ -622,7 +622,7 @@ class ControlRoomCliTests(unittest.TestCase):
 
     def test_local_alias_binds_loopback(self) -> None:
         with patch("sys.argv", ["control_room.py", "local", "--token", "1001"]), patch(
-            "edap.control_room.server.serve.serve_observer_mode"
+            "edcr.control_room.server.serve.serve_observer_mode"
         ) as serve:
             main()
 
@@ -639,9 +639,9 @@ class ControlRoomCliTests(unittest.TestCase):
 
     def test_serve_on_every_interface_advertises_the_detected_lan_host(self) -> None:
         with patch("sys.argv", ["control_room.py", "serve", "--host", "0.0.0.0"]), patch(
-            "edap.control_room.app._detect_lan_host",
+            "edcr.control_room.app._detect_lan_host",
             return_value="192.168.1.42",
-        ), patch("edap.control_room.server.serve.serve_observer_mode") as serve:
+        ), patch("edcr.control_room.server.serve.serve_observer_mode") as serve:
             main()
 
         self.assertEqual((serve.call_args.kwargs["host"], serve.call_args.kwargs["advertise_host"]),
@@ -649,7 +649,7 @@ class ControlRoomCliTests(unittest.TestCase):
 
     def test_no_tts_keeps_the_server_silent(self) -> None:
         with patch("sys.argv", ["control_room.py", "local", "--token", "1001", "--no-tts"]), patch(
-            "edap.control_room.server.serve.serve_observer_mode"
+            "edcr.control_room.server.serve.serve_observer_mode"
         ) as serve:
             main()
 
@@ -662,7 +662,7 @@ class ControlRoomCliTests(unittest.TestCase):
 
     def test_serve_uses_default_token_when_token_is_omitted(self) -> None:
         with patch("sys.argv", ["control_room.py", "serve"]), patch(
-            "edap.control_room.server.serve.serve_observer_mode"
+            "edcr.control_room.server.serve.serve_observer_mode"
         ) as serve:
             main()
 
@@ -1382,7 +1382,7 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertEqual(self.app._market.system, "Col 285 Sector HD-F b13-1")
 
     def test_opening_a_market_records_it_in_recent_markets(self) -> None:
-        from edap.recent_markets import load_recent_markets
+        from edcr.recent_markets import load_recent_markets
 
         journal_dir = Path(self.tmpdir.name)
         (journal_dir / "Market.json").write_text(
@@ -1405,7 +1405,7 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertEqual(markets[0].items[0]["Name_Localised"], "Gold")
 
     def test_jumps_and_docking_record_station_facts_live_and_from_the_latest_log(self) -> None:
-        from edap.eddn.messages import StationInfo, SystemPosition
+        from edcr.eddn.messages import StationInfo, SystemPosition
 
         journal_dir = Path(self.tmpdir.name)
         (journal_dir / "Journal.240101000000.01.log").write_text(
@@ -1488,7 +1488,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
             captured["kwargs"] = kwargs
             return None
 
-        with patch("edap.control_room.routines_station.undock", new=fake_undock):
+        with patch("edcr.control_room.routines_station.undock", new=fake_undock):
             self.app._cmd_undock()
 
         self.assertEqual(captured["kwargs"]["undock_timeout_s"], 30.0)
@@ -1511,7 +1511,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
             captured["kwargs"] = kwargs
             return None
 
-        with patch("edap.control_room.routines_station.dock", new=fake_dock):
+        with patch("edcr.control_room.routines_station.dock", new=fake_dock):
             self.app._cmd_dock()
 
         self.assertEqual(captured["kwargs"]["wait_for_supercruise_exit"], True)
@@ -1535,7 +1535,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
             captured["kwargs"] = kwargs
             return None
 
-        with patch("edap.control_room.routines_station.dock", new=fake_dock):
+        with patch("edcr.control_room.routines_station.dock", new=fake_dock):
             self.app._cmd_dock()
 
         self.assertEqual(captured["kwargs"]["wait_for_supercruise_exit"], False)
@@ -1557,7 +1557,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
                 dispatch=ActionDispatchResult(action="GalaxyMapOpen", status="ok"),
             )
 
-        with patch("edap.control_room.routines_nav.set_gal_map_destination", new=fake_set_destination):
+        with patch("edcr.control_room.routines_nav.set_gal_map_destination", new=fake_set_destination):
             self.app._dependencies.execution.dispatch_destination(
                 "Sol",
                 2.0,
@@ -1583,7 +1583,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
             captured["kwargs"] = kwargs
             return None
 
-        with patch("edap.control_room.routines_trade.market_buy", new=fake_market_buy):
+        with patch("edcr.control_room.routines_trade.market_buy", new=fake_market_buy):
             self.app._cmd_buy("aluminium 10")
 
         announce_fn = captured["kwargs"]["announce_fn"]
@@ -1607,7 +1607,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
             captured["kwargs"] = kwargs
             return None
 
-        with patch("edap.control_room.routines_trade.market_buy", new=fake_market_buy):
+        with patch("edcr.control_room.routines_trade.market_buy", new=fake_market_buy):
             self.app._cmd_buy("food cartridges")
 
         self.assertEqual(captured["kwargs"]["target"], "food cartridges")
@@ -1627,7 +1627,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
             captured["kwargs"] = kwargs
             return None
 
-        with patch("edap.control_room.routines_movement.escape_mass_lock", new=fake_escape_mass_lock):
+        with patch("edcr.control_room.routines_movement.escape_mass_lock", new=fake_escape_mass_lock):
             self.app._cmd_escape()
 
         self.assertEqual(captured["kwargs"]["boost_delay_s"], 5.0)
@@ -1693,7 +1693,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
                 dispatch=ActionDispatchResult(action="market_sell", status="ok"),
             )
 
-        with patch("edap.control_room.routines_trade.market_sell", new=fake_market_sell):
+        with patch("edcr.control_room.routines_trade.market_sell", new=fake_market_sell):
             self.app._sell_all()
 
         output = "\n".join(self.app.logged)
@@ -1738,7 +1738,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
                 dispatch=ActionDispatchResult(action="market_sell", status="ok"),
             )
 
-        with patch("edap.control_room.routines_trade.market_sell", new=fake_market_sell):
+        with patch("edcr.control_room.routines_trade.market_sell", new=fake_market_sell):
             self.app._sell_all()
 
         output = "\n".join(self.app.logged)
@@ -1779,7 +1779,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
                 dispatch=ActionDispatchResult(action="haul_loop", status="ok"),
             )
 
-        with patch("edap.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
+        with patch("edcr.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
             self.app._dispatch_haul_loop()
 
         self.assertIn("runtime", captured)
@@ -1837,7 +1837,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
                 dispatch=ActionDispatchResult(action="haul_loop", status="ok"),
             )
 
-        with patch("edap.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
+        with patch("edcr.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
             self.app._dispatch_haul_loop()
 
         self.assertEqual(captured["route"].station_1.station, "Mystery Base")
@@ -1875,7 +1875,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
                 dispatch=ActionDispatchResult(action="haul_loop", status="ok"),
             )
 
-        with patch("edap.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
+        with patch("edcr.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
             self.app._dispatch_haul_loop()
 
         self.assertEqual(captured["route"].station_2.buy_commodity, "")
@@ -1920,7 +1920,7 @@ manual_landing = true
                 dispatch=ActionDispatchResult(action="haul_loop", status="ok"),
             )
 
-        with patch("edap.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
+        with patch("edcr.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
             self.app._cmd_haul(f"load {config_path}", raw_command=f"haul load {config_path}")
 
         self.assertEqual(captured["route"].station_1.buy_commodity, "Aluminium")
@@ -1962,8 +1962,8 @@ manual_landing = true
                 dispatch=ActionDispatchResult(action="haul_loop", status="ok"),
             )
 
-        with patch("edap.control_room.routines_haul.load_haul_config", new=fake_load), patch(
-            "edap.control_room.routines_haul.haul_loop_two_way",
+        with patch("edcr.control_room.routines_haul.load_haul_config", new=fake_load), patch(
+            "edcr.control_room.routines_haul.haul_loop_two_way",
             new=fake_haul_loop,
         ):
             self.app._cmd_haul("load", raw_command="haul load")
@@ -2003,8 +2003,8 @@ manual_landing = true
         )
 
         with (
-            patch("edap.control_room.routines_haul.search_trade_routes", return_value=result),
-            patch("edap.control_room.routines_haul.save_haul_search_config") as save_defaults,
+            patch("edcr.control_room.routines_haul.search_trade_routes", return_value=result),
+            patch("edcr.control_room.routines_haul.save_haul_search_config") as save_defaults,
         ):
             self.app._cmd_haul("search", raw_command="haul search")
             self.assertEqual(self.app._prompt_state.haul_prompt_mode, "search")
@@ -2041,8 +2041,8 @@ manual_landing = true
         )
 
         with (
-            patch("edap.control_room.routines_haul.search_trade_routes", return_value=result),
-            patch("edap.control_room.routines_haul.save_haul_search_config") as save_defaults,
+            patch("edcr.control_room.routines_haul.search_trade_routes", return_value=result),
+            patch("edcr.control_room.routines_haul.save_haul_search_config") as save_defaults,
         ):
             self.app._cmd_haul("search", raw_command="haul search")
             self.app._handle_haul_prompt(
@@ -2076,8 +2076,8 @@ manual_landing = true
         )
 
         with (
-            patch("edap.control_room.routines_haul.search_trade_routes", return_value=result),
-            patch("edap.control_room.routines_haul.save_haul_search_config"),
+            patch("edcr.control_room.routines_haul.search_trade_routes", return_value=result),
+            patch("edcr.control_room.routines_haul.save_haul_search_config"),
         ):
             self.app._cmd_haul("search", raw_command="haul search")
             self.app._handle_haul_prompt(
@@ -2143,8 +2143,8 @@ manual_landing = true
         )
 
         with (
-            patch("edap.control_room.routines_haul.search_trade_routes", return_value=result),
-            patch("edap.control_room.routines_haul.save_haul_search_config") as save_defaults,
+            patch("edcr.control_room.routines_haul.search_trade_routes", return_value=result),
+            patch("edcr.control_room.routines_haul.save_haul_search_config") as save_defaults,
         ):
             self.app._cmd_haul(f"search url {url}", raw_command=f"haul search url {url}")
 
@@ -2197,7 +2197,7 @@ manual_landing = true
         )
         self.app._selected_trade_route_index = 2
 
-        with patch("edap.control_room.routines_haul.dispatch_haul_loop") as dispatch:
+        with patch("edcr.control_room.routines_haul.dispatch_haul_loop") as dispatch:
             self.app._cmd_haul("start", raw_command="haul start")
 
         dispatch.assert_called_once()
@@ -2262,7 +2262,7 @@ manual_landing = true
         ])
         self.assertEqual(stats.completed_runs, 1)
         self.assertEqual(stats.last_run_profit, 300_000)
-        from edap.haul_history import load_runs
+        from edcr.haul_history import load_runs
         rows, _ = load_runs(self.app._config.control_room.haul_runs_file)
         self.assertEqual(rows[-1]["mode"], "tracked")
 
@@ -2309,7 +2309,7 @@ manual_landing = true
             (stats.completed_runs, stats.accumulated_profit, stats.cargo_moved_t),
             (3, 151_505_250, 6_822),
         )
-        from edap.haul_history import load_runs
+        from edcr.haul_history import load_runs
         rows, _ = load_runs(self.app._config.control_room.haul_runs_file)
         self.assertEqual(
             [(row["mode"], row["status"], row["profit"], round(row["duration_s"])) for row in rows],
@@ -2369,7 +2369,7 @@ manual_landing = true
                 dispatch=ActionDispatchResult(action="haul_loop", status="ok"),
             )
 
-        with patch("edap.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
+        with patch("edcr.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
             self.app._dispatch_haul_loop()
 
         self.assertFalse(captured["route"].station_1.manual_landing)
@@ -2398,8 +2398,8 @@ manual_landing = true
                 dispatch=ActionDispatchResult(action="multi_leg_haul", status="ok"),
             )
 
-        with patch("edap.control_room.routines_haul.load_multi_leg_haul_definition", return_value=definition), patch(
-            "edap.control_room.routines_haul.multi_leg_haul",
+        with patch("edcr.control_room.routines_haul.load_multi_leg_haul_definition", return_value=definition), patch(
+            "edcr.control_room.routines_haul.multi_leg_haul",
             new=fake_multi_leg_haul,
         ):
             self.app._cmd_multi_leg_haul("fixture.json", raw_command="multi_leg_haul fixture.json")
@@ -2661,7 +2661,7 @@ manual_landing = true
         self.app._handle_haul_event({"event": "MarketSell", "TotalSale": 400_000}, station_before="Pawelczyk Dock")
         self.assertEqual(self.app._haul_stats.completed_runs, 1)
         self.assertEqual(self.app._haul_stats.last_run_profit, 300_000)
-        from edap.haul_history import load_runs
+        from edcr.haul_history import load_runs
         rows, skipped = load_runs(self.app._config.control_room.haul_runs_file)
         self.assertEqual(skipped, 0)
         self.assertEqual((rows[-1]["cost"], rows[-1]["revenue"]), (350_000, 650_000))
@@ -3157,7 +3157,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             captured["kwargs"] = kwargs
             return None
 
-        with patch("edap.control_room.routines_trade.market_buy", new=fake_market_buy):
+        with patch("edcr.control_room.routines_trade.market_buy", new=fake_market_buy):
             self.app._dispatch_command("buy food cartridges")
 
         entry = self._last_history()
@@ -3202,7 +3202,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             captured["skip_delay"] = skip_delay
             captured["raw_command"] = raw_command
 
-        with patch("edap.control_room.routines_nav.cmd_dest", new=fake_cmd_dest):
+        with patch("edcr.control_room.routines_nav.cmd_dest", new=fake_cmd_dest):
             self.app._dispatch_command("home")
 
         self.assertEqual(captured["destination"], "Achenar")
@@ -3686,8 +3686,8 @@ class ControlRoomDispatchTests(unittest.TestCase):
         )
 
     def _assert_timer_views(self, session: float, elapsed: float | None) -> None:
-        from edap.control_room.dependencies import LocalControlRoomDataSource
-        from edap.control_room.rendering import fmt_duration, haul_stats_markup
+        from edcr.control_room.dependencies import LocalControlRoomDataSource
+        from edcr.control_room.rendering import fmt_duration, haul_stats_markup
         remote = LocalControlRoomDataSource(self.app).current().haul_session
         self.assertEqual(remote.session_elapsed_s, session)
         self.assertEqual(remote.current_run_elapsed_s, elapsed)
@@ -3727,7 +3727,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self._assert_timer_views(30.0, 30.0)
 
     def test_stop_preserves_docked_cycle_duration_and_final_completed_elapsed(self) -> None:
-        from edap.control_room.haul_tracking import finalize_completed_haul_run
+        from edcr.control_room.haul_tracking import finalize_completed_haul_run
         for completed in (False, True):
             with self.subTest(completed=completed):
                 self.app._haul_stats = HaulStats()
@@ -3750,7 +3750,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.app._time_fn = lambda: 200.0
         self.app._load_saved_state()
         self.app._time_fn = lambda: 400.0
-        from edap.control_room.dependencies import LocalControlRoomDataSource
+        from edcr.control_room.dependencies import LocalControlRoomDataSource
         remote = LocalControlRoomDataSource(self.app).current().haul_session
         self.assertEqual(remote.session_elapsed_s, 60.0)
         self.assertIsNone(self.app._haul_stats.session_started_at)
@@ -4290,7 +4290,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             called.append("jump")
             return None
 
-        with patch("edap.control_room.routines_movement.jump", new=fake_jump):
+        with patch("edcr.control_room.routines_movement.jump", new=fake_jump):
             self.app._dispatch_command("jump")
 
         self.assertEqual(delays, [5.0])
@@ -4327,7 +4327,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             called.append("jump")
             return None
 
-        with patch("edap.control_room.routines_movement.jump", new=fake_jump):
+        with patch("edcr.control_room.routines_movement.jump", new=fake_jump):
             self.app._dispatch_command("!jump")
 
         self.assertEqual(delays, [])
@@ -4365,7 +4365,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             called.append("jump")
             return None
 
-        with patch("edap.control_room.routines_movement.jump", new=fake_jump):
+        with patch("edcr.control_room.routines_movement.jump", new=fake_jump):
             self.app._dispatch_command("jump")
 
         self.assertEqual(delays, [])
@@ -4401,7 +4401,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             called.append("jump")
             return None
 
-        with patch("edap.control_room.routines_movement.jump", new=fake_jump):
+        with patch("edcr.control_room.routines_movement.jump", new=fake_jump):
             self.app._replay_history_entry(
                 CommandHistoryEntry(raw="jump", command="jump", timestamp="1"),
                 edit=False,
@@ -4439,7 +4439,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             called.append("jump")
             return None
 
-        with patch("edap.control_room.routines_movement.jump", new=fake_jump):
+        with patch("edcr.control_room.routines_movement.jump", new=fake_jump):
             self.app._replay_history_entry(
                 CommandHistoryEntry(raw="jump", command="jump", timestamp="1"),
                 edit=False,
@@ -4569,7 +4569,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             called.append("jump")
             return None
 
-        with patch("edap.control_room.routines_movement.jump", new=fake_jump):
+        with patch("edcr.control_room.routines_movement.jump", new=fake_jump):
             self.app._dispatch_command("jump")
 
         self.assertEqual(called, [])
@@ -4763,7 +4763,7 @@ class ControlRoomFailureMessageTests(unittest.TestCase):
             ),
         )
 
-        with patch("edap.control_room.workers.get_current_worker", return_value=_Worker()):
+        with patch("edcr.control_room.workers.get_current_worker", return_value=_Worker()):
             run_routine_thread(app, lambda: result)
 
         joined = "\n".join(app.logged)
@@ -5006,7 +5006,7 @@ class HaulRunHistoryTests(unittest.TestCase):
         )
 
     def rows(self):
-        from edap.haul_history import load_runs
+        from edcr.haul_history import load_runs
         rows, skipped = load_runs(self.path)
         self.assertEqual(skipped, 0)
         return rows
@@ -5064,7 +5064,7 @@ class HaulRunHistoryTests(unittest.TestCase):
         self.assertEqual(row["warnings"], ["haul_buy_still_short", "haul_top_up_unaffordable", "market_buy_none_available"])
 
     def test_restart_flushes_saved_partial_run(self) -> None:
-        from edap.control_room.persistence import load_saved_state
+        from edcr.control_room.persistence import load_saved_state
         self.event("Undocked", "Alpha", 0)
         self.event("MarketSell", "Beta", 10, Type="gold", Count=2, TotalSale=50)
         restarted = _HarnessApp(_make_context(Path(self.tmpdir.name)))
@@ -5078,7 +5078,7 @@ class HaulRunHistoryTests(unittest.TestCase):
         self.assertEqual(len(self.rows()), 1)
 
     def test_clear_keeps_history_and_flushes_even_trade_free_departure(self) -> None:
-        from edap.control_room.persistence import clear_session_stats
+        from edcr.control_room.persistence import clear_session_stats
         self.complete()
         self.event("Undocked", "Alpha", 25)
         clear_session_stats(self.app)
@@ -5095,8 +5095,8 @@ class HaulRunHistoryTests(unittest.TestCase):
         self.assertIn("not a clean run", row["reason"])
 
     def test_failed_append_survives_clear_and_restart(self) -> None:
-        from edap.control_room.persistence import clear_session_stats, load_saved_state
-        from edap.control_room_state import load_control_room_state
+        from edcr.control_room.persistence import clear_session_stats, load_saved_state
+        from edcr.control_room_state import load_control_room_state
         self.event("MarketBuy", "Alpha", 0, Type="gold", Count=1, TotalCost=10)
         self.path.mkdir()  # Real filesystem failure, not a simulated successful write.
         self.app._stop_haul_stats()
@@ -5113,7 +5113,7 @@ class HaulRunHistoryTests(unittest.TestCase):
 
     def test_reader_skips_torn_invalid_lines_and_deduplicates_retries(self) -> None:
         import json
-        from edap.haul_history import append_run, load_runs
+        from edcr.haul_history import append_run, load_runs
         self.complete()
         row, = self.rows()
         with self.path.open("ab") as handle:
@@ -5138,7 +5138,7 @@ class HaulRunHistoryTests(unittest.TestCase):
         self.assertEqual(row["duration_s"], 20)
 
     def suspend_mid_run(self) -> None:
-        from edap.control_room.workers import clear_routine
+        from edcr.control_room.workers import clear_routine
         self.event("MarketBuy", "Alpha", 0, Type="gold", Count=5, TotalCost=50)
         self.event("Undocked", "Alpha", 2)
         self.event("MarketSell", "Beta", 10, Type="gold", Count=5, TotalSale=100)
@@ -5235,7 +5235,7 @@ class HaulStatsCommandTests(unittest.TestCase):
 
     def test_stats_includes_journal_trades_when_no_runs_were_recorded(self):
         from datetime import datetime, timezone
-        from edap.control_room.commands import cmd_stats
+        from edcr.control_room.commands import cmd_stats
         path = Path(self.directory.name) / "Journal.2026-11-01T100000.01.log"
         path.write_text(json.dumps({"event": "MarketSell", "timestamp": "2026-11-01T10:00:00Z",
                                    "Type": "gold", "Count": 2, "TotalSale": 50, "AvgPricePaid": 10}) + "\n")
@@ -5257,7 +5257,7 @@ class HaulStatsCommandTests(unittest.TestCase):
 
     def test_populated_summary_keeps_aborted_and_expected_values_separate(self):
         from datetime import datetime, timezone
-        from edap.control_room.commands import cmd_stats
+        from edcr.control_room.commands import cmd_stats
         rows = [dict(schema=1, kind="two_way", status=status, started_at="2026-11-01T10:00:00Z",
                      ended_at=("2026-11-01T11:00:00Z" if status == "completed" else "2026-11-01T12:00:00Z"), cost=100, revenue=revenue,
                      duration_s=3600, expected_profit=50,

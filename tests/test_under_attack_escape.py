@@ -4,11 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from edap.actions import ActionDispatchResult
-from edap.routines.callbacks import noop_announce, noop_progress
-from edap.routines.docking import UNDER_ATTACK_FLEE_AFTER_UNDOCK_S, _wait_for_clear_of_station, dock, undock
-from edap.routines.transit import undock_and_route_to_system
-from edap.tts import AnnouncementId
+from edcr.actions import ActionDispatchResult
+from edcr.routines.callbacks import noop_announce, noop_progress
+from edcr.routines.docking import UNDER_ATTACK_FLEE_AFTER_UNDOCK_S, _wait_for_clear_of_station, dock, undock
+from edcr.routines.transit import undock_and_route_to_system
+from edcr.tts import AnnouncementId
 from tests.fakes import FakeShipControls, FakeWatcher
 from tests.test_travel import _runtime, _ticking_clock
 

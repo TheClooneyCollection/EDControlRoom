@@ -5,10 +5,10 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from edap.config import load_config
-from edap.platform.input.uinput import LinuxUinputController
-from edap.runtime import build_runtime_context, load_config_with_fallback
-from edap.platform.input.windows import WindowsInputController
+from edcr.config import load_config
+from edcr.platform.input.uinput import LinuxUinputController
+from edcr.runtime import build_runtime_context, load_config_with_fallback
+from edcr.platform.input.windows import WindowsInputController
 
 
 class _FakeGamePaths:
@@ -40,10 +40,10 @@ class RuntimeTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch("edap.runtime.DEFAULT_CONFIG_PATH", default_config_path), patch(
-                "edap.runtime.EXAMPLE_CONFIG_PATH",
+            with patch("edcr.runtime.DEFAULT_CONFIG_PATH", default_config_path), patch(
+                "edcr.runtime.EXAMPLE_CONFIG_PATH",
                 example_path,
-            ), patch("edap.config.default_runtime_platform", return_value="macos"):
+            ), patch("edcr.config.default_runtime_platform", return_value="macos"):
                 loaded = load_config_with_fallback(default_config_path)
 
         self.assertEqual(loaded.config_path, str(example_path))
@@ -72,11 +72,11 @@ bindings_file = '{bindings_file}'
             )
             config = load_config(config_path)
 
-            with patch("edap.runtime.build_game_paths", return_value=None), patch(
-                "edap.runtime.build_input_controller",
+            with patch("edcr.runtime.build_game_paths", return_value=None), patch(
+                "edcr.runtime.build_input_controller",
                 return_value=object(),
             ), patch(
-                "edap.runtime.load_binding_lookup",
+                "edcr.runtime.load_binding_lookup",
                 return_value=object(),
             ) as load_binding_lookup_mock:
                 runtime = build_runtime_context(config, actions=["SetSpeedZero"])
@@ -113,8 +113,8 @@ bindings_file = '{bindings_file}'
                 bindings_file=auto_bindings_file,
             )
 
-            with patch("edap.runtime.build_game_paths", return_value=game_paths), patch(
-                "edap.runtime.build_input_controller",
+            with patch("edcr.runtime.build_game_paths", return_value=game_paths), patch(
+                "edcr.runtime.build_input_controller",
                 return_value=None,
             ):
                 runtime = build_runtime_context(config)
@@ -143,8 +143,8 @@ bindings_file = '{missing_bindings}'
             )
             config = load_config(config_path)
 
-            with patch("edap.runtime.build_game_paths", return_value=None), patch(
-                "edap.runtime.build_input_controller",
+            with patch("edcr.runtime.build_game_paths", return_value=None), patch(
+                "edcr.runtime.build_input_controller",
                 return_value=None,
             ):
                 runtime = build_runtime_context(config, actions=["SetSpeedZero"])
@@ -170,7 +170,7 @@ platform = "windows"
             )
             config = load_config(config_path)
 
-            with patch("edap.runtime.build_game_paths", return_value=None):
+            with patch("edcr.runtime.build_game_paths", return_value=None):
                 runtime = build_runtime_context(config)
 
         self.assertIsInstance(runtime.input_controller, WindowsInputController)
@@ -192,7 +192,7 @@ platform = "linux"
             )
             config = load_config(config_path)
 
-            with patch("edap.runtime.build_game_paths", return_value=None):
+            with patch("edcr.runtime.build_game_paths", return_value=None):
                 runtime = build_runtime_context(config)
 
         self.assertIsInstance(runtime.input_controller, LinuxUinputController)

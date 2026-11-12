@@ -9,11 +9,11 @@ from types import SimpleNamespace
 import unittest
 from xml.etree.ElementTree import ElementTree, SubElement
 
-from edap.binding_conflicts import galaxy_map_binding_conflicts, read_galaxy_map_binding_conflicts
-from edap.binding_lookup import load_binding_lookup
-from edap.bindings import read_bindings
-from edap.control_room.app import ControlRoomApp
-from edap.runtime import ResolvedPath
+from edcr.binding_conflicts import galaxy_map_binding_conflicts, read_galaxy_map_binding_conflicts
+from edcr.binding_lookup import load_binding_lookup
+from edcr.bindings import read_bindings
+from edcr.control_room.app import ControlRoomApp
+from edcr.runtime import ResolvedPath
 from tests.fixtures.galaxy_map_bindings import galaxy_map_bindings
 from tools.check_bindings import main
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from edap.actions import ActionDispatchResult
-from edap.binding_lookup import NormalizedBinding
+from edcr.actions import ActionDispatchResult
+from edcr.binding_lookup import NormalizedBinding
 
 _OK = ActionDispatchResult(action="ok", status="ok", binding=NormalizedBinding(key="x", modifier=None))
 

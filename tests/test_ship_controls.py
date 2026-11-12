@@ -4,10 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from edap.actions import ActionDispatcher
-from edap.binding_lookup import build_binding_lookup
-from edap.bindings import Binding
-from edap.ship_controls import ShipControls
+from edcr.actions import ActionDispatcher
+from edcr.binding_lookup import build_binding_lookup
+from edcr.bindings import Binding
+from edcr.ship_controls import ShipControls
 
 
 class FakeInputController:

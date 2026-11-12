@@ -3,14 +3,14 @@ from __future__ import annotations
 from types import SimpleNamespace
 import unittest
 
-from edap.control_room.dependencies import (
+from edcr.control_room.dependencies import (
     LocalControlRoomDataSource,
     LocalControlRoomExecution,
 )
-from edap.control_room.backend import LocalControlRoomBackend
-from edap.control_room.models import HaulStats, MarketData, RuntimeUIState, ShipState
-from edap.control_room.protocol import build_activity_log_entry
-from edap.control_room_state import ControlRoomState, CommandHistoryEntry
+from edcr.control_room.backend import LocalControlRoomBackend
+from edcr.control_room.models import HaulStats, MarketData, RuntimeUIState, ShipState
+from edcr.control_room.protocol import build_activity_log_entry
+from edcr.control_room_state import ControlRoomState, CommandHistoryEntry
 
 
 class _FakeFacade:

@@ -4,13 +4,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from edap.binding_lookup import (
+from edcr.binding_lookup import (
     BindingLookupResult,
     build_binding_lookup,
     load_binding_lookup,
     normalize_internal_key_name,
 )
-from edap.bindings import Binding
+from edcr.bindings import Binding
 
 
 class BindingLookupTests(unittest.TestCase):

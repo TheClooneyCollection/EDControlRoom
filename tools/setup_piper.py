@@ -13,8 +13,8 @@ if str(REPO_ROOT) not in sys.path:
 
 import httpx
 
-from edap.config import DEFAULT_CONFIG_PATH, ConfigError, PiperVoiceConfig, default_runtime_platform, load_config
-from edap.piper_setup import (
+from edcr.config import DEFAULT_CONFIG_PATH, ConfigError, PiperVoiceConfig, default_runtime_platform, load_config
+from edcr.piper_setup import (
     DEFAULT_VOICE,
     PIPER_TTS_PACKAGE,
     VOICES,
@@ -23,7 +23,7 @@ from edap.piper_setup import (
     piper_executable,
     with_piper_config,
 )
-from edap.tts import PiperSpeechBackend, build_speech_backend
+from edcr.tts import PiperSpeechBackend, build_speech_backend
 
 
 def main(argv: list[str] | None = None) -> int:

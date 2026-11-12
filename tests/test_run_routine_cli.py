@@ -8,11 +8,11 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from tools import run_routine
-from edap.binding_lookup import build_binding_lookup
-from edap.bindings import Binding
-from edap.config import load_config
-from edap.runtime import LoadedConfig
-from edap.timing import TimingSampler
+from edcr.binding_lookup import build_binding_lookup
+from edcr.bindings import Binding
+from edcr.config import load_config
+from edcr.runtime import LoadedConfig
+from edcr.timing import TimingSampler
 
 
 class _FakeControls:

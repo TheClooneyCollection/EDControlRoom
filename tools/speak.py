@@ -8,8 +8,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from edap.config import ConfigError, default_runtime_platform
-from edap.tts import NullSpeechBackend, build_speech_backend, normalize_tts_value
+from edcr.config import ConfigError, default_runtime_platform
+from edcr.tts import NullSpeechBackend, build_speech_backend, normalize_tts_value
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler
+from edcr.timing import TimingChannelConfig, TimingConfig, TimingSampler
 
 
 def _config(*, enabled: bool = True) -> TimingConfig:

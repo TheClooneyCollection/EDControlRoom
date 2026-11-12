@@ -6,7 +6,7 @@ import tomllib
 import unittest
 from pathlib import Path
 
-from edap.piper_setup import (
+from edcr.piper_setup import (
     VOICES,
     PiperVoice,
     VoiceFile,

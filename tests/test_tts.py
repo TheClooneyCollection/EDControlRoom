@@ -8,8 +8,8 @@ from tempfile import TemporaryDirectory
 from threading import Event
 import unittest
 
-from edap.config import PiperVoiceConfig, TTSConfig
-from edap.tts import (
+from edcr.config import PiperVoiceConfig, TTSConfig
+from edcr.tts import (
     AnnouncementId,
     PiperSpeechBackend,
     QueuedSpeaker,

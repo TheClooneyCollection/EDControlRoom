@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from edap.cargo_manifest import read_cargo_inventory
+from edcr.cargo_manifest import read_cargo_inventory
 
 
 class CargoManifestTests(unittest.TestCase):

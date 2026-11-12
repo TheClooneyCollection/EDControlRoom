@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from edap.control_room.client.target import ObserverServerTarget
-from edap.control_room.protocol import (
+from edcr.control_room.client.target import ObserverServerTarget
+from edcr.control_room.protocol import (
     ACCESS_TOKEN_QUERY_PARAMETER,
     AUTHENTICATION_SCHEME_BEARER_TOKEN,
     REQUIRED_AUTHENTICATION_TRANSPORTS,

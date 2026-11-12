@@ -1,5 +1,5 @@
-from edap.config import WineHelperConfig
-from edap.platform.input.wine_helper import WineHelperClient
+from edcr.config import WineHelperConfig
+from edcr.platform.input.wine_helper import WineHelperClient
 
 
 def unexpected(*args, **kwargs):

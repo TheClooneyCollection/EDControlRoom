@@ -1,5 +1,5 @@
 """
-ED AutoPilot Control Room
+EDControlRoom Control Room
 
 Thin launcher for the control-room Textual app.
 
@@ -7,7 +7,7 @@ Usage:
     uv run python3 control_room.py
 """
 
-from edap.control_room.app import (
+from edcr.control_room.app import (
     ControlRoomApp,
     _ALL_ROUTINE_ACTIONS,
     _build_log_text,

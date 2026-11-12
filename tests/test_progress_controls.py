@@ -3,8 +3,8 @@ from __future__ import annotations
 import inspect
 import unittest
 
-from edap.progress_controls import ProgressShipControls
-from edap.ship_controls import DEFAULT_SHIP_CONTROL_ACTIONS, ShipControls
+from edcr.progress_controls import ProgressShipControls
+from edcr.ship_controls import DEFAULT_SHIP_CONTROL_ACTIONS, ShipControls
 
 # Every action string dispatched by ShipControls methods. Update this set when
 # a new method is added to ShipControls so the test fails loudly if the action

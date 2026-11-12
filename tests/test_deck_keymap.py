@@ -7,10 +7,10 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from edap.binding_lookup import load_binding_lookup
-from edap.bindings import AUTOPILOT_REQUIRED_BINDINGS
-from edap.deck_keymap import DECK_KEYMAP, DeckKey, plan_deck_keymap
-from edap.ship_controls import DEFAULT_SHIP_CONTROL_ACTIONS
+from edcr.binding_lookup import load_binding_lookup
+from edcr.bindings import AUTOPILOT_REQUIRED_BINDINGS
+from edcr.deck_keymap import DECK_KEYMAP, DeckKey, plan_deck_keymap
+from edcr.ship_controls import DEFAULT_SHIP_CONTROL_ACTIONS
 from tools import deck_keymap as deck_keymap_tool
 
 _PAD = '<Primary Device="28DE11FF" Key="GamePad_FaceRight" />'

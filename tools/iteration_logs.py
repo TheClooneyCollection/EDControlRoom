@@ -9,7 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from edap.iteration_logs import (
+from edcr.iteration_logs import (
     LEGACY_SESSION_BASELINE,
     create_iteration_log,
     iter_iteration_log_paths,

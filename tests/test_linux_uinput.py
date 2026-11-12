@@ -4,11 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from edap.config import ConfigError, InputConfig, load_config
-from edap.platform.input.factory import build_input_controller
-from edap.platform.input.linux import LinuxInputController
-from edap.platform.input.uinput import LinuxUinputController, evdev_code
-from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler, no_jitter_timing_sampler
+from edcr.config import ConfigError, InputConfig, load_config
+from edcr.platform.input.factory import build_input_controller
+from edcr.platform.input.linux import LinuxInputController
+from edcr.platform.input.uinput import LinuxUinputController, evdev_code
+from edcr.timing import TimingChannelConfig, TimingConfig, TimingSampler, no_jitter_timing_sampler
 
 
 def unexpected(*args, **kwargs):

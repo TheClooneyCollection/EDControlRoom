@@ -7,16 +7,16 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from edap.config import default_haul_routine_defaults
-from edap.routines.callbacks import noop_announce, noop_progress
-from edap.routines.haul_support import (
+from edcr.config import default_haul_routine_defaults
+from edcr.routines.callbacks import noop_announce, noop_progress
+from edcr.routines.haul_support import (
     HaulMarketSettings,
     HaulRuntime,
     HaulTravelSettings,
     build_haul_runtime,
     build_haul_timing,
 )
-from edap.routines.haul_two_way import (
+from edcr.routines.haul_two_way import (
     _HaulCtx,
     Phase,
     StationLeg,
@@ -27,11 +27,11 @@ from edap.routines.haul_two_way import (
     _wait_for_arrival_or_approach_event,
     haul_loop_two_way as _haul_loop_two_way,
 )
-from edap.routines._base import ActionDispatchResult, RoutineResult
-from edap.routines.transit import (
+from edcr.routines._base import ActionDispatchResult, RoutineResult
+from edcr.routines.transit import (
     TransitResumeState, detect_transit_resume_state, manual_landing_result, transit_to_station,
 )
-from edap.tts import AnnouncementId
+from edcr.tts import AnnouncementId
 from tests.fakes import FakeShipControls, FakeWatcher
 
 _STATION_1 = "Pawelczyk Dock"
@@ -265,8 +265,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 station_1=_station_1_leg(), station_2=_station_2_leg(),
             )
             ctx.runtime.market = replace(ctx.runtime.market, nav_delay_s=0.2)
-            with patch("edap.routines.haul_two_way.market_sell", traded), \
-                    patch("edap.routines.haul_two_way.market_buy", traded):
+            with patch("edcr.routines.haul_two_way.market_sell", traded), \
+                    patch("edcr.routines.haul_two_way.market_buy", traded):
                 _run_market_sell(ctx, leg=ctx.station_1, next_phase=Phase.AT_STATION_1_BUY)
                 _write_cargo(journal_dir, [])
                 _run_market_buy(ctx, leg=ctx.station_1, next_phase=Phase.UNDOCK_STATION_1)
@@ -313,7 +313,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                         amounts.append(amount)
                         return next(pending)
 
-                    with patch("edap.routines.haul_two_way.market_buy", buy):
+                    with patch("edcr.routines.haul_two_way.market_buy", buy):
                         result, phase = _run_market_buy(ctx, leg=ctx.station_1, next_phase=Phase.UNDOCK_STATION_1)
                     self.assertIs(result, results[-1])
                     self.assertEqual(phase, Phase.UNDOCK_STATION_1)
@@ -348,7 +348,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                         details={"expected_count": 64 if len(buys) == 1 else 24},
                     )
 
-                with patch("edap.routines.haul_two_way.market_buy", buy):
+                with patch("edcr.routines.haul_two_way.market_buy", buy):
                     result, _ = _run_market_buy(ctx, leg=ctx.station_1, next_phase=Phase.UNDOCK_STATION_1)
                 self.assertEqual(result.dispatch.status, "ok")
                 self.assertEqual(len(buys), expected_buys)
@@ -383,7 +383,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 calls.append(("sell", kwargs["target"]))
                 return RoutineResult(action="MarketSell", dispatch=ActionDispatchResult(action="MarketSell", status="ok"))
 
-            with patch("edap.routines.haul_two_way.market_buy", buy), patch("edap.routines.haul_two_way.market_sell", sell):
+            with patch("edcr.routines.haul_two_way.market_buy", buy), patch("edcr.routines.haul_two_way.market_sell", sell):
                 result, phase = _run_market_buy(ctx, leg=ctx.station_1, next_phase=Phase.UNDOCK_STATION_1)
             self.assertEqual(result.dispatch.status, "ok")
             self.assertEqual(calls, [("buy", _CARGO_1), ("buy", _CARGO_1), ("sell", "Gold"), ("buy", _CARGO_1)])
@@ -490,11 +490,11 @@ class TwoWayHaulLoopTests(unittest.TestCase):
 
         with (
             tempfile.TemporaryDirectory() as tmp,
-            patch("edap.routines.haul_two_way.transit_to_station", transit),
-            patch("edap.routines.haul_two_way.undock_and_route_to_system", return_value=ok),
-            patch("edap.routines.haul_two_way.market_sell", sell),
-            patch("edap.routines.haul_two_way.market_buy", buy),
-            patch("edap.routines.haul_two_way._read_cargo_json", lambda _: list(inventory)),
+            patch("edcr.routines.haul_two_way.transit_to_station", transit),
+            patch("edcr.routines.haul_two_way.undock_and_route_to_system", return_value=ok),
+            patch("edcr.routines.haul_two_way.market_sell", sell),
+            patch("edcr.routines.haul_two_way.market_buy", buy),
+            patch("edcr.routines.haul_two_way._read_cargo_json", lambda _: list(inventory)),
         ):
             result = _haul_loop_two_way(
                 _test_haul_runtime(Path(tmp), FakeShipControls(), FakeWatcher([]), progress_fn=progress.append),
@@ -517,7 +517,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
         ):
             phases = []
             progress = []
-            with tempfile.TemporaryDirectory() as tmp, patch("edap.routines.haul_two_way.transit_to_station", return_value=result):
+            with tempfile.TemporaryDirectory() as tmp, patch("edcr.routines.haul_two_way.transit_to_station", return_value=result):
                 observed = _haul_loop_two_way(
                     _test_haul_runtime(Path(tmp), FakeShipControls(), FakeWatcher([]), progress_fn=progress.append),
                     route=TwoWayHaulRoute(_station_1_leg(), _station_2_leg()), iterations=1,
@@ -564,7 +564,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 dock_requests.append(kwargs)
                 return ok
 
-            with patch("edap.routines.transit.dock", dock):
+            with patch("edcr.routines.transit.dock", dock):
                 result = transit_to_station(
                     _test_haul_runtime(journal_dir, FakeShipControls(), FakeWatcher([])),
                     destination=_station_1_leg(), destination_label="station 1", routine_name="haul",
@@ -820,8 +820,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 journal_dir,
                 [{"Name": "bertrandite", "Count": 64, "Stolen": 0}],
             )
-            with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
-                "edap.routines.haul_two_way.market_buy"
+            with patch("edcr.routines.haul_two_way.market_sell") as market_sell_mock, patch(
+                "edcr.routines.haul_two_way.market_buy"
             ) as market_buy_mock:
                 def fake_sell(controls, watcher, **kwargs):
                     market_calls.append(("sell", kwargs["target"]))
@@ -908,8 +908,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 [{"Category": "Metals", "Name": "aluminium", "Name_Localised": _CARGO_1, "DemandBracket": 1, "Stock": 1000}],
             )
             _write_cargo(journal_dir, [])
-            with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
-                "edap.routines.haul_two_way.market_buy"
+            with patch("edcr.routines.haul_two_way.market_sell") as market_sell_mock, patch(
+                "edcr.routines.haul_two_way.market_buy"
             ) as market_buy_mock:
                 market_sell_mock.side_effect = lambda controls, watcher, **kwargs: (
                     market_calls.append(("sell", kwargs["target"])) or RoutineResult(
@@ -1010,8 +1010,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                     dispatch=ActionDispatchResult(action="MarketSell", status="ok"),
                 )
 
-            with patch("edap.routines.haul_two_way.market_buy", side_effect=fake_buy), patch(
-                "edap.routines.haul_two_way.market_sell",
+            with patch("edcr.routines.haul_two_way.market_buy", side_effect=fake_buy), patch(
+                "edcr.routines.haul_two_way.market_sell",
                 side_effect=fake_sell,
             ):
                 result, next_phase = _run_market_buy(ctx, leg=ctx.station_1, next_phase=Phase.UNDOCK_STATION_1)
@@ -1066,8 +1066,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                     dispatch=ActionDispatchResult(action="MarketSell", status="ok"),
                 )
 
-            with patch("edap.routines.haul_two_way.market_buy", side_effect=fake_buy), patch(
-                "edap.routines.haul_two_way.market_sell",
+            with patch("edcr.routines.haul_two_way.market_buy", side_effect=fake_buy), patch(
+                "edcr.routines.haul_two_way.market_sell",
                 side_effect=fake_sell,
             ):
                 result, next_phase = _run_market_buy(ctx, leg=ctx.station_1, next_phase=Phase.UNDOCK_STATION_1)
@@ -1104,8 +1104,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                     dispatch=ActionDispatchResult(action="MarketBuy", status="ok"),
                 )
 
-            with patch("edap.routines.haul_two_way.market_buy", side_effect=fake_buy), patch(
-                "edap.routines.haul_two_way.market_sell"
+            with patch("edcr.routines.haul_two_way.market_buy", side_effect=fake_buy), patch(
+                "edcr.routines.haul_two_way.market_sell"
             ) as market_sell_mock:
                 result, next_phase = _run_market_buy(ctx, leg=ctx.station_1, next_phase=Phase.UNDOCK_STATION_1)
 
@@ -1138,8 +1138,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 station_2=_station_2_leg(),
             )
 
-            with patch("edap.routines.haul_two_way._read_cargo_json", return_value=[]), patch(
-                "edap.routines.haul_two_way.market_buy"
+            with patch("edcr.routines.haul_two_way._read_cargo_json", return_value=[]), patch(
+                "edcr.routines.haul_two_way.market_buy"
             ) as market_buy_mock:
                 result, next_phase = _run_market_buy(ctx, leg=ctx.station_1, next_phase=Phase.UNDOCK_STATION_1)
 
@@ -1199,8 +1199,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                     dispatch=ActionDispatchResult(action="MarketSell", status="ok"),
                 )
 
-            with patch("edap.routines.haul_two_way.market_buy", side_effect=fake_buy), patch(
-                "edap.routines.haul_two_way.market_sell",
+            with patch("edcr.routines.haul_two_way.market_buy", side_effect=fake_buy), patch(
+                "edcr.routines.haul_two_way.market_sell",
                 side_effect=fake_sell,
             ):
                 result, next_phase = _run_market_buy(ctx, leg=ctx.station_1, next_phase=Phase.UNDOCK_STATION_1)
@@ -1255,8 +1255,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 journal_dir,
                 [{"Name": "bertrandite", "Count": 64, "Stolen": 0}],
             )
-            with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
-                "edap.routines.haul_two_way.market_buy"
+            with patch("edcr.routines.haul_two_way.market_sell") as market_sell_mock, patch(
+                "edcr.routines.haul_two_way.market_buy"
             ) as market_buy_mock:
                 market_sell_mock.side_effect = lambda controls, watcher, **kwargs: (
                     market_calls.append(("sell", kwargs["target"])) or RoutineResult(
@@ -1326,8 +1326,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 ],
             )
 
-            with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
-                "edap.routines.haul_two_way.market_buy"
+            with patch("edcr.routines.haul_two_way.market_sell") as market_sell_mock, patch(
+                "edcr.routines.haul_two_way.market_buy"
             ) as market_buy_mock:
                 market_sell_mock.side_effect = lambda controls, watcher, **kwargs: (
                     market_calls.append(("sell", kwargs["target"])) or RoutineResult(
@@ -1402,7 +1402,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             )
             _write_cargo(journal_dir, [])
             with patch.dict(
-                "edap.routines.haul_two_way._PHASE_RUNNERS",
+                "edcr.routines.haul_two_way._PHASE_RUNNERS",
                 {
                     Phase.AT_STATION_2_BUY: fake_phase_runner,
                     Phase.TRANSIT_TO_STATION_1: fake_transit_runner,
@@ -1496,7 +1496,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             _write_cargo(journal_dir, [])
             (journal_dir / "Status.json").write_text(json.dumps({"Flags": 0}), encoding="utf-8")
 
-            with patch("edap.routines.transit.dock") as dock_mock:
+            with patch("edcr.routines.transit.dock") as dock_mock:
                 dock_mock.return_value = RoutineResult(
                     action="dock",
                     dispatch=ActionDispatchResult(action="dock", status="error", reason="stop after first transit"),
@@ -1547,7 +1547,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             _write_cargo(journal_dir, [])
             (journal_dir / "Status.json").write_text(json.dumps({"Flags": 0}), encoding="utf-8")
 
-            with patch("edap.routines.transit.dock") as dock_mock:
+            with patch("edcr.routines.transit.dock") as dock_mock:
                 dock_mock.return_value = RoutineResult(
                     action="dock",
                     dispatch=ActionDispatchResult(action="dock", status="error", reason="stop after first transit"),
@@ -1612,8 +1612,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             )
 
             with (
-                patch("edap.routines.transit.set_gal_map_destination", side_effect=[route_failure, route_failure]) as route_mock,
-                patch("edap.routines.transit.dock") as dock_mock,
+                patch("edcr.routines.transit.set_gal_map_destination", side_effect=[route_failure, route_failure]) as route_mock,
+                patch("edcr.routines.transit.dock") as dock_mock,
             ):
                 dock_mock.return_value = RoutineResult(
                     action="dock",
@@ -1675,7 +1675,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 ],
             )
             _write_cargo(journal_dir, [])
-            with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock:
+            with patch("edcr.routines.haul_two_way.market_sell") as market_sell_mock:
                 market_sell_mock.return_value = RoutineResult(
                     action="market_sell",
                     dispatch=ActionDispatchResult(action="market_sell", status="error", reason="stop after transit"),
@@ -1737,7 +1737,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 ],
             )
             _write_cargo(journal_dir, [])
-            with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock:
+            with patch("edcr.routines.haul_two_way.market_sell") as market_sell_mock:
                 market_sell_mock.return_value = RoutineResult(
                     action="market_sell",
                     dispatch=ActionDispatchResult(action="market_sell", status="error", reason="stop after transit"),
@@ -1793,7 +1793,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 ],
             )
             _write_cargo(journal_dir, [])
-            with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock:
+            with patch("edcr.routines.haul_two_way.market_sell") as market_sell_mock:
                 market_sell_mock.return_value = RoutineResult(
                     action="market_sell",
                     dispatch=ActionDispatchResult(action="market_sell", status="error", reason="stop after transit"),
@@ -1921,7 +1921,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                     [{"event": "SupercruiseExit", "BodyType": "Planet", "StarSystem": _SYSTEM_2}],
                     [{"event": "Docked", "StationName": _STATION_2}],
                 ])
-                with patch("edap.routines.transit.dock") as dock_mock:
+                with patch("edcr.routines.transit.dock") as dock_mock:
                     result = transit_to_station(
                         _test_haul_runtime(
                             journal_dir,
@@ -1959,7 +1959,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 ],
             )
             _write_cargo(journal_dir, [])
-            with patch("edap.routines.transit.dock") as dock_mock:
+            with patch("edcr.routines.transit.dock") as dock_mock:
                 result = haul_loop_two_way(
                     controls,
                     watcher,
@@ -2013,9 +2013,9 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 ],
             )
             _write_cargo(journal_dir, [{"Name": "bertrandite", "Count": 64, "Stolen": 0}])
-            with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
-                "edap.routines.haul_two_way.market_buy"
-            ) as market_buy_mock, patch("edap.routines.transit.set_gal_map_destination") as set_destination_mock:
+            with patch("edcr.routines.haul_two_way.market_sell") as market_sell_mock, patch(
+                "edcr.routines.haul_two_way.market_buy"
+            ) as market_buy_mock, patch("edcr.routines.transit.set_gal_map_destination") as set_destination_mock:
                 market_sell_mock.return_value = RoutineResult(
                     action="market_sell",
                     dispatch=ActionDispatchResult(action="market_sell", status="error", reason="stop after same-system undock transit"),
@@ -2078,8 +2078,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 ],
             )
             _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 64, "Stolen": 0}])
-            with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
-                "edap.routines.transit.set_gal_map_destination"
+            with patch("edcr.routines.haul_two_way.market_sell") as market_sell_mock, patch(
+                "edcr.routines.transit.set_gal_map_destination"
             ) as set_destination_mock:
                 market_sell_mock.return_value = RoutineResult(
                     action="market_sell",
@@ -2130,7 +2130,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 {"event": "FSDJump", "StarSystem": _SYSTEM_2},
             )
             _write_cargo(journal_dir, [])
-            with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock:
+            with patch("edcr.routines.haul_two_way.market_sell") as market_sell_mock:
                 market_sell_mock.return_value = RoutineResult(
                     action="market_sell",
                     dispatch=ActionDispatchResult(action="market_sell", status="error", reason="stop after transit"),
@@ -2189,8 +2189,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 ],
             )
             _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 64, "Stolen": 0}])
-            with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
-                "edap.routines.haul_two_way.market_buy"
+            with patch("edcr.routines.haul_two_way.market_sell") as market_sell_mock, patch(
+                "edcr.routines.haul_two_way.market_buy"
             ) as market_buy_mock:
                 def fake_sell(controls, watcher, **kwargs):
                     market_calls.append(("sell", kwargs["target"]))
@@ -2264,8 +2264,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 ],
             )
             _write_cargo(journal_dir, [])
-            with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
-                "edap.routines.haul_two_way.market_buy"
+            with patch("edcr.routines.haul_two_way.market_sell") as market_sell_mock, patch(
+                "edcr.routines.haul_two_way.market_buy"
             ) as market_buy_mock:
                 market_sell_mock.side_effect = lambda controls, watcher, **kwargs: (
                     market_calls.append(("sell", kwargs["target"])) or RoutineResult(
@@ -2316,7 +2316,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             )
             _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 64, "Stolen": 0}])
 
-            with patch("edap.routines.transit.dock") as dock_mock:
+            with patch("edcr.routines.transit.dock") as dock_mock:
                 dock_mock.return_value = RoutineResult(
                     action="dock",
                     dispatch=ActionDispatchResult(action="dock", status="error", reason="stop after first dock call"),
@@ -2360,8 +2360,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             )
             _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 64, "Stolen": 0}])
 
-            with patch("edap.routines.transit.dock") as dock_mock, patch(
-                "edap.routines.transit.station_refuel_menu"
+            with patch("edcr.routines.transit.dock") as dock_mock, patch(
+                "edcr.routines.transit.station_refuel_menu"
             ) as station_refuel_menu_mock:
                 station_refuel_menu_mock.return_value = RoutineResult(
                     action="UI_Down",
@@ -2439,8 +2439,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 encoding="utf-8",
             )
             _write_cargo(journal_dir, [])
-            with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
-                "edap.routines.haul_two_way.market_buy"
+            with patch("edcr.routines.haul_two_way.market_sell") as market_sell_mock, patch(
+                "edcr.routines.haul_two_way.market_buy"
             ) as market_buy_mock:
                 market_sell_mock.side_effect = lambda controls, watcher, **kwargs: (
                     market_calls.append(("sell", kwargs["target"])) or RoutineResult(
@@ -2599,7 +2599,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             _write_cargo(journal_dir, [])
             (journal_dir / "Status.json").write_text(json.dumps({"Flags": 0}), encoding="utf-8")
 
-            with patch("edap.routines.transit.dock") as dock_mock:
+            with patch("edcr.routines.transit.dock") as dock_mock:
                 dock_mock.return_value = RoutineResult(
                     action="dock",
                     dispatch=ActionDispatchResult(action="dock", status="error", reason="stop after first transit"),
@@ -2663,8 +2663,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 ],
             )
             _write_cargo(journal_dir, [])
-            with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
-                "edap.routines.haul_two_way.market_buy"
+            with patch("edcr.routines.haul_two_way.market_sell") as market_sell_mock, patch(
+                "edcr.routines.haul_two_way.market_buy"
             ) as market_buy_mock:
                 def fake_sell(controls, watcher, **kwargs):
                     market_calls.append(("sell", kwargs["target"]))
@@ -2754,8 +2754,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 journal_dir,
                 [{"Name": "bertrandite", "Count": 64, "Stolen": 0}],
             )
-            with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
-                "edap.routines.haul_two_way.market_buy"
+            with patch("edcr.routines.haul_two_way.market_sell") as market_sell_mock, patch(
+                "edcr.routines.haul_two_way.market_buy"
             ) as market_buy_mock:
                 def fake_sell(controls, watcher, **kwargs):
                     _write_cargo(journal_dir, [])
@@ -2829,8 +2829,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 ],
             )
             _write_cargo(journal_dir, [])
-            with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock, patch(
-                "edap.routines.haul_two_way.market_buy"
+            with patch("edcr.routines.haul_two_way.market_sell") as market_sell_mock, patch(
+                "edcr.routines.haul_two_way.market_buy"
             ) as market_buy_mock:
                 def fake_sell(controls, watcher, **kwargs):
                     _write_cargo(journal_dir, [])

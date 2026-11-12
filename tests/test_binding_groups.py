@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import unittest
 
-from edap.binding_groups import (
+from edcr.binding_groups import (
     GROUPS,
     UNMAPPED_TITLE,
     BindingRow,
     group_bindings,
 )
-from edap.binding_lookup import BindingLookupResult, NormalizedBinding
-from edap.bindings import REQUIRED_BINDINGS
+from edcr.binding_lookup import BindingLookupResult, NormalizedBinding
+from edcr.bindings import REQUIRED_BINDINGS
 
 
 class GroupCoverageTests(unittest.TestCase):

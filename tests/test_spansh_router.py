@@ -6,8 +6,8 @@ from pathlib import Path
 
 import httpx
 
-from edap.routing.types import Route, SpanshMetadata
-from edap.spansh_router import parse_spansh_result, plot_route
+from edcr.routing.types import Route, SpanshMetadata
+from edcr.spansh_router import parse_spansh_result, plot_route
 
 FIXTURES = Path(__file__).parent / "fixtures" / "routing"
 

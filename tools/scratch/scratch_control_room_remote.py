@@ -14,8 +14,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from edap.control_room.client.target import ObserverServerTarget, parse_observer_server_target
-from edap.control_room.protocol import (
+from edcr.control_room.client.target import ObserverServerTarget, parse_observer_server_target
+from edcr.control_room.protocol import (
     build_remote_observer_websocket_connect_info,
     validate_remote_observer_capabilities_payload,
 )

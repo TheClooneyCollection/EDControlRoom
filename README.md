@@ -236,7 +236,7 @@ uv run python3 -m unittest discover -s tests
 
 - `control_room.py`: primary operator surface at the repo root.
 - `tools/`: supported auxiliary CLIs (`run_routine.py`, `diagnostics.py`, `ship_controls.py`, bindings helpers).
-- `edap/`: active runtime code.
+- `edcr/`: active runtime code.
 - `web/`: the web frontend pages (`/haul`, `/markets`, `/routes`, `/controls`, `/travel`, `/multi-haul`).
 - `tools/scratch/`: exploratory probes and one-off validation helpers.
 

@@ -9,13 +9,13 @@ import zlib
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from edap.config import ConfigError, EddnConfig, load_config
-from edap.eddn.listener import EddnListener, apply_payload
-from edap.eddn.game_markets import import_game_markets, import_game_markets_every
-from edap.eddn.service import start_eddn_service
-from edap.eddn.messages import COMMODITY_SCHEMA, JOURNAL_SCHEMA, parse_eddn_message
-from edap.eddn.store import EddnStore
-from edap.recent_markets import save_recent_markets, snapshot_from_market_json
+from edcr.config import ConfigError, EddnConfig, load_config
+from edcr.eddn.listener import EddnListener, apply_payload
+from edcr.eddn.game_markets import import_game_markets, import_game_markets_every
+from edcr.eddn.service import start_eddn_service
+from edcr.eddn.messages import COMMODITY_SCHEMA, JOURNAL_SCHEMA, parse_eddn_message
+from edcr.eddn.store import EddnStore
+from edcr.recent_markets import save_recent_markets, snapshot_from_market_json
 
 LIVE_HEADER = {"softwareName": "EDMC", "gameversion": "4.0.0.1904", "uploaderID": "x"}
 

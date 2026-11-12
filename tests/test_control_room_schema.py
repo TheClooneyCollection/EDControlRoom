@@ -4,7 +4,7 @@ import json
 import unittest
 from pathlib import Path
 
-from edap.control_room.protocol import SUPPORTED_MESSAGE_TYPES
+from edcr.control_room.protocol import SUPPORTED_MESSAGE_TYPES
 
 
 _SCHEMA_PATH = (

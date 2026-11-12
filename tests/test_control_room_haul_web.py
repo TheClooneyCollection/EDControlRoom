@@ -4,8 +4,8 @@ import re
 import unittest
 from pathlib import Path
 
-from edap.control_room.routines_haul import _project_two_way_phase
-from edap.routines.haul_two_way import Phase
+from edcr.control_room.routines_haul import _project_two_way_phase
+from edcr.routines.haul_two_way import Phase
 
 
 def _haul_web_source() -> str:

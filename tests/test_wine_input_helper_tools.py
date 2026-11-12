@@ -24,7 +24,7 @@ class WineHelperToolsTests(unittest.TestCase):
             self.assertEqual(result.read_bytes(), b"MZ fake executable")
             self.assertEqual(commands, [[
                 "mingw-on-path", "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
-                str(ROOT / "tools/wine_input_helper/edap_input_helper.c"),
+                str(ROOT / "tools/wine_input_helper/edcr_input_helper.c"),
                 "-o", str(output), "-lws2_32", "-luser32",
             ]])
 
@@ -45,12 +45,12 @@ class WineHelperToolsTests(unittest.TestCase):
             source = root / "helper.exe"
             source.write_bytes(b"MZ version one")
             destination = install_helper("Test", bottles, source, copy=shutil.copy2)
-            self.assertEqual(destination, (drive / "edap" / "edap_input_helper.exe").resolve())
+            self.assertEqual(destination, (drive / "edcr" / "edcr_input_helper.exe").resolve())
             self.assertEqual(destination.read_bytes(), source.read_bytes())
             source.write_bytes(b"MZ version two")
             install_helper("Test", bottles, source, copy=shutil.copy2)
             self.assertEqual(destination.read_bytes(), b"MZ version two")
-            self.assertEqual(list(drive.iterdir()), [drive / "edap"])
+            self.assertEqual(list(drive.iterdir()), [drive / "edcr"])
 
     def test_install_refuses_missing_bottle_source_and_path_traversal(self):
         def forbidden_copy(source, target):
@@ -65,7 +65,7 @@ class WineHelperToolsTests(unittest.TestCase):
             (root / "Test" / "drive_c").mkdir(parents=True)
             with self.assertRaises(FileNotFoundError):
                 install_helper("Test", root, source, copy=forbidden_copy)
-            self.assertFalse((root / "Test" / "drive_c" / "edap").exists())
+            self.assertFalse((root / "Test" / "drive_c" / "edcr").exists())
 
     def test_install_refuses_destination_redirected_outside_bottle(self):
         def forbidden_copy(source, target):
@@ -78,7 +78,7 @@ class WineHelperToolsTests(unittest.TestCase):
             outside = root / "outside"
             outside.mkdir()
             try:
-                (drive / "edap").symlink_to(outside, target_is_directory=True)
+                (drive / "edcr").symlink_to(outside, target_is_directory=True)
             except (OSError, NotImplementedError):
                 self.skipTest("symlink creation unavailable")
             with self.assertRaises(ValueError):

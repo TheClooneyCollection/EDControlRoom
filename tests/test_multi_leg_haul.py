@@ -6,9 +6,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from edap.actions import ActionDispatchResult
-from edap.config import default_haul_routine_defaults
-from edap.multi_leg_haul import (
+from edcr.actions import ActionDispatchResult
+from edcr.config import default_haul_routine_defaults
+from edcr.multi_leg_haul import (
     EXTERNAL_SCHEMA,
     CargoTransfer,
     MultiLegHaulDefinition,
@@ -18,21 +18,21 @@ from edap.multi_leg_haul import (
     multi_leg_haul_definition_from_data,
     multi_leg_haul_definition_to_external_json,
 )
-from edap.routines import RoutineResult
-from edap.routines.callbacks import noop_announce, noop_progress
-from edap.routines.haul_support import (
+from edcr.routines import RoutineResult
+from edcr.routines.callbacks import noop_announce, noop_progress
+from edcr.routines.haul_support import (
     HaulMarketSettings,
     HaulRuntime,
     HaulTravelSettings,
     build_haul_runtime,
     build_haul_timing,
 )
-from edap.routines.haul_multi_leg import (
+from edcr.routines.haul_multi_leg import (
     Phase,
     _wait_for_arrival_or_approach_event,
     multi_leg_haul as _multi_leg_haul,
 )
-from edap.tts import AnnouncementId
+from edcr.tts import AnnouncementId
 from tests.fakes import FakeShipControls, FakeWatcher
 
 
@@ -266,10 +266,10 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
                     )
 
                 with (
-                    patch("edap.routines.haul_multi_leg.market_buy", buy),
-                    patch("edap.routines.haul_multi_leg._read_cargo_json", lambda _: []),
-                    patch("edap.routines.haul_multi_leg.transit_to_station", return_value=ok),
-                    patch("edap.routines.haul_multi_leg.undock_and_route_to_system", return_value=ok),
+                    patch("edcr.routines.haul_multi_leg.market_buy", buy),
+                    patch("edcr.routines.haul_multi_leg._read_cargo_json", lambda _: []),
+                    patch("edcr.routines.haul_multi_leg.transit_to_station", return_value=ok),
+                    patch("edcr.routines.haul_multi_leg.undock_and_route_to_system", return_value=ok),
                 ):
                     result = multi_leg_haul(
                         FakeShipControls(), FakeWatcher([]), definition=_definition(), journal_dir=Path(tmp),
@@ -304,10 +304,10 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
                                          trigger_event={"Count": count}, details={"expected_count": int(amount)})
 
                 with (
-                    patch("edap.routines.haul_multi_leg.market_buy", buy),
-                    patch("edap.routines.haul_multi_leg._read_cargo_json", lambda _: []),
-                    patch("edap.routines.haul_multi_leg.transit_to_station", return_value=ok),
-                    patch("edap.routines.haul_multi_leg.undock_and_route_to_system", return_value=ok),
+                    patch("edcr.routines.haul_multi_leg.market_buy", buy),
+                    patch("edcr.routines.haul_multi_leg._read_cargo_json", lambda _: []),
+                    patch("edcr.routines.haul_multi_leg.transit_to_station", return_value=ok),
+                    patch("edcr.routines.haul_multi_leg.undock_and_route_to_system", return_value=ok),
                 ):
                     result = multi_leg_haul(FakeShipControls(), FakeWatcher([]), definition=_definition(),
                                            journal_dir=journal_dir, announce_fn=lambda message_id, **values: announcements.append((message_id, values)), progress_fn=progress.append)
@@ -345,7 +345,7 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
                 '{"Inventory":[{"Name":"water purifiers","Name_Localised":"Water Purifiers","Count":460,"Stolen":0}]}\n',
                 encoding="utf-8",
             )
-            with patch("edap.routines.haul_multi_leg.market_sell") as market_sell_mock:
+            with patch("edcr.routines.haul_multi_leg.market_sell") as market_sell_mock:
                 market_sell_mock.return_value = RoutineResult(
                     action="market_sell",
                     dispatch=ActionDispatchResult(action="market_sell", status="error", reason="stop after transit"),
@@ -466,8 +466,8 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
                 ),
             )
             with (
-                patch("edap.routines.transit.set_gal_map_destination", side_effect=[route_failure, route_failure]) as route_mock,
-                patch("edap.routines.transit.dock") as dock_mock,
+                patch("edcr.routines.transit.set_gal_map_destination", side_effect=[route_failure, route_failure]) as route_mock,
+                patch("edcr.routines.transit.dock") as dock_mock,
             ):
                 dock_mock.return_value = RoutineResult(
                     action="dock",
@@ -548,7 +548,7 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
                 '{"Inventory":[{"Name":"water purifiers","Name_Localised":"Water Purifiers","Count":460,"Stolen":0}]}\n',
                 encoding="utf-8",
             )
-            with patch("edap.routines.transit.dock") as dock_mock:
+            with patch("edcr.routines.transit.dock") as dock_mock:
                 result = multi_leg_haul(
                     controls,
                     watcher,
@@ -599,8 +599,8 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
                 encoding="utf-8",
             )
             _write_navroute(journal_dir, "HIP 58412")
-            with patch("edap.routines.haul_multi_leg.market_sell") as market_sell_mock, patch(
-                "edap.routines.haul_multi_leg.market_buy"
+            with patch("edcr.routines.haul_multi_leg.market_sell") as market_sell_mock, patch(
+                "edcr.routines.haul_multi_leg.market_buy"
             ) as market_buy_mock:
                 def fake_sell(controls, watcher, **kwargs):
                     market_calls.append(("sell", kwargs["target"], kwargs["amount"]))
@@ -675,7 +675,7 @@ class MultiLegHaulRoutineTests(unittest.TestCase):
                 '{"Inventory":[]}\n',
                 encoding="utf-8",
             )
-            with patch("edap.routines.haul_multi_leg.market_buy") as market_buy_mock:
+            with patch("edcr.routines.haul_multi_leg.market_buy") as market_buy_mock:
                 market_buy_mock.return_value = RoutineResult(
                     action="market_buy",
                     dispatch=ActionDispatchResult(action="market_buy", status="ok"),

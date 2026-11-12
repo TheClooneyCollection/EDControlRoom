@@ -9,15 +9,15 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from edap.binding_editor import (
+from edcr.binding_editor import (
     SlotChange,
     apply_slot_change,
     describe_binding,
     parse_bindings_tree,
     write_bindings,
 )
-from edap.config import ConfigError, DEFAULT_CONFIG_PATH
-from edap.runtime import build_runtime_context, load_config_with_fallback
+from edcr.config import ConfigError, DEFAULT_CONFIG_PATH
+from edcr.runtime import build_runtime_context, load_config_with_fallback
 
 
 def main() -> int:

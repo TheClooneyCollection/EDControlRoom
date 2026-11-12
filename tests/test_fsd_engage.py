@@ -2,8 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from edap.routines.transit import engage_fsd_and_confirm_charging
-from edap.tts import AnnouncementId
+from edcr.routines.transit import engage_fsd_and_confirm_charging
+from edcr.tts import AnnouncementId
 from tests.fakes import FakeShipControls
 from tests.test_travel import _runtime
 

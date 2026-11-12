@@ -6,7 +6,7 @@ from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from edap.binding_editor import (
+from edcr.binding_editor import (
     SlotChange,
     apply_slot_change,
     describe_binding,

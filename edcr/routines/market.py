@@ -1,0 +1,1114 @@
+from __future__ import annotations
+
+import json
+from math import isfinite, log1p
+from pathlib import Path
+from time import monotonic, sleep
+from typing import Callable
+
+from edcr.cargo_manifest import (
+    cargo_item_matches_commodity,
+    read_cargo_inventory as read_cargo_inventory_with_retry,
+)
+from edcr.actions import ActionDispatchResult
+from edcr.config import MarketBuyHoldSegmentConfig
+from edcr.routines._base import (
+    RoutineResult,
+    SupportsMarketControls,
+    SupportsPollEvents,
+    _wait_for_event_with_pending,
+)
+from edcr.routines.callbacks import AnnouncementCallback, ProgressCallback
+from edcr.status import read_status
+from edcr.tts import AnnouncementId
+
+
+def _market_localised(item: dict, key: str) -> str:
+    return item.get(f"{key}_Localised") or item.get(key, "")
+
+
+def _market_buy_list(items: list[dict]) -> list[tuple[str, str]]:
+    rows = [
+        (_market_localised(it, "Category"), _market_localised(it, "Name"))
+        for it in items
+        if it.get("Stock", 0) > 0
+    ]
+    return sorted(rows, key=lambda r: (r[0].lower(), r[1].lower()))
+
+
+def _is_sell_market_item(item: dict) -> bool:
+    demand_bracket = int(item.get("DemandBracket", 0) or 0)
+    sell_price = int(item.get("SellPrice", 0) or 0)
+    # Elite can let the player sell cargo the station is not actively buying.
+    # In Market.json that often shows up as DemandBracket == 0 with a non-zero
+    # SellPrice. Treat those rows as intentionally sellable so EDControlRoom can still
+    # target and offload the player's existing cargo there.
+    #
+    # Keep excluding placeholder rows that have neither demand nor a sell price.
+    return demand_bracket > 0 or sell_price > 0
+
+
+def _market_sell_list(items: list[dict]) -> list[tuple[str, str]]:
+    rows = [
+        (_market_localised(it, "Category"), _market_localised(it, "Name"))
+        for it in items
+        if int(it.get("DemandBracket", 0) or 0) > 0
+    ]
+    return sorted(rows, key=lambda r: (r[0].lower(), r[1].lower()))
+
+
+def _cargo_inventory_names(inventory: list[dict] | None) -> set[str]:
+    if inventory is None:
+        return set()
+    names: set[str] = set()
+    for item in inventory:
+        if not isinstance(item, dict):
+            continue
+        count = item.get("Count", 0)
+        if isinstance(count, bool) or not isinstance(count, (int, float)) or count <= 0:
+            continue
+        raw_name = str(item.get("Name", "")).strip().lower()
+        localised_name = str(item.get("Name_Localised", "")).strip().lower()
+        if raw_name:
+            names.add(raw_name)
+        if localised_name:
+            names.add(localised_name)
+    return names
+
+
+def _market_sell_list_for_cargo(
+    items: list[dict],
+    inventory: list[dict] | None,
+    target_item: dict | None,
+) -> list[tuple[str, str]]:
+    rows = _market_sell_list(items)
+    cargo_names = _cargo_inventory_names(inventory)
+    visible_names = {name.lower() for _, name in rows}
+    cargo_rows = []
+    if cargo_names:
+        for item in items:
+            if not _is_sell_market_item(item):
+                continue
+            raw_name = str(item.get("Name", "")).strip().lower()
+            localised_name = _market_localised(item, "Name").strip().lower()
+            if raw_name not in cargo_names and localised_name not in cargo_names:
+                continue
+            row = (
+                _market_localised(item, "Category"),
+                _market_localised(item, "Name"),
+            )
+            if row[1].lower() in visible_names:
+                continue
+            cargo_rows.append(row)
+    elif target_item is not None and _is_sell_market_item(target_item):
+        row = (
+            _market_localised(target_item, "Category"),
+            _market_localised(target_item, "Name"),
+        )
+        if row[1].lower() not in visible_names:
+            cargo_rows.append(row)
+
+    # The visible SELL list is demand-based, but the game can still accept a
+    # sale for cargo already in the player's hold even when those commodities
+    # do not appear in the station's normal buy list. Inject the whole hidden
+    # cargo subset so cursor indexing matches the in-game sell page ordering.
+    rows = rows + cargo_rows
+    return sorted(rows, key=lambda r: (r[0].lower(), r[1].lower()))
+
+
+def _market_item_index(sorted_items: list[tuple[str, str]], target: str) -> int:
+    t = target.lower()
+    for i, (_, name) in enumerate(sorted_items):
+        if name.lower() == t:
+            return i
+    sample = [name for _, name in sorted_items[:5]]
+    suffix = "..." if len(sorted_items) > 5 else ""
+    raise ValueError(f"'{target}' not found in market list (first items: {sample}{suffix})")
+
+
+def _is_market_event(event: dict[str, object], event_type: str, target: str) -> bool:
+    if event.get("event") != event_type:
+        return False
+    t = target.lower()
+    # Exact match (case-insensitive) so a wrong commodity cannot satisfy the
+    # predicate -- e.g. a stray MarketBuy for "Gold" must not match target "Gold Ore".
+    return (
+        str(event.get("Type_Localised", "")).lower() == t
+        or str(event.get("Type", "")).lower() == t
+    )
+
+
+def _is_trade_event(event: dict[str, object], event_type: str) -> bool:
+    return event.get("event") == event_type
+
+
+def _event_commodity_name(event: dict[str, object]) -> str:
+    return str(event.get("Type_Localised") or event.get("Type") or "unknown commodity")
+
+
+def _read_last_docked_state(journal_dir: Path) -> dict[str, object] | None:
+    journal_files = sorted(journal_dir.glob("Journal.*.log"))
+    if not journal_files:
+        return None
+    try:
+        lines = journal_files[-1].read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+            if event.get("event") == "Docked":
+                return event
+            if event.get("event") in {"Location", "CarrierJump"} and event.get("Docked") is True:
+                return event
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
+def _read_latest_position_state(journal_dir: Path) -> dict[str, object] | None:
+    journal_files = sorted(journal_dir.glob("Journal.*.log"))
+    if not journal_files:
+        return None
+    position_event_types = {"Docked", "Undocked", "SupercruiseEntry", "SupercruiseExit", "Location", "FSDJump"}
+    for journal_file in reversed(journal_files):
+        try:
+            lines = journal_file.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in reversed(lines):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if event.get("event") in position_event_types:
+                return event
+    return None
+
+
+def _is_currently_docked(journal_dir: Path) -> tuple[bool, str]:
+    latest_position = _read_latest_position_state(journal_dir)
+    if latest_position is None:
+        return False, "no current station state found in journal"
+    event_name = str(latest_position.get("event", ""))
+    if event_name == "Docked":
+        return True, ""
+    if event_name == "Location":
+        if latest_position.get("Docked") is True:
+            return True, ""
+        return False, "latest position event is Location(Docked=false)"
+    return False, f"latest position event is {event_name}"
+
+
+def _read_last_cargo_capacity(journal_dir: Path) -> int | None:
+    journal_files = sorted(journal_dir.glob("Journal.*.log"))
+    if not journal_files:
+        return None
+    for journal_file in reversed(journal_files):
+        try:
+            lines = journal_file.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in reversed(lines):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            cargo_capacity = event.get("CargoCapacity")
+            if isinstance(cargo_capacity, (int, float)) and cargo_capacity > 0:
+                return int(cargo_capacity)
+    return None
+
+
+def _read_available_cargo_space(journal_dir: Path) -> int | None:
+    cargo_capacity = _read_last_cargo_capacity(journal_dir)
+    if cargo_capacity is None or cargo_capacity <= 0:
+        return None
+    cargo_path = journal_dir / "Cargo.json"
+    try:
+        with cargo_path.open(encoding="utf-8") as handle:
+            cargo_data = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return None
+    inventory = cargo_data.get("Inventory", [])
+    if not isinstance(inventory, list):
+        return None
+    used_capacity = 0
+    for item in inventory:
+        if not isinstance(item, dict):
+            return None
+        count = item.get("Count", 0)
+        if isinstance(count, bool) or not isinstance(count, (int, float)):
+            return None
+        used_capacity += int(count)
+    return max(0, cargo_capacity - used_capacity)
+
+
+def _read_cargo_inventory(journal_dir: Path) -> list[dict] | None:
+    return read_cargo_inventory_with_retry(journal_dir)
+
+
+def _read_sell_quantity(journal_dir: Path, target: str) -> int | None:
+    inventory = _read_cargo_inventory(journal_dir)
+    if inventory is None:
+        return None
+    for item in inventory:
+        if not isinstance(item, dict):
+            return None
+        if not cargo_item_matches_commodity(item, target):
+            continue
+        count = item.get("Count", 0)
+        if isinstance(count, bool) or not isinstance(count, (int, float)) or count < 0:
+            return None
+        return int(count)
+    return None
+
+
+def _buy_hold_duration_for_quantity(
+    quantity: int,
+    *,
+    max_hold_s: float,
+    buy_hold_segments: tuple[MarketBuyHoldSegmentConfig, ...],
+) -> tuple[float, str]:
+    segment = buy_hold_segments[0]
+    for candidate in buy_hold_segments:
+        if quantity < candidate.start:
+            break
+        segment = candidate
+
+    if segment.function == "flat":
+        hold_s = segment.hold_seconds
+        detail = f"{segment.start}t+ flat {segment.hold_seconds:.2f}s"
+    elif segment.function == "log":
+        hold_s = segment.base_seconds + (log1p(quantity) * segment.multiplier)
+        detail = (
+            f"{segment.start}t+ log curve ({segment.base_seconds:.2f}s + log1p(tons) * "
+            f"{segment.multiplier:.4f}s)"
+        )
+    else:
+        hold_s = quantity * segment.seconds_per_ton
+        detail = f"{segment.start}t+ linear {segment.seconds_per_ton:.4f}s/t"
+    return min(max_hold_s, max(0.0, hold_s)), detail
+
+
+def _find_market_item(items: list[dict], target: str, side: str) -> dict | None:
+    target_lower = target.lower()
+    for item in items:
+        if side == "buy" and item.get("Stock", 0) <= 0:
+            continue
+        if side == "sell" and not _is_sell_market_item(item):
+            continue
+        if (
+            _market_localised(item, "Name").lower() == target_lower
+            or str(item.get("Name", "")).lower() == target_lower
+        ):
+            return item
+    return None
+
+
+def read_buy_affordability(journal_dir: Path, item: dict) -> tuple[int, int | float] | None:
+    """Read a usable balance and unit price, or leave affordability unknown."""
+    try:
+        status = read_status(journal_dir)
+    except (OSError, ValueError, TypeError, AttributeError, IndexError):
+        return None
+    balance = status.balance if status is not None else None
+    price = item.get("BuyPrice")
+    if isinstance(balance, bool) or not isinstance(balance, int) or balance < 0:
+        return None
+    if isinstance(price, bool) or not isinstance(price, (int, float)) or not isfinite(price) or price <= 0:
+        return None
+    return balance, price
+
+
+def unaffordable_top_up(market_path: Path, target: str) -> tuple[int, int | float] | None:
+    try:
+        data = json.loads(market_path.read_text(encoding="utf-8"))
+        items = data.get("Items", [])
+        item = next((item for item in items if isinstance(item, dict) and cargo_item_matches_commodity(item, target)), None)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+    if item is None:
+        return None
+    affordability = read_buy_affordability(market_path.parent, item)
+    if affordability is not None and affordability[0] < affordability[1]:
+        return affordability
+    return None
+
+
+def _read_buy_quantity_limit(
+    journal_dir: Path,
+    item: dict,
+) -> tuple[int | None, str]:
+    available_space = _read_available_cargo_space(journal_dir)
+    stock = item.get("Stock", 0)
+    stock_units = int(stock) if isinstance(stock, (int, float)) and not isinstance(stock, bool) else None
+    if stock_units is not None:
+        stock_units = max(0, stock_units)
+
+    limits: list[int] = []
+    reasons: list[str] = []
+    if available_space is not None:
+        limits.append(available_space)
+        reasons.append(f"{available_space}t free")
+    if stock_units is not None:
+        limits.append(stock_units)
+        reasons.append(f"{stock_units}t supply")
+    affordability = read_buy_affordability(journal_dir, item)
+    if affordability is not None:
+        balance, price = affordability
+        affordable = int(balance // price)
+        limits.append(affordable)
+        reasons.append(f"{affordable} affordable")
+    if not limits:
+        return None, "cargo space and station supply unavailable"
+    reason = reasons[0] if len(reasons) == 1 else f"min({', '.join(reasons)})"
+    return min(limits), f"from {reason}"
+
+
+def _report_market_level(
+    item: dict,
+    *,
+    journal_dir: Path,
+    side: str,
+    critical_level_multiplier: float,
+    progress_fn: ProgressCallback,
+    announce_fn: AnnouncementCallback,
+) -> None:
+    units_key = "Stock" if side == "buy" else "Demand"
+    market_side = "supply" if side == "buy" else "demand"
+    units = int(item.get(units_key, 0) or 0)
+    commodity_name = _market_localised(item, "Name") or str(item.get("Name", ""))
+    cargo_capacity = _read_last_cargo_capacity(journal_dir)
+    if cargo_capacity is None or cargo_capacity <= 0:
+        progress_fn(
+            f"Station {market_side} for {commodity_name} is {units} units; "
+            "cargo capacity unavailable, skipping low-level threshold check."
+        )
+        return
+
+    low_threshold = int(cargo_capacity * critical_level_multiplier)
+    if units < low_threshold:
+        progress_fn(
+            f"Warning: Station {market_side} for {commodity_name} is low at "
+            f"{units} units (critical below {low_threshold})."
+        )
+        announce_fn(
+            AnnouncementId.MARKET_LEVEL_LOW,
+            market_side=market_side,
+            commodity_name=commodity_name,
+            units=units,
+        )
+        return
+
+    progress_fn(
+        f"Station {market_side} for {commodity_name} looks normal at "
+        f"{units} units (critical below {low_threshold})."
+    )
+
+
+def _market_error(action: str, reason: str) -> RoutineResult:
+    return RoutineResult(
+        action=action,
+        dispatch=ActionDispatchResult(action=action, status="error", reason=reason),
+    )
+
+
+def _market_error_with_back_out(
+    controls: SupportsMarketControls,
+    *,
+    action: str,
+    reason: str,
+    step_delay_s: float,
+    sleeper: Callable[[float], None],
+    progress_fn: ProgressCallback,
+    phase: str,
+) -> RoutineResult:
+    error_result = _market_error(action, reason)
+    back_dispatch = _market_back_out_to_station_menu(
+        controls,
+        step_delay_s=step_delay_s,
+        sleeper=sleeper,
+        progress_fn=progress_fn,
+    )
+    if back_dispatch.status != "ok":
+        return RoutineResult(
+            action="UI_Back",
+            dispatch=back_dispatch,
+            details={"phase": phase, "market_error": reason},
+        )
+    return RoutineResult(
+        action=action,
+        dispatch=error_result.dispatch,
+        details={"phase": phase},
+    )
+
+
+def _market_ui_reset(
+    controls: SupportsMarketControls,
+    *,
+    step_delay_s: float,
+    sleeper: Callable[[float], None],
+    progress_fn: ProgressCallback,
+) -> ActionDispatchResult:
+    progress_fn("Resetting UI state...")
+    progress_fn("  UI_Back x4 (reset to station menu)")
+    dispatch = ActionDispatchResult(action="UI_Back", status="ok")
+    for _ in range(4):
+        dispatch = controls.ui_back()
+        if dispatch.status != "ok":
+            return dispatch
+        if step_delay_s > 0:
+            sleeper(step_delay_s)
+    return dispatch
+
+
+def _open_commodities_market(
+    controls: SupportsMarketControls,
+    *,
+    step_delay_s: float,
+    nav_delay_s: float,
+    sleeper: Callable[[float], None],
+    progress_fn: ProgressCallback,
+) -> RoutineResult | None:
+    """Reset to the station menu and open the commodities market. Returns a result only on a dispatch failure."""
+    dispatch = _market_ui_reset(
+        controls,
+        step_delay_s=step_delay_s,
+        sleeper=sleeper,
+        progress_fn=progress_fn,
+    )
+    if dispatch.status != "ok":
+        return RoutineResult(action="UI_Back", dispatch=dispatch, details={"phase": "reset"})
+
+    progress_fn("Navigating to commodities market...")
+
+    progress_fn("  UI_Select (enter station services)")
+    dispatch = controls.ui_select()
+    if dispatch.status != "ok":
+        return RoutineResult(action=dispatch.action, dispatch=dispatch, details={"phase": "navigate_to_market"})
+    # Station services UI takes a moment to populate after selection
+    sleeper(7.0)
+
+    for fn, label, delay in [
+        (controls.ui_down, "UI_Down (to commodities market)", nav_delay_s),
+        (controls.ui_select, "UI_Select (open market)", step_delay_s),
+    ]:
+        progress_fn(f"  {label}")
+        dispatch = fn()
+        if dispatch.status != "ok":
+            return RoutineResult(action=dispatch.action, dispatch=dispatch, details={"phase": "navigate_to_market"})
+        if delay > 0:
+            sleeper(delay)
+
+    sleeper(5.0)
+    return None
+
+
+def _check_market_station(market_path: Path) -> tuple[dict, str | None]:
+    """Read Market.json and confirm it belongs to the station we last docked at."""
+    if not market_path.exists():
+        return {}, "Market.json not found"
+    with market_path.open() as fh:
+        data = json.load(fh)
+    docked = _read_last_docked_state(market_path.parent)
+    if docked is None:
+        return data, (
+            "no docked station state found in journal "
+            "(expected Docked or Location(Docked=true)) -- cannot verify current station"
+        )
+    market_id = data.get("MarketID")
+    docked_id = docked.get("MarketID")
+    if market_id and docked_id and market_id == docked_id:
+        return data, None
+    if data.get("StationName") and data.get("StationName") == docked.get("StationName"):
+        return data, None
+    return data, (
+        f"Market.json is from {data.get('StationName', '?')!r} "
+        f"but last Docked event is {docked.get('StationName', '?')!r}"
+    )
+
+
+def _market_back_out_to_station_menu(
+    controls: SupportsMarketControls,
+    *,
+    step_delay_s: float,
+    sleeper: Callable[[float], None],
+    progress_fn: ProgressCallback,
+) -> ActionDispatchResult:
+    progress_fn("  UI_Back x4 (return to station menu)")
+    dispatch = ActionDispatchResult(action="UI_Back", status="ok")
+    for _ in range(4):
+        dispatch = controls.ui_back()
+        if dispatch.status != "ok":
+            return dispatch
+        if step_delay_s > 0:
+            sleeper(step_delay_s)
+    return dispatch
+
+
+def _market_reset_trade_dialog_focus(
+    controls: SupportsMarketControls,
+    *,
+    nav_delay_s: float,
+    sleeper: Callable[[float], None],
+    progress_fn: ProgressCallback,
+) -> ActionDispatchResult:
+    progress_fn("Resetting trade dialog focus to quantity controls...")
+    progress_fn("  UI_Left x5 (bias to left edge of dialog)")
+    dispatch = ActionDispatchResult(action="UI_Left", status="ok")
+    for _ in range(5):
+        dispatch = controls.ui_left()
+        if dispatch.status != "ok":
+            return dispatch
+        if nav_delay_s > 0:
+            sleeper(nav_delay_s)
+
+    progress_fn("  UI_Up x5 (bias to quantity row)")
+    dispatch = ActionDispatchResult(action="UI_Up", status="ok")
+    for _ in range(5):
+        dispatch = controls.ui_up()
+        if dispatch.status != "ok":
+            return dispatch
+        if nav_delay_s > 0:
+            sleeper(nav_delay_s)
+    return dispatch
+
+
+def market_buy(
+    controls: SupportsMarketControls,
+    watcher: SupportsPollEvents,
+    *,
+    market_path: Path,
+    target: str,
+    amount: int | str,
+    step_delay_s: float = 1.0,
+    nav_delay_s: float = 0.1,
+    max_hold_s: float = 10.0,
+    buy_hold_segments: tuple[MarketBuyHoldSegmentConfig, ...] = (
+        MarketBuyHoldSegmentConfig(start=0, function="flat", hold_seconds=3.0),
+        MarketBuyHoldSegmentConfig(start=100, function="flat", hold_seconds=5.0),
+        MarketBuyHoldSegmentConfig(start=301, function="log", base_seconds=-12.5627, multiplier=3.0756),
+    ),
+    trade_timeout_s: float = 30.0,
+    skip_station_check: bool = False,
+    max_attempts: int = 3,
+    time_fn: Callable[[], float] = monotonic,
+    sleeper: Callable[[float], None] = sleep,
+    progress_fn: ProgressCallback,
+    announce_fn: AnnouncementCallback,
+    critical_level_multiplier: float = 10.0,
+) -> RoutineResult:
+    return _market_trade(
+        controls, watcher,
+        market_path=market_path, target=target, amount=amount, side="buy",
+        step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
+        buy_hold_segments=buy_hold_segments,
+        sell_quantity_restore_taps=0,
+        sell_quantity_restore_tap_delay_s=0.0,
+        trade_timeout_s=trade_timeout_s, skip_station_check=skip_station_check,
+        max_attempts=max_attempts,
+        time_fn=time_fn, sleeper=sleeper, progress_fn=progress_fn, announce_fn=announce_fn,
+        critical_level_multiplier=critical_level_multiplier,
+    )
+
+
+def market_sell(
+    controls: SupportsMarketControls,
+    watcher: SupportsPollEvents,
+    *,
+    market_path: Path,
+    target: str,
+    amount: int | str,
+    step_delay_s: float = 1.0,
+    nav_delay_s: float = 0.1,
+    max_hold_s: float = 10.0,
+    buy_hold_segments: tuple[MarketBuyHoldSegmentConfig, ...] = (
+        MarketBuyHoldSegmentConfig(start=0, function="flat", hold_seconds=3.0),
+        MarketBuyHoldSegmentConfig(start=100, function="flat", hold_seconds=5.0),
+        MarketBuyHoldSegmentConfig(start=301, function="log", base_seconds=-12.5627, multiplier=3.0756),
+    ),
+    sell_quantity_restore_taps: int = 5,
+    sell_quantity_restore_tap_delay_s: float = 0.05,
+    trade_timeout_s: float = 30.0,
+    skip_station_check: bool = False,
+    max_attempts: int = 3,
+    time_fn: Callable[[], float] = monotonic,
+    sleeper: Callable[[float], None] = sleep,
+    progress_fn: ProgressCallback,
+    announce_fn: AnnouncementCallback,
+    critical_level_multiplier: float = 10.0,
+) -> RoutineResult:
+    return _market_trade(
+        controls, watcher,
+        market_path=market_path, target=target, amount=amount, side="sell",
+        step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
+        buy_hold_segments=buy_hold_segments,
+        sell_quantity_restore_taps=sell_quantity_restore_taps,
+        sell_quantity_restore_tap_delay_s=sell_quantity_restore_tap_delay_s,
+        trade_timeout_s=trade_timeout_s, skip_station_check=skip_station_check,
+        max_attempts=max_attempts,
+        time_fn=time_fn, sleeper=sleeper, progress_fn=progress_fn, announce_fn=announce_fn,
+        critical_level_multiplier=critical_level_multiplier,
+    )
+
+
+def _market_trade(
+    controls: SupportsMarketControls,
+    watcher: SupportsPollEvents,
+    *,
+    market_path: Path,
+    target: str,
+    amount: int | str,
+    side: str,
+    step_delay_s: float,
+    nav_delay_s: float,
+    max_hold_s: float,
+    buy_hold_segments: tuple[MarketBuyHoldSegmentConfig, ...],
+    sell_quantity_restore_taps: int,
+    sell_quantity_restore_tap_delay_s: float,
+    trade_timeout_s: float,
+    skip_station_check: bool,
+    max_attempts: int,
+    time_fn: Callable[[], float],
+    sleeper: Callable[[float], None],
+    progress_fn: ProgressCallback,
+    announce_fn: AnnouncementCallback,
+    critical_level_multiplier: float,
+) -> RoutineResult:
+    event_type = "MarketBuy" if side == "buy" else "MarketSell"
+    if max_attempts < 1:
+        max_attempts = 1
+
+    last_failure: RoutineResult | None = None
+    for attempt in range(1, max_attempts + 1):
+        if attempt > 1:
+            progress_fn(
+                f"Retrying {side} of '{target}' "
+                f"(attempt {attempt}/{max_attempts})..."
+            )
+            # Bail out of any lingering dialog/list back to station services
+            for _ in range(4):
+                controls.ui_back()
+                if nav_delay_s > 0:
+                    sleeper(nav_delay_s)
+
+        result = _market_trade_attempt(
+            controls, watcher,
+            market_path=market_path, target=target, amount=amount, side=side,
+            event_type=event_type,
+            step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
+            buy_hold_segments=buy_hold_segments,
+            sell_quantity_restore_taps=sell_quantity_restore_taps,
+            sell_quantity_restore_tap_delay_s=sell_quantity_restore_tap_delay_s,
+            trade_timeout_s=trade_timeout_s, skip_station_check=skip_station_check,
+            time_fn=time_fn, sleeper=sleeper, progress_fn=progress_fn, announce_fn=announce_fn,
+            critical_level_multiplier=critical_level_multiplier,
+        )
+
+        if result.dispatch.status == "ok" and result.trigger_event is not None:
+            return result
+
+        if (result.details or {}).get("phase") == "wrong_item":
+            return result
+
+        # Only the wait-for-event phase is retryable; other failures (UI dispatch,
+        # missing Market.json, item not in list) indicate setup problems that won't
+        # be fixed by trying again.
+        phase = (result.details or {}).get("phase", "")
+        if phase != "wait_for_event":
+            return result
+
+        last_failure = result
+
+    assert last_failure is not None
+    base_reason = last_failure.dispatch.reason or "no event observed"
+    return _market_error(
+        event_type,
+        f"{event_type} for '{target}' failed after {max_attempts} "
+        f"attempts: {base_reason}",
+    )
+
+
+def _market_trade_attempt(
+    controls: SupportsMarketControls,
+    watcher: SupportsPollEvents,
+    *,
+    market_path: Path,
+    target: str,
+    amount: int | str,
+    side: str,
+    event_type: str,
+    step_delay_s: float,
+    nav_delay_s: float,
+    max_hold_s: float,
+    buy_hold_segments: tuple[MarketBuyHoldSegmentConfig, ...],
+    sell_quantity_restore_taps: int,
+    sell_quantity_restore_tap_delay_s: float,
+    trade_timeout_s: float,
+    skip_station_check: bool,
+    time_fn: Callable[[], float],
+    sleeper: Callable[[float], None],
+    progress_fn: ProgressCallback,
+    announce_fn: AnnouncementCallback,
+    critical_level_multiplier: float,
+) -> RoutineResult:
+    if side == "sell":
+        docked, reason = _is_currently_docked(market_path.parent)
+        if not docked:
+            return _market_error(event_type, f"sell requires an in-station start: {reason}")
+
+    # The game writes Market.json when the market screen opens. Right after docking the station
+    # services screen can still be loading, so the presses that open the market get lost and
+    # Market.json stays from the previous station: back out and navigate again instead of re-reading.
+    _ATTEMPTS = 3
+    data: dict = {}
+    for attempt in range(1, _ATTEMPTS + 1):
+        navigation_failure = _open_commodities_market(
+            controls,
+            step_delay_s=step_delay_s,
+            nav_delay_s=nav_delay_s,
+            sleeper=sleeper,
+            progress_fn=progress_fn,
+        )
+        if navigation_failure is not None:
+            return navigation_failure
+        if skip_station_check:
+            if not market_path.exists():
+                return _market_error(event_type, "Market.json not found")
+            with market_path.open() as fh:
+                data = json.load(fh)
+            progress_fn("Station check skipped")
+            break
+        data, fail_reason = _check_market_station(market_path)
+        if fail_reason is None:
+            break
+        if attempt < _ATTEMPTS:
+            progress_fn(f"Station check failed (attempt {attempt}/{_ATTEMPTS}): {fail_reason}")
+            progress_fn("  Market may not have opened; backing out to open it again...")
+        else:
+            return _market_error_with_back_out(
+                controls,
+                action=event_type,
+                reason=f"Station check failed after {_ATTEMPTS} attempts: {fail_reason}",
+                step_delay_s=step_delay_s,
+                sleeper=sleeper,
+                progress_fn=progress_fn,
+                phase="station_check",
+            )
+
+    items: list[dict] = data.get("Items", [])
+
+    item = _find_market_item(items, target, side)
+    sorted_items = (
+        _market_buy_list(items)
+        if side == "buy"
+        else _market_sell_list_for_cargo(items, _read_cargo_inventory(market_path.parent), item)
+    )
+    try:
+        item_index = _market_item_index(sorted_items, target)
+    except ValueError as exc:
+        return _market_error_with_back_out(
+            controls,
+            action=event_type,
+            reason=str(exc),
+            step_delay_s=step_delay_s,
+            sleeper=sleeper,
+            progress_fn=progress_fn,
+            phase="resolve_target",
+        )
+    if item is None:
+        return _market_error_with_back_out(
+            controls,
+            action=event_type,
+            reason=f"'{target}' matched navigation list but not market item data",
+            step_delay_s=step_delay_s,
+            sleeper=sleeper,
+            progress_fn=progress_fn,
+            phase="resolve_target",
+        )
+
+    progress_fn(f"Target '{target}' at position {item_index} in {side} list ({len(sorted_items)} items)")
+    _report_market_level(
+        item,
+        journal_dir=market_path.parent,
+        side=side,
+        critical_level_multiplier=critical_level_multiplier,
+        progress_fn=progress_fn,
+        announce_fn=announce_fn,
+    )
+
+    # For sell: navigate sidebar from BUY to SELL tab before entering the list
+    if side == "sell":
+        progress_fn("  UI_Down (BUY -> SELL tab)")
+        dispatch = controls.ui_down()
+        if dispatch.status != "ok":
+            return RoutineResult(action="UI_Down", dispatch=dispatch, details={"phase": "navigate_to_sell_tab"})
+        if nav_delay_s > 0:
+            sleeper(nav_delay_s)
+
+        progress_fn("  UI_Select (enter SELL tab)")
+        dispatch = controls.ui_select()
+        if dispatch.status != "ok":
+            return RoutineResult(action="UI_Select", dispatch=dispatch, details={"phase": "navigate_to_sell_tab"})
+        if step_delay_s > 0:
+            sleeper(step_delay_s)
+
+    # Enter the commodity list (cursor lands on the first item)
+    progress_fn("  UI_Right (enter commodity list)")
+    dispatch = controls.ui_right()
+    if dispatch.status != "ok":
+        return RoutineResult(action="UI_Right", dispatch=dispatch, details={"phase": "enter_list"})
+    if step_delay_s > 0:
+        sleeper(step_delay_s)
+
+    # Navigate down to target item (category headers are non-navigable separators)
+    if item_index > 0:
+        progress_fn(f"  UI_Down x{item_index} (navigate to '{target}')")
+        for _ in range(item_index):
+            dispatch = controls.ui_down()
+            if dispatch.status != "ok":
+                return RoutineResult(action="UI_Down", dispatch=dispatch, details={"phase": "navigate_to_item"})
+            if nav_delay_s > 0:
+                sleeper(nav_delay_s)
+
+    # Open the trade dialog for this item
+    progress_fn(f"  UI_Select (open '{target}' dialog)")
+    dispatch = controls.ui_select()
+    if dispatch.status != "ok":
+        return RoutineResult(action="UI_Select", dispatch=dispatch, details={"phase": "select_item"})
+    if step_delay_s > 0:
+        sleeper(step_delay_s)
+
+    dialog_reset_dispatch = _market_reset_trade_dialog_focus(
+        controls,
+        nav_delay_s=nav_delay_s,
+        sleeper=sleeper,
+        progress_fn=progress_fn,
+    )
+    if dialog_reset_dispatch.status != "ok":
+        return RoutineResult(
+            action=dialog_reset_dispatch.action,
+            dispatch=dialog_reset_dispatch,
+            details={"phase": "reset_trade_dialog_focus"},
+        )
+
+    # Prime the watcher before setting quantity so the trade event is not missed
+    pending_events = watcher.poll()
+
+    # Set quantity
+    expected_count: int | None = None
+    if side == "buy":
+        if amount == "MAX":
+            hold_s = max_hold_s
+            buy_limit, buy_limit_reason = _read_buy_quantity_limit(market_path.parent, item)
+            expected_count = buy_limit
+            if buy_limit == 0:
+                progress_fn(f"Warning: no units available to buy ({buy_limit_reason}); continuing with current load.")
+                announce_fn(
+                    AnnouncementId.MARKET_BUY_NONE_AVAILABLE,
+                    commodity_name=_market_localised(item, "Name"),
+                )
+                back_dispatch = _market_back_out_to_station_menu(
+                    controls, step_delay_s=step_delay_s, sleeper=sleeper, progress_fn=progress_fn,
+                )
+                return RoutineResult(
+                    action=event_type, dispatch=back_dispatch,
+                    details={"target": target, "amount": str(amount), "side": side, "expected_count": 0},
+                )
+            if buy_limit is not None:
+                hold_s, hold_detail = _buy_hold_duration_for_quantity(
+                    buy_limit,
+                    max_hold_s=max_hold_s,
+                    buy_hold_segments=buy_hold_segments,
+                )
+            if buy_limit is None:
+                progress_fn(
+                    f"  UI_Right hold {hold_s:.2f}s "
+                    f"(fill to max; {buy_limit_reason}, using cap)"
+                )
+            else:
+                progress_fn(
+                    f"  UI_Right hold {hold_s:.2f}s "
+                    f"(fill to max {buy_limit_reason} with {hold_detail})"
+                )
+            qty_dispatch = controls.ui_right(hold_s=hold_s)
+            if qty_dispatch.status != "ok":
+                return RoutineResult(action="UI_Right", dispatch=qty_dispatch, details={"phase": "set_quantity"})
+        else:
+            qty = int(amount)
+            expected_count = qty
+            progress_fn(f"  UI_Right x{qty} (set quantity to {qty})")
+            qty_dispatch = None
+            for _ in range(qty):
+                qty_dispatch = controls.ui_right()
+                if qty_dispatch.status != "ok":
+                    return RoutineResult(action="UI_Right", dispatch=qty_dispatch, details={"phase": "set_quantity"})
+                if step_delay_s > 0:
+                    sleeper(step_delay_s)
+            if qty_dispatch is None:
+                return _market_error(event_type, "amount must be at least 1")
+    else:
+        if amount == "MAX":
+            progress_fn(
+                f"  UI_Right x{sell_quantity_restore_taps} "
+                f"(restore sell quantity to max with rapid taps, {sell_quantity_restore_tap_delay_s:.2f}s spacing)"
+            )
+            qty_dispatch = ActionDispatchResult(action="UI_Right", status="ok")
+            for tap_index in range(sell_quantity_restore_taps):
+                qty_dispatch = controls.ui_right()
+                if qty_dispatch.status != "ok":
+                    return RoutineResult(
+                        action="UI_Right",
+                        dispatch=qty_dispatch,
+                        details={"phase": "set_quantity"},
+                    )
+                if sell_quantity_restore_tap_delay_s > 0 and tap_index < sell_quantity_restore_taps - 1:
+                    sleeper(sell_quantity_restore_tap_delay_s)
+        else:
+            qty = int(amount)
+            progress_fn(f"  UI_Right x{qty} (set quantity to {qty})")
+            qty_dispatch = None
+            for _ in range(qty):
+                qty_dispatch = controls.ui_right()
+                if qty_dispatch.status != "ok":
+                    return RoutineResult(
+                        action="UI_Right",
+                        dispatch=qty_dispatch,
+                        details={"phase": "set_quantity"},
+                    )
+                if step_delay_s > 0:
+                    sleeper(step_delay_s)
+            if qty_dispatch is None:
+                return _market_error(event_type, "amount must be at least 1")
+    if step_delay_s > 0:
+        sleeper(step_delay_s)
+
+    # Confirm trade
+    confirm_label = "BUY" if side == "buy" else "SELL"
+    progress_fn(f"  UI_Down (to {confirm_label} button)")
+    dispatch = controls.ui_down()
+    if dispatch.status != "ok":
+        return RoutineResult(action="UI_Down", dispatch=dispatch, details={"phase": "confirm"})
+    if nav_delay_s > 0:
+        sleeper(nav_delay_s)
+
+    progress_fn(f"  UI_Select (confirm {confirm_label})")
+    trade_dispatch = controls.ui_select()
+    if trade_dispatch.status != "ok":
+        return RoutineResult(action="UI_Select", dispatch=trade_dispatch, details={"phase": "confirm"})
+
+    # Wait for journal confirmation
+    progress_fn(f"Waiting for {event_type} event (timeout {trade_timeout_s:.0f}s)...")
+    predicate = (
+        (lambda e: _is_trade_event(e, event_type))
+        if side == "buy"
+        else (lambda e: _is_market_event(e, event_type, target))
+    )
+    trade_event, _ = _wait_for_event_with_pending(
+        watcher,
+        predicate=predicate,
+        deadline=time_fn() + trade_timeout_s,
+        time_fn=time_fn,
+        pending_events=pending_events,
+    )
+    if trade_event is None:
+        return RoutineResult(
+            action=event_type,
+            dispatch=ActionDispatchResult(
+                action=event_type,
+                status="error",
+                reason=f"{event_type} for '{target}' not observed within {trade_timeout_s:.0f}s",
+            ),
+            details={"phase": "wait_for_event"},
+        )
+
+    if side == "buy" and not _is_market_event(trade_event, event_type, target):
+        wrong_commodity = _event_commodity_name(trade_event)
+        progress_fn(
+            f"{event_type}: wrong commodity bought: {wrong_commodity} "
+            f"(expected {target})"
+        )
+        back_dispatch = _market_back_out_to_station_menu(
+            controls,
+            step_delay_s=step_delay_s,
+            sleeper=sleeper,
+            progress_fn=progress_fn,
+        )
+        if back_dispatch.status != "ok":
+            return RoutineResult(
+                action="UI_Back",
+                dispatch=back_dispatch,
+                trigger_event=trade_event,
+                details={
+                    "phase": "return_to_station_menu",
+                    "wrong_commodity": wrong_commodity,
+                    "target": target,
+                },
+            )
+        return RoutineResult(
+            action=event_type,
+            dispatch=ActionDispatchResult(
+                action=event_type,
+                status="error",
+                reason=f"wrong commodity bought: {wrong_commodity} (expected {target})",
+            ),
+            trigger_event=trade_event,
+            details={
+                "phase": "wrong_item",
+                "wrong_commodity": wrong_commodity,
+                "target": target,
+            },
+        )
+
+    count = trade_event.get("Count", "?")
+    cr_key = "TotalCost" if side == "buy" else "TotalSale"
+    cr_val = trade_event.get(cr_key, "?")
+    progress_fn(f"{event_type}: {count}x {target}, {cr_val} CR total")
+
+    # Return to station menu
+    back_dispatch = _market_back_out_to_station_menu(
+        controls,
+        step_delay_s=step_delay_s,
+        sleeper=sleeper,
+        progress_fn=progress_fn,
+    )
+    if back_dispatch.status != "ok":
+        return RoutineResult(
+            action="UI_Back",
+            dispatch=back_dispatch,
+            trigger_event=trade_event,
+            details={"phase": "return_to_station_menu"},
+        )
+    if side == "sell":
+        docked, reason = _is_currently_docked(market_path.parent)
+        if not docked:
+            return RoutineResult(
+                action=event_type,
+                dispatch=ActionDispatchResult(
+                    action=event_type,
+                    status="error",
+                    reason=f"sell return-to-station check failed: {reason}",
+                ),
+                trigger_event=trade_event,
+                details={"phase": "return_to_station_menu"},
+            )
+
+    return RoutineResult(
+        action=event_type,
+        dispatch=trade_dispatch,
+        trigger_event=trade_event,
+        details={
+            "target": target, "amount": str(amount), "side": side,
+            **({"expected_count": expected_count} if expected_count is not None else {}),
+        },
+    )

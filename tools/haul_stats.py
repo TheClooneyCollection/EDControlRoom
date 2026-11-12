@@ -14,12 +14,12 @@ if str(REPO_ROOT) not in sys.path:
 
 from rich.console import Console
 
-from edap.config import load_config
-from edap.control_room.rendering import haul_history_summary_lines, journal_ledger_lines
-from edap.journal_trade_ledger import journal_trade_ledger
-from edap.runtime import build_game_paths, resolve_journal_path
-from edap.haul_history import load_runs, parse_window, summarize
-from edap.platform.local_time import SystemLocalTimezone
+from edcr.config import load_config
+from edcr.control_room.rendering import haul_history_summary_lines, journal_ledger_lines
+from edcr.journal_trade_ledger import journal_trade_ledger
+from edcr.runtime import build_game_paths, resolve_journal_path
+from edcr.haul_history import load_runs, parse_window, summarize
+from edcr.platform.local_time import SystemLocalTimezone
 
 
 def main(argv: list[str] | None, *, now: datetime) -> int:

@@ -1,0 +1,571 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Callable
+
+from edcr.cargo_manifest import read_cargo_inventory as read_cargo_inventory_with_retry
+from rich.markup import escape
+from rich.text import Text
+
+from edcr.control_room.models import HaulStats, MarketData, ShipState, TradeRoutesData
+from edcr.control_room.view_models import (
+    HaulPanelViewModel,
+    MarketPanelViewModel,
+    StatusPanelViewModel,
+    haul_panel_view_model,
+    market_panel_view_model,
+    status_panel_view_model,
+)
+from edcr.haul_history import HaulSummary, RunTotals
+from edcr.journal_trade_ledger import JournalTradeLedger
+from edcr.routines.market import _is_sell_market_item
+
+
+def fmt_cr(n: int) -> str:
+    abs_n = abs(n)
+    prefix = "-" if n < 0 else ""
+    if abs_n >= 1_000_000_000:
+        billions = abs_n // 1_000_000_000
+        millions = (abs_n % 1_000_000_000) / 1_000_000
+        return f"{prefix}{billions}b {millions:06.2f}M CR"
+    if abs_n >= 1_000_000:
+        return f"{prefix}{abs_n / 1_000_000:.2f}M CR"
+    if abs_n >= 1_000:
+        return f"{prefix}{abs_n / 1_000:.1f}K CR"
+    return f"{n:,} CR"
+
+
+def fuel_bar(level: float, capacity: float) -> str:
+    pct = level / capacity
+    filled = round(pct * 10)
+    return f"{'█' * filled}{'░' * (10 - filled)}  {round(pct * 100)}%"
+
+
+def loc(item: dict[str, Any], key: str) -> str:
+    return item.get(f"{key}_Localised") or item.get(key, "")
+
+
+def hhmmss(timestamp: str) -> str:
+    if not timestamp:
+        raise ValueError("Activity log entries must include a timestamp.")
+    try:
+        parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"Invalid activity log timestamp: {timestamp}") from exc
+    return parsed.astimezone(UTC).strftime("%H:%M:%S")
+
+
+def is_recent(ev: dict[str, Any], threshold_s: float = 120.0) -> bool:
+    ts = ev.get("timestamp", "")
+    if not ts:
+        return True
+    try:
+        ev_time = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ")
+        return (datetime.now(UTC).replace(tzinfo=None) - ev_time).total_seconds() < threshold_s
+    except ValueError:
+        return True
+
+
+def fmt_duration(seconds: float | None) -> str:
+    if seconds is None:
+        return "—"
+    total = max(0, int(round(seconds)))
+    hours, rem = divmod(total, 3600)
+    minutes, secs = divmod(rem, 60)
+    if hours:
+        return f"{hours:d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
+
+
+def build_log_text(msg: str, *, timestamp: str) -> Text:
+    line = Text.from_markup(f"[dim]{hhmmss(timestamp)}[/]  {msg}")
+    line.no_wrap = False
+    line.overflow = "fold"
+    return line
+
+
+def read_cargo_inventory(journal_dir: Path) -> list[dict[str, Any]]:
+    return read_cargo_inventory_with_retry(journal_dir)
+
+
+def cargo_summary_lines(inventory: list[dict[str, Any]], *, limit: int = 3) -> list[str]:
+    rows = [item for item in inventory if int(item.get("Count", 0) or 0) > 0]
+    rows.sort(
+        key=lambda item: (
+            -int(item.get("Count", 0) or 0),
+            str(item.get("Name_Localised") or item.get("Name") or "").lower(),
+        )
+    )
+    result: list[str] = []
+    for item in rows[:limit]:
+        name = str(item.get("Name_Localised") or item.get("Name") or "?")
+        count = int(item.get("Count", 0) or 0)
+        result.append(f"{count}t {escape(name)}")
+    return result
+
+
+def _compact_trade_profit_per_hour(profit_per_hour: str | None) -> str | None:
+    if not profit_per_hour:
+        return None
+    digits = "".join(ch for ch in profit_per_hour if ch.isdigit())
+    if not digits:
+        return None
+    value = int(digits)
+    return f"{value / 1_000_000:.1f}m/h"
+
+
+def destination_summary(ship: ShipState) -> str | None:
+    parts = [
+        ship.destination_system or None,
+        ship.destination_body or None,
+        ship.destination_name or None,
+    ]
+    filtered = [escape(str(part)) for part in parts if part]
+    if not filtered:
+        return None
+    return " / ".join(filtered)
+
+
+def status_panel_markup(view_model: StatusPanelViewModel) -> str:
+    ship = view_model.ship
+    left_rows: list[str] = []
+    right_rows: list[str] = []
+    full_width_rows: list[str] = []
+
+    def left_row(label: str, value: str) -> None:
+        left_rows.append(f"[dim]{label:<11}[/]  {value}")
+
+    def right_row(label: str, value: str) -> None:
+        right_rows.append(f"[dim]{label:<11}[/]  {value}")
+
+    if ship.commander:
+        left_row("Commander", f"[bold]{escape(ship.commander)}[/]")
+    left_row("System", f"[bold]{escape(ship.system or '—')}[/]")
+    if ship.station:
+        left_row("Station", f"[bold cyan]{escape(ship.station)}[/]")
+    left_row("Status", escape(ship.status or "—"))
+    if ship.fuel_level is not None and ship.fuel_capacity:
+        left_row("Fuel", fuel_bar(ship.fuel_level, ship.fuel_capacity))
+    destination = destination_summary(ship)
+    if destination:
+        full_width_rows.append(f"[dim]Destination[/]  [yellow]{destination}[/]")
+    if ship.target:
+        left_row("Target", f"[yellow]{escape(ship.target)}[/]")
+
+    if ship.credits is not None:
+        right_row("Balance", f"[green]{fmt_cr(ship.credits)}[/]")
+    if ship.cargo_capacity is not None:
+        pct = round(ship.cargo_count / ship.cargo_capacity * 100) if ship.cargo_capacity else 0
+        right_row("Cargo", f"{ship.cargo_count} / {ship.cargo_capacity} t  ({pct}%)")
+    elif ship.cargo_count:
+        right_row("Cargo", f"{ship.cargo_count} t")
+
+    summary = cargo_summary_lines(ship.cargo_inventory, limit=3)
+    if summary:
+        right_row("Cargo Top", summary[0])
+        for line in summary[1:]:
+            right_rows.append(f"{'':13}{line}")
+
+    left_width = max((len(Text.from_markup(line).plain) for line in left_rows), default=0)
+    paired: list[str] = []
+    row_count = max(len(left_rows), len(right_rows))
+    for idx in range(row_count):
+        left = left_rows[idx] if idx < len(left_rows) else ""
+        right = right_rows[idx] if idx < len(right_rows) else ""
+        left_plain = Text.from_markup(left).plain if left else ""
+        gap = " " * max(4, left_width - len(left_plain) + 4)
+        paired.append(f"{left}{gap}{right}" if right else left)
+    rows = paired + full_width_rows
+    return "\n".join(rows) if rows else "[dim]No data yet[/]"
+
+
+def status_markup(ship: ShipState) -> str:
+    return status_panel_markup(status_panel_view_model(ship))
+
+
+def haul_panel_markup(
+    view_model: HaulPanelViewModel,
+    *,
+    now_fn: Callable[[], float],
+) -> str:
+    stats = view_model.stats
+    current_balance = view_model.current_balance
+    today = view_model.today_totals
+    today_line = (f"Today {'+' if today.profit >= 0 else ''}{fmt_cr(today.profit)} ({today.count} runs)"
+                  if today is not None else "[dim]Today unavailable[/]")
+    if not stats.station_1_buying:
+        session_elapsed = (
+            now_fn() - stats.session_started_at
+            if stats.session_started_at is not None
+            else (stats.session_elapsed_s if stats.session_elapsed_s > 0 else None)
+        )
+        session_profit = stats.accumulated_profit + stats.current_run_profit
+        lines = [
+            "[dim]No haul session active.[/]",
+            "",
+            "Start `haul` to track cycle time,",
+            "average time, and session profit.",
+        ]
+        if session_elapsed is not None or session_profit != 0:
+            lines.extend([
+                "",
+                f"[dim]Session[/]  {escape(fmt_duration(session_elapsed))}",
+                f"[dim]Profit[/]   [green]{fmt_cr(session_profit)}[/]",
+            ])
+        if current_balance is not None:
+            lines.extend(["", f"[dim]Balance[/]  [green]{fmt_cr(current_balance)}[/]"])
+        lines.append(today_line)
+        return "\n".join(lines)
+
+    rows: list[str] = []
+
+    def row(label: str, value: str) -> None:
+        rows.append(f"[dim]{label:<12}[/]  {value}")
+
+    status = "active" if stats.active else "stopped"
+    if stats.paused:
+        status = "paused"
+    elif stats.resumed_mid_run and not stats.clean_run_active:
+        status = "resumed mid-run"
+    elif stats.waiting_for_station_1_departure:
+        status = "waiting at station 1"
+    elif stats.docked_back_at_station_1:
+        status = "back at station 1"
+
+    current_elapsed = stats.current_run_elapsed_s
+    if stats.current_run_started_at is not None and not stats.docked_back_at_station_1:
+        current_elapsed = now_fn() - stats.current_run_started_at
+
+    avg_elapsed = (
+        stats.total_run_elapsed_s / stats.completed_runs
+        if stats.completed_runs > 0 else None
+    )
+    session_elapsed = (
+        now_fn() - stats.session_started_at
+        if stats.session_started_at is not None
+        else (stats.session_elapsed_s if stats.session_elapsed_s > 0 else None)
+    )
+    session_profit = stats.accumulated_profit + stats.current_run_profit
+
+    row("Status", escape(status))
+    row("St1 buy", f"[cyan]{escape(stats.station_1_buying)}[/]")
+    row("St2 buy", f"[cyan]{escape(stats.station_2_buying)}[/]")
+    row("Station 1", f"[bold cyan]{escape(stats.station_1 or '—')}[/]")
+    row("Station 2", escape(stats.station_2 or "—"))
+    row("Session", escape(fmt_duration(session_elapsed)))
+    row("Profit", f"[green]{fmt_cr(session_profit)}[/]")
+    if stats.expected_profit_per_trip is not None:
+        row("Route trip", f"[green]{fmt_cr(stats.expected_profit_per_trip)}[/]")
+    if current_balance is not None:
+        row("Balance", f"[green]{fmt_cr(current_balance)}[/]")
+    row(
+        "This run",
+        f"[green]{fmt_cr(stats.current_run_profit)}[/]"
+        if stats.clean_run_active else "[dim]—[/]",
+    )
+    row("Elapsed", escape(fmt_duration(current_elapsed)))
+    row("Avg time", escape(fmt_duration(avg_elapsed)))
+    row("Runs", str(stats.completed_runs))
+    row(
+        "Last run",
+        f"[green]{fmt_cr(stats.last_run_profit)}[/]"
+        if stats.last_run_profit is not None else "[dim]—[/]",
+    )
+    if stats.last_run_profit_delta is not None:
+        delta = stats.last_run_profit_delta
+        if delta == 0:
+            delta_text = "[green]as planned[/]"
+        elif delta > 0:
+            delta_text = f"[green]+{fmt_cr(delta)}[/]"
+        else:
+            delta_text = f"[yellow]-{fmt_cr(abs(delta))}[/]"
+        row("Vs route", delta_text)
+    row("Last time", escape(fmt_duration(stats.last_run_elapsed_s)))
+    rows.append(today_line)
+    return "\n".join(rows)
+
+
+def haul_stats_markup(
+    stats: HaulStats,
+    *,
+    current_balance: int | None,
+    today_totals: RunTotals | None,
+    now_fn: Callable[[], float],
+) -> str:
+    return haul_panel_markup(
+        haul_panel_view_model(stats, current_balance=current_balance, today_totals=today_totals),
+        now_fn=now_fn,
+    )
+
+
+def market_panel_markup(view_model: MarketPanelViewModel) -> str:
+    market = view_model.market
+    market_filter = view_model.market_filter
+    side = view_model.side
+    if not market.items:
+        return (
+            "[dim]No market data.[/]\n\n"
+            "Dock at a station and open\nthe market screen in-game."
+        )
+
+    lock_tag = "  [dim]\\[PINNED][/]" if market.locked else ""
+    header = (
+        f"[bold]{escape(market.station)}[/] / {escape(market.system)}{lock_tag}\n"
+        f"[dim]{escape(market.timestamp)}[/]"
+    )
+
+    term = market_filter.lower() if market_filter else None
+    items = market.items
+    if term:
+        items = [
+            item for item in items
+            if term in loc(item, "Name").lower() or term in loc(item, "Category").lower()
+        ]
+
+    buy = [
+        (loc(item, "Name"), item.get("Stock", 0), item.get("BuyPrice", 0))
+        for item in items if item.get("Stock", 0) > 0
+    ]
+    sell = [
+        (loc(item, "Name"), item.get("Demand", 0), item.get("SellPrice", 0))
+        for item in items if _is_sell_market_item(item)
+    ]
+
+    sections: list[str] = [header]
+    if side == "buy" and buy:
+        col = max(max(len(name) for name, *_ in buy), 12)
+        sections.append("\n[bold]  BUY FROM MARKET[/]")
+        sections.append(f"  [dim]{'Item':<{col}}  {'Supply':>10}  {'Buy CR':>10}[/]")
+        sections.append(f"  [dim]{'─' * (col + 24)}[/]")
+        for name, stock, price in sorted(buy, key=lambda row: row[0].lower()):
+            sections.append(f"  {escape(name):<{col}}  {stock:>10,}  {price:>8,}")
+
+    if side == "sell" and sell:
+        col = max(max(len(name) for name, *_ in sell), 12)
+        sections.append("\n[bold]  SELL TO MARKET[/]")
+        sections.append(f"  [dim]{'Item':<{col}}  {'Demand':>10}  {'Sell CR':>10}[/]")
+        sections.append(f"  [dim]{'─' * (col + 24)}[/]")
+        for name, demand, price in sorted(sell, key=lambda row: row[0].lower()):
+            sections.append(f"  {escape(name):<{col}}  {demand:>10,}  {price:>8,}")
+
+    if side == "buy" and not buy:
+        no_match = f" matching '{escape(term)}'" if term else ""
+        sections.append(f"\n[dim]No buy items{no_match}.[/]")
+    elif side == "sell" and not sell:
+        no_match = f" matching '{escape(term)}'" if term else ""
+        sections.append(f"\n[dim]No sell items{no_match}.[/]")
+
+    return "\n".join(sections)
+
+
+def market_markup(
+    market: MarketData,
+    market_filter: str | None,
+    *,
+    side: str = "buy",
+) -> str:
+    return market_panel_markup(
+        market_panel_view_model(
+            market,
+            market_filter=market_filter,
+            side=side,
+        )
+    )
+
+
+def trade_route_option_label(route: TradeRoute) -> str:
+    prefix = _compact_trade_profit_per_hour(route.profit_per_hour)
+    detail_bits: list[str] = []
+    station_distance_bits = [
+        distance
+        for distance in (route.from_station_distance, route.to_station_distance)
+        if distance
+    ]
+    if station_distance_bits:
+        detail_bits.append(f"stn {'/'.join(station_distance_bits)}")
+    if route.distance_from_system:
+        detail_bits.append(f"dist {route.distance_from_system}")
+    if route.source_buy_commodity:
+        detail_bits.append(f"buy {route.source_buy_commodity}")
+    if route.target_buy_commodity:
+        detail_bits.append(f"return {route.target_buy_commodity}")
+    if route.profit_per_unit:
+        detail_bits.append(f"ppu {route.profit_per_unit}")
+    if route.profit_per_trip:
+        detail_bits.append(f"trip {route.profit_per_trip}")
+    tail = f" [{ ' | '.join(detail_bits) }]" if detail_bits else ""
+    prefix_text = f"[{prefix}] " if prefix else ""
+    return f"{prefix_text}{route.index}. {route.from_station} -> {route.to_station}{tail}"
+
+
+def trade_route_detail_markup(
+    route: TradeRoute,
+    *,
+    system_name: str,
+    searched_at: str,
+    route_count: int,
+) -> str:
+    def endpoint_text(label: str, station: str, system: str, station_distance: str | None) -> str:
+        station_label = escape(station)
+        if station_distance:
+            station_label += f" [dim]({escape(station_distance)})[/]"
+        return f"[bold]{label}[/] {station_label} [dim]({escape(system)})[/]"
+
+    def join_columns(left: str | None, right: str | None) -> str | None:
+        parts = [part for part in (left, right) if part]
+        if not parts:
+            return None
+        if len(parts) == 1:
+            return parts[0]
+        return f"{parts[0]}    {parts[1]}"
+
+    header = f"[bold]{escape(system_name or '?')}[/]  [dim]route #{route.index} of {route_count}[/]"
+    if searched_at:
+        header += f"  [dim]{escape(searched_at)}[/]"
+    lines = [header]
+    for line in (
+        join_columns(
+            endpoint_text("From", route.from_station, route.from_system, route.from_station_distance),
+            endpoint_text("To", route.to_station, route.to_system, route.to_station_distance),
+        ),
+        join_columns(
+            (
+                f"[bold]Buy[/] [cyan]{escape(route.source_buy_commodity)}[/]"
+                if route.source_buy_commodity
+                else None
+            ),
+            (
+                f"[bold]Return[/] [cyan]{escape(route.target_buy_commodity)}[/]"
+                if route.target_buy_commodity
+                else None
+            ),
+        ),
+        join_columns(
+            f"[bold]Distance[/] {escape(route.distance_from_system)}" if route.distance_from_system else None,
+            f"[bold]Route[/] {escape(route.route_distance)}" if route.route_distance else None,
+        ),
+        join_columns(
+            f"[bold]Per unit[/] {escape(route.profit_per_unit)}" if route.profit_per_unit else None,
+            None,
+        ),
+        join_columns(
+            f"[bold]Per trip[/] {escape(route.profit_per_trip)}" if route.profit_per_trip else None,
+            f"[bold]Per hour[/] {escape(route.profit_per_hour)}" if route.profit_per_hour else None,
+        ),
+    ):
+        if line:
+            lines.append(line)
+
+    footer_parts: list[str] = []
+    if route.updated:
+        footer_parts.append(f"[bold]Seen[/] {escape(route.updated)}")
+    footer_parts.append("[dim]Enter loads this route. Esc closes.[/]")
+    lines.append("  ".join(footer_parts))
+    return "\n".join(lines)
+
+
+def activity_line(ev: dict[str, Any]) -> str | None:
+    if not is_recent(ev):
+        return None
+    event = ev.get("event", "")
+    if event == "FSDJump":
+        return f"Jumped to [bold]{escape(ev.get('StarSystem', '?'))}[/]"
+    if event == "StartJump" and ev.get("JumpType") == "Hyperspace":
+        return f"Jumping to [bold]{escape(ev.get('StarSystem', '?'))}[/]"
+    if event == "SupercruiseEntry":
+        return "Entered supercruise"
+    if event == "SupercruiseExit":
+        body = ev.get("Body", "")
+        return f"Exited supercruise{f' near {escape(body)}' if body else ''}"
+    if event == "Docked":
+        return f"Docked at [bold cyan]{escape(ev.get('StationName', '?'))}[/]"
+    if event == "Undocked":
+        return f"Undocked from {escape(ev.get('StationName', '?'))}"
+    if event == "DockingGranted":
+        return "[dim]Docking granted[/]"
+    if event == "DockingDenied":
+        reason = ev.get("Reason", "")
+        return f"[yellow]Docking denied[/]{f': {escape(reason)}' if reason else ''}"
+    if event == "DockingCancelled":
+        return "[dim]Docking cancelled[/]"
+    if event == "MarketBuy":
+        name = escape(ev.get("Type_Localised") or ev.get("Type", "?"))
+        return f"Bought [cyan]{ev.get('Count')}t {name}[/]  [dim]{fmt_cr(ev.get('TotalCost', 0))}[/]"
+    if event == "MarketSell":
+        name = escape(ev.get("Type_Localised") or ev.get("Type", "?"))
+        return f"Sold [cyan]{ev.get('Count')}t {name}[/]  →  [green]{fmt_cr(ev.get('TotalSale', 0))}[/]"
+    if event == "Refuelled":
+        return f"Refuelled {ev.get('Amount', 0):.1f}t"
+    if event == "MissionCompleted":
+        label = escape(ev.get("LocalisedName") or ev.get("Name", "mission"))
+        return f"Mission: {label}  →  [green]{fmt_cr(ev.get('Reward', 0))}[/]"
+    return None
+
+
+def haul_history_summary_lines(summary: HaulSummary, label: str) -> list[str]:
+    """Compact query output shared by the control-room log and CLI."""
+    completed = summary.completed
+    rate = fmt_cr(round(completed.profit_per_hour)) + "/h" if completed.profit_per_hour is not None else "n/a"
+    mean = fmt_cr(round(completed.mean_profit)) if completed.mean_profit is not None else "n/a"
+    best = fmt_cr(completed.best_profit) if completed.best_profit is not None else "n/a"
+    total_rate = (
+        fmt_cr(round(summary.all_in_profit_per_hour)) + "/h" if summary.all_in_profit_per_hour is not None else "n/a"
+    )
+    lines = [
+        f"[bold]Haul stats: {escape(label)}[/]",
+        f"[bold]Total: profit {fmt_cr(summary.all_in.profit)}[/] | {summary.all_in.count} runs | "
+        f"{fmt_duration(summary.all_in_duration_s)} | {total_rate}",
+        f"Completed: {completed.count} runs | profit {fmt_cr(completed.profit)} | "
+        f"revenue {fmt_cr(completed.revenue)} | cost {fmt_cr(completed.cost)}",
+        f"Completed time: {fmt_duration(completed.duration_s)} | {rate} | mean {mean} | best {best}",
+        f"Aborted: {summary.aborted.count} runs | realized profit {fmt_cr(summary.aborted.profit)}",
+        f"All-in: profit {fmt_cr(summary.all_in.profit)} | revenue {fmt_cr(summary.all_in.revenue)} | "
+        f"cost {fmt_cr(summary.all_in.cost)}",
+    ]
+    if completed.expected_count:
+        lines.append(
+            f"Expected vs actual ({completed.expected_count} completed runs): "
+            f"{fmt_cr(completed.expected_profit)} vs {fmt_cr(completed.expected_actual_profit)} | "
+            f"delta {fmt_cr(completed.profit_delta)}"
+        )
+    for route in summary.routes:
+        lines.append(
+            f"Route {escape(route.station_1)} ↔ {escape(route.station_2)}: "
+            f"{route.completed.count} completed / {route.aborted.count} aborted | "
+            f"profit {fmt_cr(route.all_in.profit)}"
+        )
+    for item in summary.commodities:
+        trade = item.all_in
+        lines.append(f"{escape(item.commodity)}: bought {trade.tons_bought}t / sold {trade.tons_sold}t | "
+                     f"cost {fmt_cr(trade.cost)} | revenue {fmt_cr(trade.revenue)}")
+    if summary.skipped_lines:
+        lines.append(f"[yellow]Skipped {summary.skipped_lines} invalid haul history lines.[/]")
+    return lines
+
+
+def journal_ledger_lines(ledger: JournalTradeLedger) -> list[str]:
+    if not ledger.available:
+        return [f"[dim]All trading (journal): unavailable ({escape(ledger.reason or 'no journal directory')}).[/]"]
+    margin = fmt_cr(ledger.sell_margin) if ledger.sell_margin is not None else "unknown purchase basis"
+    change = fmt_cr(ledger.net_balance_change) if ledger.net_balance_change is not None else "unknown"
+    lines = [
+        "[bold]All trading (journal)[/]",
+        f"{ledger.buys} buys / {ledger.sells} sells | cost {fmt_cr(ledger.cost)} | "
+        f"revenue {fmt_cr(ledger.revenue)} | trade profit {fmt_cr(ledger.profit)} | sell margin {margin}",
+        f"Net balance change (observed snapshots): {change}",
+    ]
+    top = sorted(ledger.commodities, key=lambda item: (
+        item.sell_margin is None, -(item.sell_margin or 0), item.commodity
+    ))[:5]
+    if top:
+        lines.append("Top commodities by sell margin: " + "; ".join(
+            f"{escape(item.commodity)} {fmt_cr(item.sell_margin) if item.sell_margin is not None else 'unknown'}"
+            for item in top
+        ))
+    coverage = ledger.coverage
+    warning = " | window starts before oldest journal" if coverage.window_start_before_oldest_journal else ""
+    lines.append(f"[dim]Coverage: {coverage.files} files | {coverage.first_event_at or 'unknown'} to "
+                 f"{coverage.last_event_at or 'unknown'} | {coverage.skipped_lines} skipped lines | "
+                 f"{coverage.unreadable_files} unreadable files{warning}[/]")
+    return lines

@@ -24,11 +24,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from edap.binding_groups import BindingGroup, BindingRow, group_bindings
-from edap.binding_lookup import load_binding_lookup
-from edap.bindings import REQUIRED_BINDINGS
-from edap.config import ConfigError, DEFAULT_CONFIG_PATH
-from edap.runtime import build_runtime_context, load_config_with_fallback
+from edcr.binding_groups import BindingGroup, BindingRow, group_bindings
+from edcr.binding_lookup import load_binding_lookup
+from edcr.bindings import REQUIRED_BINDINGS
+from edcr.config import ConfigError, DEFAULT_CONFIG_PATH
+from edcr.runtime import build_runtime_context, load_config_with_fallback
 
 
 TOP_ROW_TITLES = ("Roll & Throttle", "Pitch & Yaw")

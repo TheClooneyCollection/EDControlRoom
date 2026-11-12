@@ -2,8 +2,8 @@ import math
 import unittest
 from pathlib import Path
 
-from edap.routing.navroute import parse_navroute_json, read_navroute
-from edap.routing.types import InGameMetadata
+from edcr.routing.navroute import parse_navroute_json, read_navroute
+from edcr.routing.types import InGameMetadata
 
 FIXTURE = Path(__file__).parent / "fixtures" / "routing" / "navroute_hd232819_xinca.json"
 

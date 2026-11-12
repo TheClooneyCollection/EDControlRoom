@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from edap.status import StatusFlags, read_status
+from edcr.status import StatusFlags, read_status
 
 
 class StatusFlagsTests(unittest.TestCase):

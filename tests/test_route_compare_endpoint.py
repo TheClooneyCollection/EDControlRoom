@@ -6,16 +6,16 @@ from unittest.mock import patch
 
 import httpx
 
-from edap.routing.types import Route, RouteWaypoint, SpanshMetadata
+from edcr.routing.types import Route, RouteWaypoint, SpanshMetadata
 
 warnings.filterwarnings(
     "ignore",
     message=r"Using `httpx` with `starlette\.testclient` is deprecated; install `httpx2` instead\.",
 )
 
-from edap.control_room.server.app import build_observer_server_app
-from edap.control_room.server.auth import SharedAccessTokenAuth
-from edap.control_room.server.broker import InMemoryObserverSessionBroker
+from edcr.control_room.server.app import build_observer_server_app
+from edcr.control_room.server.auth import SharedAccessTokenAuth
+from edcr.control_room.server.broker import InMemoryObserverSessionBroker
 from tests.shared_loop import TestClient
 
 
@@ -194,7 +194,7 @@ class SpanshRouteEndpointTests(unittest.TestCase):
 
     def test_returns_spansh_route_and_caches_id(self) -> None:
         broker = InMemoryObserverSessionBroker()
-        with patch("edap.control_room.server.app.plot_route", side_effect=_fake_spansh_route):
+        with patch("edcr.control_room.server.app.plot_route", side_effect=_fake_spansh_route):
             with self._client(broker=broker) as client:
                 response = self._get(
                     client,
@@ -226,8 +226,8 @@ class SpanshRouteEndpointTests(unittest.TestCase):
         def boom(**_kwargs):
             raise RuntimeError("spansh down")
 
-        with patch("edap.control_room.server.app.plot_route", side_effect=boom):
-            with self._client() as client, self.assertLogs("edap.control_room.server.app", "ERROR") as logs:
+        with patch("edcr.control_room.server.app.plot_route", side_effect=boom):
+            with self._client() as client, self.assertLogs("edcr.control_room.server.app", "ERROR") as logs:
                 response = self._get(client, "/api/spansh-route?from=A&to=B&range=60")
         self.assertEqual(response.status_code, 502)
         self.assertIn("spansh route fetch failed", logs.output[0])
@@ -241,10 +241,10 @@ class SpanshRouteEndpointTests(unittest.TestCase):
         )
 
         with patch(
-            "edap.control_room.server.app.plot_route",
+            "edcr.control_room.server.app.plot_route",
             side_effect=httpx.HTTPStatusError("400 Bad Request", request=request, response=response),
         ):
-            with self._client() as client, self.assertLogs("edap.control_room.server.app", "ERROR") as logs:
+            with self._client() as client, self.assertLogs("edcr.control_room.server.app", "ERROR") as logs:
                 result = self._get(client, "/api/spansh-route?from=A&to=B&range=60")
 
         self.assertEqual(result.status_code, 400)
@@ -318,10 +318,10 @@ class DispatchRouteAllInOneTests(unittest.TestCase):
             "route_id": "route-live-123",
         }
         with patch(
-            "edap.control_room.server.app.fetch_and_cache_spansh_route",
+            "edcr.control_room.server.app.fetch_and_cache_spansh_route",
             return_value=(None, "route-spansh-abc", {"spansh": {"waypoints": [1, 2, 3]}, "route_id": "route-spansh-abc"}),
         ), patch(
-            "edap.control_room.server.app.build_and_cache_live_comparison",
+            "edcr.control_room.server.app.build_and_cache_live_comparison",
             return_value=fake_comparison_payload,
         ):
             with self._client(broker=broker, command_handler=handler) as client:
@@ -352,7 +352,7 @@ class DispatchRouteAllInOneTests(unittest.TestCase):
         self.assertEqual(handler.dispatched_destinations, [("Xinca", 1.5, False, "web all-in-one Sol -> Xinca")])
 
     def test_retries_compare_on_retryable_error_then_succeeds(self) -> None:
-        from edap.control_room.server.app import RouteCompareError
+        from edcr.control_room.server.app import RouteCompareError
 
         broker = InMemoryObserverSessionBroker()
         handler = _FakeCommandHandler()
@@ -365,10 +365,10 @@ class DispatchRouteAllInOneTests(unittest.TestCase):
             return {"route_id": "route-final", "verdict": "even", "in_game": {}, "spansh": {}}
 
         with patch(
-            "edap.control_room.server.app.fetch_and_cache_spansh_route",
+            "edcr.control_room.server.app.fetch_and_cache_spansh_route",
             return_value=(None, "route-spansh-abc", {"spansh": {"waypoints": []}, "route_id": "route-spansh-abc"}),
         ), patch(
-            "edap.control_room.server.app.build_and_cache_live_comparison",
+            "edcr.control_room.server.app.build_and_cache_live_comparison",
             side_effect=compare_side_effect,
         ):
             with self._client(broker=broker, command_handler=handler) as client:
@@ -393,15 +393,15 @@ class DispatchRouteAllInOneTests(unittest.TestCase):
         self.assertEqual([p["status"] for p in compare_phases], ["retryable", "retryable", "ok"])
 
     def test_returns_error_when_all_compare_attempts_fail(self) -> None:
-        from edap.control_room.server.app import RouteCompareError
+        from edcr.control_room.server.app import RouteCompareError
 
         broker = InMemoryObserverSessionBroker()
         handler = _FakeCommandHandler()
         with patch(
-            "edap.control_room.server.app.fetch_and_cache_spansh_route",
+            "edcr.control_room.server.app.fetch_and_cache_spansh_route",
             return_value=(None, "route-spansh", {"spansh": {"waypoints": []}, "route_id": "route-spansh"}),
         ), patch(
-            "edap.control_room.server.app.build_and_cache_live_comparison",
+            "edcr.control_room.server.app.build_and_cache_live_comparison",
             side_effect=RouteCompareError(status_code=404, detail="NavRoute.json not found", retryable=True),
         ):
             with self._client(broker=broker, command_handler=handler) as client:
@@ -480,7 +480,7 @@ class ActiveSpanshRouteHydrateTests(unittest.TestCase):
         self.assertIsNone(payload.get("active_spansh_route"))
 
     def test_dispatch_spansh_route_sets_active_and_hydrate_exposes_it(self) -> None:
-        from edap.routing.route_cache import RouteRequestKey
+        from edcr.routing.route_cache import RouteRequestKey
 
         broker = InMemoryObserverSessionBroker()
 

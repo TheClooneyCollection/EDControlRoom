@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from edap.config import (
+from edcr.config import (
     AppConfig,
     ControlRoomConfig,
     ControlsConfig,
@@ -15,16 +15,16 @@ from edap.config import (
     RuntimeConfig,
     TTSConfig,
 )
-from edap.control_room.app import ControlRoomApp
+from edcr.control_room.app import ControlRoomApp
 from tests.test_control_room import _CachedThemeVariables, _FakeVersionSource
-from edap.control_room.client.backend import (
+from edcr.control_room.client.backend import (
     RemoteObserverBackend,
     RemoteObserverDataSource,
     RemoteObserverExecution,
     _validate_remote_observer_capabilities,
 )
-from edap.control_room.client.connect import connect_observer_mode
-from edap.control_room.dependencies import (
+from edcr.control_room.client.connect import connect_observer_mode
+from edcr.control_room.dependencies import (
     ActivityLogReadModel,
     CommandHistoryReadModel,
     ControlRoomDataReadModel,
@@ -33,11 +33,11 @@ from edap.control_room.dependencies import (
     SessionReadModel,
     ControlRoomDependencies,
 )
-from edap.control_room_state import CommandHistoryEntry
-from edap.control_room import commands as control_room_commands
-from edap.control_room.client.target import ObserverServerTarget, parse_observer_server_target
-from edap.control_room.models import HaulStats, MarketData, ShipState
-from edap.control_room.protocol import (
+from edcr.control_room_state import CommandHistoryEntry
+from edcr.control_room import commands as control_room_commands
+from edcr.control_room.client.target import ObserverServerTarget, parse_observer_server_target
+from edcr.control_room.models import HaulStats, MarketData, ShipState
+from edcr.control_room.protocol import (
     ACCESS_TOKEN_QUERY_PARAMETER,
     ActivityLogEntry,
     ActivityLogAppendedEvent,
@@ -50,9 +50,9 @@ from edap.control_room.protocol import (
     event_from_message,
     hydrate_message,
 )
-from edap.inara.trade_routes import TradeRoute, TradeRouteSearchResult
-from edap.runtime import ResolvedPath, RuntimeContext
-from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler
+from edcr.inara.trade_routes import TradeRoute, TradeRouteSearchResult
+from edcr.runtime import ResolvedPath, RuntimeContext
+from edcr.timing import TimingChannelConfig, TimingConfig, TimingSampler
 
 
 def _make_timing_config() -> TimingConfig:
@@ -698,9 +698,9 @@ class ControlRoomClientTests(unittest.TestCase):
         command_input = _FakeInputWidget()
         _bind_observer_widgets(app, command_input)
         with (
-            patch("edap.control_room.routines_haul.search_trade_routes", return_value=result),
+            patch("edcr.control_room.routines_haul.search_trade_routes", return_value=result),
             # The search saves its params as defaults; keep that off the repo's haul_search.toml.
-            patch("edap.control_room.routines_haul.save_haul_search_config"),
+            patch("edcr.control_room.routines_haul.save_haul_search_config"),
         ):
             app.on_input_submitted(_Submitted("haul search Praea Euq AK-A d25"))
             self.assertEqual(app._prompt_state.haul_prompt_mode, "search")
@@ -778,9 +778,9 @@ class ControlRoomClientTests(unittest.TestCase):
         command_input = _FakeInputWidget()
         _bind_observer_widgets(app, command_input)
         with (
-            patch("edap.control_room.routines_haul.search_trade_routes", return_value=result),
+            patch("edcr.control_room.routines_haul.search_trade_routes", return_value=result),
             # The search saves its params as defaults; keep that off the repo's haul_search.toml.
-            patch("edap.control_room.routines_haul.save_haul_search_config"),
+            patch("edcr.control_room.routines_haul.save_haul_search_config"),
         ):
             app.on_input_submitted(_Submitted("haul search"))
             self.assertEqual(app._prompt_state.haul_prompt_mode, "search")
@@ -911,16 +911,16 @@ class ControlRoomClientTests(unittest.TestCase):
                 captured_apps.append(self)
 
         with (
-            patch("edap.control_room.client.connect.load_config_with_fallback", return_value=loaded),
+            patch("edcr.control_room.client.connect.load_config_with_fallback", return_value=loaded),
             patch(
-                "edap.control_room.client.connect.build_runtime_context",
+                "edcr.control_room.client.connect.build_runtime_context",
                 return_value=_make_observer_context(),
             ),
             patch(
-                "edap.control_room.client.connect.fetch_remote_control_room_data",
+                "edcr.control_room.client.connect.fetch_remote_control_room_data",
                 return_value=(_current_remote_capabilities(), _data_read_model()),
             ),
-            patch("edap.control_room.client.connect.ControlRoomApp", new=_FakeApp),
+            patch("edcr.control_room.client.connect.ControlRoomApp", new=_FakeApp),
         ):
             connect_observer_mode(
                 config_path="config.toml",

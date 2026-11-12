@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import unittest
 
-from edap.ardent import ArdentError, ArdentLookup
-from edap.eddn.messages import StationInfo, SystemPosition
-from edap.trade_trip import PartialFacts, store_lookup
+from edcr.ardent import ArdentError, ArdentLookup
+from edcr.eddn.messages import StationInfo, SystemPosition
+from edcr.trade_trip import PartialFacts, store_lookup
 from tests.test_eddn import memory_store
 
 BASE = "https://ardent.test/v2"

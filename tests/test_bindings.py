@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from edap.bindings import normalize_binding_token, read_bindings
+from edcr.bindings import normalize_binding_token, read_bindings
 
 
 class BindingsTests(unittest.TestCase):

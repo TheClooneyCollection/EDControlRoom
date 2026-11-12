@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from edap.haul_search_config import (
+from edcr.haul_search_config import (
     HaulSearchConfigError,
     load_haul_search_config,
     save_haul_search_config,

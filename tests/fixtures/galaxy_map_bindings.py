@@ -1,7 +1,7 @@
 """Keyboard/VKB cursor setup which also binds WASD to galaxy-map translation."""
 from xml.etree.ElementTree import Element, SubElement
 
-from edap.bindings import REQUIRED_BINDINGS
+from edcr.bindings import REQUIRED_BINDINGS
 
 
 def galaxy_map_bindings(*, arrow_secondaries: bool = False) -> Element:

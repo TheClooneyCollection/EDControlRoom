@@ -4,7 +4,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from edap import version
+from edcr import version
 
 
 class _FakeResponse:
@@ -40,7 +40,7 @@ class VersionTests(unittest.TestCase):
             "published_at": "2026-06-10T00:00:00Z",
         }
 
-        with patch("edap.version.urlopen", return_value=_FakeResponse(payload)):
+        with patch("edcr.version.urlopen", return_value=_FakeResponse(payload)):
             release = version.fetch_latest_github_release()
 
         self.assertIsNotNone(release)
@@ -49,7 +49,7 @@ class VersionTests(unittest.TestCase):
         self.assertEqual(release.version, "1.8.0")
 
     def test_fetch_latest_github_release_returns_none_for_invalid_payload(self) -> None:
-        with patch("edap.version.urlopen", return_value=_FakeResponse({"tag_name": ""})):
+        with patch("edcr.version.urlopen", return_value=_FakeResponse({"tag_name": ""})):
             release = version.fetch_latest_github_release()
 
         self.assertIsNone(release)

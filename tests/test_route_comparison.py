@@ -4,9 +4,9 @@ import json
 import unittest
 from pathlib import Path
 
-from edap.routing.comparison import compare
-from edap.routing.navroute import read_navroute
-from edap.spansh_router import parse_spansh_result
+from edcr.routing.comparison import compare
+from edcr.routing.navroute import read_navroute
+from edcr.spansh_router import parse_spansh_result
 
 FIXTURES = Path(__file__).parent / "fixtures" / "routing"
 

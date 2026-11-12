@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from edap.routing.route_cache import RouteCache, RouteRequestKey
-from edap.routing.types import Route, RouteWaypoint, SpanshMetadata
+from edcr.routing.route_cache import RouteCache, RouteRequestKey
+from edcr.routing.types import Route, RouteWaypoint, SpanshMetadata
 
 
 def _route(source: str = "A", destination: str = "B") -> Route:

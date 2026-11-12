@@ -36,18 +36,18 @@ Everything else (reading `ps`, reading files, building into `build/`, editing th
 
 3. **Build.** Run `uv run python3 tools/build_wine_input_helper.py`, adding `--compiler <path>` when the compiler is not at `/opt/homebrew/bin`.
 
-   **Done:** `build/wine_input_helper/edap_input_helper.exe` exists, and `file` reports `PE32+ executable ... x86-64, for MS Windows`.
+   **Done:** `build/wine_input_helper/edcr_input_helper.exe` exists, and `file` reports `PE32+ executable ... x86-64, for MS Windows`.
 
 4. **Install (consent gate).** Run `uv run python3 tools/install_wine_input_helper.py --bottle <bottle>`.
 
-   **Done:** it prints `.../<bottle>/drive_c/edap/edap_input_helper.exe` and that file exists.
+   **Done:** it prints `.../<bottle>/drive_c/edcr/edcr_input_helper.exe` and that file exists.
 
 5. **Configure.** Merge the `[input]` and `[input.wine_helper]` tables from the doc into the player's local `config.toml`, keeping every existing table:
    - `wine_path` is `<CrossOver app from step 1>/Contents/SharedSupport/CrossOver/bin/wine`, in TOML single quotes;
    - `bottle` is the step 1 bottle;
    - `target = "wine_helper"`.
 
-   **Done:** `uv run python3 -c "from edap.config import load_config; c = load_config('config.toml').input; print(c.target, c.wine_helper.bottle, c.wine_helper.wine_path)"` prints `wine_helper`, the bottle and the wine path, with no `ConfigError`.
+   **Done:** `uv run python3 -c "from edcr.config import load_config; c = load_config('config.toml').input; print(c.target, c.wine_helper.bottle, c.wine_helper.wine_path)"` prints `wine_helper`, the bottle and the wine path, with no `ConfigError`.
 
 6. **Verify (consent gate).**
    - Make sure Control Room is not running (the helper serves one client), and ask the player to keep another Mac app in front.
@@ -66,4 +66,4 @@ Everything else (reading `ps`, reading files, building into `build/`, editing th
 
 ## Turning it off
 
-When the player wants foreground input back, follow the doc's "Switching back to foreground" section. Leave the installed helper in the bottle unless they ask you to remove `<bottle>/drive_c/edap/`.
+When the player wants foreground input back, follow the doc's "Switching back to foreground" section. Leave the installed helper in the bottle unless they ask you to remove `<bottle>/drive_c/edcr/`.

@@ -11,14 +11,14 @@ warnings.filterwarnings(
     message=r"Using `httpx` with `starlette\.testclient` is deprecated; install `httpx2` instead\.",
 )
 
-from edap.control_room.models import ShipState
-from edap.control_room.server.app import build_observer_server_app
-from edap.control_room.server.auth import SharedAccessTokenAuth
-from edap.control_room.server.broker import InMemoryObserverSessionBroker
-from edap.eddn.listener import apply_payload
-from edap.eddn.route_query import parse_route_query, run_route_query
-from edap.eddn.routes import RouteFilters, TimeModel, find_routes, load_route_markets
-from edap.eddn.store import EddnStore
+from edcr.control_room.models import ShipState
+from edcr.control_room.server.app import build_observer_server_app
+from edcr.control_room.server.auth import SharedAccessTokenAuth
+from edcr.control_room.server.broker import InMemoryObserverSessionBroker
+from edcr.eddn.listener import apply_payload
+from edcr.eddn.route_query import parse_route_query, run_route_query
+from edcr.eddn.routes import RouteFilters, TimeModel, find_routes, load_route_markets
+from edcr.eddn.store import EddnStore
 from tests.shared_loop import TestClient
 from tests.test_eddn import commodity_envelope, docked_envelope, frame, memory_store
 
@@ -181,7 +181,7 @@ class EddnRoutesApiTests(unittest.TestCase):
                 command_handler=None, broker=InMemoryObserverSessionBroker(),
                 auth=SharedAccessTokenAuth("secret-token"), market_database_file=path,
             )
-            with patch("edap.control_room.server.app.load_haul_search_config", return_value={}), TestClient(app) as client:
+            with patch("edcr.control_room.server.app.load_haul_search_config", return_value={}), TestClient(app) as client:
                 self.assertEqual(client.get("/api/eddn-routes").status_code, 401)
                 unknown = client.get("/api/eddn-routes?access_token=secret-token")
                 self.assertEqual(unknown.status_code, 404)

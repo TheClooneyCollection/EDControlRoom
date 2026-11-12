@@ -2,22 +2,22 @@ from __future__ import annotations
 
 import unittest
 
-from edap.control_room.models import (
+from edcr.control_room.models import (
     HaulStats,
     MarketData,
     ShipState,
     TradeRoutePickerState,
     TradeRoutesData,
 )
-from edap.control_room.view_models import (
+from edcr.control_room.view_models import (
     haul_panel_view_model,
     market_panel_view_model,
     status_panel_view_model,
     trade_route_picker_view_model,
 )
-from edap.haul_history import RunTotals
-from edap.control_room.rendering import haul_panel_markup
-from edap.inara.trade_routes import TradeRoute
+from edcr.haul_history import RunTotals
+from edcr.control_room.rendering import haul_panel_markup
+from edcr.inara.trade_routes import TradeRoute
 
 
 class ControlRoomViewModelsTests(unittest.TestCase):

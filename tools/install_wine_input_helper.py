@@ -6,7 +6,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 import shutil
 
-DEFAULT_SOURCE = Path(__file__).resolve().parents[1] / "build/wine_input_helper/edap_input_helper.exe"
+DEFAULT_SOURCE = Path(__file__).resolve().parents[1] / "build/wine_input_helper/edcr_input_helper.exe"
 DEFAULT_BOTTLES_DIR = Path.home() / "Library/Application Support/CrossOver/Bottles"
 
 
@@ -17,7 +17,7 @@ def install_helper(bottle: str, bottles_dir: Path, source: Path, *,
     root = bottles_dir.resolve()
     bottle_dir = root / bottle
     drive = bottle_dir / "drive_c"
-    destination = drive / "edap" / "edap_input_helper.exe"
+    destination = drive / "edcr" / "edcr_input_helper.exe"
     # Refuse symlinks that escape the selected bottle or redirect its drive.
     if bottle_dir.resolve().parent != root or not drive.is_dir():
         raise ValueError("bottle must already exist and contain drive_c")

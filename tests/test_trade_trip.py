@@ -3,10 +3,10 @@ from __future__ import annotations
 import unittest
 from datetime import datetime, timedelta, timezone
 
-from edap.eddn.routes import TimeModel
-from edap.eddn.messages import journal_event_updates, station_type_from_game
-from edap.recent_markets import MarketSnapshot
-from edap.trade_trip import (
+from edcr.eddn.routes import TimeModel
+from edcr.eddn.messages import journal_event_updates, station_type_from_game
+from edcr.recent_markets import MarketSnapshot
+from edcr.trade_trip import (
     PartialFacts,
     StationFacts,
     estimate_trip,

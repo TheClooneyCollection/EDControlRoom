@@ -5,9 +5,9 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from edap.config import load_config
-from edap.eddn.messages import SystemPosition
-from edap.market_db import open_market_store, station_facts_writer
+from edcr.config import load_config
+from edcr.eddn.messages import SystemPosition
+from edcr.market_db import open_market_store, station_facts_writer
 
 SOL = SystemPosition(address=10, name="Sol", x=0.0, y=0.0, z=0.0, timestamp=1.0)
 

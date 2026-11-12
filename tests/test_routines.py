@@ -5,10 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from edap.actions import ActionDispatchResult
-from edap.binding_lookup import NormalizedBinding
-from edap.config import MarketBuyHoldSegmentConfig
-from edap.routines import (
+from edcr.actions import ActionDispatchResult
+from edcr.binding_lookup import NormalizedBinding
+from edcr.config import MarketBuyHoldSegmentConfig
+from edcr.routines import (
     RoutineResult,
     auto_zero_throttle_on_arrival as _auto_zero_throttle_on_arrival,
     dock as _dock,
@@ -23,8 +23,8 @@ from edap.routines import (
     station_refuel_menu_sequence,
     undock as _undock,
 )
-from edap.routines.callbacks import noop_announce, noop_progress
-from edap.tts import AnnouncementId
+from edcr.routines.callbacks import noop_announce, noop_progress
+from edcr.tts import AnnouncementId
 from tests.fakes import FakeShipControls, FakeWatcher
 
 
@@ -1212,7 +1212,7 @@ class RoutinesTests(unittest.TestCase):
         )
 
     def test_max_buy_caps_expected_quantity_by_balance_and_skips_zero_limit(self) -> None:
-        from edap.routines.haul_support import buy_shortfall
+        from edcr.routines.haul_support import buy_shortfall
 
         for balance, expected in ((450, 45), (9, 0)):
             with self.subTest(balance=balance), tempfile.TemporaryDirectory() as tmp:
@@ -1244,7 +1244,7 @@ class RoutinesTests(unittest.TestCase):
                                  [(AnnouncementId.MARKET_BUY_NONE_AVAILABLE, {"commodity_name": "Aluminium"})] if not expected else [])
 
     def test_quantity_limit_treats_unusable_balance_or_price_as_unknown(self) -> None:
-        from edap.routines.market import _read_buy_quantity_limit
+        from edcr.routines.market import _read_buy_quantity_limit
 
         with tempfile.TemporaryDirectory() as tmp:
             journal_dir = Path(tmp)

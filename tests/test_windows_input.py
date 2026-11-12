@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from edap.platform.input.windows import KEY_CODES, WindowsInputController
-from edap.timing import TimingChannelConfig, TimingConfig, TimingSampler, no_jitter_timing_sampler
+from edcr.platform.input.windows import KEY_CODES, WindowsInputController
+from edcr.timing import TimingChannelConfig, TimingConfig, TimingSampler, no_jitter_timing_sampler
 
 
 class FakeBackend:
