@@ -10269,7 +10269,7 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 ## Summary
 
-- Live side-by-side test on forge (assisted haul plus a second Control Room in Track only). Docking at Chauhan Dock (station 1) was denied for distance, the haul ended and kept the run open, the commander docked by hand, then restarted the haul. The routine sold at station 1 but the run never completed: no `Docked` at station 1 reached the stats while the haul was ended, so `docked_back_at_station_1` stayed false. Stop after run then suspended the open run again, and neither run complete nor session complete TTS played.
+- Live side-by-side test on a Windows peer (assisted haul plus a second Control Room in Track only). Docking at Chauhan Dock (station 1) was denied for distance, the haul ended and kept the run open, the commander docked by hand, then restarted the haul. The routine sold at station 1 but the run never completed: no `Docked` at station 1 reached the stats while the haul was ended, so `docked_back_at_station_1` stayed false. Stop after run then suspended the open run again, and neither run complete nor session complete TTS played.
 - The Track only process stayed active the whole time and recorded the run as completed: 45,194,613 Cr profit, 772 s, matching the assisted run's trades exactly.
 
 ## Changes
@@ -10279,5 +10279,5 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 ## Follow-ups
 
-- Restarting a Control Room still aborts a kept-open run, so the forge run from this test stays in the Track only file only.
+- Restarting a Control Room still aborts a kept-open run, so the peer run from this test stays in the Track only file only.
 - A `Distance` docking denial retries in place; approaching before the retry is a possible follow-up.
