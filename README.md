@@ -239,7 +239,6 @@ uv run python3 -m unittest discover -s tests
 - `edap/`: active runtime code.
 - `web/`: the web frontend pages (`/haul`, `/markets`, `/routes`, `/controls`, `/travel`, `/multi-haul`).
 - `tools/scratch/`: exploratory probes and one-off validation helpers.
-- `archive/legacy-windows/`: historical Windows-era reference code.
 
 ## Contributing
 

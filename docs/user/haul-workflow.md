@@ -113,7 +113,7 @@ multi_leg_haul <spansh-url>
 mult ...                        # short alias
 ```
 
-The route can come from the normalized JSON schema at `docs/schemas/multi_leg_haul.schema.json` (see `templates/multi_leg_haul.example.json`) or directly from a Spansh trade-result URL / payload. Resume is state-based; rerun and EDControlRoom figures out where you are.
+The route can come from the normalized JSON schema at `docs/schemas/multi_leg_haul.schema.json` (see `docs/examples/multi_leg_haul.example.json`) or directly from a Spansh trade-result URL / payload. Resume is state-based; rerun and EDControlRoom figures out where you are.
 
 ## Interrupt Behavior
 

@@ -1,5 +1,7 @@
 # Legacy Autopilot Architecture and Port Status
 
+> The legacy code was removed from the tree. The `archive/legacy-windows/` paths below refer to it as of commit `56843e7`: https://github.com/TheClooneyCollection/EDControlRoom/tree/56843e7/archive/legacy-windows
+
 Date: 2026-05-26
 
 ## Scope

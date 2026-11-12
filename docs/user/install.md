@@ -34,16 +34,6 @@ With `uv` (recommended):
 4. Run `uv sync`.
 5. Start Elite Dangerous.
 
-Without `uv`:
-
-```powershell
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-Then start Elite Dangerous.
-
 ## Steam Deck / Linux
 
 Run these in Konsole (Desktop Mode) or over `ssh`. Everything goes into your home folder, which SteamOS updates leave alone; the system partition is read-only, so do not use `sudo` or `pacman`.

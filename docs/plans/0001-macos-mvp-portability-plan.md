@@ -1,5 +1,7 @@
 # 0001: macOS MVP Portability Plan
 
+> The legacy code was removed from the tree. The `archive/legacy-windows/` paths below refer to it as of commit `56843e7`: https://github.com/TheClooneyCollection/EDControlRoom/tree/56843e7/archive/legacy-windows
+
 ## Status
 
 In Progress

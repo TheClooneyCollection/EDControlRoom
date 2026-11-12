@@ -46,7 +46,7 @@ For the workflow story, see [../user/haul-workflow.md](../user/haul-workflow.md)
 
 ## Multi-Leg Haul
 
-`multi_leg_haul <route.json | spansh-url>` (alias `mult`) runs a standalone finite multi-leg route. Route input can come from the normalized JSON at `docs/schemas/multi_leg_haul.schema.json` (see `templates/multi_leg_haul.example.json`) or from a Spansh trade-result URL / payload. Resume state is re-derived from journal, `Cargo.json`, `Market.json`, and the route definition. The public schema intentionally excludes plan / execution state.
+`multi_leg_haul <route.json | spansh-url>` (alias `mult`) runs a standalone finite multi-leg route. Route input can come from the normalized JSON at `docs/schemas/multi_leg_haul.schema.json` (see `docs/examples/multi_leg_haul.example.json`) or from a Spansh trade-result URL / payload. Resume state is re-derived from journal, `Cargo.json`, `Market.json`, and the route definition. The public schema intentionally excludes plan / execution state.
 
 ## Persistence
 

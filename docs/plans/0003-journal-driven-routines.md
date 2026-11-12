@@ -1,5 +1,7 @@
 # 0003: Journal-Driven Routines
 
+> The legacy code was removed from the tree. The `archive/legacy-windows/` paths below refer to it as of commit `56843e7`: https://github.com/TheClooneyCollection/EDControlRoom/tree/56843e7/archive/legacy-windows
+
 ## Status
 
 Planned, not started.
