@@ -36,7 +36,7 @@ Use [docs/iteration-logs/](docs/iteration-logs/) for concise per-iteration notes
 - Name each file `YYYY-MM-DD-HH-MM_<area>_<title>.md`.
 - `_` separates fields; `-` separates words inside each field.
 - `<area>` is a short kebab-case slug center-padded with underscores to width `12` so `control-room` fits exactly. Example: `2026-06-11-13-45_____docs_____iteration-log-migration.md`.
-- Always create iteration logs with `uv run python3 tools/iteration_logs.py new "<area>" "<title>"`; do not handcraft filenames.
+- Always create iteration logs with `uv run python3 tools/iteration_logs.py new "<area>" "<title>"`; do not handcraft filenames. `<title>` must already be lowercase kebab-case (e.g. `remove-cv-and-rename-edap-to-edcr`); the tool rejects spaces.
 - Do not hand-edit an iteration number anywhere; derive it from `docs/iteration-logs/` with `uv run python3 tools/iteration_logs.py next-number` or the generated archive.
 - `docs/iteration-archive.md` is maintained current from `docs/iteration-logs/`; refresh it whenever iteration logs change before committing, pushing, or opening a PR.
 - If `docs/iteration-archive.md` conflicts during a merge or rebase, do not resolve the generated file by hand; regenerate it with `uv run python3 tools/iteration_logs.py render-archive`, then stage the regenerated result.
