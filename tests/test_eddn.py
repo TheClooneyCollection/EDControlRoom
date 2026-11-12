@@ -13,7 +13,9 @@ from edcr.config import ConfigError, EddnConfig, load_config
 from edcr.eddn.listener import EddnListener, apply_payload
 from edcr.eddn.game_markets import import_game_markets, import_game_markets_every
 from edcr.eddn.service import start_eddn_service
-from edcr.eddn.messages import COMMODITY_SCHEMA, JOURNAL_SCHEMA, SIGNAL_SCHEMA, CarrierName, parse_eddn_message
+from edcr.eddn.messages import (
+    COMMODITY_SCHEMA, JOURNAL_SCHEMA, SIGNAL_SCHEMA, CarrierName, CarrierSighting, journal_event_updates, parse_eddn_message,
+)
 from edcr.eddn.store import EddnStore
 from edcr.recent_markets import save_recent_markets, snapshot_from_market_json
 
@@ -127,11 +129,28 @@ class EddnMessageTests(unittest.TestCase):
             "Q6K-WVH", "no callsign here",
         ))
 
-        self.assertEqual([(update.callsign, update.name) for update in updates], [
+        names = [update for update in updates if isinstance(update, CarrierName)]
+        self.assertEqual([(update.callsign, update.name) for update in names], [
             ("JFF-15Z", "GRAND ARTS THEATRE"), ("H3Q-W4M", "CANARY PARADISE"), ("BBG-4HW", "Clarissa"),
             ("B8H-7KT", "[UAPF] CENTURIO ASTRA"),
         ])
-        self.assertTrue(all(isinstance(update, CarrierName) for update in updates))
+        # An unnamed carrier is still seen; EDDN batches may be partial, so none is complete.
+        sightings = [update for update in updates if isinstance(update, CarrierSighting)]
+        self.assertEqual([(s.callsign, s.system_address, s.complete) for s in sightings], [
+            (callsign, 10477373803, False) for callsign in ("JFF-15Z", "H3Q-W4M", "BBG-4HW", "B8H-7KT", "Q6K-WVH")
+        ])
+
+    def test_our_journal_carrier_signals_are_complete_sightings(self) -> None:
+        def signal(name: str, signal_type: str = "FleetCarrier") -> dict[str, object]:
+            return {"timestamp": "2026-11-12T19:23:23Z", "event": "FSSSignalDiscovered", "SystemAddress": 4207155286746,
+                    "SignalName": name, "SignalType": signal_type, "IsStation": True}
+
+        updates = journal_event_updates(signal("THE MAGELLAN K9N-54Y"))
+        self.assertEqual([type(update) for update in updates], [CarrierName, CarrierSighting])
+        self.assertEqual((updates[1].callsign, updates[1].system_address, updates[1].complete),
+                         ("K9N-54Y", 4207155286746, True))
+        self.assertEqual(journal_event_updates(signal("Olympus Mons | MS31", "SquadronCarrier")), [])
+        self.assertEqual(journal_event_updates(signal("Galen Hub", "StationONeilOrbis")), [])
 
     def test_legacy_test_and_unknown_messages_are_ignored(self) -> None:
         self.assertEqual(parse_eddn_message(commodity_envelope(header={**LIVE_HEADER, "gameversion": "CAPI-Legacy-market"})), [])
@@ -235,10 +254,11 @@ class EddnStoreTests(unittest.TestCase):
         def applied(name: str, timestamp: str) -> list[type]:
             return apply_payload(store, frame(signal_envelope(name, timestamp=timestamp)))
 
-        self.assertEqual(applied("GRAND ARTS THEATRE JFF-15Z", "2026-11-10T14:00:00Z"), [CarrierName])
+        # A sighting in the same system is refreshed only every 10 minutes.
+        self.assertEqual(applied("GRAND ARTS THEATRE JFF-15Z", "2026-11-10T14:00:00Z"), [CarrierName, CarrierSighting])
         self.assertEqual(applied("GRAND ARTS THEATRE JFF-15Z", "2026-11-10T14:05:00Z"), [])
         self.assertEqual(applied("OLD NAME JFF-15Z", "2026-11-10T13:00:00Z"), [])
-        self.assertEqual(applied("GRAND ARTS HALL JFF-15Z", "2026-11-10T14:10:00Z"), [CarrierName])
+        self.assertEqual(applied("GRAND ARTS HALL JFF-15Z", "2026-11-10T14:10:00Z"), [CarrierName, CarrierSighting])
         self.assertEqual(store._db.execute("SELECT callsign, name FROM carrier_name").fetchall(),
                          [("JFF-15Z", "GRAND ARTS HALL")])
 

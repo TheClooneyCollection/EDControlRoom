@@ -153,7 +153,7 @@ class PeerLink:
     def enqueue_station_facts(self, updates: list[EddnUpdate]) -> None:
         for update in updates:
             body = encode_update(update)
-            identity = body.get("market_id", body.get("address"))
+            identity = body.get("market_id", body.get("address", body.get("callsign")))
             self._enqueue(ITEM_STATION_FACTS, body, key=f"{body['kind']}:{identity}:{update.timestamp}")
 
     def enqueue_runs(self, rows: list[dict[str, Any]]) -> None:

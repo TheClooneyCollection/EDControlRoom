@@ -138,25 +138,33 @@ def load_route_markets(db: sqlite3.Connection, filters: RouteFilters, *, now: fl
         SELECT m.market_id, m.station_name, m.system_name, m.is_carrier, m.updated_at,
                st.type, st.dist_ls, st.max_pad,
                COALESCE(sa.x, sn.x), COALESCE(sa.y, sn.y), COALESCE(sa.z, sn.z),
-               ca.access, cn.name
+               ca.access, cn.name,
+               sn.address, st.system_name, st.updated_at, cs.system_address, cs.seen_at, sc.scanned_at
         FROM market m
         LEFT JOIN station st ON st.market_id = m.market_id
         LEFT JOIN carrier_access ca ON ca.market_id = m.market_id
         LEFT JOIN carrier_name cn ON cn.callsign = m.station_name
         LEFT JOIN system sa ON sa.address = st.system_address
         LEFT JOIN system sn ON sn.name = m.system_name COLLATE NOCASE
+        LEFT JOIN carrier_seen cs ON cs.callsign = m.station_name
+        LEFT JOIN carrier_scan sc ON sc.system_address = sn.address
         WHERE m.updated_at >= ?
         """,
         (now - filters.max_age_s,),
     ).fetchall()
     markets: dict[int, RouteMarket] = {}
     for (market_id, station, system, is_carrier, updated_at, station_type, dist_ls, max_pad, x, y, z,
-         access, carrier_name) in rows:
+         access, carrier_name, address, station_system, station_at, seen_address, seen_at, scanned_at) in rows:
         station_type = station_type or ""
         # A newer commodity message rewrites market.is_carrier from the name alone, so a
         # named carrier ("VAON") loses the flag; its station type still says FleetCarrier.
         is_carrier = bool(is_carrier) or station_type == "FleetCarrier"
         if x is None or (is_carrier and not filters.include_carriers) or "ConstructionDepot" in station_type:
+            continue
+        if is_carrier and carrier_departed(
+            system, updated_at, address=address, station_system=station_system, station_at=station_at,
+            seen_address=seen_address, seen_at=seen_at, scanned_at=scanned_at,
+        ):
             continue
         access = (access or "") if is_carrier else ""
         if access and access != "all" and filters.carriers_open_only:
@@ -185,6 +193,23 @@ def load_route_markets(db: sqlite3.Connection, filters: RouteFilters, *, now: fl
         if sell > 0:
             market.imports[commodity] = (sell, demand)
     return [market for market in markets.values() if market.exports or market.imports]
+
+
+def carrier_departed(
+    system: str, updated_at: float, *, address: int | None, station_system: str | None, station_at: float | None,
+    seen_address: int | None, seen_at: float | None, scanned_at: float | None,
+) -> bool:
+    """A carrier has left the system its market was read in when, after that market: a `CarrierJump` put
+    its station elsewhere, its signal was seen elsewhere, or our journal listed that system's carriers
+    without it."""
+    if station_at is not None and station_at > updated_at and station_system \
+            and station_system.casefold() != system.casefold():
+        return True
+    if seen_at is not None and seen_at > updated_at and address is not None and seen_address != address:
+        return True
+    if scanned_at is None or scanned_at <= updated_at:
+        return False
+    return seen_at is None or seen_address != address or seen_at < scanned_at
 
 
 def best_leg(source: RouteMarket, target: RouteMarket, capacity: int) -> RouteLeg | None:

@@ -10,7 +10,9 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Protocol
 
-from edcr.eddn.messages import EddnUpdate, MarketSnapshot, StationInfo, StationTypeSeen, SystemPosition
+from edcr.eddn.messages import (
+    CarrierName, CarrierSighting, EddnUpdate, MarketSnapshot, StationInfo, StationTypeSeen, SystemPosition,
+)
 
 PEER_LINK_PATH = "/api/peer-link"
 
@@ -63,6 +65,8 @@ _UPDATE_KINDS: dict[str, type] = {
     "system": SystemPosition,
     "station": StationInfo,
     "station_type": StationTypeSeen,
+    "carrier_name": CarrierName,
+    "carrier_sighting": CarrierSighting,
 }
 
 

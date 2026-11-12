@@ -1,7 +1,7 @@
 """Parse EDDN relay envelopes into the market, station and system updates we store.
 
 Only live-galaxy `commodity/3`, `journal/1` (Docked, CarrierJump, FSDJump, Location) and
-`fsssignaldiscovered/1` (fleet carrier names) messages are used; test schemas and legacy-galaxy
+`fsssignaldiscovered/1` (fleet carrier names and sightings) messages are used; test schemas and legacy-galaxy
 uploads are dropped.
 """
 from __future__ import annotations
@@ -89,7 +89,19 @@ class CarrierName:
     timestamp: float
 
 
-EddnUpdate = MarketSnapshot | SystemPosition | StationInfo | StationTypeSeen | CarrierName
+@dataclass(frozen=True)
+class CarrierSighting:
+    """A fleet carrier's signal in a system. `complete` marks our own journal's batch, which the game
+    writes once per system visit (at login or the first supercruise drop) with every carrier there,
+    all at one timestamp; a carrier missing from it has left. EDDN batches may be partial."""
+
+    callsign: str
+    system_address: int
+    timestamp: float
+    complete: bool
+
+
+EddnUpdate = MarketSnapshot | SystemPosition | StationInfo | StationTypeSeen | CarrierName | CarrierSighting
 
 
 def is_carrier_station(name: str, station_type: str) -> bool:
@@ -123,7 +135,11 @@ def journal_event_updates(event: Any) -> list[EddnUpdate]:
     if not isinstance(event, dict):
         return []
     timestamp = _timestamp(event.get("timestamp"))
-    return _journal_updates(event, timestamp) if timestamp is not None else []
+    if timestamp is None:
+        return []
+    if event.get("event") == "FSSSignalDiscovered":
+        return _carrier_signal(event, event.get("SystemAddress"), timestamp, complete=True)
+    return _journal_updates(event, timestamp)
 
 
 def station_type_from_game(game: GameMarket) -> StationTypeSeen | None:
@@ -192,14 +208,24 @@ def _carrier_names(message: dict[str, Any], timestamp: float) -> list[EddnUpdate
     signals = message.get("signals")
     if not isinstance(signals, list):
         return []
-    names: list[EddnUpdate] = []
-    for signal in signals:
-        if not isinstance(signal, dict) or signal.get("SignalType") != "FleetCarrier":
-            continue
-        match = _CARRIER_SIGNAL.match(str(signal.get("SignalName") or "").strip())
-        if match is not None and match.group(1).strip():
-            names.append(CarrierName(callsign=match.group(2), name=match.group(1).strip(), timestamp=timestamp))
-    return names
+    address = message.get("SystemAddress")
+    return [update for signal in signals for update in _carrier_signal(signal, address, timestamp, complete=False)]
+
+
+def _carrier_signal(signal: Any, address: Any, timestamp: float, *, complete: bool) -> list[EddnUpdate]:
+    """A fleet carrier signal's name (when it has one) and where it was seen."""
+    if not isinstance(signal, dict) or signal.get("SignalType") != "FleetCarrier":
+        return []
+    match = _CARRIER_SIGNAL.match(str(signal.get("SignalName") or "").strip())
+    if match is None:
+        return []
+    name, callsign = match.group(1).strip(), match.group(2)
+    updates: list[EddnUpdate] = []
+    if name:
+        updates.append(CarrierName(callsign=callsign, name=name, timestamp=timestamp))
+    if isinstance(address, int) and not isinstance(address, bool):
+        updates.append(CarrierSighting(callsign=callsign, system_address=address, timestamp=timestamp, complete=complete))
+    return updates
 
 
 def _price(item: object) -> CommodityPrice | None:

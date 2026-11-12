@@ -24,7 +24,7 @@ from edcr.control_room.models import ShipState
 from edcr.control_room.server.app import _handle_session_message_async, build_observer_server_app
 from edcr.control_room.server.auth import SharedAccessTokenAuth
 from edcr.control_room.server.broker import InMemoryObserverSessionBroker
-from edcr.eddn.messages import StationInfo, SystemPosition
+from edcr.eddn.messages import CarrierName, CarrierSighting, StationInfo, SystemPosition
 from edcr.eddn.route_query import parse_route_query, resolve_route_params
 from edcr.eddn.store import EddnStore
 from edcr.hub.history import CentralHistory, HubRuns
@@ -397,6 +397,18 @@ class LinkTests(unittest.TestCase):
         self.assertTrue(link.closed)
         self.assertIn("own node id", r.peer.status()["last_error"])
 
+    def test_a_journal_carrier_batch_goes_up_whole(self) -> None:
+        r = rig(self)
+        # One batch shares its timestamp, so the outbox tells its items apart by callsign.
+        r.peer.enqueue_station_facts([
+            CarrierSighting(callsign=callsign, system_address=4207155286746, timestamp=1.0, complete=True)
+            for callsign in ("Q8N-BVT", "K9N-54Y")
+        ])
+        self.assertEqual(r.peer.status()["outbox_pending"], 2)
+        r.attach()
+        self.assertEqual(r.store._db.execute("SELECT callsign FROM carrier_seen ORDER BY callsign").fetchall(),
+                         [("K9N-54Y",), ("Q8N-BVT",)])
+
     def test_outbox_drains_in_order_on_connect_and_new_items_go_out_at_once(self) -> None:
         r = rig(self)
         r.peer.enqueue_markets((market("2026-11-10T14:00:00Z"), market("2026-11-10T13:00:00Z", 1, "Abraham")))
@@ -509,7 +521,9 @@ class LinkTests(unittest.TestCase):
         self.assertIn("dropped outbox item 1", r.hub_logs[-1])
 
     def test_facts_survive_json_both_ways(self) -> None:
-        for update in (SOL, GALILEO):
+        carrier = CarrierName(callsign="Q8N-BVT", name="GONDAMON", timestamp=1.0)
+        sighting = CarrierSighting(callsign="Q8N-BVT", system_address=4207155286746, timestamp=1.0, complete=True)
+        for update in (SOL, GALILEO, carrier, sighting):
             self.assertEqual(decode_update(roundtrip(encode_update(update))), update)
         self.assertIsNone(decode_update({"kind": "system", "address": 1}))
 

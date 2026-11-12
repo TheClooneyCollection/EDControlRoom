@@ -16,6 +16,7 @@ from edcr.control_room.server.app import build_observer_server_app
 from edcr.control_room.server.auth import SharedAccessTokenAuth
 from edcr.control_room.server.broker import InMemoryObserverSessionBroker
 from edcr.eddn.listener import apply_payload
+from edcr.eddn.messages import CarrierSighting
 from edcr.eddn.route_query import parse_route_query, run_route_query
 from edcr.eddn.routes import RouteFilters, TimeModel, find_routes, load_route_markets
 from edcr.eddn.store import EddnStore
@@ -118,6 +119,35 @@ class EddnRouteFinderTests(unittest.TestCase):
                          [True, True, False])
         with self.assertRaisesRegex(ValueError, "carrier_access"):
             parse_route_query({"carrier_access": "friends"}, search_defaults={}, current_system="Sol", cargo_capacity=1)
+
+    def test_carriers_seen_elsewhere_or_missing_from_our_journal_batch_are_gone(self) -> None:
+        store = galaxy()
+        self.addCleanup(store.close)
+        for market_id, callsign in ((6, "AAA-111"), (7, "BBB-222"), (8, "CCC-333")):
+            add_station(store, market_id, callsign, "Alpha", 10.0, "FleetCarrier", LARGE,
+                        [price("gold", sell=12000 + market_id, demand=8000)])
+        alpha = 1010
+        store.save([
+            # Our journal listed Alpha's carriers after their markets were read: CCC-333 was not there.
+            CarrierSighting(callsign="AAA-111", system_address=alpha, timestamp=NOW + 1800, complete=True),
+            CarrierSighting(callsign="BBB-222", system_address=alpha, timestamp=NOW + 1800, complete=True),
+            # An EDDN upload saw K7Q-BQL, read in Sol, in Alpha later.
+            CarrierSighting(callsign="K7Q-BQL", system_address=alpha, timestamp=NOW + 600, complete=False),
+        ])
+
+        def carriers() -> set[str]:
+            markets = load_route_markets(store._db, RouteFilters(include_carriers=True), now=NOW)
+            return {m.station for m in markets if m.is_carrier}
+
+        self.assertEqual(carriers(), {"AAA-111", "BBB-222"})
+        # A newer market for CCC-333 in Alpha brings it back; a later batch with only AAA-111 hides the others.
+        newer = commodity_envelope(market_id=8, station="CCC-333", timestamp="2026-11-10T15:00:00Z",
+                                   commodities=[price("gold", sell=12008, demand=8000)])
+        newer["message"]["systemName"] = "Alpha"  # type: ignore[index]
+        apply_payload(store, frame(newer))
+        self.assertEqual(carriers(), {"AAA-111", "BBB-222", "CCC-333"})
+        store.save([CarrierSighting(callsign="AAA-111", system_address=alpha, timestamp=NOW + 7200, complete=True)])
+        self.assertEqual(carriers(), {"AAA-111"})
 
     def test_surface_stations_need_opting_in_and_add_landing_time(self) -> None:
         store = galaxy()

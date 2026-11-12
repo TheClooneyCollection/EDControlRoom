@@ -14,6 +14,7 @@ from pathlib import Path
 
 from edcr.eddn.messages import (
     CarrierName,
+    CarrierSighting,
     EddnUpdate,
     MarketSnapshot,
     StationInfo,
@@ -21,6 +22,8 @@ from edcr.eddn.messages import (
     SystemPosition,
     is_carrier_station,
 )
+
+_SIGHTING_REFRESH_S = 600.0
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS system (
@@ -69,6 +72,16 @@ CREATE TABLE IF NOT EXISTS carrier_name (
     callsign TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     updated_at REAL NOT NULL
+);
+-- Where each carrier's signal was last seen, and when our own journal last listed every carrier in a system.
+CREATE TABLE IF NOT EXISTS carrier_seen (
+    callsign TEXT PRIMARY KEY,
+    system_address INTEGER NOT NULL,
+    seen_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS carrier_scan (
+    system_address INTEGER PRIMARY KEY,
+    scanned_at REAL NOT NULL
 );
 """
 
@@ -120,6 +133,8 @@ class EddnStore:
             return self._apply_station_type(update)
         if isinstance(update, CarrierName):
             return self._apply_carrier_name(update)
+        if isinstance(update, CarrierSighting):
+            return self._apply_carrier_sighting(update)
         return self._apply_station(update)
 
     def commit(self) -> None:
@@ -253,5 +268,25 @@ class EddnStore:
             " ON CONFLICT (callsign) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at"
             " WHERE excluded.name != carrier_name.name AND excluded.updated_at >= carrier_name.updated_at",
             (carrier.callsign, carrier.name, carrier.timestamp),
+        )
+        return cursor.rowcount > 0
+
+    def _apply_carrier_sighting(self, sighting: CarrierSighting) -> bool:
+        """EDDN repeats the same sightings many times a minute, so one in the same system is written only
+        every `_SIGHTING_REFRESH_S`; a complete batch is always written, since its members must match its scan time."""
+        if sighting.complete:
+            self._db.execute(
+                "INSERT INTO carrier_scan (system_address, scanned_at) VALUES (?, ?)"
+                " ON CONFLICT (system_address) DO UPDATE SET scanned_at = excluded.scanned_at"
+                " WHERE excluded.scanned_at > carrier_scan.scanned_at",
+                (sighting.system_address, sighting.timestamp),
+            )
+        refresh = 0.0 if sighting.complete else _SIGHTING_REFRESH_S
+        cursor = self._db.execute(
+            "INSERT INTO carrier_seen (callsign, system_address, seen_at) VALUES (?, ?, ?)"
+            " ON CONFLICT (callsign) DO UPDATE SET system_address = excluded.system_address, seen_at = excluded.seen_at"
+            " WHERE excluded.seen_at > carrier_seen.seen_at AND (excluded.system_address != carrier_seen.system_address"
+            " OR excluded.seen_at >= carrier_seen.seen_at + ?)",
+            (sighting.callsign, sighting.system_address, sighting.timestamp, refresh),
         )
         return cursor.rowcount > 0
