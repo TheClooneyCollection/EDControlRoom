@@ -96,13 +96,15 @@ function clockTime(seconds) {
 }
 
 function appendLog(text) {
-  const log = document.getElementById("eddn-log");
+  const log = document.getElementById("activity-list");
   if (log.dataset.started !== "yes") {
     log.innerHTML = "";
     log.dataset.started = "yes";
   }
-  const item = document.createElement("li");
-  item.innerHTML = `<time>${escapeHtml(clockTime(Date.now() / 1000))}</time>${escapeHtml(text)}`;
+  const item = document.createElement("div");
+  item.className = "activity-row";
+  item.innerHTML = `<div class="activity-time mono">${escapeHtml(clockTime(Date.now() / 1000))}</div>` +
+    `<div class="activity-text">${escapeHtml(text)}</div>`;
   log.prepend(item);
   while (log.children.length > EDDN_LOG_LIMIT) log.lastElementChild.remove();
 }

@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `364`
-- Latest generated iteration number: `497`
+- Generated iteration count: `365`
+- Latest generated iteration number: `498`
 
 ## Iteration 134
 
@@ -10366,3 +10366,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Most carriers stay `access unknown` until someone uploads their Market.json; a Spansh dump seed is possible but 4.6 GB.
 - /haul and Copy still use the callsign as the station name, which is what the game navigates by.
+
+## Iteration 498
+
+- When: `2026-11-12 18:19`
+- Area: `control-room`
+- Title: `dock-eddn-listener-log-on-routes`
+- Source: [2026-11-12-18-19_control-room_dock-eddn-listener-log-on-routes.md](iteration-logs/2026-11-12-18-19_control-room_dock-eddn-listener-log-on-routes.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `dock-eddn-listener-log-on-routes`
+- Started: `2026-11-12 18:19`
+
+## Summary
+
+- `/routes` EDDN listener panel now uses the shared activity dock: docked to the bottom on desktop widths, collapsed to the newest entry, expandable, phones keep it in flow.
+
+## Changes
+
+- `web/routes.html`: panel takes the `activity-panel` / `activity-toggle` / `activity-latest` / `activity-list` markup and loads `activity-dock.js`; the page-local `.eddn-log` CSS is gone.
+- `web/routes.js`: `appendLog` writes `.activity-row` rows (time + text) into `#activity-list`; `activity-dock.js` is unchanged.
+- Dock test now covers `routes.html`.
+
+## Follow-ups
+
+- The expanded state shares one localStorage key with the haul, controls and travel pages.
+- Not yet checked in a browser.

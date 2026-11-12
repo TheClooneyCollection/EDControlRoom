@@ -96,29 +96,6 @@
     .routes-form .field:disabled {
       opacity: 0.45;
     }
-    .eddn-log {
-      max-height: 220px;
-      overflow-y: auto;
-      margin: 0;
-      padding: 0;
-      list-style: none;
-      font-family: var(--mono);
-      font-size: 12px;
-    }
-    .eddn-log li {
-      padding: 3px 0;
-      border-top: 1px solid var(--border);
-      color: var(--text-2);
-      overflow-wrap: anywhere;
-    }
-    .eddn-log li:first-child {
-      border-top: 0;
-      color: var(--text-1);
-    }
-    .eddn-log time {
-      color: var(--text-3);
-      margin-right: 8px;
-    }
     /* haul-ui.css turns .route-table rows into labelled cards here; drop the wide-table rules. */
     @media (max-width: 760px) {
       .route-table {
@@ -236,15 +213,15 @@
             </div>
           </div>
         </section>
-        <section class="panel" aria-labelledby="eddn-log-title">
-          <div class="panel-head">
-            <div class="panel-title" id="eddn-log-title">EDDN listener</div>
-            <div class="panel-action field-hint">checked every 10 s</div>
-          </div>
-          <div class="panel-body">
-            <ul class="eddn-log" id="eddn-log">
-              <li>Waiting for the first status check</li>
-            </ul>
+        <section class="panel activity-panel" id="activity-panel" aria-labelledby="activity-title">
+          <button class="panel-head activity-toggle" type="button" id="activity-toggle" aria-expanded="false" aria-controls="activity-list">
+            <span class="panel-title" id="activity-title">EDDN listener</span>
+            <span class="panel-action field-hint">checked every 10 s</span>
+            <span class="activity-latest" id="activity-latest" aria-hidden="true"><span class="activity-time mono">--:--:--</span><span class="activity-text">Waiting for the first status check</span></span>
+            <svg class="activity-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="panel-body activity-list" id="activity-list" role="log" aria-live="polite" tabindex="0">
+            <div class="activity-row"><div class="activity-time mono">--:--:--</div><div class="activity-text">Waiting for the first status check</div></div>
           </div>
         </section>
       </main>
@@ -256,5 +233,6 @@
   </script>
   <script src="/assets/routes.js" defer></script>
   <script src="/assets/hub-status.js" defer></script>
+  <script src="/assets/activity-dock.js" defer></script>
 </body>
 </html>

@@ -217,7 +217,7 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         css = (web_dir / "haul-ui.css").read_text(encoding="utf-8")
         dock = (web_dir / "activity-dock.js").read_text(encoding="utf-8")
 
-        for page in ("haul-v1.html", "controls.html", "travel.html"):
+        for page in ("haul-v1.html", "controls.html", "travel.html", "routes.html"):
             with self.subTest(page=page):
                 html = (web_dir / page).read_text(encoding="utf-8")
                 self.assertIn('<button class="panel-head activity-toggle" type="button" id="activity-toggle" '
