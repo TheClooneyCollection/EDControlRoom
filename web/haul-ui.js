@@ -202,9 +202,10 @@ let routes = [];
       const buy = creditNumber(buyPrice);
       const sell = creditNumber(sellPrice);
       const prices = buy !== null && sell !== null
-        ? ` ${buy.toLocaleString("en-US")} → ${sell.toLocaleString("en-US")} (${sell >= buy ? "+" : "−"}${Math.abs(sell - buy).toLocaleString("en-US")}/t)`
+        ? `<div class="route-sub mono">${buy.toLocaleString("en-US")} → ${sell.toLocaleString("en-US")} (${sell >= buy ? "+" : "−"}${Math.abs(sell - buy).toLocaleString("en-US")}/t)</div>`
         : "";
-      return `<div class="route-main">${escapeHtml(name)}<span class="route-sub mono">${escapeHtml(prices)}</span></div>
+      return `<div class="route-main">${escapeHtml(name)}</div>
+            ${prices}
             <div class="route-sub mono">Sup ${escapeHtml(marketAmount(supply))} · Dem ${escapeHtml(marketAmount(demand))}</div>`;
     }
 

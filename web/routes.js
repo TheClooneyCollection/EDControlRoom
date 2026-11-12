@@ -179,8 +179,9 @@ function legCell(leg) {
   if (!leg) {
     return `<span class="route-sub">empty</span>`;
   }
-  const detail = `${count(leg.buy_price)} → ${count(leg.sell_price)} (+${count(leg.profit_per_ton)}/t) × ${count(leg.tons)} t · supply ${count(leg.supply)}`;
-  return `${escapeHtml(leg.name)}<span class="route-sub">${escapeHtml(detail)}</span>`;
+  const prices = `${count(leg.buy_price)} → ${count(leg.sell_price)} (+${count(leg.profit_per_ton)}/t) × ${count(leg.tons)} t`;
+  const market = `Sup ${count(leg.supply)} · Dem ${count(leg.demand)}`;
+  return `${escapeHtml(leg.name)}<span class="route-sub nowrap">${escapeHtml(prices)}</span><span class="route-sub nowrap">${escapeHtml(market)}</span>`;
 }
 
 // /haul imports a route from its #route= fragment once it connects, as /markets does.

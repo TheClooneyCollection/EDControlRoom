@@ -824,11 +824,6 @@
       overflow-wrap: normal;
     }
 
-    .cargo-legs .route-main .route-sub {
-      display: inline-block;
-      font-weight: 400;
-    }
-
     .cargo-legs .route-sub + .route-main {
       margin-top: 8px;
     }
