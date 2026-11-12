@@ -118,6 +118,11 @@ class TradeRoute:
     from_demand: str | None = None
     to_supply: str | None = None
     to_demand: str | None = None
+    # Outbound buys at `from` and sells at `to`; the return leg buys at `to` and sells at `from`.
+    from_buy_price: str | None = None
+    to_sell_price: str | None = None
+    to_buy_price: str | None = None
+    from_sell_price: str | None = None
     updated: str | None = None
     from_manual_landing: bool = False
     to_manual_landing: bool = False
@@ -327,6 +332,11 @@ def _extract_trade_commodity_values(lines: list[str], label: str) -> list[str]:
     return values
 
 
+def _price(value: str) -> str:
+    """`40,684 Cr | +37,264 Cr (1,089%)` -> `40,684 Cr`: Inara appends the margin to sell prices."""
+    return value.split("|", 1)[0].strip()
+
+
 def _row_to_route(row: dict[str, Any]) -> TradeRoute:
     lines = [_clean_line(line) for line in row.get("lines", []) if _clean_line(line)]
     fields = _extract_key_value_pairs(lines)
@@ -350,6 +360,9 @@ def _row_to_route(row: dict[str, Any]) -> TradeRoute:
     station_distances = _extract_repeated_field_values(lines, "STATION DISTANCE")
     supply_values = _extract_repeated_field_values(lines, "SUPPLY")
     demand_values = _extract_repeated_field_values(lines, "DEMAND")
+    # Inara lists the `from` station's block first; a one-way route has only the outbound buy and sell.
+    buy_prices = [_price(value) for value in _extract_repeated_field_values(lines, "BUY PRICE")]
+    sell_prices = [_price(value) for value in _extract_repeated_field_values(lines, "SELL PRICE")]
 
     return TradeRoute(
         index=int(row.get("index", 0) or 0),
@@ -370,6 +383,10 @@ def _row_to_route(row: dict[str, Any]) -> TradeRoute:
         from_demand=demand_values[0] if demand_values else None,
         to_supply=supply_values[1] if len(supply_values) > 1 else None,
         to_demand=demand_values[1] if len(demand_values) > 1 else None,
+        from_buy_price=buy_prices[0] if buy_prices else None,
+        to_sell_price=sell_prices[-1] if sell_prices else None,
+        to_buy_price=buy_prices[1] if len(buy_prices) > 1 else None,
+        from_sell_price=sell_prices[0] if len(sell_prices) > 1 else None,
         updated=fields.get("UPDATED"),
         raw_text=str(row.get("text", "")),
         url_links=tuple(str(link) for link in row.get("links", [])),

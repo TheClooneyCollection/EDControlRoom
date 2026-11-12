@@ -186,6 +186,10 @@ class InaraTradeRoutesTests(unittest.TestCase):
         self.assertEqual(route.from_demand, "5,835,635")
         self.assertEqual(route.to_supply, "7,025")
         self.assertEqual(route.to_demand, "522,430")
+        self.assertEqual(
+            (route.from_buy_price, route.to_sell_price, route.to_buy_price, route.from_sell_price),
+            ("3,420 Cr", "40,684 Cr", "2,022 Cr", "2,661 Cr"),
+        )
 
 if __name__ == "__main__":
     unittest.main()

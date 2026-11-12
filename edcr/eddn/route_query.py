@@ -254,6 +254,10 @@ def _trade_route(route: FoundRoute, outbound: dict[str, Any] | None, inbound: di
         "to_demand": f"{outbound['demand']:,}" if outbound else None,
         "to_supply": f"{inbound['supply']:,}" if inbound else None,
         "from_demand": f"{inbound['demand']:,}" if inbound else None,
+        "from_buy_price": f"{outbound['buy_price']:,} Cr" if outbound else None,
+        "to_sell_price": f"{outbound['sell_price']:,} Cr" if outbound else None,
+        "to_buy_price": f"{inbound['buy_price']:,} Cr" if inbound else None,
+        "from_sell_price": f"{inbound['sell_price']:,} Cr" if inbound else None,
         # Planetary ports usually dock like orbital ones; manual landing is the pilot's call.
         "from_manual_landing": False, "to_manual_landing": False,
     }

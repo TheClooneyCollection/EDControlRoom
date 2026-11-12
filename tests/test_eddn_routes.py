@@ -209,6 +209,12 @@ class EddnRoutesApiTests(unittest.TestCase):
                  "target_buy_commodity": "Silver", "profit_per_trip": "4,011,000 Cr"},
             )
             self.assertFalse(named["routes"][0]["trade_route"]["to_manual_landing"])
+            out, back = named["routes"][0]["outbound"], named["routes"][0]["inbound"]
+            self.assertEqual(
+                [named["routes"][0]["trade_route"][key] for key in
+                 ("from_buy_price", "to_sell_price", "to_buy_price", "from_sell_price")],
+                [f"{price:,} Cr" for price in (out["buy_price"], out["sell_price"], back["buy_price"], back["sell_price"])],
+            )
 
             def global_view(system: str) -> dict:
                 return run_route_query(

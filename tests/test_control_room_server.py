@@ -1404,6 +1404,10 @@ class ControlRoomServerTests(unittest.TestCase):
             "from_demand": "1,204",
             "to_supply": "8,870",
             "to_demand": "96,431",
+            "from_buy_price": "3,420 Cr",
+            "to_sell_price": "40,684 Cr",
+            "to_buy_price": "2,022 Cr",
+            "from_sell_price": "2,661 Cr",
             "from_manual_landing": True,
         }
 
@@ -1435,6 +1439,10 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(
             [selected[key] for key in ("from_supply", "from_demand", "to_supply", "to_demand")],
             ["52,113", "1,204", "8,870", "96,431"],
+        )
+        self.assertEqual(
+            [selected[key] for key in ("from_buy_price", "to_sell_price", "to_buy_price", "from_sell_price")],
+            ["3,420 Cr", "40,684 Cr", "2,022 Cr", "2,661 Cr"],
         )
         self.assertEqual(
             [selected[key] for key in ("from_manual_landing", "to_manual_landing")],

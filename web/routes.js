@@ -179,7 +179,7 @@ function legCell(leg) {
   if (!leg) {
     return `<span class="route-sub">empty</span>`;
   }
-  const detail = `${count(leg.profit_per_ton)}/t × ${count(leg.tons)} t · supply ${count(leg.supply)}`;
+  const detail = `${count(leg.buy_price)} → ${count(leg.sell_price)} (+${count(leg.profit_per_ton)}/t) × ${count(leg.tons)} t · supply ${count(leg.supply)}`;
   return `${escapeHtml(leg.name)}<span class="route-sub">${escapeHtml(detail)}</span>`;
 }
 

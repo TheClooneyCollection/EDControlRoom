@@ -304,6 +304,10 @@ function tradeRoute(marketX, marketY, out, back, perHour) {
     to_demand: out ? count(out.demand) : null,
     to_supply: back ? count(back.stock) : null,
     from_demand: back ? count(back.demand) : null,
+    from_buy_price: out ? credits(out.buy_price) : null,
+    to_sell_price: out ? credits(out.sell_price) : null,
+    to_buy_price: back ? credits(back.buy_price) : null,
+    from_sell_price: back ? credits(back.sell_price) : null,
     from_manual_landing: false, to_manual_landing: false
   };
 }

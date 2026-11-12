@@ -153,6 +153,12 @@ let routes = [];
 
     // Inara marks supply and demand with its own icon font: U+E84E high, U+E84D low. Show them as arrows and
     // drop any other private-use glyph, which would render as a box.
+    // Each station buys its own cargo and sells the other station's; routes saved before prices were kept have none.
+    function stationPricesLine(prices) {
+      const parts = [prices.buy ? `Buy ${prices.buy}` : "", prices.sell ? `Sell ${prices.sell}` : ""].filter(Boolean);
+      return parts.length ? `<div class="route-sub mono">${escapeHtml(parts.join(" / "))}</div>` : "";
+    }
+
     function marketAmount(value) {
       return String(value ?? "")
         .replace(/\ue84e\ufe0e?/g, " ▲")
@@ -318,6 +324,8 @@ let routes = [];
         buyStationDemand: route.from_demand || "-",
         sellStationSupply: route.to_supply || "-",
         sellStationDemand: route.to_demand || "-",
+        buyStationPrices: { buy: route.from_buy_price || "", sell: route.from_sell_price || "" },
+        sellStationPrices: { buy: route.to_buy_price || "", sell: route.to_sell_price || "" },
         apiRoute: { ...route, index, from_manual_landing: buyManualLanding, to_manual_landing: sellManualLanding }
       };
     }
@@ -990,11 +998,13 @@ let routes = [];
             <div class="route-main">${escapeHtml(route.buyStation)}</div>
             <div class="route-sub mono">${escapeHtml(route.buySystem)} / ${escapeHtml(route.buyStationDistance)}${route.buyManualLanding ? " / manual landing" : ""}</div>
             <div class="route-sub mono">Sup ${escapeHtml(marketAmount(route.buyStationSupply))} / Dem ${escapeHtml(marketAmount(route.buyStationDemand))}</div>
+            ${stationPricesLine(route.buyStationPrices)}
           </td>
           <td data-label="Station 2">
             <div class="route-main">${escapeHtml(route.sellStation)}</div>
             <div class="route-sub mono">${escapeHtml(route.sellSystem)} / ${escapeHtml(route.sellStationDistance)}${route.sellManualLanding ? " / manual landing" : ""}</div>
             <div class="route-sub mono">Sup ${escapeHtml(marketAmount(route.sellStationSupply))} / Dem ${escapeHtml(marketAmount(route.sellStationDemand))}</div>
+            ${stationPricesLine(route.sellStationPrices)}
           </td>
           <td class="num" data-label="Distance">${escapeHtml(route.distanceFromSystem)}</td>
           <td class="num" data-label="Route">${escapeHtml(route.routeDistance)}</td>
