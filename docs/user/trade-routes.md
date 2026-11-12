@@ -18,6 +18,7 @@ The EDDN listener is off by default; turn it on with `enabled = true` under `[ed
 ## Using the Routes page
 
 - **Near** shows routes whose first station is within range of your current system (or the system you type). **Global** searches every market in the database.
+- Each station shows how many Ly away it is from your current system (or the system you type), when that system has coordinates in the database; the **Jumps** column shows the Ly between the two stations.
 - **1 / 2 / 4 jumps** size the range by your laden jump range; **100 / 250 Ly** use a flat distance.
 - Filters: cargo, min supply, max station distance (Ls), max data age, surface stations, fleet carriers. Empty fields fall back to `haul_search.toml` and your current ship.
 - Demand is not filtered: a station buys anything it lists a sell price for, even with a tiny demand (for example a station that also produces it).

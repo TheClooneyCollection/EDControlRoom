@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `362`
-- Latest generated iteration number: `495`
+- Generated iteration count: `363`
+- Latest generated iteration number: `496`
 
 ## Iteration 134
 
@@ -10307,3 +10307,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - `market.is_carrier` stays wrong in the store; fix it at write time if another reader starts relying on it.
+
+## Iteration 496
+
+- When: `2026-11-12 17:35`
+- Area: `control-room`
+- Title: `global-routes-distance`
+- Source: [2026-11-12-17-35_control-room_global-routes-distance.md](iteration-logs/2026-11-12-17-35_control-room_global-routes-distance.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `global-routes-distance`
+- Started: `2026-11-12 17:35`
+
+## Summary
+
+- `/routes` Global view now shows how far each station is from the current system. The station-to-station Ly was already under the Jumps column in both views, so the new number is distance from the commander.
+
+## Changes
+
+- `run_route_query` looks up the query system's coordinates in both views; Near still errors when missing, Global carries on without distances. Only Near passes the origin to `find_routes` as a filter.
+- Each station in the payload gains `ly_from_system`; the payload gains `distance_system` (null when there are no coordinates).
+- `web/routes.js` adds `<n> Ly away` to each station's sub line (Near too, since the origin is known there) and names the system in the status line.
+- On a hub, the peer's `resolve_route_params` already fills `system` with the peer's current system, so distances are from the peer's ship.
+
+## Follow-ups
+
+- Not tried in a browser or live session.
