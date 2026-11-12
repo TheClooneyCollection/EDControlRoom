@@ -189,10 +189,31 @@ let routes = [];
       }
     }
 
-    // Each station buys its own cargo and sells the other station's; routes saved before prices were kept have none.
-    function stationPricesLine(prices) {
-      const parts = [prices.buy ? `Buy ${prices.buy}` : "", prices.sell ? `Sell ${prices.sell}` : ""].filter(Boolean);
-      return parts.length ? `<div class="route-sub mono">${escapeHtml(parts.join(" / "))}</div>` : "";
+    function creditNumber(value) {
+      const digits = String(value || "").replace(/[^\d]/g, "");
+      return digits ? Number(digits) : null;
+    }
+
+    // One cargo leg: bought at one station, sold at the other. Routes saved before prices were kept have none.
+    function cargoLegHtml(name, buyPrice, sellPrice, supply, demand) {
+      if (!name) {
+        return "";
+      }
+      const buy = creditNumber(buyPrice);
+      const sell = creditNumber(sellPrice);
+      const prices = buy !== null && sell !== null
+        ? ` ${buy.toLocaleString("en-US")} → ${sell.toLocaleString("en-US")} (${sell >= buy ? "+" : "−"}${Math.abs(sell - buy).toLocaleString("en-US")}/t)`
+        : "";
+      return `<div class="route-main">${escapeHtml(name)}<span class="route-sub mono">${escapeHtml(prices)}</span></div>
+            <div class="route-sub mono">Sup ${escapeHtml(marketAmount(supply))} · Dem ${escapeHtml(marketAmount(demand))}</div>`;
+    }
+
+    function cargoCellHtml(route) {
+      const legs = [
+        cargoLegHtml(route.commodity, route.buyStationPrices.buy, route.sellStationPrices.sell, route.buyStationSupply, route.sellStationDemand),
+        cargoLegHtml(route.targetCommodity, route.sellStationPrices.buy, route.buyStationPrices.sell, route.sellStationSupply, route.buyStationDemand)
+      ].filter(Boolean);
+      return legs.length ? legs.join("") : `<div class="route-main">No buy commodity</div>`;
     }
 
     function marketAmount(value) {
@@ -1027,20 +1048,16 @@ let routes = [];
           <td class="mono" data-label="#">${escapeHtml(route.index)}</td>
           <td class="num profit" data-label="Profit / hr">${escapeHtml(profitHourLabel(route))}</td>
           <td class="num profit" data-label="Profit / trip">${escapeHtml(route.profitTrip || "-")}</td>
-          <td data-label="Cargo">
-            <div class="route-main">${escapeHtml(route.commodity || "No buy commodity")} / ${escapeHtml(route.targetCommodity || "No buy commodity")}</div>
+          <td class="cargo-legs" data-label="Cargo">
+            ${cargoCellHtml(route)}
           </td>
           <td data-label="Station 1">
             <div class="route-main">${escapeHtml(stationLabel(route.buyStation))}</div>
             <div class="route-sub mono">${escapeHtml(route.buySystem)} / ${escapeHtml(route.buyStationDistance)}${route.buyManualLanding ? " / manual landing" : ""}</div>
-            <div class="route-sub mono">Sup ${escapeHtml(marketAmount(route.buyStationSupply))} / Dem ${escapeHtml(marketAmount(route.buyStationDemand))}</div>
-            ${stationPricesLine(route.buyStationPrices)}
           </td>
           <td data-label="Station 2">
             <div class="route-main">${escapeHtml(stationLabel(route.sellStation))}</div>
             <div class="route-sub mono">${escapeHtml(route.sellSystem)} / ${escapeHtml(route.sellStationDistance)}${route.sellManualLanding ? " / manual landing" : ""}</div>
-            <div class="route-sub mono">Sup ${escapeHtml(marketAmount(route.sellStationSupply))} / Dem ${escapeHtml(marketAmount(route.sellStationDemand))}</div>
-            ${stationPricesLine(route.sellStationPrices)}
           </td>
           <td class="num" data-label="Distance">${escapeHtml(route.distanceFromSystem)}</td>
           <td class="num" data-label="Route">${escapeHtml(route.routeDistance)}</td>

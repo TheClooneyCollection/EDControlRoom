@@ -377,8 +377,23 @@ class ControlRoomHaulWebTests(unittest.TestCase):
 
         self.assertIn('.replace(/\\ue84e\\ufe0e?/g, " ▲")', html)
         self.assertIn('.replace(/\\ue84d\\ufe0e?/g, " ▼")', html)
-        self.assertIn("Sup ${escapeHtml(marketAmount(route.buyStationSupply))}", html)
-        self.assertIn("Dem ${escapeHtml(marketAmount(route.sellStationDemand))}", html)
+        self.assertIn("Sup ${escapeHtml(marketAmount(supply))} · Dem ${escapeHtml(marketAmount(demand))}", html)
+
+    def test_haul_route_cargo_cell_pairs_each_leg_with_its_prices_and_market(self) -> None:
+        html = _haul_web_source()
+
+        # Outbound cargo: bought and supplied at station 1, sold and demanded at station 2; the return leg is the mirror.
+        self.assertIn(
+            "cargoLegHtml(route.commodity, route.buyStationPrices.buy, route.sellStationPrices.sell, "
+            "route.buyStationSupply, route.sellStationDemand)",
+            html,
+        )
+        self.assertIn(
+            "cargoLegHtml(route.targetCommodity, route.sellStationPrices.buy, route.buyStationPrices.sell, "
+            "route.sellStationSupply, route.buyStationDemand)",
+            html,
+        )
+        self.assertIn('<td class="cargo-legs" data-label="Cargo">', html)
 
     def test_haul_web_track_only_dispatches_the_route_in_track_mode(self) -> None:
         html = _haul_web_source()

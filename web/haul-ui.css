@@ -819,6 +819,20 @@
       overflow-wrap: anywhere;
     }
 
+    .cargo-legs .route-sub {
+      white-space: nowrap;
+      overflow-wrap: normal;
+    }
+
+    .cargo-legs .route-main .route-sub {
+      display: inline-block;
+      font-weight: 400;
+    }
+
+    .cargo-legs .route-sub + .route-main {
+      margin-top: 8px;
+    }
+
     .pager {
       display: flex;
       align-items: center;
