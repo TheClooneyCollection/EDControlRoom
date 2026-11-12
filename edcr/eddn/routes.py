@@ -142,6 +142,9 @@ def load_route_markets(db: sqlite3.Connection, filters: RouteFilters, *, now: fl
     markets: dict[int, RouteMarket] = {}
     for (market_id, station, system, is_carrier, updated_at, station_type, dist_ls, max_pad, x, y, z) in rows:
         station_type = station_type or ""
+        # A newer commodity message rewrites market.is_carrier from the name alone, so a
+        # named carrier ("VAON") loses the flag; its station type still says FleetCarrier.
+        is_carrier = is_carrier or station_type == "FleetCarrier"
         if x is None or (is_carrier and not filters.include_carriers) or "ConstructionDepot" in station_type:
             continue
         pad = max_pad or _TYPE_PADS.get(station_type, "")

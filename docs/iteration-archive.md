@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `361`
-- Latest generated iteration number: `494`
+- Generated iteration count: `362`
+- Latest generated iteration number: `495`
 
 ## Iteration 134
 
@@ -10281,3 +10281,29 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Restarting a Control Room still aborts a kept-open run, so the peer run from this test stays in the Track only file only.
 - A `Distance` docking denial retries in place; approaching before the retry is a possible follow-up.
+
+## Iteration 495
+
+- When: `2026-11-12 17:35`
+- Area: `routes`
+- Title: `named-carriers-leak-into-routes`
+- Source: [2026-11-12-17-35____routes____named-carriers-leak-into-routes.md](iteration-logs/2026-11-12-17-35____routes____named-carriers-leak-into-routes.md)
+
+# Iteration Log
+
+- Area: `routes`
+- Title: `named-carriers-leak-into-routes`
+- Started: `2026-11-12 17:35`
+
+## Summary
+
+- The Global routes view showed fleet carrier VAON (Greae Hype LK-C d14-561) with "Fleet carriers" unchecked.
+- Cause: commodity messages carry no station type, so `market.is_carrier` comes from the callsign pattern only. Each newer commodity message rewrites the row and clears the flag for a carrier with a custom name. The station table still had `FleetCarrier`. About 120 of 2,152 carrier markets in the local store had lost the flag.
+
+## Changes
+
+- `load_route_markets` also treats station type `FleetCarrier` as a carrier, with a regression test.
+
+## Follow-ups
+
+- `market.is_carrier` stays wrong in the store; fix it at write time if another reader starts relying on it.

@@ -87,6 +87,15 @@ class EddnRouteFinderTests(unittest.TestCase):
         near_far = routes(store, max_route_ly=200.0, origin=(100.0, 0.0, 0.0), origin_radius_ly=5.0)
         self.assertEqual([(r.station_1.station, r.station_2.station) for r in near_far], [("Galileo", "Far Hub")])
 
+    def test_a_named_carrier_stays_out_by_its_station_type(self) -> None:
+        store = galaxy()
+        self.addCleanup(store.close)
+        # Commodity messages carry no station type, and "VAON" is not a callsign.
+        add_station(store, 6, "VAON", "Alpha", 10.0, "FleetCarrier", LARGE, [price("gold", sell=90000, demand=8000)])
+        store.commit()
+
+        self.assertNotIn("VAON", [route.station_2.station for route in routes(store)])
+
     def test_surface_stations_need_opting_in_and_add_landing_time(self) -> None:
         store = galaxy()
         self.addCleanup(store.close)
