@@ -157,14 +157,20 @@ function carrierAccessLabel(access) {
 function stationCell(station) {
   // A carrier's station name is its callsign; its display name is user-set, so it is escaped below like the rest.
   const name = station.carrier_name ? `${station.carrier_name} (${station.station})` : station.station;
+  const access = station.is_carrier ? station.carrier_access : "";
+  // The title line says only open or closed; the line below spells out why a carrier is closed, or that we don't know.
   // `ly_from_system` is the distance from the current (or searched) system; null when it has no coordinates.
+  const tags = [
+    station.ly_from_system == null ? null : `${station.ly_from_system.toFixed(1)} Ly`,
+    access ? (access === "all" ? "open" : "closed") : null
+  ].filter(Boolean).join(" · ");
   const details = [
-    station.is_carrier ? carrierAccessLabel(station.carrier_access) : null,
     station.system,
     station.dist_ls == null ? null : `${count(Math.round(station.dist_ls))} Ls`,
-    station.ly_from_system == null ? null : `${station.ly_from_system.toFixed(1)} Ly away`
+    station.is_carrier && access !== "all" ? carrierAccessLabel(access) : null
   ].filter(Boolean).join(" · ");
-  return `${escapeHtml(name)}<span class="route-sub">${escapeHtml(details)}</span>`;
+  const tag = tags ? ` <span class="route-tag">${escapeHtml(tags)}</span>` : "";
+  return `${escapeHtml(name)}${tag}<span class="route-sub">${escapeHtml(details)}</span>`;
 }
 
 function legCell(leg) {

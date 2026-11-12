@@ -18,10 +18,10 @@ The EDDN listener is off by default; turn it on with `enabled = true` under `[ed
 ## Using the Routes page
 
 - **Near** shows routes whose first station is within range of your current system (or the system you type). **Global** searches every market in the database.
-- Each station shows how many Ly away it is from your current system (or the system you type), when that system has coordinates in the database; the **Jumps** column shows the Ly between the two stations.
+- Each station's title line shows how many Ly away it is from your current system (or the system you type), when that system has coordinates in the database; the **Jumps** column shows the Ly between the two stations.
 - **1 / 2 / 4 jumps** size the range by your laden jump range; **100 / 250 Ly** use a flat distance.
 - Filters: cargo, min supply, max station distance (Ls), max data age, surface stations, fleet carriers. Empty fields fall back to `haul_search.toml` and your current ship.
-- Fleet carriers show their display name with the callsign, e.g. `GRAND ARTS THEATRE (JFF-15Z)`, and their docking access, or `access unknown` when no EDDN upload has reported it yet. With fleet carriers on, **Open to all only** (on by default) hides carriers known to dock only their squadron or friends; carriers of unknown access stay.
+- Fleet carriers show their display name with the callsign, e.g. `GRAND ARTS THEATRE (JFF-15Z)`, The title line says `open` or `closed`; the line below says who a closed carrier docks (squadron, friends, both or nobody), or `access unknown` when no EDDN upload has reported it yet. With fleet carriers on, **Open to all only** (on by default) hides carriers known to dock only their squadron or friends; carriers of unknown access stay.
 - Demand is not filtered: a station buys anything it lists a sell price for, even with a tiny demand (for example a station that also produces it).
 - Routes are ranked by profit per hour. The trip time is an estimate fitted from real haul runs: jumps, supercruise distance and time docked.
 - **Copy** puts the route on the clipboard as JSON; paste it into the **Copy / paste route** box on the haul page to run it. Routes with a commodity whose in-game name is not known yet show "name unknown" instead; visiting a market that sells it teaches the name.
