@@ -30,6 +30,8 @@ The EDDN listener is off by default; turn it on with `enabled = true` under `[ed
 
 Prices are only as fresh as the last commander who docked there; the **Data age** column shows how old each route's prices are.
 
+The haul page and the Markets page show fleet carriers the same way, `NAME (CALLSIGN)`, once the market database has seen the carrier's name; until then they show the callsign.
+
 ## Best deal on the Markets page
 
 The **Best deal** panel on `/markets` compares two stations whose market you opened and shows the numbers Inara's trade route view shows:

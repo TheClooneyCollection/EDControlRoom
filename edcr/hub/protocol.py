@@ -28,6 +28,7 @@ REQUEST_EDDN_STATUS = "eddn_status"
 REQUEST_STATION_FACTS = "station_facts"
 REQUEST_HAUL_STATS = "haul_stats"
 REQUEST_MEASURED = "measured"
+REQUEST_CARRIER_NAMES = "carrier_names"
 
 
 class HubUnreachable(OSError):

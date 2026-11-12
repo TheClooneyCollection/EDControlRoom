@@ -599,7 +599,7 @@ class LinkedServerTests(unittest.TestCase):
         cls.addClassCleanup(tmp.cleanup)
         cls.database = Path(tmp.name) / "markets.sqlite3"
         store = EddnStore.open(cls.database)
-        store.save([SOL, GALILEO])
+        store.save([SOL, GALILEO, CarrierName(callsign="Q8N-BVT", name="GONDAMON", timestamp=1.0)])
         store.close()
         cls.recent = Path(tmp.name) / "recent.json"
         save_recent_markets(cls.recent, (market(market_id=GALILEO.market_id), market(market_id=2, station="Abraham")))
@@ -647,6 +647,21 @@ class LinkedServerTests(unittest.TestCase):
         self.assertEqual(down.status_code, 502)
         self.assertEqual(down.json()["detail"], "Hub Home is unreachable: not connected to the hub: cable pulled")
         self.assertEqual(deal_down.json()["trip"]["hint"], "Hub Home is unreachable: not connected to the hub: cable pulled")
+
+    def test_carrier_names_come_from_the_hub_store(self) -> None:
+        self.r.attach()
+        params = [("access_token", TOKEN), ("callsign", "Q8N-BVT"), ("callsign", "K9N-54Y")]
+        with TestClient(self.hub_app) as hub, TestClient(self.peer_app()) as peer:
+            on_hub = hub.get("/api/carrier-names", params=params)
+            on_peer = peer.get("/api/carrier-names", params=params)
+            self.r.drop(self.r.links[-1])
+            down = peer.get("/api/carrier-names", params=params)
+
+        # Only callsigns with a known name come back.
+        self.assertEqual(on_hub.json(), {"names": {"Q8N-BVT": "GONDAMON"}})
+        self.assertEqual((on_peer.json()["names"], on_peer.json()["hub"]), ({"Q8N-BVT": "GONDAMON"}, "Home"))
+        self.assertEqual(down.status_code, 502)
+        self.assertEqual(self.hub_app.state.link_handlers["carrier_names"]({"callsigns": "Q8N-BVT"}).status, 400)
 
     def test_history_and_measured_profit_come_from_the_hubs_central_history(self) -> None:
         write_runs(self.r.own_runs, [haul_run("2026-11-10T09:00:00Z", ship_id=7, profit=1_000_000)])

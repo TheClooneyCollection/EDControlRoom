@@ -153,6 +153,42 @@ let routes = [];
 
     // Inara marks supply and demand with its own icon font: U+E84E high, U+E84D low. Show them as arrows and
     // drop any other private-use glyph, which would render as a box.
+    // A fleet carrier's station name is its callsign; its display name comes from the market database
+    // (`/api/carrier-names`), asked once per callsign, and the rows redraw when it answers.
+    const CARRIER_CALLSIGN = /^[A-Z0-9]{3}-[A-Z0-9]{3}$/;
+    const carrierNames = {};
+    const askedCarrierNames = new Set();
+
+    function stationLabel(station) {
+      const name = carrierNames[station];
+      return name ? `${name} (${station})` : station;
+    }
+
+    async function requestCarrierNames(stations) {
+      const callsigns = [...new Set(stations)].filter((station) => CARRIER_CALLSIGN.test(station || "") && !askedCarrierNames.has(station));
+      if (!callsigns.length) {
+        return;
+      }
+      callsigns.forEach((callsign) => askedCarrierNames.add(callsign));
+      const url = new URL("/api/carrier-names", window.location.origin);
+      callsigns.forEach((callsign) => url.searchParams.append("callsign", callsign));
+      if (accessToken) url.searchParams.set(AUTH_QUERY_PARAMETER_NAME, accessToken);
+      try {
+        const response = await fetch(url, { method: "GET" });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
+        Object.assign(carrierNames, payload.names || {});
+      } catch (error) {
+        // Ask again on the next redraw; names are a nicety, the callsign still docks.
+        callsigns.forEach((callsign) => askedCarrierNames.delete(callsign));
+        return;
+      }
+      if (callsigns.some((callsign) => carrierNames[callsign])) {
+        renderRows();
+        renderSelected();
+      }
+    }
+
     // Each station buys its own cargo and sells the other station's; routes saved before prices were kept have none.
     function stationPricesLine(prices) {
       const parts = [prices.buy ? `Buy ${prices.buy}` : "", prices.sell ? `Sell ${prices.sell}` : ""].filter(Boolean);
@@ -995,13 +1031,13 @@ let routes = [];
             <div class="route-main">${escapeHtml(route.commodity || "No buy commodity")} / ${escapeHtml(route.targetCommodity || "No buy commodity")}</div>
           </td>
           <td data-label="Station 1">
-            <div class="route-main">${escapeHtml(route.buyStation)}</div>
+            <div class="route-main">${escapeHtml(stationLabel(route.buyStation))}</div>
             <div class="route-sub mono">${escapeHtml(route.buySystem)} / ${escapeHtml(route.buyStationDistance)}${route.buyManualLanding ? " / manual landing" : ""}</div>
             <div class="route-sub mono">Sup ${escapeHtml(marketAmount(route.buyStationSupply))} / Dem ${escapeHtml(marketAmount(route.buyStationDemand))}</div>
             ${stationPricesLine(route.buyStationPrices)}
           </td>
           <td data-label="Station 2">
-            <div class="route-main">${escapeHtml(route.sellStation)}</div>
+            <div class="route-main">${escapeHtml(stationLabel(route.sellStation))}</div>
             <div class="route-sub mono">${escapeHtml(route.sellSystem)} / ${escapeHtml(route.sellStationDistance)}${route.sellManualLanding ? " / manual landing" : ""}</div>
             <div class="route-sub mono">Sup ${escapeHtml(marketAmount(route.sellStationSupply))} / Dem ${escapeHtml(marketAmount(route.sellStationDemand))}</div>
             ${stationPricesLine(route.sellStationPrices)}
@@ -1011,6 +1047,7 @@ let routes = [];
         </tr>
       `).join("");
       updateRoutePager(startIndex + 1, startIndex + visibleRoutes.length, routes.length, totalPages);
+      requestCarrierNames(visibleRoutes.flatMap((route) => [route.buyStation, route.sellStation]));
     }
 
     function renderSelected() {
@@ -1031,7 +1068,7 @@ let routes = [];
       destinationButton.disabled = clientRole !== "active_operator";
       trackButton.disabled = clientRole !== "active_operator" || Boolean(currentRoutine.routine_active);
       document.getElementById("selected-title").textContent =
-        `${route.buySystem} (${route.buyStation}) -> ${route.sellSystem} (${route.sellStation})`;
+        `${route.buySystem} (${stationLabel(route.buyStation)}) -> ${route.sellSystem} (${stationLabel(route.sellStation)})`;
       updateTravelTarget(route);
       updateCommandPreview();
     }

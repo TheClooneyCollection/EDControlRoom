@@ -87,8 +87,40 @@ function ageLabel(timestamp) {
   return `${Math.round(hours / 24)} days ago`;
 }
 
+// A fleet carrier's station name is its callsign; its display name comes from the market database.
+const CARRIER_CALLSIGN = /^[A-Z0-9]{3}-[A-Z0-9]{3}$/;
+const carrierNames = {};
+
+function stationLabel(station) {
+  const name = carrierNames[station];
+  return name ? `${name} (${station})` : station || "?";
+}
+
 function marketLabel(market) {
-  return `${market.station || "?"} (${market.system || "?"})`;
+  return `${stationLabel(market.station)} (${market.system || "?"})`;
+}
+
+// Names for carriers not named yet; the list and pickers redraw when any arrives.
+async function refreshCarrierNames() {
+  const callsigns = [...new Set(markets.map((market) => market.station))]
+    .filter((station) => CARRIER_CALLSIGN.test(station || "") && !carrierNames[station]);
+  if (!callsigns.length) return;
+  const url = new URL("/api/carrier-names", window.location.origin);
+  callsigns.forEach((callsign) => url.searchParams.append("callsign", callsign));
+  if (accessToken) url.searchParams.set(AUTH_QUERY_PARAMETER_NAME, accessToken);
+  try {
+    const response = await fetch(url, { method: "GET" });
+    const payload = await response.json();
+    if (!response.ok) return;
+    Object.assign(carrierNames, payload.names || {});
+  } catch (error) {
+    return;
+  }
+  if (callsigns.some((callsign) => carrierNames[callsign])) {
+    renderMarketList();
+    renderMarketTable();
+    renderDealPickers();
+  }
 }
 
 async function fetchJson(path, params = {}) {
@@ -123,6 +155,7 @@ async function refreshMarkets() {
     renderMarketTable();
     renderDealPickers();
     refreshComparison();
+    refreshCarrierNames();
   } catch (error) {
     setText("markets-status", `Markets unavailable: ${error.message}`);
   }
@@ -131,7 +164,7 @@ async function refreshMarkets() {
 function renderMarketList() {
   document.getElementById("market-list").innerHTML = markets.map((market) => `
     <button class="market-pick" type="button" data-market-id="${market.market_id}" aria-pressed="${market.market_id === selectedMarketId}">
-      <span class="market-pick-name">${escapeHtml(market.station || "?")}</span>
+      <span class="market-pick-name">${escapeHtml(stationLabel(market.station))}</span>
       <span class="market-pick-sub">${escapeHtml(market.system || "?")} · ${escapeHtml(market.station_type || "station")} · ${escapeHtml(ageLabel(market.timestamp))}</span>
     </button>`).join("");
 }
@@ -318,8 +351,8 @@ function renderComparison() {
   const out = chosenDeal("outbound");
   const back = chosenDeal("inbound");
   chosenDeals = { outbound: out ? out.commodity : null, inbound: back ? back.commodity : null };
-  const nameX = escapeHtml(marketX.station);
-  const nameY = escapeHtml(marketY.station);
+  const nameX = escapeHtml(stationLabel(marketX.station));
+  const nameY = escapeHtml(stationLabel(marketY.station));
   const legs = legTable("outbound", `Buy at ${nameX} (X), sell at ${nameY} (Y)`, payload.outbound)
     + legTable("inbound", `Buy at ${nameY} (Y), sell at ${nameX} (X)`, payload.inbound);
   if (!out && !back) {

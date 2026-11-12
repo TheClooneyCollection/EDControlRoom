@@ -40,6 +40,7 @@ from edcr.hub.peer import PeerLink, hub_unreachable_detail, with_hub_source
 from edcr.hub.relay import NODE_ACTIONS, NODE_READS, NodeOffline, node_state, relay_error
 from edcr.hub.protocol import (
     PEER_LINK_PATH,
+    REQUEST_CARRIER_NAMES,
     REQUEST_EDDN_ROUTES,
     REQUEST_EDDN_STATUS,
     REQUEST_HAUL_SEARCH,
@@ -751,6 +752,36 @@ def build_observer_server_app(
             return LinkReply(400, {"detail": "body must be {\"stations\": [{market_id, station, system}, ...]}"})
         return LinkReply(200, {"stations": [asdict(facts) for facts in station_facts(entries)]})
 
+    def answer_carrier_names(body: Any) -> LinkReply:
+        """Fleet carrier display names by callsign, from this server's store; a peer's requests land here too."""
+        callsigns = body.get("callsigns") if isinstance(body, dict) else None
+        if not isinstance(callsigns, list) or not all(isinstance(callsign, str) for callsign in callsigns):
+            return LinkReply(400, {"detail": "body must be {\"callsigns\": [callsign, ...]}"})
+        if market_database_file is None or not market_database_file.exists() or not callsigns:
+            return LinkReply(200, {"names": {}})
+        try:
+            store = sqlite3.connect(f"file:{market_database_file}?mode=ro", uri=True)
+        except sqlite3.Error as exc:
+            return LinkReply(503, {"detail": f"Cannot read the market database: {exc}"})
+        try:
+            marks = ",".join("?" * len(callsigns))
+            rows = store.execute(f"SELECT callsign, name FROM carrier_name WHERE callsign IN ({marks})", callsigns)
+            return LinkReply(200, {"names": dict(rows.fetchall())})
+        except sqlite3.Error as exc:
+            return LinkReply(503, {"detail": f"Cannot read the market database: {exc}"})
+        finally:
+            store.close()
+
+    async def carrier_names_endpoint(request: Request) -> JSONResponse:
+        """`?callsign=Q8N-BVT&callsign=...` -> {"names": {callsign: name}}; only callsigns with a known name."""
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        body = {"callsigns": request.query_params.getlist("callsign")[:200]}
+        if peer_link is not None:
+            return await ask_hub(REQUEST_CARRIER_NAMES, body)
+        return link_reply_response(await asyncio.to_thread(answer_carrier_names, body))
+
     def answer_measured(body: Any) -> LinkReply:
         """A peer's Best deal measured profit per hour, from the central history."""
         stations = body.get("stations") if isinstance(body, dict) else None
@@ -933,6 +964,7 @@ def build_observer_server_app(
         REQUEST_STATION_FACTS: answer_station_facts,
         REQUEST_HAUL_STATS: answer_haul_stats,
         REQUEST_MEASURED: answer_measured,
+        REQUEST_CARRIER_NAMES: answer_carrier_names,
     }
 
     async def peer_link_endpoint(websocket: WebSocket) -> None:
@@ -1348,6 +1380,7 @@ def build_observer_server_app(
             Route("/api/recent-markets", recent_markets),
             Route("/api/market-compare", market_compare),
             Route("/api/eddn-status", eddn_status_endpoint),
+            Route("/api/carrier-names", carrier_names_endpoint),
             Route("/api/eddn-routes", node_read_endpoint("/api/eddn-routes")),
             Route("/api/hub-status", hub_status_endpoint),
             Route("/api/nodes", nodes_endpoint),
