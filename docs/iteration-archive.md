@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `356`
-- Latest generated iteration number: `489`
+- Generated iteration count: `357`
+- Latest generated iteration number: `490`
 
 ## Iteration 134
 
@@ -10140,3 +10140,28 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - Replayed a real assisted haul journal (three loops on one same-system route) through Track only. Profit, cargo and run times matched the assisted history; where a routine restart split one assisted run into two aborted rows, Track only counted it as one completed run with the same total.
 - New regression fixture `tests/fixtures/journal/two_way_haul_hand_flown.jsonl`: 42 events cut from that journal, only Docked, Undocked, MarketBuy, MarketSell, StartJump, SupercruiseEntry and SupercruiseExit with an allowlist of game-data fields (no commander, chat or ship identity), dates moved to 2026-01-01. `test_haul_track_replays_a_real_hand_flown_journal` checks the phase timeline, the stats and the three tracked run rows.
 - Fix found by the fixture: `ship.station` clears only on SupercruiseExit or a Music NoTrack while undocking, so a StartJump right after Undocked could still see the station just left and point the phase at the wrong station. `_track_phase` now reads the station only on station events (buy, sell, undock, dock) and keeps the target station in flight.
+
+## Iteration 490
+
+- When: `2026-11-12 05:52`
+- Area: `docs`
+- Title: `track-only-side-by-side-check`
+- Source: [2026-11-12-05-52_____docs_____track-only-side-by-side-check.md](iteration-logs/2026-11-12-05-52_____docs_____track-only-side-by-side-check.md)
+
+# Iteration Log
+
+- Area: `docs`
+- Title: `track-only-side-by-side-check`
+- Started: `2026-11-12 05:52`
+
+## Summary
+
+- Documented how to check Track only against a running routine: a second Control Room with its own state, history, recent-markets and EDDN database files, EDDN off, `[hub] role = "standalone"`, another port and `--no-tts`, tracking the same route copied from the main page.
+
+## Changes
+
+- `docs/user/haul-workflow.md`: new "Checking Track Only Beside a Routine" subsection under Track Only, also pointing at the journal replay test for checks without the game.
+
+## Follow-ups
+
+- None.

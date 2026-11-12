@@ -124,6 +124,30 @@ The route can come from the normalized JSON schema at `docs/schemas/multi_leg_ha
 
 To keep the stats without the routine, pick a route and click **Track only** on the web haul page, or type `haul track` for the selected route. You fly, dock and trade by hand; Control Room reads the journal and sends no keys. It counts the session profit, cargo moved and run times, shows the five stages as you go (a buy, an undock, a jump, docking and a sale), and writes each run to the history like a routine run, tagged `"mode": "tracked"` (routine runs are `"assisted"`). The two kinds share one history. **Stop stats** or `stop` ends tracking. It is refused while a routine runs, and it does not survive a Control Room restart: click **Track only** again.
 
+### Checking Track Only Beside a Routine
+
+Track only reads the journal and sends no keys, so a second Control Room can track the same route while your usual one runs it. Give the second one its own files (relative paths resolve from the launch directory) in a copy of your config, say `config.track.toml`:
+
+```toml
+[control_room]
+state_file = ".track_state.json"
+haul_runs_file = ".track_haul_runs.jsonl"
+recent_markets_file = ".track_recent_markets.json"
+
+[eddn]
+enabled = false
+database_file = ".track_eddn_markets.sqlite3"
+
+[hub]
+role = "standalone"  # otherwise it joins or announces a hub
+```
+
+```bash
+uv run python3 control_room.py local --config config.track.toml --port 8766 --no-tts
+```
+
+Copy the route from the main `/haul` page (**Copy selected**), paste it into **Import pasted** on port 8766 and click **Track only**, then start the route on the main page. Use only Track only and Stop stats on 8766. After a few runs both pages should agree on runs, profit, cargo and run times; the tracked stages may lag the routine by a step, since they wait for the journal event. Without the game, `test_haul_track_replays_a_real_hand_flown_journal` replays a recorded journal through Track only.
+
 ## Haul History
 
 Every finished run, completed or aborted, is written to `control_room.haul_runs_file` with its ship. The **History** panel on the web haul page sums it for a window (Today, 48h, Week, Month, All), and `stats [window]` does the same in the command bar.
