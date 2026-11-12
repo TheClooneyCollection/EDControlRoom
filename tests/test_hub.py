@@ -795,7 +795,8 @@ class LinkedServerTests(unittest.TestCase):
     def test_resolved_params_parse_the_same_on_a_hub_without_defaults(self) -> None:
         saved = {"max_route_distance_ly": "17.2", "min_supply": "5000", "min_landing_pad": "medium",
                  "use_surface_stations": "yes_with_odyssey", "max_price_age_hours": "8", "max_station_distance_ls": "1000"}
-        for params in ({}, {"jumps": "2", "pad": "S", "max_age_hours": "any"}, {"view": "global", "system": "Lave"}):
+        for params in ({}, {"jumps": "2", "pad": "S", "max_age_hours": "any"}, {"view": "global", "system": "Lave"},
+                       {"carriers": "yes", "carrier_access": "any"}):
             here = parse_route_query(params, search_defaults=saved, current_system="Sol", cargo_capacity=720)
             resolved = resolve_route_params(params, search_defaults=saved, current_system="Sol", cargo_capacity=720)
             self.assertEqual(parse_route_query(resolved, search_defaults={}, current_system="", cargo_capacity=0), here)

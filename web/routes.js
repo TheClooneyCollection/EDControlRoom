@@ -140,14 +140,31 @@ async function refreshStatus() {
   }
 }
 
+// Frontier's `CarrierDockingAccess` values, as the carrier management screen words them.
+const CARRIER_ACCESS_LABELS = {
+  all: "Open to all",
+  squadron: "Squadron only",
+  friends: "Friends only",
+  squadronfriends: "Squadron + friends",
+  none: "No access"
+};
+
+function carrierAccessLabel(access) {
+  if (!access) return "access unknown";
+  return CARRIER_ACCESS_LABELS[access] || access;
+}
+
 function stationCell(station) {
+  // A carrier's station name is its callsign; its display name is user-set, so it is escaped below like the rest.
+  const name = station.carrier_name ? `${station.carrier_name} (${station.station})` : station.station;
   // `ly_from_system` is the distance from the current (or searched) system; null when it has no coordinates.
   const details = [
+    station.is_carrier ? carrierAccessLabel(station.carrier_access) : null,
     station.system,
     station.dist_ls == null ? null : `${count(Math.round(station.dist_ls))} Ls`,
     station.ly_from_system == null ? null : `${station.ly_from_system.toFixed(1)} Ly away`
   ].filter(Boolean).join(" · ");
-  return `${escapeHtml(station.station)}<span class="route-sub">${escapeHtml(details)}</span>`;
+  return `${escapeHtml(name)}<span class="route-sub">${escapeHtml(details)}</span>`;
 }
 
 function legCell(leg) {
@@ -219,6 +236,7 @@ async function search() {
   if (range.ly) params.max_route_ly = range.ly;
   params.surface = document.getElementById("route-surface").checked ? "yes" : "no";
   params.carriers = document.getElementById("route-carriers").checked ? "yes" : "no";
+  params.carrier_access = document.getElementById("route-carriers-open").checked ? "all" : "any";
   setText("routes-status", "Searching");
   try {
     const payload = await fetchJson("/api/eddn-routes", params);
@@ -282,6 +300,12 @@ FILTER_TOGGLES.forEach((id) => {
 });
 // Start from the haul search surface choice (`use_surface_stations`) so surface ports are not hidden by default.
 document.getElementById("route-surface").checked = (WEB_CONFIG.webDefaults || {}).allowPlanetary === "true";
+// "Open to all only" narrows the carriers, so it only applies while carriers are shown.
+const carriersToggle = document.getElementById("route-carriers");
+const carriersOpenToggle = document.getElementById("route-carriers-open");
+const syncCarriersOpen = () => { carriersOpenToggle.disabled = !carriersToggle.checked; };
+syncCarriersOpen();
+carriersToggle.addEventListener("change", syncCarriersOpen);
 document.getElementById("access-token").value = accessToken;
 document.getElementById("save-token").addEventListener("click", () => {
   accessToken = document.getElementById("access-token").value.trim();

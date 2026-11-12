@@ -13,7 +13,7 @@ from edcr.config import ConfigError, EddnConfig, load_config
 from edcr.eddn.listener import EddnListener, apply_payload
 from edcr.eddn.game_markets import import_game_markets, import_game_markets_every
 from edcr.eddn.service import start_eddn_service
-from edcr.eddn.messages import COMMODITY_SCHEMA, JOURNAL_SCHEMA, parse_eddn_message
+from edcr.eddn.messages import COMMODITY_SCHEMA, JOURNAL_SCHEMA, SIGNAL_SCHEMA, CarrierName, parse_eddn_message
 from edcr.eddn.store import EddnStore
 from edcr.recent_markets import save_recent_markets, snapshot_from_market_json
 
@@ -65,6 +65,31 @@ def docked_envelope(*, timestamp: str = "2026-11-10T14:00:00Z", **overrides: obj
     return {"$schemaRef": JOURNAL_SCHEMA, "header": LIVE_HEADER, "message": message}
 
 
+def carrier_commodity_envelope(access: str | None, *, timestamp: str, station: str = "JFF-15Z") -> dict[str, object]:
+    envelope = commodity_envelope(market_id=3713428992, station=station, timestamp=timestamp)
+    if access is not None:
+        envelope["message"]["carrierDockingAccess"] = access  # type: ignore[index]
+    return envelope
+
+
+def signal_envelope(*names: str, timestamp: str = "2026-11-10T14:00:00Z") -> dict[str, object]:
+    return {
+        "$schemaRef": SIGNAL_SCHEMA,
+        "header": LIVE_HEADER,
+        "message": {
+            "event": "FSSSignalDiscovered", "timestamp": timestamp, "StarSystem": "Sol", "SystemAddress": 10477373803,
+            "StarPos": [0.0, 0.0, 0.0],
+            "signals": [{"timestamp": timestamp, "SignalName": name, "SignalType": "FleetCarrier", "IsStation": True}
+                        for name in names]
+            + [{"timestamp": timestamp, "SignalName": "Galileo", "SignalType": "Outpost", "IsStation": True}],
+        },
+    }
+
+
+def carrier_access(store: EddnStore) -> list[tuple[object, ...]]:
+    return store._db.execute("SELECT market_id, access FROM carrier_access").fetchall()
+
+
 def frame(envelope: dict[str, object]) -> bytes:
     return zlib.compress(json.dumps(envelope).encode())
 
@@ -89,6 +114,24 @@ class EddnMessageTests(unittest.TestCase):
         [snapshot] = parse_eddn_message(commodity_envelope(station="K7Q-BQL", market_id=3709000000))
 
         self.assertTrue(snapshot.is_carrier)
+
+    def test_carrier_access_is_read_when_the_message_has_it(self) -> None:
+        [with_access] = parse_eddn_message(carrier_commodity_envelope("SquadronFriends", timestamp="2026-11-10T14:00:00Z"))
+        [without] = parse_eddn_message(carrier_commodity_envelope(None, timestamp="2026-11-10T14:00:00Z"))
+
+        self.assertEqual((with_access.carrier_access, without.carrier_access), ("squadronfriends", ""))
+
+    def test_carrier_signals_give_display_names_by_callsign(self) -> None:
+        updates = parse_eddn_message(signal_envelope(
+            "GRAND ARTS THEATRE JFF-15Z", "CANARY PARADISE  H3Q-W4M", "Clarissa BBG-4HW", "[UAPF] CENTURIO ASTRA B8H-7KT",
+            "Q6K-WVH", "no callsign here",
+        ))
+
+        self.assertEqual([(update.callsign, update.name) for update in updates], [
+            ("JFF-15Z", "GRAND ARTS THEATRE"), ("H3Q-W4M", "CANARY PARADISE"), ("BBG-4HW", "Clarissa"),
+            ("B8H-7KT", "[UAPF] CENTURIO ASTRA"),
+        ])
+        self.assertTrue(all(isinstance(update, CarrierName) for update in updates))
 
     def test_legacy_test_and_unknown_messages_are_ignored(self) -> None:
         self.assertEqual(parse_eddn_message(commodity_envelope(header={**LIVE_HEADER, "gameversion": "CAPI-Legacy-market"})), [])
@@ -173,6 +216,52 @@ class EddnStoreTests(unittest.TestCase):
         )
         self.assertEqual(store._db.execute("SELECT is_carrier FROM market WHERE market_id = 99").fetchone(), (1,))
 
+    def test_carrier_access_is_kept_until_a_newer_message_changes_it(self) -> None:
+        store = memory_store()
+        self.addCleanup(store.close)
+        apply_payload(store, frame(carrier_commodity_envelope("squadron", timestamp="2026-11-10T14:00:00Z")))
+        apply_payload(store, frame(carrier_commodity_envelope(None, timestamp="2026-11-10T14:10:00Z")))
+        self.assertEqual(carrier_access(store), [(3713428992, "squadron")])
+
+        apply_payload(store, frame(carrier_commodity_envelope("all", timestamp="2026-11-10T14:20:00Z")))
+        # A late upload of an older market does not undo the newer access.
+        apply_payload(store, frame(carrier_commodity_envelope("none", timestamp="2026-11-10T13:00:00Z")))
+        self.assertEqual(carrier_access(store), [(3713428992, "all")])
+
+    def test_carrier_names_are_written_only_when_new_or_changed(self) -> None:
+        store = memory_store()
+        self.addCleanup(store.close)
+
+        def applied(name: str, timestamp: str) -> list[type]:
+            return apply_payload(store, frame(signal_envelope(name, timestamp=timestamp)))
+
+        self.assertEqual(applied("GRAND ARTS THEATRE JFF-15Z", "2026-11-10T14:00:00Z"), [CarrierName])
+        self.assertEqual(applied("GRAND ARTS THEATRE JFF-15Z", "2026-11-10T14:05:00Z"), [])
+        self.assertEqual(applied("OLD NAME JFF-15Z", "2026-11-10T13:00:00Z"), [])
+        self.assertEqual(applied("GRAND ARTS HALL JFF-15Z", "2026-11-10T14:10:00Z"), [CarrierName])
+        self.assertEqual(store._db.execute("SELECT callsign, name FROM carrier_name").fetchall(),
+                         [("JFF-15Z", "GRAND ARTS HALL")])
+
+    def test_a_database_from_before_carrier_facts_opens_with_its_data(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "eddn.sqlite3"
+            old = sqlite3.connect(path)
+            old.executescript(
+                "CREATE TABLE market (market_id INTEGER PRIMARY KEY, system_name TEXT NOT NULL,"
+                " station_name TEXT NOT NULL, is_carrier INTEGER NOT NULL, updated_at REAL NOT NULL);"
+                "INSERT INTO market VALUES (3713428992, 'Sol', 'JFF-15Z', 1, 1.0);"
+            )
+            old.commit()
+            old.close()
+
+            store = EddnStore.open(path)
+            apply_payload(store, frame(carrier_commodity_envelope("friends", timestamp="2026-11-10T14:00:00Z")))
+            store.close()
+            reopened = EddnStore.open(path)
+            self.addCleanup(reopened.close)
+            self.assertEqual(reopened.counts().markets, 1)
+            self.assertEqual(carrier_access(reopened), [(3713428992, "friends")])
+
     def test_prune_drops_stale_markets_and_counts_report_the_rest(self) -> None:
         store = memory_store()
         self.addCleanup(store.close)
@@ -238,13 +327,14 @@ class EddnListenerTests(unittest.TestCase):
         self.assertEqual(len(prices(store)), 2)
 
 
-def save_game_markets(path: Path, *timestamps: str) -> None:
+def save_game_markets(path: Path, *timestamps: str, access: str = "") -> None:
     """Recent markets as the Control Room records them from Market.json, one per timestamp."""
     markets = []
     for index, timestamp in enumerate(timestamps):
         markets.append(snapshot_from_market_json({
             "timestamp": timestamp, "MarketID": 3229359104 + index, "StationName": f"Galileo {index}" if index else "Galileo",
-            "StarSystem": "Sol", "StationType": "Ocellus",
+            "StarSystem": "Sol", "StationType": "FleetCarrier" if access else "Ocellus",
+            **({"CarrierDockingAccess": access} if access else {}),
             "Items": [
                 {"Name": "$gold_name;", "BuyPrice": 9500, "SellPrice": 9400, "Stock": 700, "Demand": 1},
                 {"Name": "$insulatingmembrane_name;", "BuyPrice": 0, "SellPrice": 20375, "Stock": 0, "Demand": 7134688},
@@ -274,6 +364,16 @@ class GameMarketImportTests(unittest.TestCase):
         self.assertEqual(prices(store), [(3229359104, "gold", 9500, 9400, 700, 1),
                                          (3229359104, "insulatingmembrane", 0, 20375, 0, 7134688)])
         self.assertEqual(apply_payload(store, frame(commodity_envelope(timestamp="2026-11-10T15:30:00Z"))), [])
+
+    def test_our_carrier_market_brings_its_docking_access(self) -> None:
+        store = memory_store()
+        self.addCleanup(store.close)
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "recent_markets.json"
+            save_game_markets(path, "2026-11-10T14:00:00Z", access="squadronfriends")
+            import_game_markets(store, path)
+
+        self.assertEqual(carrier_access(store), [(3229359104, "squadronfriends")])
 
     def test_service_imports_our_markets_at_start_and_when_the_file_changes(self) -> None:
         store = memory_store()

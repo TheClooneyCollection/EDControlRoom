@@ -36,7 +36,7 @@ _ROUTE_PARAM_DEFAULT_KEYS = {
 }
 _ROUTE_PARAMS = (
     "view", "system", "jumps", "laden_jump_range_ly", "max_route_ly", "radius_ly", "capacity", "pad", "surface",
-    "carriers", "max_station_distance_ls", "min_supply", "max_age_hours", "limit",
+    "carriers", "carrier_access", "max_station_distance_ls", "min_supply", "max_age_hours", "limit",
 )
 
 
@@ -115,6 +115,7 @@ def parse_route_query(
             min_pad=pad,
             include_surface=_include_surface(value("surface")),
             include_carriers=_flag(value("carriers")),
+            carriers_open_only=_carriers_open_only(value("carrier_access")),
             max_station_distance_ls=max_station_ls or None,
             min_supply=int(number("min_supply", 0)),
             max_age_s=(
@@ -132,6 +133,14 @@ _NO_AGE_LIMIT_S = 10 * 365 * 86400.0
 
 def _flag(raw: str) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _carriers_open_only(raw: str) -> bool:
+    """`all` (the default) keeps only carriers open to all or of unknown access; `any` keeps every carrier."""
+    choice = raw.strip().lower() or "all"
+    if choice not in {"all", "any"}:
+        raise ValueError("carrier_access must be all or any")
+    return choice == "all"
 
 
 def _include_surface(raw: str) -> bool:
@@ -196,6 +205,8 @@ def route_payload(
             "market_id": market.market_id, "station": market.station, "system": market.system,
             "type": market.station_type, "dist_ls": market.dist_ls, "is_surface": market.is_surface,
             "age_s": max(0.0, now - market.updated_at),
+            "is_carrier": market.is_carrier, "carrier_access": market.carrier_access,
+            "carrier_name": market.carrier_name,
             "ly_from_system": None if origin is None else round(math.dist(origin, (market.x, market.y, market.z)), 2),
         }
 

@@ -34,6 +34,11 @@ class RouteMarket:
     dist_ls: float | None
     is_surface: bool
     updated_at: float
+    is_carrier: bool
+    # A carrier's last seen docking access (all, squadron, ...); "" when unknown or not a carrier.
+    carrier_access: str
+    # A carrier's display name from its signal; "" when unknown.
+    carrier_name: str
     # commodity -> (buy price, supply) where the station sells to us
     exports: dict[str, tuple[int, int]] = field(default_factory=dict)
     # commodity -> (sell price, demand) where the station buys from us
@@ -45,6 +50,8 @@ class RouteFilters:
     min_pad: str = "L"
     include_surface: bool = False
     include_carriers: bool = False
+    # Hide carriers known to dock only some pilots; carriers whose access is unknown stay.
+    carriers_open_only: bool = True
     max_station_distance_ls: float | None = 5000.0
     min_supply: int = 0
     max_age_s: float = 2 * 86400
@@ -130,9 +137,12 @@ def load_route_markets(db: sqlite3.Connection, filters: RouteFilters, *, now: fl
         """
         SELECT m.market_id, m.station_name, m.system_name, m.is_carrier, m.updated_at,
                st.type, st.dist_ls, st.max_pad,
-               COALESCE(sa.x, sn.x), COALESCE(sa.y, sn.y), COALESCE(sa.z, sn.z)
+               COALESCE(sa.x, sn.x), COALESCE(sa.y, sn.y), COALESCE(sa.z, sn.z),
+               ca.access, cn.name
         FROM market m
         LEFT JOIN station st ON st.market_id = m.market_id
+        LEFT JOIN carrier_access ca ON ca.market_id = m.market_id
+        LEFT JOIN carrier_name cn ON cn.callsign = m.station_name
         LEFT JOIN system sa ON sa.address = st.system_address
         LEFT JOIN system sn ON sn.name = m.system_name COLLATE NOCASE
         WHERE m.updated_at >= ?
@@ -140,12 +150,16 @@ def load_route_markets(db: sqlite3.Connection, filters: RouteFilters, *, now: fl
         (now - filters.max_age_s,),
     ).fetchall()
     markets: dict[int, RouteMarket] = {}
-    for (market_id, station, system, is_carrier, updated_at, station_type, dist_ls, max_pad, x, y, z) in rows:
+    for (market_id, station, system, is_carrier, updated_at, station_type, dist_ls, max_pad, x, y, z,
+         access, carrier_name) in rows:
         station_type = station_type or ""
         # A newer commodity message rewrites market.is_carrier from the name alone, so a
         # named carrier ("VAON") loses the flag; its station type still says FleetCarrier.
-        is_carrier = is_carrier or station_type == "FleetCarrier"
+        is_carrier = bool(is_carrier) or station_type == "FleetCarrier"
         if x is None or (is_carrier and not filters.include_carriers) or "ConstructionDepot" in station_type:
+            continue
+        access = (access or "") if is_carrier else ""
+        if access and access != "all" and filters.carriers_open_only:
             continue
         pad = max_pad or _TYPE_PADS.get(station_type, "")
         if PAD_ORDER.get(pad, 0) < PAD_ORDER[filters.min_pad]:
@@ -158,6 +172,7 @@ def load_route_markets(db: sqlite3.Connection, filters: RouteFilters, *, now: fl
         markets[market_id] = RouteMarket(
             market_id=market_id, station=station, system=system, x=x, y=y, z=z,
             station_type=station_type, dist_ls=dist_ls, is_surface=is_surface, updated_at=updated_at,
+            is_carrier=is_carrier, carrier_access=access, carrier_name=(carrier_name or "") if is_carrier else "",
         )
     for market_id, commodity, buy, sell, supply, demand in db.execute(
         "SELECT market_id, commodity, buy, sell, supply, demand FROM price"

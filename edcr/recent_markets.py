@@ -27,6 +27,8 @@ class MarketSnapshot:
     station_type: str
     timestamp: str
     items: tuple[dict[str, Any], ...]
+    # A fleet carrier's `CarrierDockingAccess` (all, squadron, friends, squadronfriends, none); "" otherwise.
+    carrier_access: str
 
 
 @dataclass(frozen=True)
@@ -67,6 +69,7 @@ def snapshot_from_market_json(data: dict[str, Any]) -> MarketSnapshot | None:
         station_type=str(data.get("StationType") or ""),
         timestamp=str(data.get("timestamp") or ""),
         items=tuple(item for item in items if isinstance(item, dict)),
+        carrier_access=str(data.get("CarrierDockingAccess") or "").lower(),
     )
 
 
@@ -142,6 +145,7 @@ def snapshot_from_entry(entry: object) -> MarketSnapshot | None:
             "StationType": entry.get("station_type"),
             "timestamp": entry.get("timestamp"),
             "Items": entry.get("items"),
+            "CarrierDockingAccess": entry.get("carrier_access"),
         }
     )
 
@@ -154,6 +158,7 @@ def snapshot_entry(snapshot: MarketSnapshot) -> dict[str, Any]:
         "station_type": snapshot.station_type,
         "timestamp": snapshot.timestamp,
         "items": list(snapshot.items),
+        "carrier_access": snapshot.carrier_access,
     }
 
 

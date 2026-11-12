@@ -1,4 +1,4 @@
-"""SQLite store of the latest market snapshot per station (no price history) plus system and station facts.
+"""SQLite store of the latest market snapshot per station (no price history) plus system, station and carrier facts.
 
 Hub and standalone Control Rooms always open it; a peer never does. EDDN, our own journal and
 Market.json, and Ardent all write into it with the same newest-wins rule.
@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from edcr.eddn.messages import (
+    CarrierName,
     EddnUpdate,
     MarketSnapshot,
     StationInfo,
@@ -58,6 +59,17 @@ CREATE TABLE IF NOT EXISTS price (
     demand INTEGER NOT NULL,
     PRIMARY KEY (market_id, commodity)
 ) WITHOUT ROWID;
+-- Only some commodity messages carry a carrier's access, so the last one seen is kept apart from the market row.
+CREATE TABLE IF NOT EXISTS carrier_access (
+    market_id INTEGER PRIMARY KEY,
+    access TEXT NOT NULL,
+    updated_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS carrier_name (
+    callsign TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    updated_at REAL NOT NULL
+);
 """
 
 
@@ -106,6 +118,8 @@ class EddnStore:
             return self._apply_system(update)
         if isinstance(update, StationTypeSeen):
             return self._apply_station_type(update)
+        if isinstance(update, CarrierName):
+            return self._apply_carrier_name(update)
         return self._apply_station(update)
 
     def commit(self) -> None:
@@ -145,6 +159,13 @@ class EddnStore:
         )
 
     def _apply_market(self, snapshot: MarketSnapshot) -> bool:
+        if snapshot.carrier_access:
+            self._db.execute(
+                "INSERT INTO carrier_access (market_id, access, updated_at) VALUES (?, ?, ?)"
+                " ON CONFLICT (market_id) DO UPDATE SET access = excluded.access, updated_at = excluded.updated_at"
+                " WHERE excluded.updated_at >= carrier_access.updated_at",
+                (snapshot.market_id, snapshot.carrier_access, snapshot.timestamp),
+            )
         row = self._db.execute(
             "SELECT updated_at FROM market WHERE market_id = ?", (snapshot.market_id,)
         ).fetchone()
@@ -224,3 +245,13 @@ class EddnStore:
             market_id=seen.market_id, system_address=row[0], system_name=seen.system_name, name=seen.name,
             type=seen.type, dist_ls=None, max_pad="", timestamp=seen.timestamp,
         ))
+
+    def _apply_carrier_name(self, carrier: CarrierName) -> bool:
+        """Signals repeat the same names many times a minute, so only a new or changed name is written."""
+        cursor = self._db.execute(
+            "INSERT INTO carrier_name (callsign, name, updated_at) VALUES (?, ?, ?)"
+            " ON CONFLICT (callsign) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at"
+            " WHERE excluded.name != carrier_name.name AND excluded.updated_at >= carrier_name.updated_at",
+            (carrier.callsign, carrier.name, carrier.timestamp),
+        )
+        return cursor.rowcount > 0

@@ -23,7 +23,7 @@ def facts(station: str, system: str, coords=(0.0, 0.0, 0.0), dist_ls=500.0, stat
 
 
 def snapshot(market_id: int, station: str, system: str, station_type: str = "Coriolis") -> MarketSnapshot:
-    return MarketSnapshot(market_id, station, system, station_type, "2026-11-10T10:00:00Z", ())
+    return MarketSnapshot(market_id, station, system, station_type, "2026-11-10T10:00:00Z", (), "")
 
 
 NOW = datetime(2026, 11, 11, 12, 0, tzinfo=timezone.utc)
@@ -145,7 +145,7 @@ class FactSourceTests(unittest.TestCase):
                   "StationType": "Ocellus", "DistFromStarLS": 505.3}
         store.save(journal_event_updates(docked))
         # An older Market.json type does not overwrite the newer docked row.
-        store.save([station_type_from_game(MarketSnapshot(1, "Galileo", "Sol", "Coriolis", "2026-11-10T09:00:00Z", ()))])
+        store.save([station_type_from_game(MarketSnapshot(1, "Galileo", "Sol", "Coriolis", "2026-11-10T09:00:00Z", (), ""))])
 
         self.assertEqual(store_lookup(store._db)(1, "Galileo", "Sol"), PartialFacts((0.0, 0.0, 0.0), 505.3, "Ocellus"))
         self.assertEqual(journal_event_updates({"event": "Docked", "MarketID": 1}), [])

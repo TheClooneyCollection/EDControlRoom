@@ -1,7 +1,8 @@
 """Parse EDDN relay envelopes into the market, station and system updates we store.
 
-Only live-galaxy `commodity/3` and `journal/1` (Docked, CarrierJump, FSDJump,
-Location) messages are used; test schemas and legacy-galaxy uploads are dropped.
+Only live-galaxy `commodity/3`, `journal/1` (Docked, CarrierJump, FSDJump, Location) and
+`fsssignaldiscovered/1` (fleet carrier names) messages are used; test schemas and legacy-galaxy
+uploads are dropped.
 """
 from __future__ import annotations
 
@@ -14,12 +15,15 @@ from edcr.recent_markets import MarketSnapshot as GameMarket, commodity_key
 
 COMMODITY_SCHEMA = "https://eddn.edcd.io/schemas/commodity/3"
 JOURNAL_SCHEMA = "https://eddn.edcd.io/schemas/journal/1"
+SIGNAL_SCHEMA = "https://eddn.edcd.io/schemas/fsssignaldiscovered/1"
 
 _POSITION_EVENTS = frozenset({"Docked", "CarrierJump", "FSDJump", "Location"})
 _STATION_EVENTS = frozenset({"Docked", "CarrierJump"})
 # Fleet carrier callsigns, e.g. `K7Q-BQL`. Market ids cannot tell carriers apart:
 # colonisation stations also use ids above 3.7 billion.
 _CARRIER_NAME = re.compile(r"^[A-Z0-9]{3}-[A-Z0-9]{3}$")
+# A carrier signal reads "<display name> <callsign>"; the name is user-set and may be blank.
+_CARRIER_SIGNAL = re.compile(r"^(.*?)\s*([A-Z0-9]{3}-[A-Z0-9]{3})$")
 
 
 @dataclass(frozen=True)
@@ -39,6 +43,8 @@ class MarketSnapshot:
     is_carrier: bool
     timestamp: float
     prices: tuple[CommodityPrice, ...]
+    # A carrier's docking access (all, squadron, friends, squadronfriends, none); "" when the message omits it.
+    carrier_access: str
 
 
 @dataclass(frozen=True)
@@ -74,7 +80,16 @@ class StationTypeSeen:
     timestamp: float
 
 
-EddnUpdate = MarketSnapshot | SystemPosition | StationInfo | StationTypeSeen
+@dataclass(frozen=True)
+class CarrierName:
+    """A fleet carrier's display name, keyed by callsign (its station name); the signal names no market id."""
+
+    callsign: str
+    name: str
+    timestamp: float
+
+
+EddnUpdate = MarketSnapshot | SystemPosition | StationInfo | StationTypeSeen | CarrierName
 
 
 def is_carrier_station(name: str, station_type: str) -> bool:
@@ -98,6 +113,8 @@ def parse_eddn_message(envelope: Any) -> list[EddnUpdate]:
         return [snapshot] if snapshot is not None else []
     if schema == JOURNAL_SCHEMA:
         return _journal_updates(message, timestamp)
+    if schema == SIGNAL_SCHEMA:
+        return _carrier_names(message, timestamp)
     return []
 
 
@@ -149,6 +166,7 @@ def _market_snapshot(message: dict[str, Any], timestamp: float) -> MarketSnapsho
         is_carrier=is_carrier_station(station_name, str(message.get("stationType") or "")),
         timestamp=timestamp,
         prices=prices,
+        carrier_access=str(message.get("carrierDockingAccess") or "").strip().lower(),
     )
 
 
@@ -166,7 +184,22 @@ def market_snapshot_from_game(game: GameMarket) -> MarketSnapshot | None:
         for item in game.items
     ]
     return _market_snapshot({"marketId": game.market_id, "systemName": game.system, "stationName": game.station,
-                             "stationType": game.station_type, "commodities": commodities}, timestamp)
+                             "stationType": game.station_type, "carrierDockingAccess": game.carrier_access,
+                             "commodities": commodities}, timestamp)
+
+
+def _carrier_names(message: dict[str, Any], timestamp: float) -> list[EddnUpdate]:
+    signals = message.get("signals")
+    if not isinstance(signals, list):
+        return []
+    names: list[EddnUpdate] = []
+    for signal in signals:
+        if not isinstance(signal, dict) or signal.get("SignalType") != "FleetCarrier":
+            continue
+        match = _CARRIER_SIGNAL.match(str(signal.get("SignalName") or "").strip())
+        if match is not None and match.group(1).strip():
+            names.append(CarrierName(callsign=match.group(2), name=match.group(1).strip(), timestamp=timestamp))
+    return names
 
 
 def _price(item: object) -> CommodityPrice | None:

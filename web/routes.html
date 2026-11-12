@@ -63,6 +63,9 @@
     .profit {
       color: var(--green);
     }
+    .carrier-open:has(input:disabled) {
+      opacity: 0.45;
+    }
     .route-actions {
       display: flex;
       flex-wrap: wrap;
@@ -220,6 +223,7 @@
             <div class="routes-tools">
               <label><input type="checkbox" id="route-surface"> Surface stations</label>
               <label><input type="checkbox" id="route-carriers"> Fleet carriers</label>
+              <label class="carrier-open" title="Hides carriers known to dock only squadron or friends; carriers whose access is unknown stay, marked access unknown"><input type="checkbox" id="route-carriers-open" checked> Open to all only</label>
               <button class="btn" type="button" id="routes-search">Search</button>
             </div>
             <div class="route-table-scroll" id="route-table">

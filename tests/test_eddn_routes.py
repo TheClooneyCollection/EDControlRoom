@@ -20,7 +20,7 @@ from edcr.eddn.route_query import parse_route_query, run_route_query
 from edcr.eddn.routes import RouteFilters, TimeModel, find_routes, load_route_markets
 from edcr.eddn.store import EddnStore
 from tests.shared_loop import TestClient
-from tests.test_eddn import commodity_envelope, docked_envelope, frame, memory_store
+from tests.test_eddn import commodity_envelope, docked_envelope, frame, memory_store, signal_envelope
 
 NOW = 1_794_319_200.0  # 2026-11-10T14:00:00Z, the fixture timestamp
 
@@ -31,7 +31,7 @@ def price(name: str, *, buy: int = 0, sell: int = 0, stock: int = 0, demand: int
 
 def add_station(
     store: EddnStore, market_id: int, station: str, system: str, x: float, station_type: str,
-    pads: dict[str, int], commodities: list[dict[str, object]], dist_ls: float = 500.0,
+    pads: dict[str, int], commodities: list[dict[str, object]], dist_ls: float = 500.0, access: str = "",
 ) -> None:
     apply_payload(store, frame(docked_envelope(
         MarketID=market_id, StationName=station, StationType=station_type, StarSystem=system,
@@ -39,6 +39,8 @@ def add_station(
     )))
     envelope = commodity_envelope(market_id=market_id, station=station, commodities=commodities)
     envelope["message"]["systemName"] = system  # type: ignore[index]
+    if access:
+        envelope["message"]["carrierDockingAccess"] = access  # type: ignore[index]
     apply_payload(store, frame(envelope))
 
 
@@ -95,6 +97,27 @@ class EddnRouteFinderTests(unittest.TestCase):
         store.commit()
 
         self.assertNotIn("VAON", [route.station_2.station for route in routes(store)])
+
+    def test_carriers_open_to_all_or_of_unknown_access_by_default(self) -> None:
+        store = galaxy()
+        self.addCleanup(store.close)
+        for market_id, callsign, access in ((6, "AAA-111", "all"), (7, "BBB-222", "squadronfriends"), (8, "CCC-333", "")):
+            add_station(store, market_id, callsign, "Alpha", 10.0, "FleetCarrier", LARGE,
+                        [price("gold", sell=12000 + market_id, demand=8000)], access=access)
+        apply_payload(store, frame(signal_envelope("GRAND ARTS THEATRE AAA-111")))
+        store.commit()
+
+        def carriers(**filters: object) -> dict[str, tuple[str, str]]:
+            markets = load_route_markets(store._db, RouteFilters(include_carriers=True, **filters), now=NOW)
+            return {m.station: (m.carrier_name, m.carrier_access) for m in markets if m.is_carrier}
+
+        self.assertEqual(carriers(), {"K7Q-BQL": ("", ""), "AAA-111": ("GRAND ARTS THEATRE", "all"), "CCC-333": ("", "")})
+        self.assertEqual(carriers(carriers_open_only=False)["BBB-222"], ("", "squadronfriends"))
+        self.assertEqual([parse_route_query(params, search_defaults={}, current_system="Sol", cargo_capacity=1)
+                          .filters.carriers_open_only for params in ({}, {"carrier_access": "all"}, {"carrier_access": "any"})],
+                         [True, True, False])
+        with self.assertRaisesRegex(ValueError, "carrier_access"):
+            parse_route_query({"carrier_access": "friends"}, search_defaults={}, current_system="Sol", cargo_capacity=1)
 
     def test_surface_stations_need_opting_in_and_add_landing_time(self) -> None:
         store = galaxy()
@@ -174,6 +197,8 @@ class EddnRoutesApiTests(unittest.TestCase):
             )
             [route] = payload["routes"]
             self.assertEqual((route["outbound"]["name"], route["inbound"]["name"]), ("Gold", "silver"))
+            self.assertEqual({key: route["station_1"][key] for key in ("is_carrier", "carrier_access", "carrier_name")},
+                             {"is_carrier": False, "carrier_access": "", "carrier_name": ""})
             self.assertIsNone(route["trade_route"])
             named = run_route_query(path, parse_route_query({}, search_defaults={}, current_system="Sol", cargo_capacity=1137),
                                     time_model=TimeModel(), display_names={"gold": "Gold", "silver": "Silver"}, now=NOW)
