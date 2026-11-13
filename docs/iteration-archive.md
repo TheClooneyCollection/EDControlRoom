@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `377`
-- Latest generated iteration number: `510`
+- Generated iteration count: `378`
+- Latest generated iteration number: `511`
 
 ## Iteration 134
 
@@ -10752,3 +10752,28 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 ## Follow-ups
 
 - Hub relay tests stay about `3.4ms` each: setUp `~0.9ms`, each WebSocket session `~0.8ms`, each `TestClient` enter and exit `~0.4ms`.
+
+## Iteration 511
+
+- When: `2026-11-13 21:31`
+- Area: `hub`
+- Title: `two-network-hub-troubleshooting`
+- Source: [2026-11-13-21-31_____hub______two-network-hub-troubleshooting.md](iteration-logs/2026-11-13-21-31_____hub______two-network-hub-troubleshooting.md)
+
+# Iteration Log
+
+- Area: `hub`
+- Title: `two-network-hub-troubleshooting`
+- Started: `2026-11-13 21:31`
+
+## Summary
+
+- A peer could not find the hub because the hub machine was on two subnets (Wi-Fi on one, Ethernet on another) and the peer was on the other one. The hub binds and advertises over mDNS on one address only, normally the default-route one.
+
+## Changes
+
+- `docs/user/hub.md`: the `no hub found on the LAN` troubleshooting row now covers a hub on two networks and points at the `Uvicorn running on` line to see which address it uses.
+
+## Follow-ups
+
+- None. Code unchanged; advertising on every interface was not requested.
