@@ -1016,7 +1016,8 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertIsNone(missing["trip_s"])
         self.assertIsNone(missing["profit_per_hour"])
         self.assertIn("Void coordinates", missing["missing"])
-        self.assertEqual(found["ship"], {"id": 7, "type": "cutter", "name": "Hauler", "laden_jump_range_ly": 20.0})
+        self.assertEqual(found["ship"], {"id": 7, "type": "cutter", "name": "Hauler", "label": "Hauler",
+                                         "laden_jump_range_ly": 20.0})
         self.assertEqual((bad.status_code, denied.status_code), (400, 401))
 
     def test_market_compare_asks_ardent_only_for_what_the_store_lacks(self) -> None:

@@ -601,7 +601,7 @@ let routes = [];
     }
 
     function edcrShipLabel() {
-      return edcrTripShip ? (edcrTripShip.name || edcrTripShip.type || "current ship") : "current ship";
+      return (edcrTripShip && edcrTripShip.label) || "current ship";
     }
 
     // Inara's profit per hour and trip time above EDCR's own for the same route and ship, so they compare.

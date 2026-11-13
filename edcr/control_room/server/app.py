@@ -768,10 +768,13 @@ def build_observer_server_app(
                     # Inara's own trip time, from its profit per trip and per hour.
                     "inara_trip_s": round(per_trip * 3600 / inara_per_hour) if per_trip and inara_per_hour else None,
                 })
+            name = (getattr(ship, "ship_name", None) or "").strip()
             return {
                 "trips": trips,
-                "ship": {"id": ship_id, "type": getattr(ship, "ship_type", None),
-                         "name": getattr(ship, "ship_name", None), "laden_jump_range_ly": laden},
+                "ship": {"id": ship_id, "type": getattr(ship, "ship_type", None), "name": name or None,
+                         # A blank in-game name falls back to type and ident as the trip time fit knows the ship.
+                         "label": name or time_model_payload.get("ship_label") or getattr(ship, "ship_type", None),
+                         "laden_jump_range_ly": laden},
                 "time_model": time_model_payload,
                 "hint": hint,
             }
