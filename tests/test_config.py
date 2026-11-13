@@ -90,6 +90,7 @@ class LoadConfigTests(unittest.TestCase):
             self.assertEqual(config.control_room.route_compare_compare_retry_attempts, 3)
             self.assertEqual(config.control_room.recent_markets_limit, 20)
             self.assertTrue(config.control_room.lan_also_localhost)
+            self.assertTrue(config.control_room.lan_all_interfaces)
             self.assertTrue(config.tts.enabled)
             self.assertEqual(config.tts.title_mode, "commander_name")
             self.assertEqual(config.tts.title, "commander")
@@ -296,12 +297,14 @@ min_seconds = 0.03
 
 [control_room]
 clear_session_on_launch = true
+lan_all_interfaces = false
 """.strip(),
             )
 
             config = load_config(config_path)
 
             self.assertTrue(config.control_room.clear_session_on_launch)
+            self.assertFalse(config.control_room.lan_all_interfaces)
 
     def test_save_home_system_updates_existing_control_room_section(self) -> None:
         with TemporaryDirectory() as temp_dir:

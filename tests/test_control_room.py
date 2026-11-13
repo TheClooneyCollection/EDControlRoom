@@ -39,6 +39,8 @@ from edcr.control_room.app import (
     ActivityLog,
     _JOURNAL_ARTIFACT_LOG_FLUSH_EVERY,
     _detect_lan_host,
+    _detect_lan_hosts,
+    _no_lan_hosts,
 )
 from edcr.control_room.backend import ControlRoomBackendEventHandler
 from edcr.platform.input.wine_helper import FOCUS_FAILED_MESSAGE, FocusFailed
@@ -521,7 +523,7 @@ class ControlRoomCliTests(unittest.TestCase):
         with patch("edcr.control_room.app.socket.socket", return_value=fake_socket), patch(
             "edcr.control_room.app.socket.getaddrinfo",
             return_value=[],
-        ), patch("edcr.control_room.app._iter_ifconfig_ipv4", return_value=[]):
+        ), patch("edcr.control_room.app._iter_local_ipv4", return_value=[]):
             self.assertEqual(_detect_lan_host(), "192.168.1.42")
         self.assertEqual(fake_socket.address, ("8.8.8.8", 80))
 
@@ -532,7 +534,7 @@ class ControlRoomCliTests(unittest.TestCase):
                 (None, None, None, None, ("127.0.0.1", 0)),
                 (None, None, None, None, ("10.0.0.12", 0)),
             ],
-        ), patch("edcr.control_room.app._iter_ifconfig_ipv4", return_value=[]):
+        ), patch("edcr.control_room.app._iter_local_ipv4", return_value=[]):
             socket_factory.return_value.__enter__.return_value.connect.side_effect = OSError("no route")
             self.assertEqual(_detect_lan_host(), "10.0.0.12")
 
@@ -556,10 +558,23 @@ class ControlRoomCliTests(unittest.TestCase):
             "edcr.control_room.app.socket.getaddrinfo",
             return_value=[],
         ), patch(
-            "edcr.control_room.app._iter_ifconfig_ipv4",
+            "edcr.control_room.app._iter_local_ipv4",
             return_value=["127.0.0.1", "198.19.0.1", "192.168.0.107"],
         ):
             self.assertEqual(_detect_lan_host(), "192.168.0.107")
+
+    def test_every_lan_interface_is_listed_without_vpns_or_host_name_guesses(self) -> None:
+        # Wi-Fi and Ethernet on two subnets, plus Tailscale; the host name resolves to a stale address.
+        with patch("edcr.control_room.app.socket.socket") as socket_factory, patch(
+            "edcr.control_room.app.socket.getaddrinfo",
+            return_value=[(None, None, None, None, ("10.9.9.9", 0))],
+        ), patch(
+            "edcr.control_room.app._iter_local_ipv4",
+            return_value=["127.0.0.1", "192.168.1.128", "100.100.1.2", "192.168.2.8"],
+        ):
+            socket_factory.return_value.__enter__.return_value.getsockname.return_value = ("192.168.2.8", 1)
+            self.assertEqual(_detect_lan_hosts(), ["192.168.2.8", "192.168.1.128"])
+        self.assertEqual(_no_lan_hosts(), [])
 
     def test_detect_lan_host_prefers_rfc1918_over_public(self) -> None:
         with patch("edcr.control_room.app.socket.socket") as socket_factory, patch(
@@ -568,7 +583,7 @@ class ControlRoomCliTests(unittest.TestCase):
                 (None, None, None, None, ("203.0.113.5", 0)),
                 (None, None, None, None, ("192.168.5.10", 0)),
             ],
-        ), patch("edcr.control_room.app._iter_ifconfig_ipv4", return_value=[]):
+        ), patch("edcr.control_room.app._iter_local_ipv4", return_value=[]):
             socket_factory.return_value.__enter__.return_value.connect.side_effect = OSError("no route")
             self.assertEqual(_detect_lan_host(), "192.168.5.10")
 
@@ -584,6 +599,7 @@ class ControlRoomCliTests(unittest.TestCase):
             host="192.168.1.42",
             port=8765,
             advertise_host="192.168.1.42",
+            lan_hosts=_detect_lan_hosts,
             access_token="1001",
             speak_tts=True,
             hub_role=None,
@@ -602,6 +618,7 @@ class ControlRoomCliTests(unittest.TestCase):
             host="192.168.1.42",
             port=8765,
             advertise_host="192.168.1.42",
+            lan_hosts=_detect_lan_hosts,
             access_token="1001",
             speak_tts=True,
             hub_role=None,
@@ -621,6 +638,7 @@ class ControlRoomCliTests(unittest.TestCase):
                 host="192.168.1.42",
                 port=8765,
                 advertise_host="192.168.1.42",
+                lan_hosts=_detect_lan_hosts,
                 access_token="edcr",
                 speak_tts=True,
                 hub_role=mode,
@@ -638,6 +656,7 @@ class ControlRoomCliTests(unittest.TestCase):
             host="127.0.0.1",
             port=8765,
             advertise_host="",
+            lan_hosts=_no_lan_hosts,
             access_token="1001",
             speak_tts=True,
             hub_role=None,
@@ -678,6 +697,7 @@ class ControlRoomCliTests(unittest.TestCase):
             host="127.0.0.1",
             port=8765,
             advertise_host="",
+            lan_hosts=_no_lan_hosts,
             access_token=DEFAULT_OBSERVER_ACCESS_TOKEN,
             speak_tts=True,
             hub_role=None,

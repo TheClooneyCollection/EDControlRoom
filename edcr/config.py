@@ -199,6 +199,8 @@ class ControlRoomConfig:
     recent_markets_limit: int = 20
     # A LAN-bound server (lan / hub / peer) also listens on 127.0.0.1, for local tunnels like Tailscale serve.
     lan_also_localhost: bool = True
+    # A LAN-bound server listens on and advertises every LAN interface, not only the default-route one.
+    lan_all_interfaces: bool = True
 
 
 @dataclass(frozen=True)
@@ -1229,6 +1231,9 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             ),
             lan_also_localhost=_boolean(
                 control_room, "lan_also_localhost", _boolean(default_control_room, "lan_also_localhost", True)
+            ),
+            lan_all_interfaces=_boolean(
+                control_room, "lan_all_interfaces", _boolean(default_control_room, "lan_all_interfaces", True)
             ),
         ),
         tts=TTSConfig(

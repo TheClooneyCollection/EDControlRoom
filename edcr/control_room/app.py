@@ -47,7 +47,6 @@ import ipaddress
 import json
 import signal
 import socket
-import subprocess
 import sys
 import time
 from dataclasses import replace
@@ -2406,44 +2405,25 @@ def _classify_lan_candidate(host: str) -> int | None:
     return 1
 
 
-def _iter_ifconfig_ipv4() -> list[str]:
-    """Best-effort enumeration of local IPv4 addresses via ifconfig on POSIX."""
-    if sys.platform.startswith("win"):
-        return []
-    try:
-        output = subprocess.check_output(
-            ["ifconfig"], text=True, stderr=subprocess.DEVNULL, timeout=2
-        )
-    except (OSError, subprocess.SubprocessError):
-        return []
-    results: list[str] = []
-    for line in output.splitlines():
-        stripped = line.strip()
-        if not stripped.startswith("inet "):
-            continue
-        parts = stripped.split()
-        if len(parts) >= 2:
-            results.append(parts[1])
-    return results
+def _iter_local_ipv4() -> list[str]:
+    """Best-effort enumeration of this machine's IPv4 interface addresses (see `edcr.platform.lan`)."""
+    from edcr.platform.lan import local_ipv4_interfaces
+
+    return [str(interface.ip) for interface in local_ipv4_interfaces(sys.platform)]
 
 
-def _detect_lan_host() -> str:
-    candidates: list[str] = []
+def _route_ipv4() -> list[str]:
+    """The address the default route leaves from, if any."""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
             probe.connect(("8.8.8.8", 80))
-            candidates.append(probe.getsockname()[0])
+            return [probe.getsockname()[0]]
     except OSError:
-        pass
+        return []
 
-    try:
-        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET, socket.SOCK_STREAM):
-            candidates.append(info[4][0])
-    except OSError:
-        pass
 
-    candidates.extend(_iter_ifconfig_ipv4())
-
+def _ranked_lan_hosts(candidates: list[str]) -> list[str]:
+    """Accepted LAN addresses, private ranges first, otherwise in candidate order."""
     ranked: list[tuple[int, int, str]] = []
     seen: set[str] = set()
     for order, host in enumerate(candidates):
@@ -2454,12 +2434,33 @@ def _detect_lan_host() -> str:
         if rank is None:
             continue
         ranked.append((rank, order, host))
+    return [host for _, _, host in sorted(ranked)]
 
+
+def _detect_lan_host() -> str:
+    candidates = _route_ipv4()
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET, socket.SOCK_STREAM):
+            candidates.append(info[4][0])
+    except OSError:
+        pass
+    candidates.extend(_iter_local_ipv4())
+
+    ranked = _ranked_lan_hosts(candidates)
     if ranked:
-        ranked.sort()
-        return ranked[0][2]
+        return ranked[0]
 
     raise RuntimeError("could not determine a LAN IPv4 address; use --host explicitly")
+
+
+def _detect_lan_hosts() -> list[str]:
+    """Every LAN interface address, for `[control_room] lan_all_interfaces`. Only addresses the machine
+    reports on an interface: a stale host name entry would fail the bind."""
+    return _ranked_lan_hosts(_route_ipv4() + _iter_local_ipv4())
+
+
+def _no_lan_hosts() -> list[str]:
+    return []
 
 
 def main() -> None:
@@ -2525,6 +2526,8 @@ def main() -> None:
             port=args.port,
             # The hub advertises where peers can reach it: `lan` binds the detected LAN address already.
             advertise_host=advertise_address(host, _detect_lan_host),
+            # Every other LAN interface, when `[control_room] lan_all_interfaces` is on.
+            lan_hosts=_detect_lan_hosts if serve_lan else _no_lan_hosts,
             access_token=access_token,
             speak_tts=not args.no_tts,
             hub_role=hub_role,

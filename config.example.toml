@@ -20,6 +20,9 @@
 # recent_markets_limit = 20
 # lan / hub / peer also listen on 127.0.0.1 so `tailscale serve` can proxy to localhost.
 # lan_also_localhost = true
+# lan / hub / peer listen on and advertise every LAN interface (Wi-Fi and Ethernet on two subnets, say);
+# false keeps the default-route one only. Interfaces are read at start: restart after a network change.
+# lan_all_interfaces = true
 
 [eddn]
 # Live market prices for the /routes trade route search; the `lan` server listens when enabled.

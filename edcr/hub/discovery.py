@@ -9,6 +9,7 @@ and answers it, while Python's own multicast socket may receive nothing without 
 """
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import re
@@ -22,6 +23,7 @@ from pathlib import Path
 from typing import Callable
 
 from edcr.hub.protocol import LinkConnection
+from edcr.platform.lan import preferred_addresses
 
 SERVICE_TYPE = "_edcr._tcp.local."
 # The remembered hub lives next to the config, beside the node id; delete it to pick another hub.
@@ -32,17 +34,20 @@ BROWSE_S = 3.0
 
 @dataclass(frozen=True)
 class HubAdvert:
-    """One hub found on the LAN, from its mDNS record."""
+    """One hub found on the LAN, from its mDNS record. A hub on several networks lists every address."""
 
     hub_id: str
     name: str
     version: str
-    address: str
+    addresses: tuple[str, ...]
     port: int
 
     @property
     def url(self) -> str:
-        return f"http://{self.address}:{self.port}"
+        return self.url_at(self.addresses[0])
+
+    def url_at(self, address: str) -> str:
+        return f"http://{address}:{self.port}"
 
 
 class NoHubFound(OSError):
@@ -54,12 +59,13 @@ def advert_properties(*, hub_id: str, name: str, version: str) -> dict[str, str]
     return {"role": "hub", "id": hub_id, "name": name, "version": version}
 
 
-def advert_from_record(properties: dict[str, str], address: str, port: int) -> HubAdvert | None:
+def advert_from_record(properties: dict[str, str], addresses: list[str], port: int) -> HubAdvert | None:
     """A hub from one resolved mDNS record; None for anything that is not an EDCR hub."""
-    if properties.get("role") != "hub" or not properties.get("id") or not address or not port:
+    addresses = [address for address in dict.fromkeys(addresses) if address]
+    if properties.get("role") != "hub" or not properties.get("id") or not addresses or not port:
         return None
     return HubAdvert(hub_id=properties["id"], name=properties.get("name") or properties["id"],
-                     version=properties.get("version", ""), address=address, port=port)
+                     version=properties.get("version", ""), addresses=tuple(addresses), port=port)
 
 
 class KnownHub:
@@ -116,7 +122,8 @@ class KnownHub:
 
 class DiscoveredHub:
     """The link's `connect` for a peer without `[hub] url`: browse, pick the remembered hub (or the
-    only one on a first run) and dial it. `url` is the hub last dialled, for status and logs."""
+    only one on a first run) and dial it. A hub with several addresses is dialled on this peer's subnet
+    first, then at each other address in turn. `url` is the hub last dialled, for status and logs."""
 
     def __init__(
         self,
@@ -124,11 +131,13 @@ class DiscoveredHub:
         browse: Callable[[], list[HubAdvert]],
         known: KnownHub,
         dial: Callable[[str], LinkConnection],
+        local_interfaces: Callable[[], list[ipaddress.IPv4Interface]],
         log: Callable[[str], None],
     ) -> None:
         self._browse = browse
         self._known = known
         self._dial = dial
+        self._local_interfaces = local_interfaces
         self._log = log
         self.url = ""
         # Strangers already warned about, so a redial loop does not repeat the warning.
@@ -156,8 +165,16 @@ class DiscoveredHub:
 
     def __call__(self) -> LinkConnection:
         hub = self.pick(self._browse())
-        self.url = hub.url
-        return self._dial(hub.url)
+        addresses = preferred_addresses(list(hub.addresses), self._local_interfaces)
+        for address in addresses[:-1]:
+            self.url = hub.url_at(address)
+            try:
+                return self._dial(self.url)
+            except Exception as exc:  # Unreachable from here: the next address may be on our network.
+                self._log(f"Hub {hub.name} not reachable at {self.url} ({str(exc) or type(exc).__name__}); "
+                          "trying its next address")
+        self.url = hub.url_at(addresses[-1])
+        return self._dial(self.url)
 
 
 def zeroconf_browse(seconds: float) -> Callable[[], list[HubAdvert]]:
@@ -192,8 +209,7 @@ def zeroconf_browse(seconds: float) -> Callable[[], list[HubAdvert]]:
                     key.decode("utf-8", "replace"): (value or b"").decode("utf-8", "replace")
                     for key, value in info.properties.items()
                 }
-                addresses = info.parsed_addresses(IPVersion.V4Only)
-                advert = advert_from_record(properties, addresses[0] if addresses else "", info.port)
+                advert = advert_from_record(properties, info.parsed_addresses(IPVersion.V4Only), info.port)
                 if advert is not None:
                     found.append(advert)
             return found
@@ -207,8 +223,10 @@ def zeroconf_browse(seconds: float) -> Callable[[], list[HubAdvert]]:
 _BROWSE_ROW = re.compile(r"^\S+\s+(Add|Rmv)\s+\d+\s+\d+\s+\S+\s+_edcr\._tcp\.\s+(.+)$")
 # `dns-sd -L`: "<full name> can be reached at <host>:<port> (interface N)", the TXT record on the next line.
 _LOOKUP_ROW = re.compile(r" can be reached at (\S+):(\d+) \(interface \d+\)")
-# `dns-sd -G v4` rows: timestamp, Add/Rmv, flags, interface, hostname, address, TTL.
-_ADDRESS_ROW = re.compile(r"^\S+\s+Add\s+\S+\s+\d+\s+\S+\s+(\d+\.\d+\.\d+\.\d+)\s+\d+")
+# `dns-sd -G v4` rows: timestamp, Add/Rmv, flags (hex), interface, hostname, address, TTL.
+_ADDRESS_ROW = re.compile(r"^\S+\s+Add\s+([0-9A-Fa-f]+)\s+\d+\s+\S+\s+(\d+\.\d+\.\d+\.\d+)\s+\d+")
+# dns-sd's kDNSServiceFlagsMoreComing: more rows of this answer follow at once.
+_MORE_COMING = 0x1
 
 
 def _txt_entries(line: str) -> dict[str, str]:
@@ -251,12 +269,19 @@ def _lookup_record(output: str) -> tuple[str, int, dict[str, str]] | None:
     return None
 
 
-def _lan_address(output: str) -> str:
-    """The host's address from `dns-sd -G v4` output: a LAN one over loopback, which a hub on this very
-    Mac also reports and no other machine could use. "" before it has answered."""
-    addresses = [match.group(1) for match in map(_ADDRESS_ROW.match, output.splitlines()) if match]
+def _lan_addresses(output: str) -> list[str]:
+    """The host's addresses from `dns-sd -G v4` output, one row each: the LAN ones over loopback, which a
+    hub on this very Mac also reports and no other machine could use. [] before it has answered."""
+    addresses = list(dict.fromkeys(match.group(2) for match in map(_ADDRESS_ROW.match, output.splitlines())
+                                   if match))
     lan = [address for address in addresses if not address.startswith("127.")]
-    return (lan or addresses or [""])[0]
+    return lan or addresses
+
+
+def _addresses_answered(output: str) -> bool:
+    """True once `dns-sd -G` has printed an address and its last row says no more rows follow."""
+    rows = [match for match in map(_ADDRESS_ROW.match, output.splitlines()) if match]
+    return bool(rows) and not int(rows[-1].group(1), 16) & _MORE_COMING
 
 
 def dnssd_browse(
@@ -281,9 +306,8 @@ def dnssd_browse(
             if record is None:
                 continue
             host, port, properties = record
-            address = _lan_address(run(["dns-sd", "-G", "v4", host], seconds,
-                                       lambda output: bool(_lan_address(output))))
-            advert = advert_from_record(properties, address, port)
+            addresses = _lan_addresses(run(["dns-sd", "-G", "v4", host], seconds, _addresses_answered))
+            advert = advert_from_record(properties, addresses, port)
             if advert is not None:
                 found.append(advert)
         return found
@@ -327,8 +351,9 @@ def lan_browse(platform: str, seconds: float) -> Callable[[], list[HubAdvert]]:
     return zeroconf_browse(seconds)
 
 
-def zeroconf_advertise(*, address: str, port: int, properties: dict[str, str]) -> Callable[[], None]:
-    """Advertise this hub on the interface that owns `address`; returns the function that stops it."""
+def zeroconf_advertise(*, addresses: list[str], port: int, properties: dict[str, str]) -> Callable[[], None]:
+    """Advertise this hub on the interfaces that own `addresses`, one record listing them all; returns the
+    function that stops it."""
     from zeroconf import IPVersion, ServiceInfo, Zeroconf
 
     name = properties.get("name") or socket.gethostname()
@@ -337,12 +362,12 @@ def zeroconf_advertise(*, address: str, port: int, properties: dict[str, str]) -
     info = ServiceInfo(
         SERVICE_TYPE,
         f"{label}.{SERVICE_TYPE}",
-        addresses=[socket.inet_aton(address)],
+        addresses=[socket.inet_aton(address) for address in addresses],
         port=port,
         properties=properties,
         server=f"{socket.gethostname().split('.')[0]}.local.",
     )
-    zc = Zeroconf(interfaces=[address], ip_version=IPVersion.V4Only)
+    zc = Zeroconf(interfaces=list(addresses), ip_version=IPVersion.V4Only)
     zc.register_service(info, allow_name_change=True)
 
     def stop() -> None:
@@ -352,12 +377,17 @@ def zeroconf_advertise(*, address: str, port: int, properties: dict[str, str]) -
     return stop
 
 
-def bind_hosts(host: str, also_localhost: bool) -> list[str]:
-    """The addresses the server listens on: the bind host, plus loopback for a LAN-bound server when
+def lan_hosts(host: str, others: list[str]) -> list[str]:
+    """The bind host first, then every other LAN interface address once."""
+    return list(dict.fromkeys([host, *others]))
+
+
+def bind_hosts(hosts: list[str], also_localhost: bool) -> list[str]:
+    """The addresses the server listens on: the bind hosts, plus loopback for a LAN-bound server when
     `also_localhost` is set, so local tunnels reach it. Loopback and every-interface binds stay as given."""
-    if not also_localhost or host in {"0.0.0.0", "", "localhost"} or host.startswith("127."):
-        return [host]
-    return [host, "127.0.0.1"]
+    if not also_localhost or any(host in {"0.0.0.0", "", "localhost"} or host.startswith("127.") for host in hosts):
+        return list(hosts)
+    return [*hosts, "127.0.0.1"]
 
 
 def advertise_address(host: str, detect_lan_host: Callable[[], str]) -> str:

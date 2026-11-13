@@ -8,6 +8,7 @@ import socket
 import sys
 import threading
 import time
+from typing import Callable
 
 import uvicorn
 
@@ -30,7 +31,7 @@ from edcr.eddn.service import EddnService, start_eddn_service
 from edcr.haul_history import load_runs
 from edcr.hub.discovery import (
     BROWSE_S, KNOWN_HUB_FILE_NAME, DiscoveredHub, KnownHub, advert_properties, bind_hosts, lan_browse,
-    zeroconf_advertise,
+    lan_hosts as lan_hosts_with, zeroconf_advertise,
 )
 from edcr.hub.history import CentralHistory, HubRuns
 from edcr.hub.nodes import HubSide, NodeRegistry, store_link_item
@@ -38,6 +39,7 @@ from edcr.hub.outbox import Outbox
 from edcr.hub.peer import NODE_ID_FILE_NAME, NodeHello, PeerLink, load_node_id, new_node_id, websocket_dialer
 from edcr.hub.relay import HubRelay, PeerRelay, node_state
 from edcr.hub.voice import HubVoice, callout_text, node_muter
+from edcr.platform.lan import local_ipv4_interfaces
 from edcr.journal_store import JournalStore
 from edcr.journal_sync import sync_journal_every
 from edcr.trip_time_fit import TripTimeModels, connect_read_only
@@ -55,13 +57,19 @@ def serve_observer_mode(
     host: str,
     port: int,
     advertise_host: str,
+    lan_hosts: Callable[[], list[str]],
     access_token: str,
     speak_tts: bool,
     hub_role: str | None,
     web_default_access_token: str = "",
 ) -> None:
-    """`hub_role`: `hub` or `peer` from the command line, overriding `[hub] role`; None keeps the config's."""
+    """`hub_role`: `hub` or `peer` from the command line, overriding `[hub] role`; None keeps the config's.
+    `lan_hosts` lists the machine's other LAN interfaces, bound and advertised beside `host` when
+    `[control_room] lan_all_interfaces` is on. They are read once: a new interface needs a restart."""
     loaded = load_config_with_fallback(config_path)
+    other_lan_hosts = lan_hosts() if loaded.config.control_room.lan_all_interfaces else []
+    listen_hosts = lan_hosts_with(host, other_lan_hosts)
+    advertise_hosts = lan_hosts_with(advertise_host, other_lan_hosts) if advertise_host else []
     if hub_role is not None:
         loaded = replace(loaded, config=with_hub_role(loaded.config, hub_role, access_token))
     ctx = build_runtime_context(
@@ -133,6 +141,7 @@ def serve_observer_mode(
             # Found over mDNS; the first hub that welcomes this peer is remembered and the only one dialled.
             known_hub = KnownHub(Path(loaded.config_path).parent / KNOWN_HUB_FILE_NAME, hub_logger.warning)
             discovered = DiscoveredHub(browse=lan_browse(sys.platform, BROWSE_S), known=known_hub, dial=dial,
+                                       local_interfaces=lambda: local_ipv4_interfaces(sys.platform),
                                        log=hub_logger.warning)
             hub_url = lambda: discovered.url
             connect = discovered
@@ -280,11 +289,12 @@ def serve_observer_mode(
                            voice=hub_voice)
     stop_advert = None
     if hub_side is not None:
-        if advertise_host:
+        if advertise_hosts:
             try:
-                stop_advert = zeroconf_advertise(address=advertise_host, port=port, properties=advert_properties(
+                stop_advert = zeroconf_advertise(addresses=advertise_hosts, port=port, properties=advert_properties(
                     hub_id=node.node_id, name=node.name, version=node.version))
-                hub_logger.info("Hub advertised over mDNS as %s at %s:%s", node.name, advertise_host, port)
+                hub_logger.info("Hub advertised over mDNS as %s at %s (port %s)", node.name,
+                                ", ".join(advertise_hosts), port)
             except Exception as exc:  # No multicast: peers can still use `[hub] url`.
                 hub_logger.warning("Hub not advertised over mDNS (%s); peers need `[hub] url`", exc)
         else:
@@ -334,7 +344,8 @@ def serve_observer_mode(
         # Started once the app exists: hub page channels and reads answer through it.
         threading.Thread(target=lambda: peer_link.run(stop_background.wait), name="hub-link", daemon=True).start()
     try:
-        hosts = bind_hosts(host, loaded.config.control_room.lan_also_localhost)
+        hosts = bind_hosts(listen_hosts, loaded.config.control_room.lan_also_localhost)
+        hub_logger.info("Listening on %s (port %s)", ", ".join(hosts), port)
         uvicorn.Server(uvicorn.Config(app, log_level="info")).run(
             sockets=[uvicorn.Config(app, host=h, port=port).bind_socket() for h in hosts])
     finally:
