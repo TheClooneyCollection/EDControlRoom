@@ -18,6 +18,7 @@ The EDDN listener is off by default; turn it on with `enabled = true` under `[ed
 ## Using the Routes page
 
 - **Near** shows routes whose first station is within range of your current system (or the system you type). **Global** searches every market in the database.
+- In Near, the range is also how far the first station may be from you: with **1 jump** or **2 jumps** a short route 50 Ly away is left out. Use **4 jumps**, **100 Ly** or **Global** to see it.
 - Each station's title line shows how many Ly away it is from your current system (or the system you type), when that system has coordinates in the database; the **Jumps** column shows the Ly between the two stations.
 - The **Out** and **Back** columns show each leg on three lines: the commodity; its buy price at the loading station, sell price at the other one, the margin per ton and the tons in a full hold, e.g. `3,420 → 40,684 (+37,264/t) × 720 t`; then supply at the loading station and demand at the other, e.g. `Sup 14,595 · Dem 2,310`. `/haul` route rows show the same three lines per leg in the Cargo column, without the tons.
 - **1 / 2 / 4 jumps** size the range by your laden jump range; **100 / 250 Ly** use a flat distance.
@@ -26,6 +27,7 @@ The EDDN listener is off by default; turn it on with `enabled = true` under `[ed
 - Carriers that have moved on are hidden: one whose signal was seen in another system after its market was read, one a `CarrierJump` put elsewhere, or one missing from the carrier list your own journal wrote for its system later. The game writes that list once per visit, at login or your first drop from supercruise there, so jumping through a system in supercruise does not check it.
 - Demand is not filtered: a station buys anything it lists a sell price for, even with a tiny demand (for example a station that also produces it).
 - Routes are ranked by profit per hour. The trip time is an estimate fitted from real haul runs: jumps, supercruise distance and time docked.
+- Profit per trip should match Inara's for the same hold. Profit per hour usually comes out lower than Inara's, because this trip time is more cautious (for example 930 s where Inara implies about 770 s). It was fitted on real runs, so trust it over Inara's.
 - **Copy** puts the route on the clipboard as JSON; paste it into the **Copy / paste route** box on the haul page to run it. Routes with a commodity whose in-game name is not known yet show "name unknown" instead; visiting a market that sells it teaches the name.
 
 Prices are only as fresh as the last commander who docked there; the **Data age** column shows how old each route's prices are.
