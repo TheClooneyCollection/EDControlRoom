@@ -81,6 +81,7 @@ Use [docs/iteration-logs/](docs/iteration-logs/) for concise per-iteration notes
 - If you add, remove, rename, or reorder top-level `README.md` sections, update the hand-written README table of contents in the same change. GitHub exposes an automatic Outline menu, but it does not replace the inline TOC block in the file.
 - When writing or updating tests, consider cross-platform behavior explicitly: avoid hardcoded path separators in expectations, and use TOML literal strings (`'...'`) for interpolated filesystem paths so Windows backslashes do not turn into invalid escapes.
 - If implementation reveals a new runtime or behavioral assumption, verify it with the user before baking it into defaults, heuristics, or policy-level behavior.
+- Don't silently hide items that miss a threshold or filter. Show them marked with the reason, or say how many were left out. Example: the trip time ship picker lists a ship with 27 legs as `27 legs, under 30: pooled` instead of dropping it.
 
 ### Manual Harness Scope
 
