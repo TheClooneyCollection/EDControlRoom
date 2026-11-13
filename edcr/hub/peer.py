@@ -20,10 +20,11 @@ from edcr.eddn.messages import EddnUpdate
 from edcr.haul_history import run_key
 from edcr.hub.outbox import Outbox
 from edcr.hub.protocol import (
-    ITEM_HAUL_RUN, ITEM_MARKET, ITEM_STATION_FACTS, PEER_LINK_PATH, HubUnreachable, LinkClosed, LinkConnection, LinkReply,
+    ITEM_HAUL_RUN, ITEM_JOURNAL_EVENTS, ITEM_MARKET, ITEM_STATION_FACTS, PEER_LINK_PATH, HubUnreachable, LinkClosed, LinkConnection, LinkReply,
     encode_update,
 )
 from edcr.hub.voice import VOICE_MUTE_FRAME
+from edcr.journal_sync import JournalBatch, batch_body
 from edcr.recent_markets import MarketSnapshot, snapshot_entry
 
 # Seconds between redials while the hub stays away; the last one repeats.
@@ -163,18 +164,26 @@ class PeerLink:
             started_at, ended_at, station_1, _ = run_key(row)
             self._enqueue(ITEM_HAUL_RUN, row, key=f"run:{started_at}|{ended_at}|{station_1}", forever=True)
 
-    def _enqueue(self, kind: str, body: Any, *, key: str, forever: bool = False) -> None:
+    def enqueue_journal(self, batch: JournalBatch) -> None:
+        """Queue a batch of journal lines; raises when it could not be queued, so the sync retries it."""
+        first = batch.lines[0].line if batch.lines else batch.position.line
+        if not self._enqueue(ITEM_JOURNAL_EVENTS, batch_body(batch), key=f"journal:{batch.file}:{first}", forever=True):
+            raise OSError("hub outbox write failed")
+
+    def _enqueue(self, kind: str, body: Any, *, key: str, forever: bool = False) -> bool:
+        """False only when the outbox could not be written."""
         with self._lock:
             try:
                 seq = self.outbox.add(kind, body, key=key, now=self._now(), forever=forever)
             except sqlite3.Error as exc:
                 self._log(f"Warning: hub outbox write failed, {kind} not queued: {exc}")
-                return
+                return False
             if seq is not None and self._live:
                 try:
                     self._send_items()
                 except Exception as exc:  # Still queued; the read loop notices the broken link.
                     self._log(f"Hub link send failed, {kind} stays queued: {exc}")
+            return True
 
     def _send_items(self) -> None:
         """Send what this connection has not sent yet, in order (the caller holds the lock)."""

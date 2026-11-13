@@ -14,9 +14,13 @@ from edcr.eddn.game_markets import import_markets
 from edcr.eddn.store import EddnStore
 from edcr.hub.history import CentralHistory, HubRuns
 from edcr.hub.peer import NodeHello, iso_utc
-from edcr.hub.protocol import ITEM_HAUL_RUN, ITEM_MARKET, ITEM_STATION_FACTS, LinkReply, decode_update, response_frame
+from edcr.hub.protocol import (
+    ITEM_HAUL_RUN, ITEM_JOURNAL_EVENTS, ITEM_MARKET, ITEM_STATION_FACTS, LinkReply, decode_update, response_frame,
+)
 from edcr.hub.relay import RELAY_FRAMES, HubRelay
 from edcr.hub.voice import CALLOUT_FRAME, HubVoice
+from edcr.journal_store import JournalStore
+from edcr.journal_sync import lines_from_body
 from edcr.recent_markets import MarketSnapshot, snapshot_from_entry
 
 
@@ -242,13 +246,20 @@ class HubLinkSession:
         return response_frame(request_id, reply)
 
 
-def store_link_item(store: EddnStore, runs: HubRuns, record_market: Callable[[MarketSnapshot], None],
-                    log: Callable[[str], None]) -> ItemSink:
-    """Write a peer's market snapshots and station facts into the hub's store, newest wins, and its
-    haul runs into the central history, once per run key and node. `record_market` also lists each
-    market on the hub's Markets page, beside the hub's own."""
+def store_link_item(store: EddnStore, runs: HubRuns, journal: JournalStore,
+                    record_market: Callable[[MarketSnapshot], None], log: Callable[[str], None]) -> ItemSink:
+    """Write a peer's market snapshots and station facts into the hub's store, newest wins, its
+    haul runs into the central history, once per run key and node, and its journal lines into the
+    journal store under its node id. `record_market` also lists each market on the hub's Markets
+    page, beside the hub's own."""
 
     def store_item(node: NodeHello, kind: str, body: Any) -> None:
+        if kind == ITEM_JOURNAL_EVENTS:
+            parsed = lines_from_body(body)
+            if parsed is None:
+                raise BadItem("not a batch of journal lines")
+            journal.add(node.node_id, *parsed)
+            return
         if kind == ITEM_HAUL_RUN:
             try:
                 added = runs.add(node, body)

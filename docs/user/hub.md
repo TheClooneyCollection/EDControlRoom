@@ -90,8 +90,10 @@ All under `[hub]`; defaults in `defaults/hub.toml`.
 | `token` | hub, peer | the secret on the peer link; required on both |
 | `name` | hub, peer | the name shown on the hub; default the host name |
 | `url` | peer | optional hub address; empty means discovery |
-| `outbox_file` | peer | markets, station facts and haul runs waiting for the hub (`.control_room_hub_outbox.sqlite3`) |
+| `outbox_file` | peer | markets, station facts, haul runs and journal lines waiting for the hub (`.control_room_hub_outbox.sqlite3`) |
 | `runs_file` | hub | every peer's haul runs, tagged with their node (`.control_room_hub_runs.jsonl`); the hub's own stay in `control_room.haul_runs_file` |
+| `journal_events_file` | hub, standalone | every node's journal events, chat and friends left out (`.control_room_journal.sqlite3`) |
+| `journal_sync_file` | all | how far this node's journal files have been passed on (`.control_room_journal_sync.json`) |
 | `voice_file` | hub | the voiced node, the hub speaker switch and the mute (`.control_room_hub_voice.json`) |
 | `timeout_s` | peer | seconds to wait for the hub on routes, status and station facts (10) |
 | `search_timeout_s` | peer | seconds to wait for an Inara search on the hub (180) |
@@ -119,8 +121,8 @@ Messages in a node's `[tts] disabled_messages` are never sent up, so the hub and
 
 ## Offline behaviour
 
-- Market snapshots, station facts and finished haul runs go into the peer's outbox first and leave it only when the hub has stored them. While the hub is away the outbox grows; on reconnect it drains in order. Restarting either machine loses nothing.
-- The hub stores idempotently: the newest market snapshot and station fact win, and haul runs are kept once per run and node.
+- Market snapshots, station facts, finished haul runs and every journal line (chat and friends left out; the first link sends the whole journal history) go into the peer's outbox first and leave it only when the hub has stored them. While the hub is away the outbox grows; on reconnect it drains in order. Restarting either machine loses nothing.
+- The hub stores idempotently: the newest market snapshot and station fact win, haul runs are kept once per run and node, and journal lines once per node, file and line.
 - Live state, activity and callouts are not queued: callouts spoken while the link is down are not voiced on the hub later.
 - On the peer, routines and hauls keep running. Its own pages still work as a fallback; panels with hub-owned data (routes, Best deal facts, history, Inara search) say `Hub Desk is unreachable` instead of showing stale data.
 

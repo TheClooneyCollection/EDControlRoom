@@ -2,7 +2,7 @@
 
 ## Status
 
-Designed (2026-11-13). Built: step 1 (store and local sync, 2026-11-13).
+Designed (2026-11-13). Built: step 1 (store and local sync, 2026-11-13), step 2 (peer sync, 2026-11-13).
 
 ## Why
 
@@ -52,7 +52,7 @@ A server thread `journal-sync` scans the journal directory (`ctx.journal.effecti
 
 ### Peer to hub
 
-A new outbox item kind `journal_events`: `{file, first_line, lines: [...]}` with up to 500 lines per item, key `journal:<file>:<first_line>` (kept forever, like haul runs). The hub stores them under the peer's node id and acknowledges as usual. The peer's sync state advances when the item is queued, not when the hub acknowledges it, since the outbox already keeps it until then. The first link backfills the whole history through the outbox.
+A new outbox item kind `journal_events`: `{file, first_line, lines: [...]}` with up to 500 lines or 512 KB per item, key `journal:<file>:<first_line>` (kept forever, like haul runs). The hub stores them under the peer's node id and acknowledges as usual. The peer's sync state advances when the item is queued, not when the hub acknowledges it, since the outbox already keeps it until then. The first link backfills the whole history through the outbox.
 
 ### Fitting the trip time
 

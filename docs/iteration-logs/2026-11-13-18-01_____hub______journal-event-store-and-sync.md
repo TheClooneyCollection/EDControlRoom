@@ -8,7 +8,7 @@
 
 - Wrote [plan 0016](../plans/0016-journal-events-and-trip-time-fit.md): every node's journal events go into one store on the hub, and the trip time is fitted from them per ship. A `/config` page shows configured and fitted values side by side, with a switch between the two sets.
 - Per-ship check on 2026-05..11 Mac journals (497 clean legs): for a 1-jump leg to a 300 Ls orbital station, the Panther Mk II took 383s against 326s in the Caspian Explorer. A pooled fit was off by about 15s per leg for both, so the fit is per `ShipID`.
-- Built step 1: the store and local sync on hub and standalone.
+- Built step 1 (the store and local sync on hub and standalone) and step 2 (peer sync over the outbox).
 
 ## Changes
 
@@ -18,6 +18,10 @@
 - `tools/journal_events.py`: events per node and event.
 - Live backfill of the Mac journals into a scratch store: 64,339 events in 168 files in 0.8s, 35 MB; a second pass took 1ms and stored no chat.
 
+- Step 2: outbox item `journal_events` (`{file, lines: [[line, text], ...]}`, key `journal:<file>:<first line>`, kept forever). `PeerLink.enqueue_journal` raises when the outbox write fails, so the sync does not advance past it. The hub's `store_link_item` takes the journal store and stores lines under the peer's node id; bad bodies are `BadItem`. Batches are also capped at 512 KB. A file ending on a batch boundary no longer yields an extra empty batch.
+- After the hub restart, the hub's store held the Mac's 64,339 events under its node id.
+
 ## Follow-ups
 
-- Step 2: `journal_events` outbox items from peers, stored under the peer's node id.
+- Live: restart forge (peer) and check its history reaches the hub with `tools/journal_events.py`.
+- Step 3: per-ship fit on the store.

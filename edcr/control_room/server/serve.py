@@ -218,8 +218,26 @@ def serve_observer_mode(
             haul_runs_file, 5.0, lambda path: peer_link.enqueue_runs(load_runs(path)[0]),
             stop=stop_background, log=hub_logger.warning, name="hub-runs",
         )
+    # Hub and standalone keep every node's journal events under its node id; a peer sends its own up.
+    journal_logger = logging.getLogger("edcr.journal")
+    journal_store: JournalStore | None = None
+    if hub_config.owns_data:
+        journal_store = JournalStore.open(hub_config.journal_events_file)
+        own_node_id = node.node_id if node is not None else load_node_id(
+            Path(loaded.config_path).parent / NODE_ID_FILE_NAME, new_node_id
+        )
+        journal_logger.info("Journal events: %s -> %s (node %s)", journal_dir, hub_config.journal_events_file, own_node_id)
+        deliver_journal = lambda batch: journal_store.add(own_node_id, batch.file, batch.lines)
+    elif peer_link is not None:
+        journal_logger.info("Journal events: %s -> the hub's outbox", journal_dir)
+        deliver_journal = peer_link.enqueue_journal
+    else:
+        deliver_journal = None
+    if deliver_journal is not None:
+        sync_journal_every(journal_dir, hub_config.journal_sync_file, deliver_journal, 5.0,
+                           stop=stop_background, log=journal_logger.info)
     hub_side: HubSide | None = None
-    if store is not None and node is not None:
+    if store is not None and node is not None and journal_store is not None:
         hub_logger.info("Hub %s (node %s): peers link at /api/peer-link", node.name, node.node_id)
         hub_runs = HubRuns.open(hub_config.runs_file, hub_logger.warning)
         hub_logger.info("Hub haul history: own runs %s, peer runs %s", haul_runs_file, hub_config.runs_file)
@@ -248,7 +266,7 @@ def serve_observer_mode(
         broker.add_listener(lambda message: hub_voice.callout(local_node.node_id, callout_text(message) or ""))
         hub_side = HubSide(registry=NodeRegistry(node, time.time),
                            store_item=store_link_item(
-                               store, hub_runs,
+                               store, hub_runs, journal_store,
                                lambda snapshot: record_market(
                                    recent_markets_file, snapshot, hub_logger.warning,
                                    limit=loaded.config.control_room.recent_markets_limit),
@@ -270,19 +288,6 @@ def serve_observer_mode(
             hub_logger.info("Hub not advertised over mDNS: bound to %s; serve with `lan` so peers find it", host)
     if store is not None:
         import_game_markets_every(store, recent_markets_file, 5.0, db_logger.info, stop=stop_background)
-    if hub_config.owns_data:
-        # Hub and standalone keep their own journal events under their node id; peers send theirs to the hub.
-        journal_store = JournalStore.open(hub_config.journal_events_file)
-        own_node_id = node.node_id if node is not None else load_node_id(
-            Path(loaded.config_path).parent / NODE_ID_FILE_NAME, new_node_id
-        )
-        journal_logger = logging.getLogger("edcr.journal")
-        journal_logger.info("Journal events: %s -> %s (node %s)", journal_dir, hub_config.journal_events_file, own_node_id)
-        sync_journal_every(
-            journal_dir, hub_config.journal_sync_file,
-            lambda batch: journal_store.add(own_node_id, batch.file, batch.lines),
-            5.0, stop=stop_background, log=journal_logger.info,
-        )
     ardent_lookup: ArdentLookup | None = None
     if store is not None:
         ardent_lookup = ArdentLookup(

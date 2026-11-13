@@ -20,6 +20,7 @@ PEER_LINK_PATH = "/api/peer-link"
 ITEM_MARKET = "market"
 ITEM_STATION_FACTS = "station_facts"
 ITEM_HAUL_RUN = "haul_run"
+ITEM_JOURNAL_EVENTS = "journal_events"
 
 # Requests a peer asks the hub.
 REQUEST_HAUL_SEARCH = "haul_search"

@@ -37,6 +37,8 @@ from edcr.hub.protocol import (
     REQUEST_EDDN_STATUS, HubUnreachable, LinkClosed, LinkReply, decode_update, encode_update,
 )
 from edcr.inara.trade_routes import TradeRoute, TradeRouteSearchResult
+from edcr.journal_store import JournalStore
+from edcr.journal_sync import JournalBatch, SyncPosition, read_batches
 from edcr.recent_markets import MarketSnapshot, save_recent_markets, snapshot_entry, snapshot_from_market_json
 from tests.shared_loop import TestClient
 from tests.test_eddn import memory_store, prices
@@ -180,13 +182,14 @@ class Rig:
         self.tmp = TemporaryDirectory()
         self.tmp_path = Path(self.tmp.name)
         self.hub_runs = HubRuns.open(Path(self.tmp.name) / "hub_runs.jsonl", self.hub_logs.append)
+        self.journal = JournalStore(sqlite3.connect(":memory:"))
         # The hub's own game's runs, which join the central view under its node id.
         self.own_runs = Path(self.tmp.name) / "own_runs.jsonl"
         self.history = CentralHistory(local=HUB_NODE, local_file=self.own_runs, runs=self.hub_runs)
         # The markets the hub listed on its Markets page.
         self.recorded_markets: list[Any] = []
-        self.store_item = store_item or store_link_item(self.store, self.hub_runs, self.recorded_markets.append,
-                                                        self.hub_logs.append)
+        self.store_item = store_item or store_link_item(self.store, self.hub_runs, self.journal,
+                                                        self.recorded_markets.append, self.hub_logs.append)
         self.handlers = handlers or {}
         self.outbox = memory_outbox()
         self.relay = HubRelay(log=self.hub_logs.append, read_timeout_s=10.0, slow_read_timeout_s=60.0)
@@ -458,8 +461,8 @@ class LinkTests(unittest.TestCase):
         tmp = TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         listed: list[Any] = []
-        store_item = store_link_item(store, HubRuns.open(Path(tmp.name) / "runs.jsonl", logs.append), listed.append,
-                                     logs.append)
+        store_item = store_link_item(store, HubRuns.open(Path(tmp.name) / "runs.jsonl", logs.append),
+                                     JournalStore(sqlite3.connect(":memory:")), listed.append, logs.append)
         newer = market("2026-11-10T15:00:00Z", sell_gold=9900)
         store_item(PEER_NODE, "market", roundtrip(snapshot_entry(newer)))
         store_item(PEER_NODE, "market", roundtrip(snapshot_entry(newer)))
@@ -479,6 +482,39 @@ class LinkTests(unittest.TestCase):
                            ("haul_run", {"schema": 1}), ("haul_run", [1])):
             with self.subTest(kind=kind), self.assertRaises(BadItem):
                 store_item(PEER_NODE, kind, body)
+
+    def test_journal_lines_go_up_through_the_outbox_and_land_under_the_peers_node_id(self) -> None:
+        r = rig(self)
+        journals = r.tmp_path / "journals"
+        journals.mkdir()
+        name = "Journal.2026-11-10T080000.01.log"
+        (journals / name).write_text("".join(
+            json.dumps({"timestamp": f"2026-11-10T08:00:0{i}Z", "event": event}) + "\n"
+            for i, event in enumerate(["Fileheader", "ReceiveText", "Undocked", "FSDJump", "Docked"])
+        ), encoding="utf-8")
+        # The backfill queues while the hub is away, in batches.
+        for batch in read_batches(journals, {}, batch_lines=2):
+            r.peer.enqueue_journal(batch)
+        self.assertEqual(r.outbox.count(), 2)
+        link = r.attach()
+        self.assertEqual([f.get("kind") for f in link.sent[1:]], ["journal_events", "journal_events"])
+        self.assertEqual(r.outbox.count(), 0)
+        stored = r.journal._db.execute("SELECT node_id, line, event FROM journal_event ORDER BY line").fetchall()
+        self.assertEqual(stored, [(PEER_NODE.node_id, 1, "Fileheader"), (PEER_NODE.node_id, 3, "Undocked"),
+                                  (PEER_NODE.node_id, 4, "FSDJump"), (PEER_NODE.node_id, 5, "Docked")])
+        # A batch queued again (its sync state lost) is not sent twice.
+        r.peer.enqueue_journal(next(read_batches(journals, {}, batch_lines=2)))
+        self.assertEqual(len(link.sent), 3)
+        for body in ({"file": "notes.txt", "lines": []}, {"file": name, "lines": [["1", "{}"]]}, [name]):
+            with self.subTest(body=body), self.assertRaises(BadItem):
+                r.store_item(PEER_NODE, "journal_events", body)
+
+    def test_journal_batch_that_cannot_be_queued_raises_so_the_sync_retries(self) -> None:
+        r = rig(self)
+        r.outbox._db.close()
+        batch = JournalBatch("Journal.2026-11-10T080000.01.log", (), SyncPosition(1, 10))
+        with self.assertRaises(OSError):
+            r.peer.enqueue_journal(batch)
 
     def test_finished_runs_go_up_once_and_join_the_hubs_own_under_its_node_id(self) -> None:
         r = rig(self)

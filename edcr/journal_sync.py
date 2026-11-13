@@ -11,12 +11,14 @@ import re
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from edcr.journal_store import SKIPPED_EVENTS, JournalLine
 
 JOURNAL_FILE = re.compile(r"Journal\.[0-9T.-]+\.log$")
 BATCH_LINES = 500
+# Keeps one batch, sent to the hub as one link item, well under the link's frame limit.
+BATCH_BYTES = 512 * 1024
 
 
 @dataclass(frozen=True)
@@ -65,8 +67,11 @@ def _is_skipped(text: str) -> bool:
         return False
 
 
-def read_batches(journal_dir: Path, positions: dict[str, SyncPosition], *, batch_lines: int = BATCH_LINES):
-    """Yield new lines per file, oldest file first, in batches of up to `batch_lines` kept lines."""
+def read_batches(
+    journal_dir: Path, positions: dict[str, SyncPosition], *, batch_lines: int = BATCH_LINES,
+    batch_bytes: int = BATCH_BYTES,
+):
+    """Yield new lines per file, oldest file first, in batches of up to `batch_lines` kept lines or `batch_bytes`."""
     try:
         files = sorted(path for path in journal_dir.iterdir() if JOURNAL_FILE.fullmatch(path.name))
     except OSError:
@@ -83,6 +88,7 @@ def read_batches(journal_dir: Path, positions: dict[str, SyncPosition], *, batch
             continue
         line, offset = start.line, start.offset
         kept: list[JournalLine] = []
+        kept_bytes = 0
         for raw in data.splitlines(keepends=True):
             if not raw.endswith(b"\n"):
                 break
@@ -91,11 +97,33 @@ def read_batches(journal_dir: Path, positions: dict[str, SyncPosition], *, batch
             text = raw.decode("utf-8", errors="replace").strip()
             if text and not _is_skipped(text):
                 kept.append(JournalLine(line, text))
-            if len(kept) >= batch_lines:
+                kept_bytes += len(raw)
+            if len(kept) >= batch_lines or kept_bytes >= batch_bytes:
                 yield JournalBatch(path.name, tuple(kept), SyncPosition(line, offset))
-                kept = []
+                start, kept, kept_bytes = SyncPosition(line, offset), [], 0
+        # Lines left out still move the position on.
         if (line, offset) != (start.line, start.offset):
             yield JournalBatch(path.name, tuple(kept), SyncPosition(line, offset))
+
+
+def batch_body(batch: JournalBatch) -> dict[str, Any]:
+    """A batch as a link item body."""
+    return {"file": batch.file, "lines": [[item.line, item.text] for item in batch.lines]}
+
+
+def lines_from_body(body: Any) -> tuple[str, list[JournalLine]] | None:
+    """The file and lines of a link item body, or None when it is not one."""
+    if not isinstance(body, dict) or not isinstance(body.get("file"), str) or not JOURNAL_FILE.fullmatch(body["file"]):
+        return None
+    raw = body.get("lines")
+    if not isinstance(raw, list):
+        return None
+    lines = []
+    for item in raw:
+        if not (isinstance(item, list) and len(item) == 2 and isinstance(item[0], int) and isinstance(item[1], str)):
+            return None
+        lines.append(JournalLine(item[0], item[1]))
+    return body["file"], lines
 
 
 def sync_journal(journal_dir: Path, state_file: Path, deliver: Callable[[JournalBatch], None]) -> int:
