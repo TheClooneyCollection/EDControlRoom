@@ -22,6 +22,8 @@ uv run python3 control_room.py peer   # on every other machine
 | Inara haul search | runs it | runs it | asks the hub |
 | Haul history | every machine's runs | its own | writes its own file, sends every run up |
 | Station facts from its journal | into its database | into its database | sent up |
+| Journal events (chat and friends left out) | every machine's | its own | sent up |
+| Trip time settings and fit (`/config`) | edits them | edits them | uses the hub's, read only |
 | Web pages | show and drive any machine | drive itself | fallback when the hub is down |
 | Runs routines for its own game | yes | yes | yes |
 
@@ -105,6 +107,7 @@ Open only the hub's pages. Every page has a **node picker** in the sidebar (on p
 
 - **Driving a node**: on the picked node, the haul page, Controls, Travel and the command box run on that machine with the same rules as its own pages (busy routines refuse idle-only commands, answers come back unchanged). `POST /api/command` and `/api/stop` take `?node=<node_id>` the same way ([command-api.md](command-api.md)). When the node drops mid-command the page gets `Node Deck is unreachable` instead of waiting.
 - **Markets and routes**: the hub owns the market and station database, so `/routes` and Best deal read it directly, from the picked node's ship and system. `/markets` always lists the hub's recent markets: its own and every peer's, which peers push up (`control_room.recent_markets_limit`, default 20). The picked node only sets the ship that prices trips (hold and laden range), and an offline node keeps its last reported ship.
+- **Trip time**: the hub keeps every node's journal events, so it fits the trip time on all of them; `/routes` and Best deal use that fit for the picked node's ship. The **Config** page edits the settings on the hub. A peer's own Config page shows the hub's settings read only, and a peer whose hub is away uses its own configured values ([trade-routes.md](trade-routes.md)). `tools/journal_events.py` on the hub counts the stored events per node, so you can check that a peer's events arrive.
 - **Central history**: the haul page's History panel, `/api/haul-stats` and Best deal's measured profit per hour read every machine's runs. The History panel gets node and ship filters once there are two to pick.
 
 ## TTS on the hub

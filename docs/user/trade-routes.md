@@ -59,6 +59,7 @@ status_every_s = 30.0    # server log status line; 0 turns it off
 [eddn.time_model]        # trip time for profit per hour; set only what you change
 source = "config"        # "fitted": fit them per ship from the journal events instead
 fit_days = 14.0          # days of journal events the fit reads
+fit_ship = "current"     # "current" ship, "pooled" (every ship) or a ShipID such as 9
 docked_s = 90.0          # trading while docked, per station
 travel_base_s = 110.0    # undock, leave the station, dock again
 first_jump_s = 170.0     # charge, align and the first jump
@@ -70,7 +71,7 @@ surface_extra_s = 30.0   # planetary approach and landing
 
 Restart the server after editing these by hand, or use the Config page below.
 
-With `source = "fitted"` the hub (or a standalone server) fits the values to how you actually fly, from the journal events of every node over the last `fit_days`: per ship once it has 30 clean Undocked-to-Docked legs, else every ship pooled, else the configured values. A field with fewer than 10 legs that tell it apart (for example two-jump legs for `per_extra_jump_s`) keeps the configured value. A peer uses its hub's settings and fit for its own ship. The **Config** page (`/config`) shows both sets side by side with the legs behind each fitted value; edit the configured values, pick **Configured** or **Fitted** and press **Save**. It writes `[eddn.time_model]` in `config.toml` and applies at once, no restart. On a peer the page shows the hub's settings read-only; change them on the hub. `/routes` and Best deal say which set the trip time came from.
+With `source = "fitted"` the hub (or a standalone server) fits the values to how you actually fly, from the journal events of every node over the last `fit_days`: per ship once it has 30 clean Undocked-to-Docked legs, else every ship pooled, else the configured values. A field with fewer than 10 legs that tell it apart (for example two-jump legs for `per_extra_jump_s`) keeps the configured value. A peer uses its hub's settings and fit for its own ship. `fit_ship` picks whose fit: the ship you fly (`current`, falling back to pooled when it has too few legs), every ship pooled, or one ship's fit for every ship. The **Config** page (`/config`) shows both sets side by side with the legs behind each fitted value. Ships are named as in game, for example `Panther Clipper Mk II MR-06P`. Edit the configured values, pick **Configured** or **Fitted**, pick the ship in the list beside **Fitted** (the table shows that ship's fit as you change it) and press **Save**. It writes `[eddn.time_model]` in `config.toml` and applies at once, no restart. On a peer the page shows the hub's settings read-only; change them on the hub. `/routes` and Best deal say which set the trip time came from.
 
 On a second machine you can skip the listener and ask a home Control Room instead: see [hub.md](hub.md).
 

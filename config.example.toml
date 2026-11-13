@@ -32,6 +32,7 @@
 # Trip time for /routes and Best deal (defaults/eddn.toml); set only the fields to change.
 # source = "fitted"     # fit per ship from the journal events instead
 # fit_days = 14.0
+# fit_ship = "current"  # which fit: "current" ship, "pooled" (every ship) or a ShipID such as 9
 # docked_s = 90.0
 # first_jump_s = 170.0
 # supercruise_coeff = 13.0
