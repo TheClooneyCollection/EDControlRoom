@@ -25,6 +25,7 @@ class PersistenceHost(Protocol):
     _instant_mode: bool
     _saved_state: ControlRoomState
     _state_path: Path
+    _write_state_file: Callable[[Path, str], None]
     _history: list[str]
     _history_pos: int
     _history_draft: str
@@ -63,7 +64,7 @@ def save_saved_state(app: PersistenceHost) -> None:
     try:
         # Persist the outbox before appending. A crash before acknowledgement may
         # replay a row; load_runs deduplicates it instead of risking data loss.
-        save_control_room_state(app._state_path, app._saved_state)
+        save_control_room_state(app._state_path, app._saved_state, app._write_state_file)
         while app._haul_stats.pending_runs:
             row = app._haul_stats.pending_runs[0]
             if not append_run(app._config.control_room.haul_runs_file, row, app._log):
@@ -71,7 +72,7 @@ def save_saved_state(app: PersistenceHost) -> None:
             app._haul_history_cache.invalidate()
             app._haul_stats.pending_runs.pop(0)
             _capture_persisted_session(app)
-            save_control_room_state(app._state_path, app._saved_state)
+            save_control_room_state(app._state_path, app._saved_state, app._write_state_file)
     except Exception as exc:
         app._log(
             f"[yellow]Failed to save control-room state "

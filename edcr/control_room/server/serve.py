@@ -17,6 +17,7 @@ from edcr.control_room.server.app import build_observer_server_app, _server_hydr
 from edcr.control_room.server.auth import SharedAccessTokenAuth
 from edcr.control_room.server.broker import InMemoryObserverSessionBroker
 from edcr.control_room.server.host import HeadlessControlRoomHost
+from edcr.control_room_state import write_text_atomically
 from edcr.control_room.server.sink import (
     DataHydrateFanoutSink,
     FanoutControlRoomEventSink,
@@ -159,6 +160,7 @@ def serve_observer_mode(
         speech_backend=speech_backend,
         version_source=DefaultVersionSource(),
         record_station_facts=record_station_facts,
+        write_state_file=write_text_atomically,
     )
 
     def data_provider():

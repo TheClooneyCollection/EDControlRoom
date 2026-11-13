@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from edcr.actions import ActionDispatchResult
 from edcr.binding_lookup import NormalizedBinding
 
@@ -116,3 +118,8 @@ class FakeWatcher:
         if self._batches:
             return self._batches.pop(0)
         return []
+
+
+def write_text_plain(path: Path, text: str) -> None:
+    """The control room's state writer without the fsync and rename, which cost most of each save."""
+    path.write_text(text, encoding="utf-8")

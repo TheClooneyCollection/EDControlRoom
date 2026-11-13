@@ -66,6 +66,7 @@ from edcr.routing.types import Route, RouteWaypoint, SpanshMetadata
 from edcr.runtime import ResolvedPath, RuntimeContext
 from edcr.timing import TimingChannelConfig, TimingConfig, TimingSampler
 from edcr.tts import AnnouncementId, NullSpeechBackend
+from tests.fakes import write_text_plain
 
 
 def _make_timing_config() -> TimingConfig:
@@ -323,7 +324,7 @@ class _CommandHandlerRecorder(ObserverSessionCommandHandler):
 class ControlRoomServerTests(unittest.TestCase):
     def test_headless_host_initializes_data_source_before_mount(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts, write_state_file=write_text_plain)
 
             data = host.dependencies.data_source.current()
 
@@ -332,7 +333,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_accepts_simple_remote_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts, write_state_file=write_text_plain)
 
             host.handle_remote_input("market filter gold")
 
@@ -342,7 +343,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_submit_input_alias_accepts_simple_remote_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts, write_state_file=write_text_plain)
 
             host.submit_input("market filter gold")
 
@@ -351,7 +352,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_accepts_stats_via_submit_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts, write_state_file=write_text_plain)
             host.submit_input("stats all")
             output = "\n".join(content.plain for content, _ in host._activity_widget.writes)
             self.assertIn("no haul runs recorded yet", output)
@@ -359,7 +360,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_reloads_config_via_submit_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts, write_state_file=write_text_plain)
             config_path = Path(temp_dir) / "config.toml"
             config_path.write_text("[controls.market]\nnav_delay_seconds = 0.25\n", encoding="utf-8")
             host._config_path = config_path
@@ -373,7 +374,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_emits_announcement_events_without_local_speech(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context_with_tts(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
+            host = HeadlessControlRoomHost(_make_context_with_tts(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts, write_state_file=write_text_plain)
             sink = _EventSinkRecorder()
             host._protocol_event_sink = sink
 
@@ -394,7 +395,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
         backend = _RecordingBackend()
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context_with_tts(Path(temp_dir)), speech_backend=backend, version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
+            host = HeadlessControlRoomHost(_make_context_with_tts(Path(temp_dir)), speech_backend=backend, version_source=_FakeVersionSource(), record_station_facts=_drop_facts, write_state_file=write_text_plain)
             sink = _EventSinkRecorder()
             host._protocol_event_sink = sink
 
@@ -411,7 +412,7 @@ class ControlRoomServerTests(unittest.TestCase):
                 '{"event":"LoadGame","Commander":"VRYAE"}\n',
                 encoding="utf-8",
             )
-            host = HeadlessControlRoomHost(_make_context_with_tts(journal_dir), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
+            host = HeadlessControlRoomHost(_make_context_with_tts(journal_dir), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts, write_state_file=write_text_plain)
             host._start_watcher_loop = lambda: None
 
             host.start()
@@ -420,7 +421,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_publishes_data_refresh_after_remote_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts, write_state_file=write_text_plain)
             sink = _EventSinkRecorder()
             host._protocol_event_sink = sink
 
@@ -431,7 +432,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_remote_ctrl_c_cancels_prompt_flow_and_publishes_data_refresh(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts, write_state_file=write_text_plain)
             sink = _EventSinkRecorder()
             host._protocol_event_sink = sink
             host._start_dest_prompt("Achenar")
@@ -629,7 +630,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_command_api_refuses_routine_command_while_busy(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts, write_state_file=write_text_plain)
             host._controls = object()
             host._routine_active = True
             host._active_routine_name = "haul"
@@ -668,7 +669,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_headless_host_submit_input_reports_busy_refusals(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts, write_state_file=write_text_plain)
             host._controls = object()
             host._routine_active = True
             host._haul_stats.active = True
@@ -1629,7 +1630,7 @@ class ControlRoomServerTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             broker = InMemoryObserverSessionBroker()
-            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts)
+            host = HeadlessControlRoomHost(_make_context(Path(temp_dir)), speech_backend=NullSpeechBackend(), version_source=_FakeVersionSource(), record_station_facts=_drop_facts, write_state_file=write_text_plain)
             host._controls = object()
             app = build_observer_server_app(
                 data_provider=host.dependencies.data_source.current,

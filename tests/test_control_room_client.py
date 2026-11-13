@@ -34,6 +34,7 @@ from edcr.control_room.dependencies import (
     ControlRoomDependencies,
 )
 from edcr.control_room_state import CommandHistoryEntry
+from tests.fakes import write_text_plain
 from edcr.control_room import commands as control_room_commands
 from edcr.control_room.client.target import ObserverServerTarget, parse_observer_server_target
 from edcr.control_room.models import HaulStats, MarketData, ShipState
@@ -332,6 +333,7 @@ class ControlRoomClientTests(unittest.TestCase):
             title_override="ED Control Room Observer - bridge.local:8765",
             version_source=_FakeVersionSource(),
             record_station_facts=lambda updates: None,
+            write_state_file=write_text_plain,
         )
         execution.bind_app(app)
         return app

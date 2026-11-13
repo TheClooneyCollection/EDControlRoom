@@ -119,6 +119,7 @@ from edcr.inara.trade_routes import TradeRoute
 from edcr.control_room_state import (
     CommandHistoryEntry,
     ControlRoomState,
+    write_text_atomically,
 )
 from edcr.binding_conflicts import read_galaxy_map_binding_conflicts
 from edcr.binding_lookup import load_binding_lookup
@@ -415,6 +416,7 @@ class ControlRoomApp(App[None]):
         view_actions: ControlRoomViewActions | None = None,
         title_override: str | None = None,
         record_station_facts: Callable[[list[EddnUpdate]], None],
+        write_state_file: Callable[[Path, str], None],
     ) -> None:
         super().__init__()
         self._ctx = ctx
@@ -441,6 +443,8 @@ class ControlRoomApp(App[None]):
         self._prompt_state = PromptState()
         self._history_state = HistoryState()
         self._state_path: Path = self._config.control_room.state_file
+        # Atomic in production; tests pass a plain write so each save skips the fsync and rename.
+        self._write_state_file = write_state_file
         self._activity_log_max_lines = (
             self._config.control_room.activity_log_max_lines
             if activity_log_max_lines is None
@@ -2569,7 +2573,10 @@ def main() -> None:
     store = open_market_store(loaded.config)
     # The writer logs through the app's activity log, which exists by the time a fact arrives.
     app = ControlRoomApp(
-        ctx, market_filter=args.market, record_station_facts=station_facts_writer(store, lambda msg: app._log(msg))
+        ctx,
+        market_filter=args.market,
+        record_station_facts=station_facts_writer(store, lambda msg: app._log(msg)),
+        write_state_file=write_text_atomically,
     )
     previous_sigint = signal.getsignal(signal.SIGINT)
 

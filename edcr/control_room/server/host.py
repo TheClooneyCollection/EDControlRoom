@@ -97,6 +97,7 @@ class HeadlessControlRoomHost(ControlRoomApp):
         speech_backend: SpeechBackend,
         version_source: VersionSource,
         record_station_facts: Callable[[list[EddnUpdate]], None],
+        write_state_file: Callable[[Path, str], None],
         market_filter: str | None = None,
     ) -> None:
         self._activity_widget = _ActivityWidgetStub()
@@ -111,7 +112,11 @@ class HeadlessControlRoomHost(ControlRoomApp):
         self._trade_route_picker_widget = _ContainerWidgetStub()
         self._main_widget = _ContainerWidgetStub()
         super().__init__(
-            ctx, market_filter=market_filter, version_source=version_source, record_station_facts=record_station_facts
+            ctx,
+            market_filter=market_filter,
+            version_source=version_source,
+            record_station_facts=record_station_facts,
+            write_state_file=write_state_file,
         )
         self._tts = TTSAnnouncer(
             self._config.tts,

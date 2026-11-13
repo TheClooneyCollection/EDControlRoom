@@ -26,6 +26,7 @@ from edcr.control_room.protocol import (
 from edcr.control_room.protocol.events import ActivityLogAppendedEvent, AnnouncementEvent
 from edcr.control_room.protocol.sink import ControlRoomEventSink
 from edcr.control_room_state import CommandHistoryEntry
+from tests.fakes import write_text_plain
 from edcr.inara.trade_routes import TradeRoute
 from edcr.runtime import ResolvedPath, RuntimeContext
 from edcr.timing import TimingChannelConfig, TimingConfig, TimingSampler
@@ -112,7 +113,12 @@ def _make_context(journal_dir: Path) -> RuntimeContext:
 
 class _ProtocolHarnessApp(_CachedThemeVariables, ControlRoomApp):
     def __init__(self, ctx: RuntimeContext) -> None:
-        super().__init__(ctx, version_source=_FakeVersionSource(), record_station_facts=lambda updates: None)
+        super().__init__(
+            ctx,
+            version_source=_FakeVersionSource(),
+            record_station_facts=lambda updates: None,
+            write_state_file=write_text_plain,
+        )
         self._current_version = "1.2.3"
         self._activity_widget = _ActivityLogStub()
 
@@ -201,7 +207,12 @@ class _RenderHarnessApp(_ProtocolHarnessApp):
             super().__init__(ctx)
         else:
             ControlRoomApp.__init__(
-                self, ctx, backend=backend, version_source=_FakeVersionSource(), record_station_facts=lambda updates: None
+                self,
+                ctx,
+                backend=backend,
+                version_source=_FakeVersionSource(),
+                record_station_facts=lambda updates: None,
+                write_state_file=write_text_plain,
             )
         self._activity_widget = _ActivityLogStub()
 

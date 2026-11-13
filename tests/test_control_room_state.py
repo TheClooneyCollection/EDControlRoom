@@ -9,6 +9,7 @@ from edcr.control_room_state import (
     ControlRoomState,
     load_control_room_state,
     save_control_room_state,
+    write_text_atomically,
 )
 from edcr.inara.trade_routes import TradeRoute, manual_landing_from_payload
 
@@ -68,7 +69,7 @@ class ControlRoomStateTests(unittest.TestCase):
                 ],
             )
 
-            save_control_room_state(path, original)
+            save_control_room_state(path, original, write_text_atomically)
             loaded = load_control_room_state(path)
 
         self.assertEqual(loaded.default_haul["station_1_buying"], "Aluminium")

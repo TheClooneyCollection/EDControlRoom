@@ -5,7 +5,7 @@ import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
     from edcr.inara.trade_routes import TradeRoute
@@ -160,7 +160,7 @@ def load_control_room_state(path: Path) -> ControlRoomState:
     )
 
 
-def save_control_room_state(path: Path, state: ControlRoomState) -> None:
+def save_control_room_state(path: Path, state: ControlRoomState, write_text: Callable[[Path, str], None]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "haul_current_run": state.haul_current_run,
@@ -190,9 +190,14 @@ def save_control_room_state(path: Path, state: ControlRoomState) -> None:
         ],
     }
 
+    # One compact string: json.dump streams hundreds of small chunks, and indent forces the slow pure-Python encoder.
+    write_text(path, json.dumps(payload, sort_keys=True) + "\n")
+
+
+def write_text_atomically(path: Path, text: str) -> None:
+    """Write through a synced temp file and rename it over `path`, so a crash never leaves half a file."""
     with NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
-        # One write: json.dump streams hundreds of small chunks, which made each save several times slower.
-        handle.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        handle.write(text)
         handle.flush()
         os.fsync(handle.fileno())
         temp_path = Path(handle.name)

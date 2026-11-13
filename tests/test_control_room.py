@@ -49,6 +49,7 @@ from edcr.control_room.haul_tracking import parse_credit_amount
 from edcr.control_room.models import HaulStats, MarketData, PromptState, ShipState, TradeRoutesData
 from edcr.control_room.protocol import ActivityLogEntry
 from edcr.control_room_state import CommandHistoryEntry
+from tests.fakes import write_text_plain
 from edcr.routines import RoutineResult
 from edcr.runtime import ResolvedPath, RuntimeContext
 from edcr.timing import TimingChannelConfig, TimingConfig, TimingSampler
@@ -235,6 +236,7 @@ class _HarnessApp(_CachedThemeVariables, ControlRoomApp):
                 activity_log_max_lines=activity_log_max_lines,
                 version_source=self.version_source,
                 record_station_facts=self.station_facts.extend,
+                write_state_file=write_text_plain,
             )
         self._journal_artifact_log_path = ctx.config.control_room.state_file.parent / "control-room-artifact.log"
         self.logged: list[str] = []
@@ -292,7 +294,12 @@ class _WorkerGroupStub:
 class _ShutdownHarnessApp(ControlRoomApp):
     def __init__(self, ctx: RuntimeContext) -> None:
         self.version_source = _FakeVersionSource()
-        super().__init__(ctx, version_source=self.version_source, record_station_facts=lambda updates: None)
+        super().__init__(
+            ctx,
+            version_source=self.version_source,
+            record_station_facts=lambda updates: None,
+            write_state_file=write_text_plain,
+        )
         self._journal_artifact_log_path = ctx.config.control_room.state_file.parent / "control-room-artifact.log"
         self.exit_calls = 0
 
@@ -3064,6 +3071,7 @@ class ActivityLogTests(unittest.TestCase):
             _make_context(Path(self.tmpdir.name), activity_log_max_lines=17),
             version_source=_FakeVersionSource(),
             record_station_facts=lambda updates: None,
+            write_state_file=write_text_plain,
         )
 
         self.assertEqual(app._activity_log_max_lines, 17)
@@ -3074,6 +3082,7 @@ class ActivityLogTests(unittest.TestCase):
             activity_log_max_lines=5,
             version_source=_FakeVersionSource(),
             record_station_facts=lambda updates: None,
+            write_state_file=write_text_plain,
         )
 
         self.assertEqual(app._activity_log_max_lines, 5)

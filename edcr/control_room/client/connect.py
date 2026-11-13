@@ -12,6 +12,7 @@ from edcr.control_room.client.backend import (
 from edcr.control_room.client.target import parse_observer_server_target
 from edcr.control_room.dependencies import ControlRoomDependencies
 from edcr.control_room.protocol import build_remote_observer_websocket_connect_info
+from edcr.control_room_state import write_text_atomically
 from edcr.runtime import build_runtime_context, load_config_with_fallback
 
 
@@ -64,6 +65,7 @@ def connect_observer_mode(
         title_override=f"ED Control Room Observer - {server_target.host}:{server_target.port}",
         # The server records station facts from its own journal; an observer has none to add.
         record_station_facts=lambda updates: None,
+        write_state_file=write_text_atomically,
     )
     execution.bind_app(app)
     app.run()
