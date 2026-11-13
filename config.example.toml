@@ -18,6 +18,8 @@
 # command_delay_seconds = 5.0
 # Stations the Markets page lists, newest first; a hub lists every peer's markets here too.
 # recent_markets_limit = 20
+# lan / hub / peer also listen on 127.0.0.1 so `tailscale serve` can proxy to localhost.
+# lan_also_localhost = true
 
 [eddn]
 # Live market prices for the /routes trade route search; the `lan` server listens when enabled.

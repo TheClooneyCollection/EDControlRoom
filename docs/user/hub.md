@@ -49,7 +49,7 @@ uv run python3 control_room.py lan --token <page-token>
 
 `--token` protects the hub's own pages and API, like on any server. `[hub] token` is a separate secret only for peer links.
 
-`lan` binds the detected LAN address (it skips VPN and CGNAT ranges such as `100.64.0.0/10` and `198.18.0.0/15`) and that is the address the hub advertises. `serve --host 0.0.0.0` also works and advertises the detected LAN address. `local` and `serve` on `127.0.0.1` are not advertised, because no other machine could reach them. The log says which: `Hub advertised over mDNS as Desk at 192.168.1.20:8765`.
+`lan` binds the detected LAN address (it skips VPN and CGNAT ranges such as `100.64.0.0/10` and `198.18.0.0/15`) and that is the address the hub advertises. `serve --host 0.0.0.0` also works and advertises the detected LAN address. `local` and `serve` on `127.0.0.1` are not advertised, because no other machine could reach them. The log says which: `Hub advertised over mDNS as Desk at 192.168.1.20:8765`. A LAN-bound server also listens on `127.0.0.1`, so a local tunnel such as `tailscale serve` can proxy to `http://127.0.0.1:8765`; set `[control_room] lan_also_localhost = false` to bind the LAN address only.
 
 The hub needs Playwright and Chromium for Inara searches ([install.md](install.md)).
 

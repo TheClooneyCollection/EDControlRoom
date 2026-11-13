@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 
 from edcr.hub.discovery import (
     DiscoveredHub, HubAdvert, KnownHub, NoHubFound, advert_from_record, advert_properties, advertise_address,
-    dnssd_browse,
+    bind_hosts, dnssd_browse,
 )
 from edcr.hub.peer import PeerLink
 from tests.test_hub import HUB_NODE, PEER_NODE, QuietRelay, rig
@@ -40,6 +40,12 @@ class DiscoveryTests(unittest.TestCase):
         for record, address in (({**properties, "role": "peer"}, "192.168.1.20"),
                                 ({**properties, "id": ""}, "192.168.1.20"), (properties, "")):
             self.assertIsNone(advert_from_record(record, address, 8765))
+
+    def test_a_lan_bound_server_also_listens_on_loopback_unless_turned_off(self) -> None:
+        self.assertEqual(bind_hosts("192.168.1.42", True), ["192.168.1.42", "127.0.0.1"])
+        self.assertEqual(bind_hosts("192.168.1.42", False), ["192.168.1.42"])
+        self.assertEqual(bind_hosts("127.0.0.1", True), ["127.0.0.1"])
+        self.assertEqual(bind_hosts("0.0.0.0", True), ["0.0.0.0"])
 
     def test_the_hub_advertises_its_lan_bind_address_never_loopback(self) -> None:
         detect = lambda: "192.168.1.20"

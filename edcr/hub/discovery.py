@@ -352,6 +352,14 @@ def zeroconf_advertise(*, address: str, port: int, properties: dict[str, str]) -
     return stop
 
 
+def bind_hosts(host: str, also_localhost: bool) -> list[str]:
+    """The addresses the server listens on: the bind host, plus loopback for a LAN-bound server when
+    `also_localhost` is set, so local tunnels reach it. Loopback and every-interface binds stay as given."""
+    if not also_localhost or host in {"0.0.0.0", "", "localhost"} or host.startswith("127."):
+        return [host]
+    return [host, "127.0.0.1"]
+
+
 def advertise_address(host: str, detect_lan_host: Callable[[], str]) -> str:
     """The address the hub advertises: the bind host, or the detected LAN address when it binds every
     interface. "" (no advert) for loopback, where no peer on another machine could reach it."""

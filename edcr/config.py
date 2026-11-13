@@ -195,6 +195,8 @@ class ControlRoomConfig:
     route_compare_compare_retry_attempts: int = 3
     # Stations the Markets page lists; a hub keeps its peers' markets in the same list.
     recent_markets_limit: int = 20
+    # A LAN-bound server (lan / hub / peer) also listens on 127.0.0.1, for local tunnels like Tailscale serve.
+    lan_also_localhost: bool = True
 
 
 @dataclass(frozen=True)
@@ -1159,6 +1161,9 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             ),
             recent_markets_limit=_integer(
                 control_room, "recent_markets_limit", _integer(default_control_room, "recent_markets_limit", 20)
+            ),
+            lan_also_localhost=_boolean(
+                control_room, "lan_also_localhost", _boolean(default_control_room, "lan_also_localhost", True)
             ),
         ),
         tts=TTSConfig(

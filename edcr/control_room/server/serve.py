@@ -28,7 +28,8 @@ from edcr.eddn.listener import open_zmq_socket
 from edcr.eddn.service import EddnService, start_eddn_service
 from edcr.haul_history import load_runs
 from edcr.hub.discovery import (
-    BROWSE_S, KNOWN_HUB_FILE_NAME, DiscoveredHub, KnownHub, advert_properties, lan_browse, zeroconf_advertise,
+    BROWSE_S, KNOWN_HUB_FILE_NAME, DiscoveredHub, KnownHub, advert_properties, bind_hosts, lan_browse,
+    zeroconf_advertise,
 )
 from edcr.hub.history import CentralHistory, HubRuns
 from edcr.hub.nodes import HubSide, NodeRegistry, store_link_item
@@ -299,7 +300,9 @@ def serve_observer_mode(
         # Started once the app exists: hub page channels and reads answer through it.
         threading.Thread(target=lambda: peer_link.run(stop_background.wait), name="hub-link", daemon=True).start()
     try:
-        uvicorn.run(app, host=host, port=port, log_level="info")
+        hosts = bind_hosts(host, loaded.config.control_room.lan_also_localhost)
+        uvicorn.Server(uvicorn.Config(app, log_level="info")).run(
+            sockets=[uvicorn.Config(app, host=h, port=port).bind_socket() for h in hosts])
     finally:
         stop_background.set()
         if stop_advert is not None:
