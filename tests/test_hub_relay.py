@@ -253,8 +253,10 @@ class RelayTests(unittest.TestCase):
             peer_markets = hub.get("/api/recent-markets", params=on_peer).json()
             hub_markets = hub.get("/api/recent-markets", params=PAGE).json()
             deal = hub.get("/api/market-compare", params={**on_peer, "x": GALILEO.market_id, "y": 2}).json()
+            time_model = hub.get("/api/time-model", params=on_peer).json()
             self.r.drop(self.r.links[-1])
             offline = hub.get("/api/recent-markets", params=on_peer)
+            offline_time_model = hub.get("/api/time-model", params=on_peer)
             offline_deal = hub.get("/api/market-compare", params={**on_peer, "x": GALILEO.market_id, "y": 2})
 
         # One list, whichever node is picked: the hub's own markets and the ones its peers pushed.
@@ -269,6 +271,9 @@ class RelayTests(unittest.TestCase):
         # Offline, the node's last reported ship still prices the page.
         self.assertEqual((offline.status_code, offline.json()["cargo_capacity"]), (200, 720))
         self.assertEqual((offline_deal.status_code, offline_deal.json()["measured_ship"]["id"]), (200, 8))
+        # The hub keeps the journal events, so it shows and saves the trip time for the picked node itself.
+        self.assertEqual((time_model["ship_id"], time_model["editable"]), (8, True))
+        self.assertEqual((offline_time_model.status_code, offline_time_model.json()["ship_id"]), (200, 8))
 
     def test_command_and_stop_posts_run_on_the_peer_with_its_own_refusals(self) -> None:
         self.r.attach()

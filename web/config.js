@@ -78,10 +78,16 @@ function showSource(value) {
   });
 }
 
+function legs(count) {
+  return `${count.toLocaleString()} legs`;
+}
+
 function renderShips(payload) {
-  const legs = (count) => `${count.toLocaleString()} legs`;
   const options = [{ value: "current", label: `Current ship (${payload.ship_label || "unknown"})` }]
-    .concat(payload.ships.map((ship) => ({ value: String(ship.id), label: `${ship.label} · ${legs(ship.legs)}` })))
+    .concat(payload.ships.map((ship) => ({
+      value: String(ship.id),
+      label: `${ship.label} · ${legs(ship.legs)}${ship.fitted ? "" : `, under ${payload.min_legs}: pooled`}`
+    })))
     .concat([{ value: "pooled", label: `Every ship pooled · ${legs(payload.pooled_legs)}` }]);
   const select = document.getElementById("trip-time-ship");
   select.innerHTML = options.map((option) =>
@@ -111,9 +117,13 @@ function render(payload) {
   });
   showSource(payload.source);
   const span = `the last ${number(payload.fit_days)} days`;
+  const viewed = payload.view === "current" ? payload.ship_id : payload.view;
+  const picked = payload.ships.find((ship) => String(ship.id) === String(viewed));
+  const short = picked && !picked.fitted
+    ? `${picked.label} has ${legs(picked.legs)}, under the ${payload.min_legs} it needs for its own fit. ` : "";
   const used = fit.scope === "config"
     ? `No fit yet: ${fit.legs} clean legs in ${span}.`
-    : `Fitted for ${scopeLabel(fit)} from ${fit.legs} legs and ${fit.stops} docked stops in ${span}.`;
+    : `${short}Fitted for ${scopeLabel(fit)} from ${fit.legs} legs and ${fit.stops} docked stops in ${span}.`;
   const example = `A 1-jump leg to an orbital station 300 Ls out: configured ${Math.round(legSeconds(payload.configured, 1, 300))} s, ` +
     `fitted ${Math.round(legSeconds(fit.model, 1, 300))} s.`;
   const where = editable ? "" : ` These settings live on hub ${payload.hub || "the hub"}; change them on its /config page.`;

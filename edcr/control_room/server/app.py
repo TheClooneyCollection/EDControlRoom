@@ -617,9 +617,9 @@ def build_observer_server_app(
     def read_recent_markets() -> tuple[MarketSnapshot, ...]:
         return load_recent_markets(recent_markets_file) if recent_markets_file is not None else ()
 
-    def markets_ship(params: Mapping[str, str]) -> Any:
-        """The ship the Markets page prices trips for: on a hub the picked node's, as it last reported
-        it (so an offline node keeps its last ship), else this server's own."""
+    def viewed_ship(params: Mapping[str, str]) -> Any:
+        """The ship a page prices trips or fits trip time for: on a hub the picked node's, as it last
+        reported it (so an offline node keeps its last ship), else this server's own."""
         node_id = viewed_node(params)
         reported = hub_side.registry.last_ship(node_id) if hub_side is not None and node_id is not None else None
         if reported is None:
@@ -635,7 +635,7 @@ def build_observer_server_app(
         if auth_failure is not None:
             return auth_failure
         snapshots = await asyncio.to_thread(read_recent_markets)
-        ship = markets_ship(request.query_params)
+        ship = viewed_ship(request.query_params)
         return JSONResponse(
             {
                 "cargo_capacity": _cargo_capacity(ship),
@@ -646,12 +646,12 @@ def build_observer_server_app(
         )
 
     async def market_compare(request: Request) -> JSONResponse:
-        """Best deal between two listed markets, for the Markets page's ship (`markets_ship`)."""
+        """Best deal between two listed markets, for the Markets page's ship (`viewed_ship`)."""
         auth_failure = require_http_auth(request)
         if auth_failure is not None:
             return auth_failure
         params = request.query_params
-        ship = markets_ship(params)
+        ship = viewed_ship(params)
         try:
             market_x_id = int(params.get("x", ""))
             market_y_id = int(params.get("y", ""))
@@ -792,12 +792,14 @@ def build_observer_server_app(
         return LinkReply(200, time_models.payload(_ship_id_value(body.get("ship_id")), view))
 
     async def time_model_endpoint(params: Mapping[str, str]) -> JSONResponse:
-        """Both trip time sets for this node's ship, and which is in use; `fit=` shows another fit."""
+        """Both trip time sets for the viewed node's ship, and which is in use; `fit=` shows another fit.
+        The hub answers for any node itself, since it keeps every node's journal events."""
         try:
             view = parse_fit_ship(params["fit"]) if params.get("fit") else None
         except ValueError as exc:
             return JSONResponse({"detail": str(exc)}, status_code=400)
-        payload = await asyncio.to_thread(lambda: read_time_model(own_ship_id(), view)[1])
+        ship_id = _ship_id_value(getattr(viewed_ship(params), "ship_id", None))
+        payload = await asyncio.to_thread(lambda: read_time_model(ship_id, view)[1])
         return JSONResponse(payload)
 
     def station_facts(stations: list[dict[str, Any]]) -> list[StationFacts]:
@@ -1248,7 +1250,6 @@ def build_observer_server_app(
         "/api/spansh-route": spansh_route,
         "/api/eddn-routes": eddn_routes,
         "/api/journal-ledger": journal_ledger,
-        "/api/time-model": time_model_endpoint,
     }
     assert node_reads.keys() == NODE_READS
     # Page actions that run on the node a page drives (plan 0015 step 6); the body is JSON.
@@ -1315,15 +1316,15 @@ def build_observer_server_app(
     async def time_model_route(request: Request) -> JSONResponse:
         """GET: both trip time sets for the viewed node's ship. POST: save the configured set and which set
         is used, into `config.toml`, live. Only the server that keeps the journal events saves them."""
-        if request.method == "GET":
-            response = await node_read_endpoint("/api/time-model")(request)
-            if response.status_code != 200:
-                return response
-            # Whether this server's page may save; a hub relays a peer's read, and the peer's answer says "hub".
-            return JSONResponse({**json.loads(bytes(response.body)), "editable": peer_link is None})
         auth_failure = require_http_auth(request)
         if auth_failure is not None:
             return auth_failure
+        if request.method == "GET":
+            response = await time_model_endpoint(request.query_params)
+            if response.status_code != 200:
+                return response
+            # Whether this server's page may save; a peer's answer from its hub says "hub".
+            return JSONResponse({**json.loads(bytes(response.body)), "editable": peer_link is None})
         if peer_link is not None:
             return JSONResponse({"detail": f"The trip time settings live on the hub {peer_link.hub_label}; "
                                            "change them on its /config page"}, status_code=409)

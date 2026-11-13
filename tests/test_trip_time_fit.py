@@ -114,9 +114,13 @@ class TripTimeFitTests(unittest.TestCase):
         # Ships are named from their latest Loadout; the picker shows another ship's fit or the pooled one.
         shown = models.payload(3, 7)
         self.assertEqual((shown["ship_label"], shown["view"], shown["pooled_legs"]), ("Caspian Explorer", 7, 40))
-        self.assertEqual(shown["ships"], [{"id": 7, "label": "Panther Clipper Mk II \u201cLong Haul\u201d MR-06P",
-                                           "legs": 36}])
+        # Every ship with legs in the window, most first; forge's Caspian has too few for its own fit.
+        self.assertEqual(shown["ships"], [
+            {"id": 7, "label": "Panther Clipper Mk II \u201cLong Haul\u201d MR-06P", "legs": 36, "fitted": True},
+            {"id": 3, "label": "Caspian Explorer", "legs": 4, "fitted": False},
+        ])
         self.assertEqual((shown["fitted"]["scope"], shown["fitted"]["label"]), ("ship", shown["ships"][0]["label"]))
+        self.assertEqual(models.payload(7, 3)["fitted"]["scope"], "pooled")
         self.assertEqual(models.payload(7, "pooled")["fitted"]["scope"], "pooled")
         self.assertEqual(models.payload(7)["view"], "current")
         # The configured set ignores the fit.

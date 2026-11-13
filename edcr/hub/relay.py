@@ -36,8 +36,6 @@ NODE_READS = frozenset({
     "/api/eddn-routes",
     # The node's own journal trade ledger, shown beside the hub's central haul history.
     "/api/journal-ledger",
-    # The hub fits the trip time, but for the node's ship; the peer asks the hub back.
-    "/api/time-model",
 })
 # Reads that ask Spansh and can take minutes.
 SLOW_READS = frozenset({"/api/route-compare", "/api/spansh-route"})

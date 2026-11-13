@@ -5,6 +5,7 @@ next `Undocked`. Each belongs to the `ShipID` of the latest `Loadout` or `LoadGa
 """
 from __future__ import annotations
 
+from collections import Counter
 import sqlite3
 import statistics
 import threading
@@ -279,6 +280,8 @@ class TripTimeModels:
         self._lock = threading.Lock()
         self._fits: dict[int | None, TimeModelFit] | None = None
         self._ships: dict[int, dict[str, str]] = {}
+        # Legs in the window per ship, own fit or not.
+        self._leg_counts: Counter[int] = Counter()
         self._fitted_at = 0.0
 
     def set_configured(self, configured: TimeModel, source: str, fit_ship: FitShip) -> None:
@@ -290,13 +293,13 @@ class TripTimeModels:
         now = self._clock()
         with self._lock:
             if self._fits is None or now - self._fitted_at >= REFRESH_S:
-                self._fits, self._ships = self._fit(now)
+                self._fits, self._ships, self._leg_counts = self._fit(now)
                 self._fitted_at = now
             return self._fits
 
-    def _fit(self, now: float) -> tuple[dict[int | None, TimeModelFit], dict[int, dict[str, str]]]:
+    def _fit(self, now: float) -> tuple[dict[int | None, TimeModelFit], dict[int, dict[str, str]], Counter[int]]:
         if self._connect is None:
-            return {None: TimeModelFit("config", None, self.configured, 0, 0, (), {})}, {}
+            return {None: TimeModelFit("config", None, self.configured, 0, 0, (), {})}, {}, Counter()
         try:
             db = self._connect()
             try:
@@ -306,7 +309,8 @@ class TripTimeModels:
                 db.close()
         except sqlite3.Error:
             legs, stops, ships = [], [], {}
-        return fit_ships(legs, stops, self.configured), ships
+        counts = Counter(leg.ship_id for leg in legs if leg.ship_id is not None)
+        return fit_ships(legs, stops, self.configured), ships, counts
 
     def fitted_for(self, ship_id: int | None, pick: FitShip | None = None) -> TimeModelFit:
         """The fit `pick` (default `fit_ship`) chooses for the flown ship: a ship's own fit, else the pooled
@@ -329,7 +333,7 @@ class TripTimeModels:
         fits = self.fits()
         ships = self._ships
         fitted = self.fitted_for(ship_id, view)
-        listed = sorted((fit for key, fit in fits.items() if key is not None), key=lambda fit: -fit.legs)
+        counts = self._leg_counts
 
         def labelled(fit: TimeModelFit) -> dict[str, Any]:
             label = ship_label(fit.ship_id, ships.get(fit.ship_id)) if fit.ship_id is not None else None
@@ -342,9 +346,11 @@ class TripTimeModels:
             "view": self.fit_ship if view is None else view,
             "ship_id": ship_id,
             "ship_label": ship_label(ship_id, ships.get(ship_id)) if ship_id is not None else None,
-            # Ships with their own fit, most legs first; the pooled fit is `fit_ship = "pooled"`.
-            "ships": [{"id": fit.ship_id, "label": ship_label(fit.ship_id, ships.get(fit.ship_id)), "legs": fit.legs}
-                      for fit in listed],
+            # Every ship with legs in the window, most first; one under MIN_LEGS has no fit of its own and
+            # uses the pooled one. The pooled fit is `fit_ship = "pooled"`.
+            "ships": [{"id": ship, "label": ship_label(ship, ships.get(ship)), "legs": legs, "fitted": ship in fits}
+                      for ship, legs in sorted(counts.items(), key=lambda item: -item[1])],
+            "min_legs": MIN_LEGS,
             "pooled_legs": fits[None].legs,
             "configured": asdict(self.configured),
             "fitted": labelled(fitted),
