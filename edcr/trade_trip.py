@@ -8,8 +8,9 @@ Nothing is guessed: a missing input leaves the trip time unknown and names what 
 from __future__ import annotations
 
 import math
+import re
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any, Callable, Iterable, Sequence
 
@@ -17,6 +18,7 @@ from edcr.eddn.routes import SURFACE_TYPES, TimeModel, jump_count, round_trip_s
 from edcr.recent_markets import MarketSnapshot
 
 Coords = tuple[float, float, float]
+_LS_DISTANCE = re.compile(r"(\d+(?:\.\d+)?)\s*ls", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -125,6 +127,23 @@ def estimate_trip(
     )
 
 
+def with_inara_dist_ls(facts: StationFacts, inara_distance: object) -> StationFacts:
+    """Inara's own distance from the star (such as "1,234 Ls"), only where no other source had one."""
+    if facts.dist_ls is not None or not isinstance(inara_distance, str):
+        return facts
+    match = _LS_DISTANCE.fullmatch(inara_distance.strip().replace(",", ""))
+    if match is None:
+        return facts
+    return replace(facts, dist_ls=float(match.group(1)), dist_ls_source="inara")
+
+
+def route_profit_per_hour(profit_per_trip: int | None, trip_s: float | None) -> int | None:
+    """Profit per hour from one round trip's profit and its estimated time; None while either is unknown."""
+    if profit_per_trip is None or not trip_s:
+        return None
+    return round(profit_per_trip * 3600 / trip_s)
+
+
 @dataclass(frozen=True)
 class StationName:
     """A station by name, as a peer names Best deal's pair when it asks the hub for measured runs."""
@@ -191,14 +210,15 @@ def _ended_within(row: dict[str, Any], since: datetime | None, until: datetime) 
 
 
 def store_lookup(db: sqlite3.Connection) -> FactLookup:
-    """The market store's station row (by market id) and system coordinates (by address, else name).
+    """The market store's station row (by market id, else by station and system name, as for an Inara
+    route, which has no market id) and system coordinates (by address, else name).
 
     An unreadable store (such as one mid-migration) knows nothing, so the next source answers.
     """
 
     def lookup(market_id: int, station: str, system: str) -> PartialFacts:
         try:
-            row = query(market_id, system)
+            row = query(market_id, station, system)
         except sqlite3.Error:
             return PartialFacts()
         station_type, dist_ls, x, y, z = row
@@ -208,15 +228,18 @@ def store_lookup(db: sqlite3.Connection) -> FactLookup:
             station_type=station_type or None,
         )
 
-    def query(market_id: int, system: str) -> tuple:
+    def query(market_id: int, station: str, system: str) -> tuple:
         return db.execute(
             "SELECT st.type, st.dist_ls, COALESCE(sa.x, sn.x), COALESCE(sa.y, sn.y), COALESCE(sa.z, sn.z)"
-            " FROM (SELECT ? AS market_id, ? AS system_name) q"
-            " LEFT JOIN station st ON st.market_id = q.market_id"
+            " FROM (SELECT ? AS market_id, ? AS station, ? AS system_name) q"
+            " LEFT JOIN station st ON st.market_id = COALESCE("
+            "   (SELECT market_id FROM station WHERE market_id = q.market_id),"
+            "   (SELECT market_id FROM station WHERE name = q.station COLLATE NOCASE"
+            "     AND system_name = q.system_name COLLATE NOCASE ORDER BY updated_at DESC LIMIT 1))"
             " LEFT JOIN system sa ON sa.address = st.system_address"
             " LEFT JOIN system sn ON sn.name = q.system_name COLLATE NOCASE"
             " ORDER BY sn.updated_at DESC LIMIT 1",
-            (market_id, system),
+            (market_id, station, system),
         ).fetchone()
 
     return lookup

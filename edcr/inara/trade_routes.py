@@ -98,6 +98,10 @@ _FIELD_ALIASES = {
 }
 
 
+class InaraAccessCheck(RuntimeError):
+    """Inara answered with its access check, which a headless browser cannot pass."""
+
+
 @dataclass(frozen=True)
 class TradeRoute:
     index: int
@@ -455,7 +459,7 @@ def _wait_for_route_rows(
                     "the fetch will keep waiting for route rows."
                 )
             else:
-                raise RuntimeError(
+                raise InaraAccessCheck(
                     "Inara access check detected in headless mode. Retry with a visible browser "
                     "session to complete the check first."
                 )

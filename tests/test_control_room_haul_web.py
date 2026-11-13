@@ -372,6 +372,22 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn('data-label="Profit / trip">${escapeHtml(route.profitTrip || "-")}</td>', html)
         self.assertIn('colspan="8"', html)
 
+    def test_haul_web_route_table_compares_inara_and_edcr_profit_per_hour(self) -> None:
+        html = _haul_web_source()
+
+        for hook in ('data-label="Profit / hr">${profitCompareCell(route)}</td>', '"/api/haul-trips"',
+                     "Inara: ${escapeHtml(inaraHour + inaraTrip)}",
+                     "EDCR: ${perHourLabel(trip.profit_per_hour)} ${minutesPerTrip(trip.trip_s)} (${edcrShipLabel()})",
+                     'missing ${trip.missing.join(", ")',
+                     "window.EDCRNode.addTo(url.searchParams)"):
+            self.assertIn(hook, html)
+
+    def test_haul_web_failed_search_says_why_in_the_results_table(self) -> None:
+        html = _haul_web_source()
+
+        self.assertIn("`Search failed: ${searchError}`", html)
+        self.assertIn("searchError = error.message;", html)
+
     def test_haul_route_table_shows_inara_supply_levels_as_arrows(self) -> None:
         html = _haul_web_source()
 

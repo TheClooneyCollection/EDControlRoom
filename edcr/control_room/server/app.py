@@ -7,6 +7,8 @@ import json
 import logging
 import math
 from pathlib import Path
+import shlex
+import socket
 import sqlite3
 import threading
 import time
@@ -60,7 +62,8 @@ from edcr.recent_markets import (
     market_items,
 )
 from edcr.trade_trip import (
-    FactLookup, StationFacts, StationName, estimate_trip, gather_facts, measured_route, store_lookup,
+    FactLookup, StationFacts, StationName, estimate_trip, gather_facts, measured_route, route_profit_per_hour,
+    store_lookup, with_inara_dist_ls,
 )
 from edcr.platform.local_time import SystemLocalTimezone
 from edcr.control_room.server.auth import ObserverServerAuth, SharedAccessTokenAuth
@@ -86,8 +89,10 @@ from edcr.haul_search_config import (
     save_haul_search_config,
 )
 from edcr.inara.trade_routes import (
+    InaraAccessCheck,
     TradeRoute,
     TradeRouteSearchResult,
+    build_trade_routes_url,
     parse_surface_stations,
     search_trade_routes,
 )
@@ -100,6 +105,7 @@ from edcr.control_room.protocol import (
     build_remote_observer_capabilities_payload,
     hydrate_message,
 )
+from edcr.control_room.haul_tracking import parse_credit_amount
 from edcr.control_room.routine_stop import normalize_routine_stop_mode
 from edcr.control_room.server.messages import protocol_message
 
@@ -131,6 +137,8 @@ _HAUL_WEB_ASSET_DIR = Path(__file__).resolve().parents[3] / "web"
 CONTROL_ROOM_MESSAGE_SCHEMA = json.loads(_MESSAGE_SCHEMA_PATH.read_text(encoding="utf-8"))
 CONTROL_ROOM_BROWSER_PROBE_HTML = _BROWSER_PROBE_PATH.read_text(encoding="utf-8")
 _HAUL_WEB_CONFIG_SENTINEL = "window.EDCR_WEB_CONFIG = {};"
+# Inara lists 50 routes at most; `/haul` asks for all of one search at once.
+HAUL_TRIPS_LIMIT = 100
 
 
 def _render_haul_web_html(*, web_config: dict[str, Any] | None = None, web_default_access_token: str = "") -> str:
@@ -696,25 +704,86 @@ def build_observer_server_app(
             return JSONResponse({"detail": "market is not in the recent markets list"}, status_code=404)
         return JSONResponse(payload)
 
+    def read_station_facts(stations: list[dict[str, Any]]) -> tuple[list[StationFacts], str | None]:
+        """Station facts here, or from the hub on a peer, and a hint when they cannot be known."""
+        if peer_link is not None:
+            try:
+                reply = peer_link.request(REQUEST_STATION_FACTS, {"stations": stations},
+                                          timeout_s=peer_link.request_timeout_s)
+                return [StationFacts(**{**entry, "coords": _coords(entry.get("coords"))})
+                        for entry in reply.body["stations"]], None
+            except (HubUnreachable, KeyError, TypeError) as exc:
+                hint = hub_unreachable_detail(peer_link.hub_label, exc)
+                return [gather_facts(int(s["market_id"]), str(s["station"]), str(s["system"]), [])
+                        for s in stations], hint
+        # A peer without a hub address yet (discovery comes later) owns no station facts.
+        hint = "Station facts come from the hub." if market_database_file is None else None
+        return station_facts(stations), hint
+
+    async def haul_trips(request: Request) -> JSONResponse:
+        """EDCR's own trip time and profit per hour for `/haul`'s Inara routes, for the viewed ship
+        (`viewed_ship`), beside Inara's figures. Body: {"routes": [{from_station, from_system, to_station,
+        to_system, from_station_distance, to_station_distance, profit_per_trip, profit_per_hour}, ...]}."""
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        try:
+            body = await request.json()
+        except ValueError:
+            body = None
+        routes = body.get("routes") if isinstance(body, dict) else None
+        keys = ("from_station", "from_system", "to_station", "to_system")
+        if not isinstance(routes, list) or len(routes) > HAUL_TRIPS_LIMIT or not all(
+            isinstance(route, dict) and all(isinstance(route.get(key), str) for key in keys) for route in routes
+        ):
+            return JSONResponse(
+                {"detail": f"body must be {{\"routes\": [...]}} with at most {HAUL_TRIPS_LIMIT} routes naming "
+                           "from/to station and system"}, status_code=400)
+        ship = viewed_ship(request.query_params)
+        ship_laden = getattr(ship, "laden_jump_range_ly", None)
+        try:
+            search_defaults = await asyncio.to_thread(load_haul_search_config)
+        except (OSError, HaulSearchConfigError):
+            search_defaults = {}
+        laden = laden_jump_range({}, search_defaults=search_defaults, ship_laden_ly=ship_laden)
+        ship_id = getattr(ship, "ship_id", None)
+
+        def estimate() -> dict[str, Any]:
+            # Inara gives no market ids; the store and Ardent match the stations by name.
+            stations = [{"market_id": 0, "station": route[f"{end}_station"], "system": route[f"{end}_system"]}
+                        for route in routes for end in ("from", "to")]
+            facts, hint = read_station_facts(stations) if stations else ([], None)
+            time_model, time_model_payload = read_time_model(ship_id)
+            trips = []
+            for i, route in enumerate(routes):
+                x, y = (with_inara_dist_ls(facts[2 * i + n], route.get(f"{end}_station_distance"))
+                        for n, end in enumerate(("from", "to")))
+                found = estimate_trip(x, y, laden_jump_range_ly=laden, time_model=time_model)
+                per_trip = parse_credit_amount(route.get("profit_per_trip"))
+                inara_per_hour = parse_credit_amount(route.get("profit_per_hour"))
+                trips.append({
+                    **asdict(found),
+                    "profit_per_hour": route_profit_per_hour(per_trip, found.trip_s),
+                    "inara_profit_per_hour": inara_per_hour,
+                    # Inara's own trip time, from its profit per trip and per hour.
+                    "inara_trip_s": round(per_trip * 3600 / inara_per_hour) if per_trip and inara_per_hour else None,
+                })
+            return {
+                "trips": trips,
+                "ship": {"id": ship_id, "type": getattr(ship, "ship_type", None),
+                         "name": getattr(ship, "ship_name", None), "laden_jump_range_ly": laden},
+                "time_model": time_model_payload,
+                "hint": hint,
+            }
+
+        return JSONResponse(await asyncio.to_thread(estimate))
+
     def read_trip(
         market_x: MarketSnapshot, market_y: MarketSnapshot, laden: float, ship_id: int | None
     ) -> dict[str, Any]:
         """Estimated trip time (station facts, here or from the hub) and measured haul profit per hour."""
         stations = [{"market_id": m.market_id, "station": m.station, "system": m.system} for m in (market_x, market_y)]
-        hint = None
-        if peer_link is not None:
-            try:
-                reply = peer_link.request(REQUEST_STATION_FACTS, {"stations": stations},
-                                          timeout_s=peer_link.request_timeout_s)
-                facts = [StationFacts(**{**entry, "coords": _coords(entry.get("coords"))})
-                         for entry in reply.body["stations"]]
-            except (HubUnreachable, KeyError, TypeError) as exc:
-                hint = hub_unreachable_detail(peer_link.hub_label, exc)
-                facts = [gather_facts(m.market_id, m.station, m.system, []) for m in (market_x, market_y)]
-        else:
-            facts = station_facts(stations)
-            # A peer without a hub address yet (discovery comes later) owns no station facts.
-            hint = "Station facts come from the hub." if market_database_file is None else None
+        facts, hint = read_station_facts(stations)
         time_model, time_model_payload = read_time_model(ship_id)
         estimate = estimate_trip(facts[0], facts[1], laden_jump_range_ly=laden, time_model=time_model)
         trip: dict[str, Any] = {
@@ -1499,6 +1568,7 @@ def build_observer_server_app(
             Route("/api/haul-stats", haul_stats_endpoint),
             Route("/api/recent-markets", recent_markets),
             Route("/api/market-compare", market_compare),
+            Route("/api/haul-trips", haul_trips, methods=["POST"]),
             Route("/api/eddn-status", eddn_status_endpoint),
             Route("/api/carrier-names", carrier_names_endpoint),
             Route("/api/eddn-routes", node_read_endpoint("/api/eddn-routes")),
@@ -2087,6 +2157,9 @@ def _run_haul_search(search: _HaulSearch, *, peer_link: PeerLink | None) -> dict
         return _run_hub_haul_search(search, peer_link)
     try:
         result = search_trade_routes(search.system_name, query_params=search.query_params)
+    except InaraAccessCheck as exc:
+        logger.warning("haul search stopped at Inara's access check")
+        raise _HaulSearchError("inara_access_check", _inara_access_check_detail(search)) from exc
     except Exception as exc:
         logger.exception("haul search failed")
         raise _HaulSearchError("haul_search_failed", str(exc) or "Failed to search haul routes.") from exc
@@ -2099,6 +2172,17 @@ def _run_haul_search(search: _HaulSearch, *, peer_link: PeerLink | None) -> dict
         routes=routes,
         unfiltered_count=unfiltered_count,
         use_surface_stations=search.query_params["use_surface_stations"],
+    )
+
+
+def _inara_access_check_detail(search: _HaulSearch) -> str:
+    """What to do about Inara's access check: pass it once in a visible browser on the computer that
+    searched, whose browser profile the headless searches then reuse."""
+    url = build_trade_routes_url(search.system_name, query_params=search.query_params)
+    return (
+        f"Inara asked for an access check, which the background browser cannot pass. On {socket.gethostname()}, "
+        "pass it once in a visible browser, then search again: "
+        f"uv run python3 tools/scratch/scratch_inara_trade_routes.py --show-browser {shlex.quote(url)}"
     )
 
 

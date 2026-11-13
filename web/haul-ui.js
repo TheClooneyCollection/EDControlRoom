@@ -1,6 +1,8 @@
 let routes = [];
     let selectedRouteIndex = 0;
     let hasSearchedRoutes = false;
+    // Why the last search failed, shown in the results table instead of an empty list.
+    let searchError = "";
     let routePage = 1;
     let travelTargetDirty = false;
     const ROUTES_PER_PAGE = 12;
@@ -457,7 +459,9 @@ let routes = [];
         routes = [hydratedRoute, ...routes];
       }
       hasSearchedRoutes = true;
+      searchError = "";
       selectedRouteIndex = hydratedRoute.index;
+      requestEdcrTrips([hydratedRoute]);
       const routeOffset = routes.findIndex((route) => route.index === selectedRouteIndex);
       routePage = routeOffset >= 0 ? Math.floor(routeOffset / ROUTES_PER_PAGE) + 1 : 1;
       return hydratedRoute;
@@ -544,6 +548,77 @@ let routes = [];
         return "-";
       }
       return route.profitHour.includes("/") ? route.profitHour : `${route.profitHour}/h`;
+    }
+
+    // EDCR's own trip time and profit per hour for each route (`/api/haul-trips`), by `routeKey`, for the
+    // ship the page looks at; `edcrTripShip` is that ship.
+    const edcrTrips = new Map();
+    let edcrTripShip = null;
+    let edcrTripsStatus = "";
+    let edcrTripsRequest = 0;
+
+    async function requestEdcrTrips(list) {
+      const wanted = list.filter((route) => !edcrTrips.has(routeKey(route)));
+      if (!wanted.length || !accessToken) {
+        return;
+      }
+      const request = ++edcrTripsRequest;
+      edcrTripsStatus = "estimating...";
+      const url = new URL("/api/haul-trips", window.location.origin);
+      window.EDCRNode.addTo(url.searchParams);
+      if (accessToken) url.searchParams.set(AUTH_QUERY_PARAMETER_NAME, accessToken);
+      const body = {
+        routes: wanted.map((route) => ({
+          from_station: route.buyStation, from_system: route.buySystem,
+          to_station: route.sellStation, to_system: route.sellSystem,
+          from_station_distance: route.buyStationDistance, to_station_distance: route.sellStationDistance,
+          profit_per_trip: route.profitTrip, profit_per_hour: route.profitHour
+        }))
+      };
+      try {
+        const response = await fetch(url, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
+        if (request !== edcrTripsRequest) return;
+        wanted.forEach((route, i) => edcrTrips.set(routeKey(route), payload.trips[i]));
+        edcrTripShip = payload.ship;
+        edcrTripsStatus = payload.hint || "";
+      } catch (error) {
+        if (request !== edcrTripsRequest) return;
+        edcrTripsStatus = `unavailable: ${error.message}`;
+      }
+      renderRows();
+    }
+
+    function perHourLabel(value) {
+      return value == null ? "-" : formatCredits(value).replace(/ CR$/, " Cr/h");
+    }
+
+    function minutesPerTrip(seconds) {
+      return seconds ? `${Math.round(seconds / 60)} m/trip` : "- m/trip";
+    }
+
+    function edcrShipLabel() {
+      return edcrTripShip ? (edcrTripShip.name || edcrTripShip.type || "current ship") : "current ship";
+    }
+
+    // Inara's profit per hour and trip time above EDCR's own for the same route and ship, so they compare.
+    function profitCompareCell(route) {
+      const trip = edcrTrips.get(routeKey(route));
+      const inaraHour = trip ? perHourLabel(trip.inara_profit_per_hour) : profitHourLabel(route);
+      const inaraTrip = trip ? ` ${minutesPerTrip(trip.inara_trip_s)}` : "";
+      let edcr;
+      if (!trip) {
+        edcr = `EDCR: ${edcrTripsStatus || "-"}`;
+      } else if (trip.trip_s) {
+        edcr = `EDCR: ${perHourLabel(trip.profit_per_hour)} ${minutesPerTrip(trip.trip_s)} (${edcrShipLabel()})`;
+      } else {
+        edcr = `EDCR: - (${edcrShipLabel()}; missing ${trip.missing.join(", ") || "profit per trip"})`;
+      }
+      return `<div class="route-main">Inara: ${escapeHtml(inaraHour + inaraTrip)}</div>
+            <div class="route-sub mono">${escapeHtml(edcr)}</div>`;
     }
 
     function setResultCount(text) {
@@ -1032,10 +1107,12 @@ let routes = [];
     function renderRows() {
       const tbody = document.getElementById("route-rows");
       if (!routes.length) {
-        const message = hasSearchedRoutes
-          ? `No ${searchScopeLabel()} found.`
-          : `Search routes to load ${searchScopeLabel()}.`;
-        tbody.innerHTML = `<tr><td colspan="8" class="route-sub empty-route-message">${message}</td></tr>`;
+        const message = searchError
+          ? `Search failed: ${searchError}`
+          : hasSearchedRoutes
+            ? `No ${searchScopeLabel()} found.`
+            : `Search routes to load ${searchScopeLabel()}.`;
+        tbody.innerHTML = `<tr><td colspan="8" class="route-sub empty-route-message">${escapeHtml(message)}</td></tr>`;
         routePage = 1;
         updateRoutePager(0, 0, 0, 1);
         return;
@@ -1047,7 +1124,7 @@ let routes = [];
       tbody.innerHTML = visibleRoutes.map((route) => `
         <tr class="${route.index === selectedRouteIndex ? "selected" : ""}" data-index="${route.index}">
           <td class="mono" data-label="#">${escapeHtml(route.index)}</td>
-          <td class="num profit" data-label="Profit / hr">${escapeHtml(profitHourLabel(route))}</td>
+          <td class="num profit" data-label="Profit / hr">${profitCompareCell(route)}</td>
           <td class="num profit" data-label="Profit / trip">${escapeHtml(route.profitTrip || "-")}</td>
           <td class="cargo-legs" data-label="Cargo">
             ${cargoCellHtml(route)}
@@ -1251,6 +1328,10 @@ let routes = [];
           const result = payload.result || {};
           routes = (result.routes || []).map(routeFromApi);
           hasSearchedRoutes = true;
+          searchError = "";
+          // A new search estimates again, for the ship flown now; before the first draw, so rows say so.
+          edcrTrips.clear();
+          requestEdcrTrips(routes);
           routePage = 1;
           selectedRouteIndex = routes[0] ? routes[0].index : 0;
           renderRows();
@@ -1263,6 +1344,12 @@ let routes = [];
         .catch((error) => {
           setResultCount("Search failed");
           setInaraSearchLink("");
+          // The old results would read as this search's; the table says why there are none.
+          routes = [];
+          hasSearchedRoutes = true;
+          searchError = error.message;
+          renderRows();
+          renderSelected();
           appendActivity(error.message, "Search", "warning");
         });
     });

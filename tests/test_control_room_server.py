@@ -963,6 +963,62 @@ class ControlRoomServerTests(unittest.TestCase):
                          {"id": 7, "type": "cutter", "name": "Hauler", "laden_jump_range_ly": 24.5})
         self.assertEqual((bad.status_code, bad_window.status_code), (400, 400))
 
+    def test_haul_trips_estimates_edcr_profit_per_hour_beside_inara_for_the_flown_ship(self) -> None:
+        from edcr.eddn.routes import TimeModel
+        from edcr.recent_markets import record_market_json
+        from edcr.trade_trip import PartialFacts, StationFacts, estimate_trip
+
+        def ardent(market_id: int, station: str, system: str) -> PartialFacts:
+            return PartialFacts(station_type="Orbis") if station == "Alpha Port" else PartialFacts()
+
+        def flying_ship_7():
+            return replace(_base_data_read_model(), ship=ShipState(ship_id=7, ship_type="cutter", ship_name="Hauler",
+                                                                      laden_jump_range_ly=20.0))
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = Path(directory) / "recent.json"
+            record_market_json(store, {"MarketID": 1, "StationName": "Galileo", "StarSystem": "Sol",
+                                       "StationType": "Coriolis", "timestamp": "2026-11-10T10:00:00Z", "Items": []},
+                               lambda _: None, limit=10)
+            database = _facts_db(directory, store, [
+                {"event": "Location", "timestamp": "2026-11-10T10:30:00Z", "StarSystem": "Sol", "SystemAddress": 10,
+                 "StarPos": [0, 0, 0], "Docked": True, "MarketID": 1, "StationName": "Galileo",
+                 "StationType": "Coriolis", "DistFromStarLS": 500.0},
+                # Alpha's coordinates only: its distance comes from Inara's row and its type from Ardent.
+                {"event": "FSDJump", "timestamp": "2026-11-10T10:40:00Z", "StarSystem": "Alpha", "SystemAddress": 20,
+                 "StarPos": [30.0, 0, 0]},
+            ])
+            app = build_observer_server_app(
+                data_provider=flying_ship_7, command_handler=None, broker=InMemoryObserverSessionBroker(),
+                auth=SharedAccessTokenAuth("secret-token"), recent_markets_file=store,
+                market_database_file=database, ardent_lookup=ardent,
+            )
+            route = {"from_station": "galileo", "from_system": "Sol", "to_station": "Alpha Port",
+                     "to_system": "Alpha", "from_station_distance": "999 Ls", "to_station_distance": "1,080 Ls",
+                     "profit_per_trip": "4,000,000 Cr", "profit_per_hour": "48.0m"}
+            unknown = {**route, "to_station": "Nowhere", "to_system": "Void", "to_station_distance": "-"}
+            with TestClient(app) as client:
+                url = "/api/haul-trips?access_token=secret-token"
+                found = client.post(url, json={"routes": [route, unknown]}).json()
+                bad = client.post(url, json={"routes": [{"from_station": "Galileo"}]})
+                denied = client.post("/api/haul-trips", json={"routes": []})
+
+        expected = estimate_trip(
+            StationFacts("galileo", "Sol", (0.0, 0.0, 0.0), "j", 500.0, "j", "Coriolis", "j"),
+            StationFacts("Alpha Port", "Alpha", (30.0, 0.0, 0.0), "j", 1080.0, "j", "Orbis", "j"),
+            laden_jump_range_ly=20.0, time_model=TimeModel(),
+        )
+        trip, missing = found["trips"]
+        # The store's 500 Ls wins over Inara's 999; Inara's 1,080 fills what no other source knows.
+        self.assertEqual((trip["jumps"], trip["missing"], trip["trip_s"]), (2, [], expected.trip_s))
+        self.assertEqual(trip["profit_per_hour"], round(4_000_000 * 3600 / expected.trip_s))
+        self.assertEqual((trip["inara_profit_per_hour"], trip["inara_trip_s"]), (48_000_000, 300))
+        self.assertIsNone(missing["trip_s"])
+        self.assertIsNone(missing["profit_per_hour"])
+        self.assertIn("Void coordinates", missing["missing"])
+        self.assertEqual(found["ship"], {"id": 7, "type": "cutter", "name": "Hauler", "laden_jump_range_ly": 20.0})
+        self.assertEqual((bad.status_code, denied.status_code), (400, 401))
+
     def test_market_compare_asks_ardent_only_for_what_the_store_lacks(self) -> None:
         from edcr.recent_markets import record_market_json
         from edcr.trade_trip import PartialFacts
@@ -1394,6 +1450,29 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(response["message_type"], "response.success")
         self.assertEqual(response["correlation_message_id"], "message-search-observer")
         self.assertEqual(response["payload"]["result"]["route_count"], 0)
+
+    def test_search_haul_routes_says_how_to_pass_inaras_access_check(self) -> None:
+        from edcr.inara.trade_routes import InaraAccessCheck
+
+        broker = InMemoryObserverSessionBroker()
+        observer = broker.register_observer("web-haul")
+        with (
+            patch("edcr.control_room.server.app.search_trade_routes", side_effect=InaraAccessCheck("check")),
+            patch("edcr.control_room.server.app.save_haul_search_config"),
+            self.assertLogs("edcr.control_room.server.app", level="WARNING"),
+        ):
+            response = _handle_session_message(
+                {"message_type": "command.search_haul_routes", "message_id": "m1", "payload": {"origin": "Sol"}},
+                session_id=observer.session_id, client_role="active_operator", command_handler=None,
+                broker=broker, data_provider=_base_data_read_model,
+            )
+
+        self.assertEqual(response["message_type"], "response.error")
+        self.assertEqual(response["payload"]["error_code"], "inara_access_check")
+        message = response["payload"]["error_message"]
+        self.assertIn("Inara asked for an access check", message)
+        self.assertIn("scratch_inara_trade_routes.py --show-browser 'https://inara.cz/", message)
+        self.assertIn("ps1=Sol", message)
 
     def test_select_trade_route_stores_route_for_future_hydrate(self) -> None:
         broker = InMemoryObserverSessionBroker()

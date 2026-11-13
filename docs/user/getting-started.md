@@ -55,6 +55,10 @@ The `/haul` view searches Inara for profitable station-to-station routes near yo
 
 Fill in the origin (and optionally destination), max route distance, cargo capacity, min supply / demand, then **Search routes**. Click a result and use **Set destination** or **Start route** to dispatch it. **Surface stations** defaults to No (orbital stations and carriers only); pick "Yes, exclude Odyssey settlements" for planetary ports, or "Yes, with Odyssey settlements" for everything. The docking computer handles planetary ports like orbital ones. Only if you cannot glide close to a station after the drop, turn on its **Manual landing** flag yourself (paste box or `haul.toml`).
 
+**Profit / hr** shows two lines per route: Inara's own figure and trip time, then EDCR's for the ship you fly (or the node picked on a hub), from the same trip time model as the Routes page and Best deal. When EDCR cannot estimate a route it names what it is missing instead.
+
+If a search fails, the results table says why. Inara sometimes asks for an access check, which the background browser cannot pass; the message names the computer that searched (the hub, for a peer) and the command that opens a visible browser there. Pass the check once and search again.
+
 ### Spansh Route Fetch and Comparison
 
 The `/travel` page (sidebar **Ship → Travel**, or **More** on phones) fetches a Spansh route between two systems in its Route Comparison panel and lays it out beside the in-game route. The Active route panel above it tracks jumps, LY and boosts remaining while the route runs.
