@@ -705,6 +705,7 @@ class LinkedServerTests(unittest.TestCase):
             TestClient(self.peer_app(data_provider=flying)) as client,
         ):
             model = client.get("/api/time-model", params=params).json()
+            save = client.post("/api/time-model", params=params, json={"source": "fitted"})
             routes = client.get("/api/eddn-routes", params={**params, "view": "global", "max_age_hours": "any"})
             deal = client.get("/api/market-compare", params={**params, "x": GALILEO.market_id, "y": 2})
             self.r.drop(self.r.links[-1])
@@ -713,6 +714,10 @@ class LinkedServerTests(unittest.TestCase):
         self.assertEqual((model["ship_id"], model["configured"]["docked_s"], model["active"]["scope"]),
                          (9, 0.0, "config"))
         self.assertEqual(routes.json()["time_model"]["ship_id"], 9)
+        # The peer's page shows the hub's settings but saves nothing; they are changed on the hub.
+        self.assertEqual((model["editable"], model["hub"]), (False, "Home"))
+        self.assertEqual(save.status_code, 409)
+        self.assertEqual(hub_models.source, "config")
         self.assertEqual(deal.json()["trip"]["time_model"]["configured"]["docked_s"], 0.0)
         # Without the hub the peer falls back to its own configured model.
         self.assertEqual(deal_down.json()["trip"]["time_model"]["configured"]["docked_s"], TimeModel().docked_s)
@@ -903,7 +908,7 @@ class LinkedServerTests(unittest.TestCase):
         with TestClient(server()) as client:
             script = client.get("/assets/hub-status.js")
             pages = {path: client.get(path, params={"access_token": TOKEN}).text
-                     for path in ("/haul", "/multi-haul", "/controls", "/markets", "/routes")}
+                     for path in ("/haul", "/multi-haul", "/controls", "/markets", "/routes", "/config")}
         self.assertIn("/api/hub-status", script.text)
         for path, page in pages.items():
             with self.subTest(path=path):

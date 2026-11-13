@@ -5,8 +5,20 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import warnings
 
+warnings.filterwarnings(
+    "ignore",
+    message=r"Using `httpx` with `starlette\.testclient` is deprecated; install `httpx2` instead\.",
+)
+
+from edcr.config import load_config
+from edcr.control_room.models import ShipState
+from edcr.control_room.server.app import build_observer_server_app
+from edcr.control_room.server.auth import SharedAccessTokenAuth
+from edcr.control_room.server.broker import InMemoryObserverSessionBroker
 from edcr.eddn.routes import TimeModel
+from tests.shared_loop import TestClient
 from edcr.journal_store import JournalLine, JournalStore
 from edcr.trip_time_fit import TripTimeModels, connect_read_only, fit_legs, read_legs, Leg, Stop
 
@@ -136,6 +148,51 @@ class TripTimeFitTests(unittest.TestCase):
         missing = TripTimeModels(configured=TimeModel(), source="fitted", fit_days=14.0,
                                  connect=connect_read_only(self.path.with_name("none.sqlite3")), clock=lambda: NOW)
         self.assertEqual(missing.active(7).scope, "config")
+
+
+class TimeModelPageTests(unittest.TestCase):
+    def test_saving_writes_config_toml_and_applies_at_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "config.toml"
+            config.write_text('[paths]\n[controls]\n[runtime]\n\n[eddn.time_model]\ndocked_s = 60.0\n', encoding="utf-8")
+            models = TripTimeModels(configured=load_config(config).eddn.time_model, source="config", fit_days=14.0,
+                                    connect=None, clock=lambda: NOW)
+            app = build_observer_server_app(
+                data_provider=lambda: type("Data", (), {"ship": ShipState(ship_id=4)})(),
+                command_handler=None, broker=InMemoryObserverSessionBroker(), auth=SharedAccessTokenAuth("t"),
+                time_models=models, config_file=config,
+            )
+            params = {"access_token": "t"}
+            with TestClient(app) as client:
+                shown = client.get("/api/time-model", params=params).json()
+                page = client.get("/config", params=params)
+                script = client.get("/assets/config.js")
+                saved = client.post("/api/time-model", params=params,
+                                    json={"source": "fitted", "configured": {"first_jump_s": 150}})
+                refused = [client.post("/api/time-model", params=params, json=body).status_code
+                           for body in ({"source": "guess"}, {"configured": {"docked": 1}},
+                                        {"configured": {"docked_s": -1}}, {"configured": {"docked_s": True}}, [])]
+                after = client.get("/api/time-model", params=params).json()
+            self.assertEqual((shown["configured"]["docked_s"], shown["editable"], shown["ship_id"]), (60.0, True, 4))
+            self.assertIn('src="/assets/config.js"', page.text)
+            self.assertIn("/api/time-model", script.text)
+            self.assertEqual(saved.status_code, 200)
+            self.assertEqual(refused, [400] * 5)
+            # Saved fields join the ones already set; nothing else in the file changes.
+            reloaded = load_config(config).eddn
+            self.assertEqual((reloaded.time_model_source, reloaded.time_model.docked_s, reloaded.time_model.first_jump_s),
+                             ("fitted", 60.0, 150.0))
+            self.assertTrue(config.read_text(encoding="utf-8").startswith("[paths]\n[controls]\n[runtime]\n"))
+            self.assertEqual((after["source"], after["configured"]["first_jump_s"]), ("fitted", 150.0))
+            self.assertEqual(models.active(4).model.first_jump_s, 150.0)
+
+    def test_a_server_without_a_config_file_cannot_save(self) -> None:
+        app = build_observer_server_app(data_provider=lambda: object(), command_handler=None,
+                                        broker=InMemoryObserverSessionBroker(), auth=SharedAccessTokenAuth("t"))
+        with TestClient(app) as client:
+            response = client.post("/api/time-model", params={"access_token": "t"}, json={"source": "fitted"})
+            self.assertEqual(client.post("/api/time-model", json={}).status_code, 401)
+        self.assertEqual(response.status_code, 503)
 
 
 if __name__ == "__main__":

@@ -311,6 +311,8 @@ def serve_observer_mode(
         recent_markets_file=recent_markets_file,
         eddn_status=eddn.status if eddn is not None else None,
         market_database_file=eddn_config.database_file if store is not None else None,
+        # Never save into the example config a server without config.toml runs on.
+        config_file=None if loaded.used_example_config_fallback else Path(loaded.config_path),
         time_models=TripTimeModels(
             configured=eddn_config.time_model,
             source=eddn_config.time_model_source,

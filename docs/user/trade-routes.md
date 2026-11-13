@@ -68,9 +68,9 @@ unknown_dist_ls = 1000.0 # Ls assumed when a station's distance is unknown
 surface_extra_s = 30.0   # planetary approach and landing
 ```
 
-Restart the server after changing these.
+Restart the server after editing these by hand, or use the Config page below.
 
-With `source = "fitted"` the hub (or a standalone server) fits the values to how you actually fly, from the journal events of every node over the last `fit_days`: per ship once it has 30 clean Undocked-to-Docked legs, else every ship pooled, else the configured values. A field with fewer than 10 legs that tell it apart (for example two-jump legs for `per_extra_jump_s`) keeps the configured value. A peer uses its hub's settings and fit for its own ship. `GET /api/time-model` shows both sets, the legs behind the fit and which set is in use; `/api/eddn-routes` and Best deal's `trip` carry the same under `time_model`.
+With `source = "fitted"` the hub (or a standalone server) fits the values to how you actually fly, from the journal events of every node over the last `fit_days`: per ship once it has 30 clean Undocked-to-Docked legs, else every ship pooled, else the configured values. A field with fewer than 10 legs that tell it apart (for example two-jump legs for `per_extra_jump_s`) keeps the configured value. A peer uses its hub's settings and fit for its own ship. The **Config** page (`/config`) shows both sets side by side with the legs behind each fitted value; edit the configured values, pick **Configured** or **Fitted** and press **Save**. It writes `[eddn.time_model]` in `config.toml` and applies at once, no restart. On a peer the page shows the hub's settings read-only; change them on the hub. `/routes` and Best deal say which set the trip time came from.
 
 On a second machine you can skip the listener and ask a home Control Room instead: see [hub.md](hub.md).
 

@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 import json
 import logging
+import math
 from pathlib import Path
 import sqlite3
 import threading
@@ -30,6 +31,7 @@ from edcr.eddn.route_query import (
     resolve_route_params,
     run_route_query,
 )
+from edcr.config import TIME_MODEL_SOURCES, ConfigError, save_time_model
 from edcr.eddn.routes import TimeModel
 from edcr.trip_time_fit import TripTimeModels, fit_payload, model_from_payload
 from edcr.haul_history import load_runs, parse_window, summarize
@@ -110,6 +112,7 @@ CONTROLS_WEB_URL_PATH = "/controls"
 MARKETS_WEB_URL_PATH = "/markets"
 ROUTES_WEB_URL_PATH = "/routes"
 TRAVEL_WEB_URL_PATH = "/travel"
+CONFIG_WEB_URL_PATH = "/config"
 HAUL_WEB_ASSET_URL_PATH = "/assets/{asset_name:str}"
 _MESSAGE_SCHEMA_PATH = (
     Path(__file__).resolve().parents[3] / "docs" / "schemas" / "control_room_message.schema.json"
@@ -123,6 +126,7 @@ _CONTROLS_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "controls.htm
 _MARKETS_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "markets.html"
 _ROUTES_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "routes.html"
 _TRAVEL_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "travel.html"
+_CONFIG_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "config.html"
 _HAUL_WEB_ASSET_DIR = Path(__file__).resolve().parents[3] / "web"
 CONTROL_ROOM_MESSAGE_SCHEMA = json.loads(_MESSAGE_SCHEMA_PATH.read_text(encoding="utf-8"))
 CONTROL_ROOM_BROWSER_PROBE_HTML = _BROWSER_PROBE_PATH.read_text(encoding="utf-8")
@@ -244,6 +248,8 @@ def build_observer_server_app(
     market_database_file: Path | None = None,
     # The trip time model: configured, or fitted per ship from the journal store. None keeps the defaults.
     time_models: TripTimeModels | None = None,
+    # Where `POST /api/time-model` saves the trip time settings; None cannot save them.
+    config_file: Path | None = None,
     ardent_lookup: FactLookup | None = None,
     # Peer role: the link to the hub, which answers searches, routes and station facts.
     peer_link: PeerLink | None = None,
@@ -385,6 +391,21 @@ def build_observer_server_app(
             headers={"Cache-Control": "no-store"},
         )
 
+    async def config_web(request):
+        data = data_provider()
+        return HTMLResponse(
+            _render_web_html(
+                _CONFIG_WEB_PATH,
+                web_config=_haul_web_config(
+                    data,
+                    auth=auth,
+                    request=request,
+                    web_default_access_token=web_default_access_token,
+                ),
+            ),
+            headers={"Cache-Control": "no-store"},
+        )
+
     async def travel_web(request):
         data = data_provider()
         return HTMLResponse(
@@ -410,6 +431,7 @@ def build_observer_server_app(
             "markets.js": "text/javascript; charset=utf-8",
             "routes.js": "text/javascript; charset=utf-8",
             "travel.js": "text/javascript; charset=utf-8",
+            "config.js": "text/javascript; charset=utf-8",
             "nav.js": "text/javascript; charset=utf-8",
             "route-compare.js": "text/javascript; charset=utf-8",
             "active-route.js": "text/javascript; charset=utf-8",
@@ -749,7 +771,7 @@ def build_observer_server_app(
                                           timeout_s=peer_link.request_timeout_s)
                 model = model_from_payload(reply.body.get("active")) if reply.status == 200 else None
                 if model is not None:
-                    return model, reply.body
+                    return model, {**reply.body, "hub": peer_link.hub_label}
             except (HubUnreachable, AttributeError):
                 pass
         return time_models.active(ship_id).model, time_models.payload(ship_id)
@@ -1280,6 +1302,35 @@ def build_observer_server_app(
             route_compare_compare_retry_attempts=route_compare_compare_retry_attempts,
         ))
 
+    async def time_model_route(request: Request) -> JSONResponse:
+        """GET: both trip time sets for the viewed node's ship. POST: save the configured set and which set
+        is used, into `config.toml`, live. Only the server that keeps the journal events saves them."""
+        if request.method == "GET":
+            response = await node_read_endpoint("/api/time-model")(request)
+            if response.status_code != 200:
+                return response
+            # Whether this server's page may save; a hub relays a peer's read, and the peer's answer says "hub".
+            return JSONResponse({**json.loads(bytes(response.body)), "editable": peer_link is None})
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        if peer_link is not None:
+            return JSONResponse({"detail": f"The trip time settings live on the hub {peer_link.hub_label}; "
+                                           "change them on its /config page"}, status_code=409)
+        if config_file is None:
+            return JSONResponse({"detail": "This server has no config file to save to"}, status_code=503)
+        try:
+            body = await request.json()
+            model, source = _time_model_update(body, time_models.configured, time_models.source)
+        except ValueError as exc:
+            return JSONResponse({"detail": str(exc) or "body must be JSON"}, status_code=400)
+        try:
+            await asyncio.to_thread(save_time_model, config_file, model, source)
+        except (OSError, ConfigError) as exc:
+            return JSONResponse({"detail": f"Cannot save {config_file}: {exc}"}, status_code=500)
+        time_models.set_configured(model, source)
+        return JSONResponse({**await asyncio.to_thread(time_models.payload, own_ship_id()), "editable": True})
+
     def node_read_endpoint(path: str) -> Callable[[Request], Awaitable[JSONResponse]]:
         read = node_reads[path]
 
@@ -1429,6 +1480,7 @@ def build_observer_server_app(
             Route(MARKETS_WEB_URL_PATH, markets_web),
             Route(ROUTES_WEB_URL_PATH, routes_web),
             Route(TRAVEL_WEB_URL_PATH, travel_web),
+            Route(CONFIG_WEB_URL_PATH, config_web),
             Route("/api/route-compare", node_read_endpoint("/api/route-compare")),
             Route("/api/route-compare/config", node_read_endpoint("/api/route-compare/config")),
             Route("/api/spansh-route", node_read_endpoint("/api/spansh-route")),
@@ -1438,7 +1490,7 @@ def build_observer_server_app(
             Route("/api/eddn-status", eddn_status_endpoint),
             Route("/api/carrier-names", carrier_names_endpoint),
             Route("/api/eddn-routes", node_read_endpoint("/api/eddn-routes")),
-            Route("/api/time-model", node_read_endpoint("/api/time-model")),
+            Route("/api/time-model", time_model_route, methods=["GET", "POST"]),
             Route("/api/hub-status", hub_status_endpoint),
             Route("/api/nodes", nodes_endpoint),
             Route("/api/hub-voice", hub_voice_endpoint, methods=["GET", "POST"]),
@@ -1510,6 +1562,25 @@ def session_start_messages(
 # Best deal's measured profit per hour window choices (haul_history.parse_window labels).
 MEASURED_WINDOWS = ("48h", "7d", "30d", "all")
 MEASURED_WINDOW_DEFAULT = "7d"
+
+
+def _time_model_update(body: Any, configured: TimeModel, source: str) -> tuple[TimeModel, str]:
+    """The configured trip time set and source after a `POST /api/time-model` body; fields left out stay."""
+    if not isinstance(body, dict):
+        raise ValueError("body must be a JSON object")
+    source = body.get("source", source)
+    if source not in TIME_MODEL_SOURCES:
+        raise ValueError(f"source must be one of {', '.join(TIME_MODEL_SOURCES)}")
+    values = body.get("configured", {})
+    if not isinstance(values, dict):
+        raise ValueError("configured must be an object of trip time fields")
+    unknown = sorted(set(values) - set(TimeModel.__dataclass_fields__))
+    if unknown:
+        raise ValueError(f"Unknown trip time fields: {', '.join(unknown)}")
+    for name, value in values.items():
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+            raise ValueError(f"{name} must be zero or a positive number")
+    return replace(configured, **{name: float(value) for name, value in values.items()}), source
 
 
 def _ship_id_value(value: Any) -> int | None:

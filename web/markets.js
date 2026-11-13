@@ -302,12 +302,22 @@ function measuredMetric(payload, trip) {
     <span class="deal-metric-note">${note}</span></div>`;
 }
 
+// Which trip time set the estimate used (`time_model` from /api/time-model); see /config.
+function timeModelLabel(timeModel) {
+  if (!timeModel) return "";
+  const active = timeModel.active;
+  if (active.scope === "ship") return "trip time fitted for this ship";
+  if (active.scope === "pooled") return "trip time fitted on every ship";
+  return timeModel.source === "fitted" ? "configured trip time (too few legs to fit)" : "configured trip time";
+}
+
 // Inara's trade route view: profit per ton, profit per trip and profit per hour, plus our measured runs.
 function dealMetrics(perTon, perTrip, perHour, trip, payload) {
   let hourNote;
   if (perHour !== null) {
     const legs = trip.jumps ? `${trip.jumps} jump${trip.jumps === 1 ? "" : "s"} each way, ${trip.distance_ly} Ly` : "same system";
-    hourNote = `Estimate: ${minutes(trip.trip_s)} round trip, ${legs} at ${trip.laden_jump_range_ly} Ly laden`;
+    const source = timeModelLabel(trip.time_model);
+    hourNote = `Estimate: ${minutes(trip.trip_s)} round trip, ${legs} at ${trip.laden_jump_range_ly} Ly laden${source ? `, ${source}` : ""}`;
   } else if (trip && trip.hint) {
     // A peer has no station facts of its own; the hub supplies them.
     hourNote = escapeHtml(trip.hint);

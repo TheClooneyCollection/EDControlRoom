@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ED Control Room - Config</title>
+  <link rel="icon" type="image/png" href="/assets/favicon.png">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="/assets/haul-ui.css">
+  <style>
+    .config-tools {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .config-tools .btn[aria-pressed="true"] {
+      border-color: var(--amber);
+      color: var(--amber);
+    }
+    .config-table-scroll {
+      max-width: 100%;
+      overflow-x: auto;
+    }
+    .config-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .config-table th,
+    .config-table td {
+      padding: 8px;
+      text-align: right;
+      border-bottom: 1px solid var(--border);
+    }
+    .config-table th:first-child,
+    .config-table td:first-child {
+      text-align: left;
+    }
+    .config-table .field {
+      width: 7em;
+      text-align: right;
+    }
+    .config-table .kept {
+      color: var(--text-2);
+    }
+    @media (max-width: 760px) {
+      .config-table th,
+      .config-table td {
+        padding: 6px 4px;
+      }
+      .config-table .field {
+        width: 4.5em;
+      }
+    }
+    .config-note {
+      margin-top: 10px;
+      color: var(--text-2);
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Navigation">
+      <div class="brand">
+        <div class="brand-mark">ED</div>
+        <div>
+          <div class="brand-name">Control Room</div>
+          <div class="brand-sub">haul control</div>
+        </div>
+      </div>
+
+      <nav class="site-nav" id="site-nav" aria-label="Pages"></nav>
+      <script src="/assets/nav.js"></script>
+
+      <div class="chip hub-chip" id="hub-chip" hidden>Hub <strong>-</strong></div>
+
+      <div class="sidebar-foot">
+        <div class="status-row"><span><span class="dot"></span>Runtime</span><span id="status-runtime">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Journal</span><span id="status-journal">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Input target</span><span id="status-input-target">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Version</span><span id="status-version">-</span></div>
+      </div>
+    </aside>
+
+    <div>
+      <header class="topbar">
+        <div>
+          <div class="topbar-title">Config</div>
+          <div class="topbar-sub">Settings this Control Room saves to config.toml and uses at once.</div>
+        </div>
+        <div class="chips" aria-label="Session status">
+          <div class="chip">Host <strong id="host-label">-</strong></div>
+          <div class="chip">Target <strong id="target-label">-</strong></div>
+          <div class="chip">Role <strong id="role-label">-</strong></div>
+          <div class="token-control">
+            <input class="token-input" id="access-token" type="password" placeholder="Access token" autocomplete="off" aria-label="Access token">
+            <button class="token-button" id="save-token" type="button">Save</button>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <section class="panel" aria-labelledby="trip-time-title">
+          <div class="panel-head">
+            <div class="panel-title" id="trip-time-title">Trip time</div>
+            <div class="panel-action field-hint" id="trip-time-status">Loading</div>
+          </div>
+          <div class="panel-body">
+            <div class="config-tools" role="group" aria-label="Trip time set in use">
+              <span class="field-label">Use</span>
+              <button class="btn" type="button" data-source="config" aria-pressed="false">Configured</button>
+              <button class="btn" type="button" data-source="fitted" aria-pressed="false">Fitted</button>
+              <button class="btn primary" type="button" id="trip-time-save">Save</button>
+            </div>
+            <div class="config-table-scroll">
+              <table class="config-table">
+                <thead><tr><th>Field</th><th>Configured</th><th>Fitted</th><th>Legs</th></tr></thead>
+                <tbody id="trip-time-rows"></tbody>
+              </table>
+            </div>
+            <div class="config-note" id="trip-time-fit"></div>
+            <div class="config-note">
+              /routes and Best deal rank by profit per hour with this trip time. A leg is docked time, then undocking,
+              jumps, supercruise (coeff &times; Ls<sup>1/3</sup>) and docking. Fitted values come from the journal
+              events of every node: the ship&rsquo;s own legs once it has 30, else every ship&rsquo;s.
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    window.EDCR_WEB_CONFIG = {};
+  </script>
+  <script src="/assets/config.js" defer></script>
+  <script src="/assets/hub-status.js" defer></script>
+</body>
+</html>

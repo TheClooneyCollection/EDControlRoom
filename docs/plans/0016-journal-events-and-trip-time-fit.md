@@ -2,7 +2,7 @@
 
 ## Status
 
-Designed (2026-11-13). Built: step 1 (store and local sync, 2026-11-13), step 2 (peer sync, 2026-11-13), step 3 (per-ship fit, 2026-11-13).
+Designed (2026-11-13). Built: step 1 (store and local sync, 2026-11-13), step 2 (peer sync, 2026-11-13), step 3 (per-ship fit, 2026-11-13), step 4 (`/config` page, 2026-11-13).
 
 ## Why
 

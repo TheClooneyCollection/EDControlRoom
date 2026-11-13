@@ -59,6 +59,12 @@ window.EDCRNode = (() => {
         },
         { href: "/travel", label: "Travel", icon: '<path d="M3 11l18-8-8 18-2-8-8-2z"/>' }
       ]
+    },
+    {
+      label: "Setup",
+      items: [
+        { href: "/config", label: "Config", icon: '<path d="M4 6h10m4 0h2M4 12h4m4 0h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>' }
+      ]
     }
   ];
   const MOBILE_QUERY = window.matchMedia("(max-width: 760px)");

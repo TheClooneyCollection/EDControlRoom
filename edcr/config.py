@@ -894,6 +894,22 @@ def save_piper_voice(path: Path | str, voice: PiperVoiceConfig) -> Path:
     return config_path
 
 
+def save_time_model(path: Path | str, model: TimeModel, source: str) -> Path:
+    """Write the configured trip time values and which set is used into `[eddn.time_model]`."""
+    if source not in TIME_MODEL_SOURCES:
+        raise ConfigError(f"Time model source must be one of {', '.join(TIME_MODEL_SOURCES)}.")
+    config_path = Path(path)
+    content = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+    content = _upsert_toml_string(content, section="eddn.time_model", key="source", value=source)
+    for name in model.__dataclass_fields__:
+        value = float(getattr(model, name))
+        if not math.isfinite(value) or value < 0:
+            raise ConfigError(f"Config value `eddn.time_model.{name}` must be zero or positive.")
+        content = _upsert_toml_line(content, section="eddn.time_model", key=name, rendered_value=repr(value))
+    config_path.write_text(content, encoding="utf-8")
+    return config_path
+
+
 def _minimal_config_text(home_system: str) -> str:
     return "\n".join((
         "[paths]",

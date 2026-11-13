@@ -189,6 +189,15 @@ function haulUrl(tradeRoute) {
   return `/haul#route=${encodeURIComponent(JSON.stringify(tradeRoute))}`;
 }
 
+// Which trip time set the estimate used (`time_model` from /api/time-model); see /config.
+function timeModelLabel(timeModel) {
+  if (!timeModel) return "";
+  const active = timeModel.active;
+  if (active.scope === "ship") return "trip time fitted for this ship";
+  if (active.scope === "pooled") return "trip time fitted on every ship";
+  return timeModel.source === "fitted" ? "configured trip time (too few legs to fit)" : "configured trip time";
+}
+
 function renderRoutes(payload) {
   const table = document.getElementById("route-table");
   const query = payload.query;
@@ -196,7 +205,8 @@ function renderRoutes(payload) {
   const away = payload.distance_system ? ` (Ly away from ${payload.distance_system})` : "";
   const where = query.view === "near" ? `near ${query.system}${away}` : `anywhere${away}`;
   const source = payload.hub ? ` via hub ${payload.hub}` : "";
-  setText("routes-status", `${payload.routes.length} routes ${where}, ${reach}, from ${count(payload.markets_considered)} markets${source}`);
+  const timing = timeModelLabel(payload.time_model);
+  setText("routes-status", `${payload.routes.length} routes ${where}, ${reach}, from ${count(payload.markets_considered)} markets${source}${timing ? `; ${timing}` : ""}`);
   if (!payload.routes.length) {
     table.innerHTML = `<p class="empty-note">No profitable round trips match these filters.</p>`;
     return;

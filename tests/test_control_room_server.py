@@ -1013,10 +1013,11 @@ class ControlRoomServerTests(unittest.TestCase):
     def test_every_page_renders_the_one_shared_nav(self) -> None:
         web_dir = Path(server_app.__file__).resolve().parents[3] / "web"
         nav = (web_dir / "nav.js").read_text(encoding="utf-8")
-        for href in ("/haul", "/multi-haul", "/markets", "/routes", "/controls", "/travel"):
+        for href in ("/haul", "/multi-haul", "/markets", "/routes", "/controls", "/travel", "/config"):
             self.assertIn(f'href: "{href}"', nav)
         self.assertIn('anchor.setAttribute("aria-current", "page")', nav)
-        for page in ("haul-v1.html", "multi-haul.html", "controls.html", "markets.html", "routes.html", "travel.html"):
+        for page in ("haul-v1.html", "multi-haul.html", "controls.html", "markets.html", "routes.html", "travel.html",
+                     "config.html"):
             html = (web_dir / page).read_text(encoding="utf-8")
             self.assertIn('<nav class="site-nav" id="site-nav" aria-label="Pages"></nav>\n'
                           '      <script src="/assets/nav.js"></script>', html, page)
