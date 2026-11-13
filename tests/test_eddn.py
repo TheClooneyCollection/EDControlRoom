@@ -16,7 +16,7 @@ from edcr.eddn.service import start_eddn_service
 from edcr.eddn.messages import (
     COMMODITY_SCHEMA, JOURNAL_SCHEMA, SIGNAL_SCHEMA, CarrierName, CarrierSighting, journal_event_updates, parse_eddn_message,
 )
-from edcr.eddn.store import EddnStore
+from edcr.eddn.store import _SCHEMA, EddnStore
 from edcr.recent_markets import save_recent_markets, snapshot_from_market_json
 
 LIVE_HEADER = {"softwareName": "EDMC", "gameversion": "4.0.0.1904", "uploaderID": "x"}
@@ -96,8 +96,15 @@ def frame(envelope: dict[str, object]) -> bytes:
     return zlib.compress(json.dumps(envelope).encode())
 
 
+# Building the schema costs most of a new store; each store copies it from this one instead.
+_schema_template = sqlite3.connect(":memory:", check_same_thread=False)
+_schema_template.executescript(_SCHEMA)
+
+
 def memory_store() -> EddnStore:
-    return EddnStore(sqlite3.connect(":memory:", check_same_thread=False))
+    connection = sqlite3.connect(":memory:", check_same_thread=False)
+    _schema_template.backup(connection)
+    return EddnStore(connection)
 
 
 def prices(store: EddnStore) -> list[tuple[object, ...]]:
