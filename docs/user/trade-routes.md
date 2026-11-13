@@ -55,6 +55,15 @@ enabled = true           # off by default
 database_file = ".eddn_markets.sqlite3"
 max_age_days = 7.0       # drop markets older than this
 status_every_s = 30.0    # server log status line; 0 turns it off
+
+[eddn.time_model]        # trip time for profit per hour; set only what you change
+docked_s = 90.0          # trading while docked, per station
+travel_base_s = 110.0    # undock, leave the station, dock again
+first_jump_s = 170.0     # charge, align and the first jump
+per_extra_jump_s = 65.0  # each further jump
+supercruise_coeff = 13.0 # supercruise seconds = coeff * Ls^(1/3)
+unknown_dist_ls = 1000.0 # Ls assumed when a station's distance is unknown
+surface_extra_s = 30.0   # planetary approach and landing
 ```
 
 Restart the server after changing these.

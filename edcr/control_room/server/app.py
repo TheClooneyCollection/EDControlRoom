@@ -240,6 +240,7 @@ def build_observer_server_app(
     recent_markets_file: Path | None = None,
     eddn_status: Callable[[], dict[str, Any]] | None = None,
     market_database_file: Path | None = None,
+    time_model: TimeModel = TimeModel(),
     ardent_lookup: FactLookup | None = None,
     # Peer role: the link to the hub, which answers searches, routes and station facts.
     peer_link: PeerLink | None = None,
@@ -684,7 +685,7 @@ def build_observer_server_app(
             facts = station_facts(stations)
             # A peer without a hub address yet (discovery comes later) owns no station facts.
             hint = "Station facts come from the hub." if market_database_file is None else None
-        estimate = estimate_trip(facts[0], facts[1], laden_jump_range_ly=laden, time_model=TimeModel())
+        estimate = estimate_trip(facts[0], facts[1], laden_jump_range_ly=laden, time_model=time_model)
         trip: dict[str, Any] = {
             **asdict(estimate),
             "stations": {"x": asdict(facts[0]), "y": asdict(facts[1])},
@@ -924,7 +925,7 @@ def build_observer_server_app(
         names = {item.commodity: item.name for snapshot in read_recent_markets() for item in market_items(snapshot)}
         try:
             return LinkReply(200, run_route_query(
-                market_database_file, query, time_model=TimeModel(), display_names=names, now=time.time()
+                market_database_file, query, time_model=time_model, display_names=names, now=time.time()
             ))
         except RouteQueryError as exc:
             return LinkReply(404, {"detail": str(exc)})

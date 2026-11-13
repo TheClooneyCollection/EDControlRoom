@@ -246,11 +246,11 @@ class EddnRoutesApiTests(unittest.TestCase):
                 [f"{price:,} Cr" for price in (out["buy_price"], out["sell_price"], back["buy_price"], back["sell_price"])],
             )
 
-            def global_view(system: str) -> dict:
+            def global_view(system: str, time_model: TimeModel = TimeModel()) -> dict:
                 return run_route_query(
                     path, parse_route_query({"view": "global"}, search_defaults={}, current_system=system,
                                             cargo_capacity=1137),
-                    time_model=TimeModel(), display_names={}, now=NOW,
+                    time_model=time_model, display_names={}, now=NOW,
                 )
 
             from_alpha = global_view("alpha")
@@ -269,14 +269,19 @@ class EddnRoutesApiTests(unittest.TestCase):
                 data_provider=lambda: type("Data", (), {"ship": ShipState(system="Nowhere", cargo_capacity=1137)})(),
                 command_handler=None, broker=InMemoryObserverSessionBroker(),
                 auth=SharedAccessTokenAuth("secret-token"), market_database_file=path,
+                time_model=TimeModel(docked_s=0.0),
             )
             with patch("edcr.control_room.server.app.load_haul_search_config", return_value={}), TestClient(app) as client:
                 self.assertEqual(client.get("/api/eddn-routes").status_code, 401)
                 unknown = client.get("/api/eddn-routes?access_token=secret-token")
                 self.assertEqual(unknown.status_code, 404)
                 self.assertIn("Nowhere", unknown.json()["detail"])
-                self.assertEqual(client.get("/api/eddn-routes?access_token=secret-token&view=global&max_age_hours=999999")
-                                 .json()["routes"][0]["station_2"]["station"], "Alpha Port")
+                found = client.get("/api/eddn-routes?access_token=secret-token&view=global&max_age_hours=999999")
+                self.assertEqual(found.json()["routes"][0]["station_2"]["station"], "Alpha Port")
+                # The configured time model sets the trip time: no docked time is 180s shorter.
+                configured = global_view("Nowhere", TimeModel(docked_s=0.0))["routes"][0]["trip_s"]
+                self.assertEqual(found.json()["routes"][0]["trip_s"], configured)
+                self.assertEqual(global_view("Nowhere")["routes"][0]["trip_s"] - configured, 180)
                 self.assertEqual(client.get("/api/eddn-routes?access_token=secret-token&jumps=x").status_code, 400)
 
 

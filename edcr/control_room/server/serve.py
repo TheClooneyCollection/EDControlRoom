@@ -290,6 +290,7 @@ def serve_observer_mode(
         recent_markets_file=recent_markets_file,
         eddn_status=eddn.status if eddn is not None else None,
         market_database_file=eddn_config.database_file if store is not None else None,
+        time_model=eddn_config.time_model,
         ardent_lookup=ardent_lookup,
         peer_link=peer_link,
         hub_side=hub_side,

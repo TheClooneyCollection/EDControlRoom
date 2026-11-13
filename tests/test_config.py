@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from edcr.config import ConfigError, default_runtime_platform, load_config, save_home_system, save_piper_voice
+from edcr.eddn.routes import TimeModel
 
 
 def _write_config(path: Path, content: str) -> None:
@@ -195,6 +196,27 @@ dest_usage = "Usage: dest <system or station name>"
                 config.messages.templates["invalid_amount"],
                 "Invalid amount. Use a positive integer or MAX.",
             )
+
+    def test_eddn_time_model_overrides_single_fields_and_rejects_bad_keys(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            _write_config(path, "[paths]\n[controls]\n[runtime]\n")
+            self.assertEqual(load_config(path).eddn.time_model, TimeModel())
+
+            _write_config(path, "[eddn.time_model]\ndocked_s = 60\nfirst_jump_s = 140.0\n")
+            self.assertEqual(
+                load_config(path).eddn.time_model, replace(TimeModel(), docked_s=60.0, first_jump_s=140.0)
+            )
+
+            for body, message in (
+                ("docked = 60", "Unknown `eddn.time_model` keys: docked"),
+                ("docked_s = -1", "eddn.time_model.docked_s"),
+                ('docked_s = "60"', "docked_s"),
+            ):
+                with self.subTest(body=body):
+                    _write_config(path, f"[eddn.time_model]\n{body}\n")
+                    with self.assertRaisesRegex(ConfigError, message):
+                        load_config(path)
 
     def test_loads_control_room_home_system_override(self) -> None:
         with TemporaryDirectory() as temp_dir:

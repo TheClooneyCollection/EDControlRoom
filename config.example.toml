@@ -28,6 +28,12 @@
 # max_age_days = 7.0
 # status_every_s = 30.0
 
+# [eddn.time_model]
+# Trip time for /routes and Best deal (defaults/eddn.toml); set only the fields to change.
+# docked_s = 90.0
+# first_jump_s = 170.0
+# supercruise_coeff = 13.0
+
 [hub]
 # "standalone" (default), "hub" or "peer" (docs/user/hub.md). With several machines, one is the
 # hub: it keeps the market DB and every machine's haul history, and its pages show and drive any
