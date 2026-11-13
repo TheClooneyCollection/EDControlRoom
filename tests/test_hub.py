@@ -26,6 +26,7 @@ from edcr.control_room.server.auth import SharedAccessTokenAuth
 from edcr.control_room.server.broker import InMemoryObserverSessionBroker
 from edcr.eddn.messages import CarrierName, CarrierSighting, StationInfo, SystemPosition
 from edcr.eddn.route_query import parse_route_query, resolve_route_params
+from edcr.eddn.routes import TimeModel
 from edcr.eddn.store import EddnStore
 from edcr.hub.history import CentralHistory, HubRuns
 from edcr.hub.nodes import BadItem, HubLinkSession, HubSide, NodeRegistry, store_link_item
@@ -39,6 +40,7 @@ from edcr.hub.protocol import (
 from edcr.inara.trade_routes import TradeRoute, TradeRouteSearchResult
 from edcr.journal_store import JournalStore
 from edcr.journal_sync import JournalBatch, SyncPosition, read_batches
+from edcr.trip_time_fit import TripTimeModels
 from edcr.recent_markets import MarketSnapshot, save_recent_markets, snapshot_entry, snapshot_from_market_json
 from tests.shared_loop import TestClient
 from tests.test_eddn import memory_store, prices
@@ -687,6 +689,33 @@ class LinkedServerTests(unittest.TestCase):
         self.assertEqual(down.status_code, 502)
         self.assertEqual(down.json()["detail"], "Hub Home is unreachable: not connected to the hub: cable pulled")
         self.assertEqual(deal_down.json()["trip"]["hint"], "Hub Home is unreachable: not connected to the hub: cable pulled")
+
+    def test_the_trip_time_model_comes_from_the_hub_for_this_ship(self) -> None:
+        hub_model = TimeModel(docked_s=0.0)
+        hub_models = TripTimeModels(configured=hub_model, source="config", fit_days=14.0, connect=None,
+                                    clock=lambda: 0.0)
+        hub_app = server(market_database_file=self.database, hub_side=self.r.hub_side(), ardent_lookup=None,
+                         time_models=hub_models)
+        self.r.handlers.update(hub_app.state.link_handlers)
+        self.r.attach()
+        flying = lambda: SimpleNamespace(ship=ShipState(system="Sol", cargo_capacity=784, ship_id=9))
+        params = {"access_token": TOKEN}
+        with (
+            patch("edcr.control_room.server.app.load_haul_search_config", return_value={}),
+            TestClient(self.peer_app(data_provider=flying)) as client,
+        ):
+            model = client.get("/api/time-model", params=params).json()
+            routes = client.get("/api/eddn-routes", params={**params, "view": "global", "max_age_hours": "any"})
+            deal = client.get("/api/market-compare", params={**params, "x": GALILEO.market_id, "y": 2})
+            self.r.drop(self.r.links[-1])
+            deal_down = client.get("/api/market-compare", params={**params, "x": GALILEO.market_id, "y": 2})
+
+        self.assertEqual((model["ship_id"], model["configured"]["docked_s"], model["active"]["scope"]),
+                         (9, 0.0, "config"))
+        self.assertEqual(routes.json()["time_model"]["ship_id"], 9)
+        self.assertEqual(deal.json()["trip"]["time_model"]["configured"]["docked_s"], 0.0)
+        # Without the hub the peer falls back to its own configured model.
+        self.assertEqual(deal_down.json()["trip"]["time_model"]["configured"]["docked_s"], TimeModel().docked_s)
 
     def test_carrier_names_come_from_the_hub_store(self) -> None:
         self.r.attach()

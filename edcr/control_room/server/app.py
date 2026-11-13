@@ -31,6 +31,7 @@ from edcr.eddn.route_query import (
     run_route_query,
 )
 from edcr.eddn.routes import TimeModel
+from edcr.trip_time_fit import TripTimeModels, fit_payload, model_from_payload
 from edcr.haul_history import load_runs, parse_window, summarize
 from edcr.journal_trade_ledger import journal_trade_ledger
 from edcr.market_compare import compare_markets
@@ -47,6 +48,7 @@ from edcr.hub.protocol import (
     REQUEST_HAUL_STATS,
     REQUEST_MEASURED,
     REQUEST_STATION_FACTS,
+    REQUEST_TIME_MODEL,
     HubUnreachable,
     LinkReply,
 )
@@ -240,7 +242,8 @@ def build_observer_server_app(
     recent_markets_file: Path | None = None,
     eddn_status: Callable[[], dict[str, Any]] | None = None,
     market_database_file: Path | None = None,
-    time_model: TimeModel = TimeModel(),
+    # The trip time model: configured, or fitted per ship from the journal store. None keeps the defaults.
+    time_models: TripTimeModels | None = None,
     ardent_lookup: FactLookup | None = None,
     # Peer role: the link to the hub, which answers searches, routes and station facts.
     peer_link: PeerLink | None = None,
@@ -249,6 +252,10 @@ def build_observer_server_app(
     route_compare_navroute_wait_seconds: float = 6.0,
     route_compare_compare_retry_attempts: int = 3,
 ) -> Starlette:
+    if time_models is None:
+        time_models = TripTimeModels(configured=TimeModel(), source="config", fit_days=14.0, connect=None,
+                                     clock=time.time)
+
     def unauthorized_response() -> JSONResponse:
         return JSONResponse(
             {"detail": "authentication required"},
@@ -657,7 +664,7 @@ def build_observer_server_app(
             comparison = compare_markets(market_items(market_x), market_items(market_y), cargo_capacity)
             return {
                 **asdict(comparison),
-                **read_trip(market_x, market_y, laden),
+                **read_trip(market_x, market_y, laden, getattr(ship, "ship_id", None)),
                 **read_measured(market_x, market_y, ship, current_laden, window, since, until),
             }
 
@@ -667,7 +674,7 @@ def build_observer_server_app(
         return JSONResponse(payload)
 
     def read_trip(
-        market_x: MarketSnapshot, market_y: MarketSnapshot, laden: float
+        market_x: MarketSnapshot, market_y: MarketSnapshot, laden: float, ship_id: int | None
     ) -> dict[str, Any]:
         """Estimated trip time (station facts, here or from the hub) and measured haul profit per hour."""
         stations = [{"market_id": m.market_id, "station": m.station, "system": m.system} for m in (market_x, market_y)]
@@ -685,9 +692,11 @@ def build_observer_server_app(
             facts = station_facts(stations)
             # A peer without a hub address yet (discovery comes later) owns no station facts.
             hint = "Station facts come from the hub." if market_database_file is None else None
+        time_model, time_model_payload = read_time_model(ship_id)
         estimate = estimate_trip(facts[0], facts[1], laden_jump_range_ly=laden, time_model=time_model)
         trip: dict[str, Any] = {
             **asdict(estimate),
+            "time_model": time_model_payload,
             "stations": {"x": asdict(facts[0]), "y": asdict(facts[1])},
             "hint": hint,
         }
@@ -730,6 +739,34 @@ def build_observer_server_app(
                 "laden_jump_range_ly": current_laden,
             },
         }
+
+    def read_time_model(ship_id: int | None) -> tuple[TimeModel, dict[str, Any]]:
+        """The trip time model for the ship and its `/api/time-model` payload; a peer asks its hub, which
+        keeps the journal events and the settings, and falls back to its own configured model."""
+        if peer_link is not None:
+            try:
+                reply = peer_link.request(REQUEST_TIME_MODEL, {"ship_id": ship_id},
+                                          timeout_s=peer_link.request_timeout_s)
+                model = model_from_payload(reply.body.get("active")) if reply.status == 200 else None
+                if model is not None:
+                    return model, reply.body
+            except (HubUnreachable, AttributeError):
+                pass
+        return time_models.active(ship_id).model, time_models.payload(ship_id)
+
+    def own_ship_id() -> int | None:
+        return _ship_id_value(getattr(getattr(data_provider(), "ship", None), "ship_id", None))
+
+    def answer_time_model(body: Any) -> LinkReply:
+        """A peer's trip time model for its ship."""
+        if not isinstance(body, dict):
+            return LinkReply(400, {"detail": "body must be a JSON object"})
+        return LinkReply(200, time_models.payload(_ship_id_value(body.get("ship_id"))))
+
+    async def time_model_endpoint(params: Mapping[str, str]) -> JSONResponse:
+        """Both trip time sets for this node's ship, and which is in use."""
+        payload = await asyncio.to_thread(lambda: read_time_model(own_ship_id())[1])
+        return JSONResponse(payload)
 
     def station_facts(stations: list[dict[str, Any]]) -> list[StationFacts]:
         """Facts from this server's store, then Ardent for what it lacks; a peer's requests land here too."""
@@ -910,8 +947,15 @@ def build_observer_server_app(
             "cargo_capacity": _ship_cargo_capacity(data),
         }
 
-    def answer_eddn_routes(params: Any) -> LinkReply:
-        """Routes from this server's market store; a peer's params arrive already resolved for its ship."""
+    def answer_peer_eddn_routes(body: Any) -> LinkReply:
+        """A peer's route search, its params resolved for its ship, and its ShipID for the trip time."""
+        if not isinstance(body, dict):
+            return LinkReply(400, {"detail": "route params must be an object"})
+        params = dict(body)
+        return answer_eddn_routes(params, _ship_id_value(params.pop("ship_id", None)))
+
+    def answer_eddn_routes(params: Any, ship_id: int | None) -> LinkReply:
+        """Routes from this server's market store."""
         if not isinstance(params, dict):
             return LinkReply(400, {"detail": "route params must be an object"})
         if market_database_file is None:
@@ -923,22 +967,25 @@ def build_observer_server_app(
         except ValueError as exc:
             return LinkReply(400, {"detail": str(exc)})
         names = {item.commodity: item.name for snapshot in read_recent_markets() for item in market_items(snapshot)}
+        active = time_models.active(ship_id)
         try:
-            return LinkReply(200, run_route_query(
-                market_database_file, query, time_model=time_model, display_names=names, now=time.time()
-            ))
+            payload = run_route_query(
+                market_database_file, query, time_model=active.model, display_names=names, now=time.time()
+            )
         except RouteQueryError as exc:
             return LinkReply(404, {"detail": str(exc)})
         except sqlite3.Error as exc:
             return LinkReply(503, {"detail": f"Cannot read the market database: {exc}"})
+        return LinkReply(200, {**payload, "time_model": time_models.payload(ship_id)})
 
     async def eddn_routes(query: Mapping[str, str]) -> JSONResponse:
         params = dict(query)
         if peer_link is not None:
             # The hub answers for this ship and this server's search settings, not its own.
             ship_inputs = await asyncio.to_thread(route_ship_inputs)
-            return await ask_hub(REQUEST_EDDN_ROUTES, resolve_route_params(params, **ship_inputs))
-        return link_reply_response(await asyncio.to_thread(answer_eddn_routes, params))
+            body = {**resolve_route_params(params, **ship_inputs), "ship_id": own_ship_id()}
+            return await ask_hub(REQUEST_EDDN_ROUTES, body)
+        return link_reply_response(await asyncio.to_thread(answer_eddn_routes, params, own_ship_id()))
 
     def link_reply_response(reply: LinkReply) -> JSONResponse:
         return JSONResponse(reply.body, status_code=reply.status)
@@ -966,7 +1013,8 @@ def build_observer_server_app(
 
     link_handlers: dict[str, RequestHandler] = {
         REQUEST_HAUL_SEARCH: answer_haul_search,
-        REQUEST_EDDN_ROUTES: answer_eddn_routes,
+        REQUEST_EDDN_ROUTES: answer_peer_eddn_routes,
+        REQUEST_TIME_MODEL: answer_time_model,
         REQUEST_EDDN_STATUS: answer_eddn_status,
         REQUEST_STATION_FACTS: answer_station_facts,
         REQUEST_HAUL_STATS: answer_haul_stats,
@@ -1168,6 +1216,7 @@ def build_observer_server_app(
         "/api/spansh-route": spansh_route,
         "/api/eddn-routes": eddn_routes,
         "/api/journal-ledger": journal_ledger,
+        "/api/time-model": time_model_endpoint,
     }
     assert node_reads.keys() == NODE_READS
     # Page actions that run on the node a page drives (plan 0015 step 6); the body is JSON.
@@ -1389,6 +1438,7 @@ def build_observer_server_app(
             Route("/api/eddn-status", eddn_status_endpoint),
             Route("/api/carrier-names", carrier_names_endpoint),
             Route("/api/eddn-routes", node_read_endpoint("/api/eddn-routes")),
+            Route("/api/time-model", node_read_endpoint("/api/time-model")),
             Route("/api/hub-status", hub_status_endpoint),
             Route("/api/nodes", nodes_endpoint),
             Route("/api/hub-voice", hub_voice_endpoint, methods=["GET", "POST"]),
@@ -1460,6 +1510,10 @@ def session_start_messages(
 # Best deal's measured profit per hour window choices (haul_history.parse_window labels).
 MEASURED_WINDOWS = ("48h", "7d", "30d", "all")
 MEASURED_WINDOW_DEFAULT = "7d"
+
+
+def _ship_id_value(value: Any) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
 def _ship_cargo_capacity(data: object) -> int:

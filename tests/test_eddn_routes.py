@@ -20,6 +20,7 @@ from edcr.eddn.messages import CarrierSighting
 from edcr.eddn.route_query import parse_route_query, run_route_query
 from edcr.eddn.routes import RouteFilters, TimeModel, find_routes, load_route_markets
 from edcr.eddn.store import EddnStore
+from edcr.trip_time_fit import TripTimeModels
 from tests.shared_loop import TestClient
 from tests.test_eddn import commodity_envelope, docked_envelope, frame, memory_store, signal_envelope
 
@@ -269,7 +270,8 @@ class EddnRoutesApiTests(unittest.TestCase):
                 data_provider=lambda: type("Data", (), {"ship": ShipState(system="Nowhere", cargo_capacity=1137)})(),
                 command_handler=None, broker=InMemoryObserverSessionBroker(),
                 auth=SharedAccessTokenAuth("secret-token"), market_database_file=path,
-                time_model=TimeModel(docked_s=0.0),
+                time_models=TripTimeModels(configured=TimeModel(docked_s=0.0), source="config", fit_days=14.0,
+                                           connect=None, clock=lambda: NOW),
             )
             with patch("edcr.control_room.server.app.load_haul_search_config", return_value={}), TestClient(app) as client:
                 self.assertEqual(client.get("/api/eddn-routes").status_code, 401)
@@ -282,6 +284,7 @@ class EddnRoutesApiTests(unittest.TestCase):
                 configured = global_view("Nowhere", TimeModel(docked_s=0.0))["routes"][0]["trip_s"]
                 self.assertEqual(found.json()["routes"][0]["trip_s"], configured)
                 self.assertEqual(global_view("Nowhere")["routes"][0]["trip_s"] - configured, 180)
+                self.assertEqual(found.json()["time_model"]["active"]["scope"], "config")
                 self.assertEqual(client.get("/api/eddn-routes?access_token=secret-token&jumps=x").status_code, 400)
 
 

@@ -39,6 +39,7 @@ from edcr.hub.relay import HubRelay, PeerRelay, node_state
 from edcr.hub.voice import HubVoice, callout_text, node_muter
 from edcr.journal_store import JournalStore
 from edcr.journal_sync import sync_journal_every
+from edcr.trip_time_fit import TripTimeModels, connect_read_only
 from edcr.recent_markets import load_recent_markets, record_market, watch_file
 from edcr.market_db import open_market_store, station_facts_writer
 from edcr.config import with_hub_role
@@ -310,7 +311,14 @@ def serve_observer_mode(
         recent_markets_file=recent_markets_file,
         eddn_status=eddn.status if eddn is not None else None,
         market_database_file=eddn_config.database_file if store is not None else None,
-        time_model=eddn_config.time_model,
+        time_models=TripTimeModels(
+            configured=eddn_config.time_model,
+            source=eddn_config.time_model_source,
+            fit_days=eddn_config.time_model_fit_days,
+            # A peer's hub fits for it.
+            connect=connect_read_only(hub_config.journal_events_file) if journal_store is not None else None,
+            clock=time.time,
+        ),
         ardent_lookup=ardent_lookup,
         peer_link=peer_link,
         hub_side=hub_side,

@@ -236,6 +236,10 @@ class EddnConfig:
     status_every_s: float = 30.0
     # Trip time estimate for /routes and Best deal; `[eddn.time_model]` overrides single fields.
     time_model: TimeModel = field(default_factory=TimeModel)
+    # "config" uses `time_model` as set; "fitted" uses the values fitted from the journal store per ship.
+    time_model_source: str = "config"
+    # Days of journal events the fit reads.
+    time_model_fit_days: float = 14.0
 
 
 @dataclass(frozen=True)
@@ -437,10 +441,14 @@ def _require_table(raw: dict[str, object], key: str) -> dict[str, object]:
     return value
 
 
+TIME_MODEL_SOURCES = ("config", "fitted")
+_TIME_MODEL_SETTINGS = ("source", "fit_days")
+
+
 def _time_model(raw: dict[str, object], defaults: dict[str, object]) -> TimeModel:
     fallback = TimeModel()
     names = tuple(fallback.__dataclass_fields__)
-    unknown = sorted(set(raw) - set(names))
+    unknown = sorted(set(raw) - set(names) - set(_TIME_MODEL_SETTINGS))
     if unknown:
         raise ConfigError(f"Unknown `eddn.time_model` keys: {', '.join(unknown)}.")
     values = {name: _float(raw, name, _float(defaults, name, getattr(fallback, name))) for name in names}
@@ -448,6 +456,16 @@ def _time_model(raw: dict[str, object], defaults: dict[str, object]) -> TimeMode
         if not math.isfinite(value) or value < 0:
             raise ConfigError(f"Config value `eddn.time_model.{name}` must be zero or positive.")
     return TimeModel(**values)
+
+
+def _time_model_settings(raw: dict[str, object], defaults: dict[str, object]) -> tuple[str, float]:
+    source = _string(raw, "source", _string(defaults, "source", "config"))
+    if source not in TIME_MODEL_SOURCES:
+        raise ConfigError(f"Config value `eddn.time_model.source` must be one of {', '.join(TIME_MODEL_SOURCES)}.")
+    fit_days = _float(raw, "fit_days", _float(defaults, "fit_days", 14.0))
+    if not math.isfinite(fit_days) or fit_days <= 0:
+        raise ConfigError("Config value `eddn.time_model.fit_days` must be positive.")
+    return source, fit_days
 
 
 def _optional_table(raw: dict[str, object], key: str) -> dict[str, object]:
@@ -967,6 +985,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     default_control_room = _load_default_control_room_table()
     eddn = _optional_table(raw, "eddn")
     default_eddn = _load_default_eddn_table()
+    time_model_settings = _time_model_settings(_optional_table(eddn, "time_model"), _optional_table(default_eddn, "time_model"))
     hub = _optional_table(raw, "hub")
     default_hub = _load_default_hub_table()
     default_timing = _load_default_timing_table()
@@ -1210,6 +1229,8 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             max_age_days=_float(eddn, "max_age_days", _float(default_eddn, "max_age_days", 7.0)),
             status_every_s=_float(eddn, "status_every_s", _float(default_eddn, "status_every_s", 30.0)),
             time_model=_time_model(_optional_table(eddn, "time_model"), _optional_table(default_eddn, "time_model")),
+            time_model_source=time_model_settings[0],
+            time_model_fit_days=time_model_settings[1],
         ),
         hub=HubConfig(
             role=_string(hub, "role", _string(default_hub, "role", "standalone")).strip().lower(),

@@ -57,6 +57,8 @@ max_age_days = 7.0       # drop markets older than this
 status_every_s = 30.0    # server log status line; 0 turns it off
 
 [eddn.time_model]        # trip time for profit per hour; set only what you change
+source = "config"        # "fitted": fit them per ship from the journal events instead
+fit_days = 14.0          # days of journal events the fit reads
 docked_s = 90.0          # trading while docked, per station
 travel_base_s = 110.0    # undock, leave the station, dock again
 first_jump_s = 170.0     # charge, align and the first jump
@@ -67,6 +69,8 @@ surface_extra_s = 30.0   # planetary approach and landing
 ```
 
 Restart the server after changing these.
+
+With `source = "fitted"` the hub (or a standalone server) fits the values to how you actually fly, from the journal events of every node over the last `fit_days`: per ship once it has 30 clean Undocked-to-Docked legs, else every ship pooled, else the configured values. A field with fewer than 10 legs that tell it apart (for example two-jump legs for `per_extra_jump_s`) keeps the configured value. A peer uses its hub's settings and fit for its own ship. `GET /api/time-model` shows both sets, the legs behind the fit and which set is in use; `/api/eddn-routes` and Best deal's `trip` carry the same under `time_model`.
 
 On a second machine you can skip the listener and ask a home Control Room instead: see [hub.md](hub.md).
 
