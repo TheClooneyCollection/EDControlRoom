@@ -17,6 +17,10 @@ outbox_file = ".control_room_hub_outbox.sqlite3"
 runs_file = ".control_room_hub_runs.jsonl"
 # Hub only: which node the hub voices and whether its speakers are on, as set from the hub pages.
 voice_file = ".control_room_hub_voice.json"
+# Hub and standalone: every node's journal events (chat and friends left out), for fitting the trip time.
+journal_events_file = ".control_room_journal.sqlite3"
+# Every role: how far this node's journal files have been passed on to the store (or, on a peer, the outbox).
+journal_sync_file = ".control_room_journal_sync.json"
 # Seconds to wait for the hub on route, status and station fact requests.
 timeout_s = 10.0
 # Seconds to wait for an Inara haul search, which drives a browser on the hub.

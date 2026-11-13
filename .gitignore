@@ -29,6 +29,8 @@ haul_search.toml
 
 .control_room_hub_outbox.sqlite3*
 .control_room_hub_runs.jsonl
+.control_room_journal.sqlite3*
+.control_room_journal_sync.json
 .control_room_hub_voice.json
 
 .control_room_node_id

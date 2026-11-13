@@ -37,6 +37,8 @@ from edcr.hub.outbox import Outbox
 from edcr.hub.peer import NODE_ID_FILE_NAME, NodeHello, PeerLink, load_node_id, new_node_id, websocket_dialer
 from edcr.hub.relay import HubRelay, PeerRelay, node_state
 from edcr.hub.voice import HubVoice, callout_text, node_muter
+from edcr.journal_store import JournalStore
+from edcr.journal_sync import sync_journal_every
 from edcr.recent_markets import load_recent_markets, record_market, watch_file
 from edcr.market_db import open_market_store, station_facts_writer
 from edcr.config import with_hub_role
@@ -268,6 +270,19 @@ def serve_observer_mode(
             hub_logger.info("Hub not advertised over mDNS: bound to %s; serve with `lan` so peers find it", host)
     if store is not None:
         import_game_markets_every(store, recent_markets_file, 5.0, db_logger.info, stop=stop_background)
+    if hub_config.owns_data:
+        # Hub and standalone keep their own journal events under their node id; peers send theirs to the hub.
+        journal_store = JournalStore.open(hub_config.journal_events_file)
+        own_node_id = node.node_id if node is not None else load_node_id(
+            Path(loaded.config_path).parent / NODE_ID_FILE_NAME, new_node_id
+        )
+        journal_logger = logging.getLogger("edcr.journal")
+        journal_logger.info("Journal events: %s -> %s (node %s)", journal_dir, hub_config.journal_events_file, own_node_id)
+        sync_journal_every(
+            journal_dir, hub_config.journal_sync_file,
+            lambda batch: journal_store.add(own_node_id, batch.file, batch.lines),
+            5.0, stop=stop_background, log=journal_logger.info,
+        )
     ardent_lookup: ArdentLookup | None = None
     if store is not None:
         ardent_lookup = ArdentLookup(

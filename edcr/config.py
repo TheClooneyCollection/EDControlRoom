@@ -254,6 +254,10 @@ class HubConfig:
     runs_file: Path = Path(".control_room_hub_runs.jsonl")
     # Hub only: the node whose callouts the hub voices and its speaker switch, set from the hub pages.
     voice_file: Path = Path(".control_room_hub_voice.json")
+    # Hub and standalone: every node's journal events (chat left out), for fitting the trip time.
+    journal_events_file: Path = Path(".control_room_journal.sqlite3")
+    # Every role: how far this node's journal files have been passed on to the store or the outbox.
+    journal_sync_file: Path = Path(".control_room_journal_sync.json")
     timeout_s: float = 10.0
     search_timeout_s: float = 180.0
     # Seconds of quiet on the link before the peer pings the hub; twice that without an answer redials.
@@ -1221,6 +1225,12 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             voice_file=Path(
                 _string(hub, "voice_file", _string(default_hub, "voice_file", ".control_room_hub_voice.json"))
             ),
+            journal_events_file=Path(_string(
+                hub, "journal_events_file", _string(default_hub, "journal_events_file", ".control_room_journal.sqlite3")
+            )),
+            journal_sync_file=Path(_string(
+                hub, "journal_sync_file", _string(default_hub, "journal_sync_file", ".control_room_journal_sync.json")
+            )),
             timeout_s=_float(hub, "timeout_s", _float(default_hub, "timeout_s", 10.0)),
             search_timeout_s=_float(hub, "search_timeout_s", _float(default_hub, "search_timeout_s", 180.0)),
             heartbeat_s=_float(hub, "heartbeat_s", _float(default_hub, "heartbeat_s", 30.0)),
