@@ -20,4 +20,4 @@
 
 ## Follow-ups
 
-- Live: a check that forge's journal events reach the hub (`tools/journal_events.py` on the hub).
+- Live: a check that a peer's journal events reach the hub (`tools/journal_events.py` on the hub).

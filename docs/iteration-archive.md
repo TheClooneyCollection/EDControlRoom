@@ -10722,4 +10722,4 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 ## Follow-ups
 
-- Live: a check that forge's journal events reach the hub (`tools/journal_events.py` on the hub).
+- Live: a check that a peer's journal events reach the hub (`tools/journal_events.py` on the hub).
