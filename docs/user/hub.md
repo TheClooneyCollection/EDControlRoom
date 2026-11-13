@@ -122,6 +122,7 @@ Messages in a node's `[tts] disabled_messages` are never sent up, so the hub and
 ## Offline behaviour
 
 - Market snapshots, station facts, finished haul runs and every journal line (chat and friends left out; the first link sends the whole journal history) go into the peer's outbox first and leave it only when the hub has stored them. While the hub is away the outbox grows; on reconnect it drains in order. Restarting either machine loses nothing.
+- Update the hub before its peers. A hub that does not know an item kind yet keeps it on the peer and takes it after its own update; hubs before 2026-11-13 dropped such items instead.
 - The hub stores idempotently: the newest market snapshot and station fact win, haul runs are kept once per run and node, and journal lines once per node, file and line.
 - Live state, activity and callouts are not queued: callouts spoken while the link is down are not voiced on the hub later.
 - On the peer, routines and hauls keep running. Its own pages still work as a fallback; panels with hub-owned data (routes, Best deal facts, history, Inara search) say `Hub Desk is unreachable` instead of showing stale data.

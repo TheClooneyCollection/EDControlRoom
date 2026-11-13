@@ -286,6 +286,7 @@ def store_link_item(store: EddnStore, runs: HubRuns, journal: JournalStore,
             except sqlite3.InterfaceError as exc:  # Wrongly typed values can never be stored.
                 raise BadItem(str(exc)) from exc
             return
-        raise BadItem(f"unknown item kind {kind!r}")
+        # A newer peer's kind: kept on the peer until this hub is updated, never dropped.
+        raise LookupError(f"unknown item kind {kind!r}")
 
     return store_item

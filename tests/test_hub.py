@@ -478,10 +478,14 @@ class LinkTests(unittest.TestCase):
         # Every market is also offered to the Markets page list, which keeps the newest per station.
         self.assertEqual([snapshot.timestamp for snapshot in listed],
                          ["2026-11-10T15:00:00Z", "2026-11-10T15:00:00Z", "2026-11-10T14:00:00Z"])
-        for kind, body in (("market", {"station": "x"}), ("station_facts", {"kind": "planet"}), ("ship", {}),
+        for kind, body in (("market", {"station": "x"}), ("station_facts", {"kind": "planet"}),
                            ("haul_run", {"schema": 1}), ("haul_run", [1])):
             with self.subTest(kind=kind), self.assertRaises(BadItem):
                 store_item(PEER_NODE, kind, body)
+        # A kind this hub does not know yet comes from a newer peer: refused, not dropped, so it is sent again.
+        with self.assertRaises(LookupError) as raised:
+            store_item(PEER_NODE, "ship", {})
+        self.assertNotIsInstance(raised.exception, BadItem)
 
     def test_journal_lines_go_up_through_the_outbox_and_land_under_the_peers_node_id(self) -> None:
         r = rig(self)

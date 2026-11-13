@@ -17,8 +17,8 @@
 - `[hub] journal_events_file` (`.control_room_journal.sqlite3`) and `journal_sync_file` (`.control_room_journal_sync.json`), both git-ignored. `serve.py` starts the sync when the role owns data; standalone gets a node id from the shared node id file.
 - `tools/journal_events.py`: events per node and event.
 - Live backfill of the Mac journals into a scratch store: 64,339 events in 168 files in 0.8s, 35 MB; a second pass took 1ms and stored no chat.
-
 - Step 2: outbox item `journal_events` (`{file, lines: [[line, text], ...]}`, key `journal:<file>:<first line>`, kept forever). `PeerLink.enqueue_journal` raises when the outbox write fails, so the sync does not advance past it. The hub's `store_link_item` takes the journal store and stores lines under the peer's node id; bad bodies are `BadItem`. Batches are also capped at 512 KB. A file ending on a batch boundary no longer yields an extra empty batch.
+- The hub now nacks an unknown item kind (kept on the peer and sent again) instead of acking and dropping it, so a newer peer never loses items to an older hub. A hub that is not updated yet still drops `journal_events`, so update the hub before its peers.
 - After the hub restart, the hub's store held the Mac's 64,339 events under its node id.
 
 ## Follow-ups
