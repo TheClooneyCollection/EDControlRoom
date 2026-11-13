@@ -409,6 +409,8 @@ def build_observer_server_app(
             "hub-status.js": "text/javascript; charset=utf-8",
             "hub-voice.js": "text/javascript; charset=utf-8",
             "activity-dock.js": "text/javascript; charset=utf-8",
+            "favicon.png": "image/png",
+            "apple-touch-icon.png": "image/png",
         }
         media_type = allowed_assets.get(asset_name)
         if media_type is None:
@@ -417,10 +419,14 @@ def build_observer_server_app(
         if not asset_path.is_file():
             return JSONResponse({"detail": "not found"}, status_code=404)
         return Response(
-            asset_path.read_text(encoding="utf-8"),
+            asset_path.read_bytes(),
             media_type=media_type,
             headers={"Cache-Control": "no-store"},
         )
+
+    async def favicon(request):
+        # Browsers ask for /favicon.ico before (or without) reading the page's icon link.
+        return Response((_HAUL_WEB_ASSET_DIR / "favicon.png").read_bytes(), media_type="image/png")
 
     async def route_compare(params: Mapping[str, str]) -> JSONResponse:
         fixture_name = params.get("fixture")
@@ -1388,6 +1394,7 @@ def build_observer_server_app(
             Route("/api/command", node_action_endpoint("/api/command", empty_body=None), methods=["POST"]),
             Route("/api/stop", node_action_endpoint("/api/stop", empty_body={}), methods=["POST"]),
             Route(HAUL_WEB_ASSET_URL_PATH, haul_web_asset),
+            Route("/favicon.ico", favicon),
             WebSocketRoute("/session", session),
             WebSocketRoute(PEER_LINK_PATH, peer_link_endpoint),
             WebSocketRoute("/api/hub-voice/listen", hub_voice_listen),

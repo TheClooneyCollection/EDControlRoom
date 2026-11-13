@@ -841,6 +841,8 @@ class ControlRoomServerTests(unittest.TestCase):
             with TestClient(app) as client:
                 page = client.get("/markets")
                 script = client.get("/assets/markets.js")
+                icons = [client.get(path) for path in
+                         ("/assets/favicon.png", "/assets/apple-touch-icon.png", "/favicon.ico")]
                 self.assertEqual(client.get("/api/recent-markets").status_code, 401)
                 listing = client.get("/api/recent-markets?access_token=secret-token").json()
                 comparison = client.get("/api/market-compare?x=1&y=2&access_token=secret-token").json()
@@ -851,6 +853,9 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(page.status_code, 200)
         self.assertEqual(page.headers["cache-control"], "no-store")
         self.assertIn('src="/assets/markets.js"', page.text)
+        for icon in icons:
+            self.assertEqual((icon.status_code, icon.headers["content-type"]), (200, "image/png"))
+            self.assertTrue(icon.content.startswith(b"\x89PNG"))
         for element_id in ("market-list", "market-table", "show-empty", "deal-x", "deal-y", "deal-capacity",
                            "deal-laden"):
             self.assertIn(f'id="{element_id}"', page.text)
@@ -1017,6 +1022,7 @@ class ControlRoomServerTests(unittest.TestCase):
                           '      <script src="/assets/nav.js"></script>', html, page)
             # No page keeps a hand-copied link list that could drift from nav.js again.
             self.assertNotIn('class="nav-item', html, page)
+            self.assertIn('<link rel="icon" type="image/png" href="/assets/favicon.png">', html, page)
             # nav.js runs before the page sets EDCR_WEB_CONFIG, so it must not read the config (and its token) yet.
             self.assertLess(html.index("/assets/nav.js"), html.index("window.EDCR_WEB_CONFIG"), page)
         self.assertNotIn("const WEB_CONFIG = window.EDCR_WEB_CONFIG", nav)
