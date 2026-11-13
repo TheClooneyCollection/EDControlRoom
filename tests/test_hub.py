@@ -692,7 +692,7 @@ class LinkedServerTests(unittest.TestCase):
 
     def test_the_trip_time_model_comes_from_the_hub_for_this_ship(self) -> None:
         hub_model = TimeModel(docked_s=0.0)
-        hub_models = TripTimeModels(configured=hub_model, source="config", fit_days=14.0, connect=None,
+        hub_models = TripTimeModels(configured=hub_model, source="config", fit_days=14.0, fit_ship="current", connect=None,
                                     clock=lambda: 0.0)
         hub_app = server(market_database_file=self.database, hub_side=self.r.hub_side(), ardent_lookup=None,
                          time_models=hub_models)

@@ -16,6 +16,8 @@ const FIELDS = [
   { name: "unknown_dist_ls", label: "Ls when a station's is unknown", fit: false }
 ];
 let source = "config";
+// Which fit the page shows and Save stores: "current", "pooled" or a ShipID as a string.
+let fitShip = "current";
 
 function setText(id, value) {
   const element = document.getElementById(id);
@@ -37,11 +39,12 @@ function applyWebConfigLabels() {
   setText("status-version", version ? (WEB_CONFIG.serverCommit ? `${version} (${WEB_CONFIG.serverCommit})` : version) : "-");
 }
 
-async function request(method, body) {
+async function request(method, body, fit) {
   const url = new URL("/api/time-model", window.location.origin);
   if (accessToken) url.searchParams.set(AUTH_QUERY_PARAMETER_NAME, accessToken);
   // On a hub, the fit is for the ship of the node picked in the sidebar (nav.js).
   if (method === "GET") window.EDCRNode.addTo(url.searchParams);
+  if (fit) url.searchParams.set("fit", fit);
   const response = await fetch(url, {
     method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
@@ -63,7 +66,7 @@ function legSeconds(model, jumps, ls) {
 }
 
 function scopeLabel(fit) {
-  if (fit.scope === "ship") return `ship ${fit.ship_id}`;
+  if (fit.scope === "ship") return fit.label || `ship ${fit.ship_id}`;
   if (fit.scope === "pooled") return "every ship pooled";
   return "configured values (too few legs)";
 }
@@ -75,9 +78,22 @@ function showSource(value) {
   });
 }
 
+function renderShips(payload) {
+  const legs = (count) => `${count.toLocaleString()} legs`;
+  const options = [{ value: "current", label: `Current ship (${payload.ship_label || "unknown"})` }]
+    .concat(payload.ships.map((ship) => ({ value: String(ship.id), label: `${ship.label} · ${legs(ship.legs)}` })))
+    .concat([{ value: "pooled", label: `Every ship pooled · ${legs(payload.pooled_legs)}` }]);
+  const select = document.getElementById("trip-time-ship");
+  select.innerHTML = options.map((option) =>
+    `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join("");
+  fitShip = String(payload.view);
+  select.value = fitShip;
+}
+
 function render(payload) {
   const fit = payload.fitted;
   const editable = payload.editable;
+  renderShips(payload);
   document.getElementById("trip-time-rows").innerHTML = FIELDS.map((field) => {
     const fitted = fit.fitted.includes(field.name);
     const fittedCell = field.fit === false ? `<span class="kept">-</span>` :
@@ -90,7 +106,9 @@ function render(payload) {
       <td class="mono">${legs}</td>
     </tr>`;
   }).join("");
-  document.querySelectorAll("[data-source], #trip-time-save").forEach((button) => { button.disabled = !editable; });
+  document.querySelectorAll("[data-source], #trip-time-save, #trip-time-ship").forEach((control) => {
+    control.disabled = !editable;
+  });
   showSource(payload.source);
   const span = `the last ${number(payload.fit_days)} days`;
   const used = fit.scope === "config"
@@ -104,9 +122,9 @@ function render(payload) {
   setText("trip-time-status", `In use: ${active}`);
 }
 
-async function load() {
+async function load(fit) {
   try {
-    render(await request("GET"));
+    render(await request("GET", undefined, fit));
   } catch (error) {
     setText("trip-time-status", error.message);
   }
@@ -125,7 +143,7 @@ async function save() {
   }
   setText("trip-time-status", "Saving");
   try {
-    render(await request("POST", { source, configured }));
+    render(await request("POST", { source, configured, fit_ship: fitShip }));
     setText("trip-time-status", `Saved to config.toml. ${document.getElementById("trip-time-status").textContent}`);
   } catch (error) {
     setText("trip-time-status", error.message);
@@ -143,5 +161,6 @@ document.getElementById("save-token").addEventListener("click", () => {
 document.querySelectorAll("[data-source]").forEach((button) => button.addEventListener("click", () => {
   showSource(button.dataset.source);
 }));
+document.getElementById("trip-time-ship").addEventListener("change", (event) => load(event.target.value));
 document.getElementById("trip-time-save").addEventListener("click", save);
 load();

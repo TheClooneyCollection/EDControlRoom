@@ -317,6 +317,7 @@ def serve_observer_mode(
             configured=eddn_config.time_model,
             source=eddn_config.time_model_source,
             fit_days=eddn_config.time_model_fit_days,
+            fit_ship=eddn_config.time_model_fit_ship,
             # A peer's hub fits for it.
             connect=connect_read_only(hub_config.journal_events_file) if journal_store is not None else None,
             clock=time.time,

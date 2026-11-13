@@ -1,0 +1,56 @@
+"""In-game names for the journal's ship types (`Loadout.Ship`, lower case)."""
+from __future__ import annotations
+
+SHIP_TYPE_NAMES = {
+    "adder": "Adder",
+    "anaconda": "Anaconda",
+    "asp": "Asp Explorer",
+    "asp_scout": "Asp Scout",
+    "belugaliner": "Beluga Liner",
+    "cobramkiii": "Cobra Mk III",
+    "cobramkiv": "Cobra Mk IV",
+    "cobramkv": "Cobra Mk V",
+    "corsair": "Corsair",
+    "cutter": "Imperial Cutter",
+    "diamondback": "Diamondback Scout",
+    "diamondbackxl": "Diamondback Explorer",
+    "dolphin": "Dolphin",
+    "eagle": "Eagle",
+    "empire_courier": "Imperial Courier",
+    "empire_eagle": "Imperial Eagle",
+    "empire_trader": "Imperial Clipper",
+    "explorer_nx": "Caspian Explorer",
+    "federation_corvette": "Federal Corvette",
+    "federation_dropship": "Federal Dropship",
+    "federation_dropship_mkii": "Federal Assault Ship",
+    "federation_gunship": "Federal Gunship",
+    "ferdelance": "Fer-de-Lance",
+    "hauler": "Hauler",
+    "independant_trader": "Keelback",
+    "krait_light": "Krait Phantom",
+    "krait_mkii": "Krait Mk II",
+    "lakonminer": "Type-11 Prospector",
+    "mamba": "Mamba",
+    "mandalay": "Mandalay",
+    "orca": "Orca",
+    "panthermkii": "Panther Clipper Mk II",
+    "python": "Python",
+    "python_nx": "Python Mk II",
+    "sidewinder": "Sidewinder",
+    "type6": "Type-6 Transporter",
+    "type7": "Type-7 Transporter",
+    "type8": "Type-8 Transporter",
+    "type9": "Type-9 Heavy",
+    "type9_military": "Type-10 Defender",
+    "typex": "Alliance Chieftain",
+    "typex_2": "Alliance Crusader",
+    "typex_3": "Alliance Challenger",
+    "viper": "Viper Mk III",
+    "viper_mkiv": "Viper Mk IV",
+    "vulture": "Vulture",
+}
+
+
+def ship_type_name(ship_type: str) -> str:
+    """The in-game name, or the journal's type as written when it is not listed."""
+    return SHIP_TYPE_NAMES.get(ship_type.strip().lower(), ship_type)

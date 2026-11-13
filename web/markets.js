@@ -306,7 +306,7 @@ function measuredMetric(payload, trip) {
 function timeModelLabel(timeModel) {
   if (!timeModel) return "";
   const active = timeModel.active;
-  if (active.scope === "ship") return "trip time fitted for this ship";
+  if (active.scope === "ship") return `trip time fitted for ${active.label || "this ship"}`;
   if (active.scope === "pooled") return "trip time fitted on every ship";
   return timeModel.source === "fitted" ? "configured trip time (too few legs to fit)" : "configured trip time";
 }

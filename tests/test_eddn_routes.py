@@ -270,7 +270,7 @@ class EddnRoutesApiTests(unittest.TestCase):
                 data_provider=lambda: type("Data", (), {"ship": ShipState(system="Nowhere", cargo_capacity=1137)})(),
                 command_handler=None, broker=InMemoryObserverSessionBroker(),
                 auth=SharedAccessTokenAuth("secret-token"), market_database_file=path,
-                time_models=TripTimeModels(configured=TimeModel(docked_s=0.0), source="config", fit_days=14.0,
+                time_models=TripTimeModels(configured=TimeModel(docked_s=0.0), source="config", fit_days=14.0, fit_ship="current",
                                            connect=None, clock=lambda: NOW),
             )
             with patch("edcr.control_room.server.app.load_haul_search_config", return_value={}), TestClient(app) as client:

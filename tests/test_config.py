@@ -204,12 +204,15 @@ dest_usage = "Usage: dest <system or station name>"
             self.assertEqual(load_config(path).eddn.time_model, TimeModel())
 
             eddn = load_config(path).eddn
-            self.assertEqual((eddn.time_model_source, eddn.time_model_fit_days), ("config", 14.0))
+            self.assertEqual((eddn.time_model_source, eddn.time_model_fit_days, eddn.time_model_fit_ship),
+                             ("config", 14.0, "current"))
 
-            _write_config(path, '[eddn.time_model]\ndocked_s = 60\nfirst_jump_s = 140.0\nsource = "fitted"\nfit_days = 7\n')
+            _write_config(path, '[eddn.time_model]\ndocked_s = 60\nfirst_jump_s = 140.0\nsource = "fitted"\nfit_days = 7\n'
+                                'fit_ship = 9\n')
             eddn = load_config(path).eddn
             self.assertEqual(eddn.time_model, replace(TimeModel(), docked_s=60.0, first_jump_s=140.0))
-            self.assertEqual((eddn.time_model_source, eddn.time_model_fit_days), ("fitted", 7.0))
+            self.assertEqual((eddn.time_model_source, eddn.time_model_fit_days, eddn.time_model_fit_ship),
+                             ("fitted", 7.0, 9))
 
             for body, message in (
                 ("docked = 60", "Unknown `eddn.time_model` keys: docked"),
@@ -217,6 +220,7 @@ dest_usage = "Usage: dest <system or station name>"
                 ('docked_s = "60"', "docked_s"),
                 ('source = "guess"', "eddn.time_model.source"),
                 ("fit_days = 0", "eddn.time_model.fit_days"),
+                ('fit_ship = "mine"', "eddn.time_model.fit_ship"),
             ):
                 with self.subTest(body=body):
                     _write_config(path, f"[eddn.time_model]\n{body}\n")

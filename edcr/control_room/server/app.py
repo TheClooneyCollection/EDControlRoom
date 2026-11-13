@@ -33,7 +33,7 @@ from edcr.eddn.route_query import (
 )
 from edcr.config import TIME_MODEL_SOURCES, ConfigError, save_time_model
 from edcr.eddn.routes import TimeModel
-from edcr.trip_time_fit import TripTimeModels, fit_payload, model_from_payload
+from edcr.trip_time_fit import FitShip, TripTimeModels, model_from_payload, parse_fit_ship
 from edcr.haul_history import load_runs, parse_window, summarize
 from edcr.journal_trade_ledger import journal_trade_ledger
 from edcr.market_compare import compare_markets
@@ -259,7 +259,8 @@ def build_observer_server_app(
     route_compare_compare_retry_attempts: int = 3,
 ) -> Starlette:
     if time_models is None:
-        time_models = TripTimeModels(configured=TimeModel(), source="config", fit_days=14.0, connect=None,
+        time_models = TripTimeModels(configured=TimeModel(), source="config", fit_days=14.0, fit_ship="current",
+                                     connect=None,
                                      clock=time.time)
 
     def unauthorized_response() -> JSONResponse:
@@ -762,19 +763,20 @@ def build_observer_server_app(
             },
         }
 
-    def read_time_model(ship_id: int | None) -> tuple[TimeModel, dict[str, Any]]:
-        """The trip time model for the ship and its `/api/time-model` payload; a peer asks its hub, which
-        keeps the journal events and the settings, and falls back to its own configured model."""
+    def read_time_model(ship_id: int | None, view: FitShip | None = None) -> tuple[TimeModel, dict[str, Any]]:
+        """The trip time model for the ship and its `/api/time-model` payload (`view`: another fit to show);
+        a peer asks its hub, which keeps the journal events and the settings, and falls back to its own
+        configured model."""
         if peer_link is not None:
             try:
-                reply = peer_link.request(REQUEST_TIME_MODEL, {"ship_id": ship_id},
+                reply = peer_link.request(REQUEST_TIME_MODEL, {"ship_id": ship_id, "view": view},
                                           timeout_s=peer_link.request_timeout_s)
                 model = model_from_payload(reply.body.get("active")) if reply.status == 200 else None
                 if model is not None:
                     return model, {**reply.body, "hub": peer_link.hub_label}
             except (HubUnreachable, AttributeError):
                 pass
-        return time_models.active(ship_id).model, time_models.payload(ship_id)
+        return time_models.active(ship_id).model, time_models.payload(ship_id, view)
 
     def own_ship_id() -> int | None:
         return _ship_id_value(getattr(getattr(data_provider(), "ship", None), "ship_id", None))
@@ -783,11 +785,19 @@ def build_observer_server_app(
         """A peer's trip time model for its ship."""
         if not isinstance(body, dict):
             return LinkReply(400, {"detail": "body must be a JSON object"})
-        return LinkReply(200, time_models.payload(_ship_id_value(body.get("ship_id"))))
+        try:
+            view = parse_fit_ship(body["view"]) if body.get("view") is not None else None
+        except ValueError as exc:
+            return LinkReply(400, {"detail": str(exc)})
+        return LinkReply(200, time_models.payload(_ship_id_value(body.get("ship_id")), view))
 
     async def time_model_endpoint(params: Mapping[str, str]) -> JSONResponse:
-        """Both trip time sets for this node's ship, and which is in use."""
-        payload = await asyncio.to_thread(lambda: read_time_model(own_ship_id())[1])
+        """Both trip time sets for this node's ship, and which is in use; `fit=` shows another fit."""
+        try:
+            view = parse_fit_ship(params["fit"]) if params.get("fit") else None
+        except ValueError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=400)
+        payload = await asyncio.to_thread(lambda: read_time_model(own_ship_id(), view)[1])
         return JSONResponse(payload)
 
     def station_facts(stations: list[dict[str, Any]]) -> list[StationFacts]:
@@ -1321,14 +1331,15 @@ def build_observer_server_app(
             return JSONResponse({"detail": "This server has no config file to save to"}, status_code=503)
         try:
             body = await request.json()
-            model, source = _time_model_update(body, time_models.configured, time_models.source)
+            model, source, fit_ship = _time_model_update(body, time_models.configured, time_models.source,
+                                                         time_models.fit_ship)
         except ValueError as exc:
             return JSONResponse({"detail": str(exc) or "body must be JSON"}, status_code=400)
         try:
-            await asyncio.to_thread(save_time_model, config_file, model, source)
+            await asyncio.to_thread(save_time_model, config_file, model, source, fit_ship)
         except (OSError, ConfigError) as exc:
             return JSONResponse({"detail": f"Cannot save {config_file}: {exc}"}, status_code=500)
-        time_models.set_configured(model, source)
+        time_models.set_configured(model, source, fit_ship)
         return JSONResponse({**await asyncio.to_thread(time_models.payload, own_ship_id()), "editable": True})
 
     def node_read_endpoint(path: str) -> Callable[[Request], Awaitable[JSONResponse]]:
@@ -1564,8 +1575,10 @@ MEASURED_WINDOWS = ("48h", "7d", "30d", "all")
 MEASURED_WINDOW_DEFAULT = "7d"
 
 
-def _time_model_update(body: Any, configured: TimeModel, source: str) -> tuple[TimeModel, str]:
-    """The configured trip time set and source after a `POST /api/time-model` body; fields left out stay."""
+def _time_model_update(
+    body: Any, configured: TimeModel, source: str, fit_ship: FitShip
+) -> tuple[TimeModel, str, FitShip]:
+    """The configured trip time set, source and fit after a `POST /api/time-model` body; fields left out stay."""
     if not isinstance(body, dict):
         raise ValueError("body must be a JSON object")
     source = body.get("source", source)
@@ -1580,7 +1593,8 @@ def _time_model_update(body: Any, configured: TimeModel, source: str) -> tuple[T
     for name, value in values.items():
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
             raise ValueError(f"{name} must be zero or a positive number")
-    return replace(configured, **{name: float(value) for name, value in values.items()}), source
+    fit_ship = parse_fit_ship(body.get("fit_ship", fit_ship))
+    return replace(configured, **{name: float(value) for name, value in values.items()}), source, fit_ship
 
 
 def _ship_id_value(value: Any) -> int | None:

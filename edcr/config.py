@@ -10,6 +10,7 @@ import tomllib
 import yaml
 
 from edcr.eddn.routes import TimeModel
+from edcr.trip_time_fit import FIT_CURRENT, parse_fit_ship
 from edcr.timing import (
     TimingChannelConfig,
     TimingConfig,
@@ -240,6 +241,8 @@ class EddnConfig:
     time_model_source: str = "config"
     # Days of journal events the fit reads.
     time_model_fit_days: float = 14.0
+    # Which fit "fitted" uses: "current" (the flown ship's), "pooled" (every ship's) or a ShipID.
+    time_model_fit_ship: str | int = "current"
 
 
 @dataclass(frozen=True)
@@ -442,7 +445,7 @@ def _require_table(raw: dict[str, object], key: str) -> dict[str, object]:
 
 
 TIME_MODEL_SOURCES = ("config", "fitted")
-_TIME_MODEL_SETTINGS = ("source", "fit_days")
+_TIME_MODEL_SETTINGS = ("source", "fit_days", "fit_ship")
 
 
 def _time_model(raw: dict[str, object], defaults: dict[str, object]) -> TimeModel:
@@ -458,14 +461,18 @@ def _time_model(raw: dict[str, object], defaults: dict[str, object]) -> TimeMode
     return TimeModel(**values)
 
 
-def _time_model_settings(raw: dict[str, object], defaults: dict[str, object]) -> tuple[str, float]:
+def _time_model_settings(raw: dict[str, object], defaults: dict[str, object]) -> tuple[str, float, str | int]:
     source = _string(raw, "source", _string(defaults, "source", "config"))
     if source not in TIME_MODEL_SOURCES:
         raise ConfigError(f"Config value `eddn.time_model.source` must be one of {', '.join(TIME_MODEL_SOURCES)}.")
     fit_days = _float(raw, "fit_days", _float(defaults, "fit_days", 14.0))
     if not math.isfinite(fit_days) or fit_days <= 0:
         raise ConfigError("Config value `eddn.time_model.fit_days` must be positive.")
-    return source, fit_days
+    try:
+        fit_ship = parse_fit_ship(raw.get("fit_ship", defaults.get("fit_ship", FIT_CURRENT)))
+    except ValueError as exc:
+        raise ConfigError(f"Config value `eddn.time_model.fit_ship`: {exc}.") from None
+    return source, fit_days, fit_ship
 
 
 def _optional_table(raw: dict[str, object], key: str) -> dict[str, object]:
@@ -894,13 +901,16 @@ def save_piper_voice(path: Path | str, voice: PiperVoiceConfig) -> Path:
     return config_path
 
 
-def save_time_model(path: Path | str, model: TimeModel, source: str) -> Path:
-    """Write the configured trip time values and which set is used into `[eddn.time_model]`."""
+def save_time_model(path: Path | str, model: TimeModel, source: str, fit_ship: str | int) -> Path:
+    """Write the configured trip time values, which set is used and which fit into `[eddn.time_model]`."""
     if source not in TIME_MODEL_SOURCES:
         raise ConfigError(f"Time model source must be one of {', '.join(TIME_MODEL_SOURCES)}.")
     config_path = Path(path)
     content = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
     content = _upsert_toml_string(content, section="eddn.time_model", key="source", value=source)
+    fit_ship = parse_fit_ship(fit_ship)
+    content = _upsert_toml_line(content, section="eddn.time_model", key="fit_ship",
+                                rendered_value=str(fit_ship) if isinstance(fit_ship, int) else _toml_basic_string(fit_ship))
     for name in model.__dataclass_fields__:
         value = float(getattr(model, name))
         if not math.isfinite(value) or value < 0:
@@ -1247,6 +1257,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             time_model=_time_model(_optional_table(eddn, "time_model"), _optional_table(default_eddn, "time_model")),
             time_model_source=time_model_settings[0],
             time_model_fit_days=time_model_settings[1],
+            time_model_fit_ship=time_model_settings[2],
         ),
         hub=HubConfig(
             role=_string(hub, "role", _string(default_hub, "role", "standalone")).strip().lower(),

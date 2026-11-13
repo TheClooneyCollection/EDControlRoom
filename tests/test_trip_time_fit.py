@@ -73,12 +73,12 @@ class TripTimeFitTests(unittest.TestCase):
         self.addCleanup(self.store.close)
 
     def models(self, source: str, clock) -> TripTimeModels:
-        return TripTimeModels(configured=TimeModel(), source=source, fit_days=14.0,
+        return TripTimeModels(configured=TimeModel(), source=source, fit_days=14.0, fit_ship="current",
                               connect=connect_read_only(self.path), clock=clock)
 
     def test_fits_each_ship_from_its_own_legs_and_falls_back_to_pooled_then_configured(self) -> None:
         mac = Journal(self.store, "mac", NOW - 20 * DAY)
-        mac.event("Loadout", ShipID=7, Ship="panthermkii")
+        mac.event("Loadout", ShipID=7, Ship="panthermkii", ShipName="Old name", ShipIdent="MR-01P")
         # Older than the window: not fitted, but the ship flown at its start still counts.
         mac.haul(TimeModel(), 5)
         mac.at = NOW - 3 * DAY
@@ -93,6 +93,7 @@ class TripTimeFitTests(unittest.TestCase):
         forge = Journal(self.store, "forge", NOW - 2 * DAY)
         forge.event("Loadout", ShipID=3, Ship="explorer_nx")
         forge.haul(TimeModel(), 4)
+        mac.event("Loadout", ShipID=7, Ship="panthermkii", ShipName="Long Haul", ShipIdent="MR-06P")
         mac.save()
         forge.save()
 
@@ -110,6 +111,14 @@ class TripTimeFitTests(unittest.TestCase):
         self.assertEqual((pooled.scope, pooled.legs), ("pooled", 40))
         self.assertEqual(models.payload(3)["active"]["scope"], "pooled")
         self.assertEqual(models.active(None).scope, "pooled")
+        # Ships are named from their latest Loadout; the picker shows another ship's fit or the pooled one.
+        shown = models.payload(3, 7)
+        self.assertEqual((shown["ship_label"], shown["view"], shown["pooled_legs"]), ("Caspian Explorer", 7, 40))
+        self.assertEqual(shown["ships"], [{"id": 7, "label": "Panther Clipper Mk II \u201cLong Haul\u201d MR-06P",
+                                           "legs": 36}])
+        self.assertEqual((shown["fitted"]["scope"], shown["fitted"]["label"]), ("ship", shown["ships"][0]["label"]))
+        self.assertEqual(models.payload(7, "pooled")["fitted"]["scope"], "pooled")
+        self.assertEqual(models.payload(7)["view"], "current")
         # The configured set ignores the fit.
         self.assertEqual(self.models("config", lambda: NOW).active(7).model, TimeModel())
 
@@ -121,6 +130,12 @@ class TripTimeFitTests(unittest.TestCase):
         self.assertEqual(models.active(3).legs, 40)
         clock[0] = NOW + 61
         self.assertEqual(models.active(3).legs, 41)
+
+        # `fit_ship` picks the fit every route uses, whichever ship flies.
+        models.set_configured(TimeModel(), "fitted", 7)
+        self.assertEqual((models.active(3).scope, models.active(3).ship_id), ("ship", 7))
+        models.set_configured(TimeModel(), "fitted", "pooled")
+        self.assertEqual(models.active(7).scope, "pooled")
 
         # Twenty days on, the window holds too few legs for any fit.
         late = self.models("fitted", lambda: NOW + 20 * DAY).active(7)
@@ -145,7 +160,7 @@ class TripTimeFitTests(unittest.TestCase):
 
     def test_reads_nothing_from_a_store_without_events(self) -> None:
         self.assertEqual(read_legs(self.store._db, 0.0), ([], []))
-        missing = TripTimeModels(configured=TimeModel(), source="fitted", fit_days=14.0,
+        missing = TripTimeModels(configured=TimeModel(), source="fitted", fit_days=14.0, fit_ship="current",
                                  connect=connect_read_only(self.path.with_name("none.sqlite3")), clock=lambda: NOW)
         self.assertEqual(missing.active(7).scope, "config")
 
@@ -155,7 +170,7 @@ class TimeModelPageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             config = Path(tmp) / "config.toml"
             config.write_text('[paths]\n[controls]\n[runtime]\n\n[eddn.time_model]\ndocked_s = 60.0\n', encoding="utf-8")
-            models = TripTimeModels(configured=load_config(config).eddn.time_model, source="config", fit_days=14.0,
+            models = TripTimeModels(configured=load_config(config).eddn.time_model, source="config", fit_days=14.0, fit_ship="current",
                                     connect=None, clock=lambda: NOW)
             app = build_observer_server_app(
                 data_provider=lambda: type("Data", (), {"ship": ShipState(ship_id=4)})(),
@@ -168,22 +183,26 @@ class TimeModelPageTests(unittest.TestCase):
                 page = client.get("/config", params=params)
                 script = client.get("/assets/config.js")
                 saved = client.post("/api/time-model", params=params,
-                                    json={"source": "fitted", "configured": {"first_jump_s": 150}})
+                                    json={"source": "fitted", "configured": {"first_jump_s": 150}, "fit_ship": 9})
                 refused = [client.post("/api/time-model", params=params, json=body).status_code
                            for body in ({"source": "guess"}, {"configured": {"docked": 1}},
-                                        {"configured": {"docked_s": -1}}, {"configured": {"docked_s": True}}, [])]
+                                        {"configured": {"docked_s": -1}}, {"configured": {"docked_s": True}},
+                                        {"fit_ship": "mine"}, [])]
+                bad_view = client.get("/api/time-model", params={**params, "fit": "mine"}).status_code
+                pooled_view = client.get("/api/time-model", params={**params, "fit": "pooled"}).json()["view"]
                 after = client.get("/api/time-model", params=params).json()
             self.assertEqual((shown["configured"]["docked_s"], shown["editable"], shown["ship_id"]), (60.0, True, 4))
             self.assertIn('src="/assets/config.js"', page.text)
             self.assertIn("/api/time-model", script.text)
             self.assertEqual(saved.status_code, 200)
-            self.assertEqual(refused, [400] * 5)
+            self.assertEqual(refused, [400] * 6)
+            self.assertEqual((bad_view, pooled_view), (400, "pooled"))
             # Saved fields join the ones already set; nothing else in the file changes.
             reloaded = load_config(config).eddn
-            self.assertEqual((reloaded.time_model_source, reloaded.time_model.docked_s, reloaded.time_model.first_jump_s),
-                             ("fitted", 60.0, 150.0))
+            self.assertEqual((reloaded.time_model_source, reloaded.time_model.docked_s, reloaded.time_model.first_jump_s,
+                              reloaded.time_model_fit_ship), ("fitted", 60.0, 150.0, 9))
             self.assertTrue(config.read_text(encoding="utf-8").startswith("[paths]\n[controls]\n[runtime]\n"))
-            self.assertEqual((after["source"], after["configured"]["first_jump_s"]), ("fitted", 150.0))
+            self.assertEqual((after["source"], after["configured"]["first_jump_s"], after["fit_ship"]), ("fitted", 150.0, 9))
             self.assertEqual(models.active(4).model.first_jump_s, 150.0)
 
     def test_a_server_without_a_config_file_cannot_save(self) -> None:

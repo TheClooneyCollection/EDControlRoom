@@ -9,9 +9,10 @@ import sqlite3
 import statistics
 import threading
 from dataclasses import asdict, dataclass, replace
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Union
 
 from edcr.eddn.routes import SURFACE_TYPES, TimeModel
+from edcr.ship_types import ship_type_name
 
 # Fitted by least squares on the legs; `docked_s` is the median stop.
 LEG_FIELDS = ("travel_base_s", "first_jump_s", "per_extra_jump_s", "supercruise_coeff", "surface_extra_s")
@@ -209,9 +210,54 @@ def fit_payload(fit: TimeModelFit) -> dict[str, Any]:
     return {**asdict(fit), "fitted": list(fit.fitted)}
 
 
+# Which fit `source = "fitted"` uses: the flown ship's, every ship's pooled, or one ship's by ShipID.
+FIT_CURRENT = "current"
+FIT_POOLED = "pooled"
+FitShip = Union[str, int]
+
+
+def parse_fit_ship(value: Any) -> FitShip:
+    """`current`, `pooled` or a ShipID; raises ValueError for anything else."""
+    if isinstance(value, bool):
+        raise ValueError("fit_ship must be current, pooled or a ShipID")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in (FIT_CURRENT, FIT_POOLED):
+            return text
+        if text.isdigit():
+            return int(text)
+    raise ValueError("fit_ship must be current, pooled or a ShipID")
+
+
+def read_ships(db: sqlite3.Connection) -> dict[int, dict[str, str]]:
+    """Each ShipID's type, name and ident from its latest Loadout on any node."""
+    rows = db.execute(
+        "SELECT json_extract(body, '$.ShipID'), json_extract(body, '$.Ship'), json_extract(body, '$.ShipName'),"
+        " json_extract(body, '$.ShipIdent'), MAX(timestamp) FROM journal_event WHERE event = 'Loadout' GROUP BY 1"
+    )
+    return {
+        ship_id: {"type": ship_type or "", "name": (name or "").strip(), "ident": (ident or "").strip()}
+        for ship_id, ship_type, name, ident, _ in rows if isinstance(ship_id, int)
+    }
+
+
+def ship_label(ship_id: int | None, ship: dict[str, str] | None) -> str:
+    """`Panther Clipper Mk II "Name" MR-06P`, or `Ship 9` when its Loadout is unknown."""
+    if ship is None:
+        return f"Ship {ship_id}" if ship_id is not None else "Unknown ship"
+    parts = [ship_type_name(ship["type"])]
+    if ship["name"]:
+        parts.append(f"\u201c{ship['name']}\u201d")
+    if ship["ident"]:
+        parts.append(ship["ident"])
+    return " ".join(part for part in parts if part) or f"Ship {ship_id}"
+
+
 class TripTimeModels:
-    """The trip time model in use: the configured one, or with `source = "fitted"` the one fitted for
-    the ship. Fits read the journal store at most once every `REFRESH_S`."""
+    """The trip time model in use: the configured one, or with `source = "fitted"` the fit `fit_ship`
+    picks. Fits read the journal store at most once every `REFRESH_S`."""
 
     def __init__(
         self,
@@ -219,65 +265,90 @@ class TripTimeModels:
         configured: TimeModel,
         source: str,
         fit_days: float,
+        fit_ship: FitShip,
         connect: Callable[[], sqlite3.Connection] | None,
         clock: Callable[[], float],
     ) -> None:
         self.configured = configured
         self.source = source
         self.fit_days = fit_days
+        self.fit_ship = fit_ship
         # None on a peer, whose hub keeps the journal events.
         self._connect = connect
         self._clock = clock
         self._lock = threading.Lock()
         self._fits: dict[int | None, TimeModelFit] | None = None
+        self._ships: dict[int, dict[str, str]] = {}
         self._fitted_at = 0.0
 
-    def set_configured(self, configured: TimeModel, source: str) -> None:
+    def set_configured(self, configured: TimeModel, source: str, fit_ship: FitShip) -> None:
         with self._lock:
-            self.configured, self.source = configured, source
+            self.configured, self.source, self.fit_ship = configured, source, fit_ship
             self._fits = None
 
     def fits(self) -> dict[int | None, TimeModelFit]:
         now = self._clock()
         with self._lock:
             if self._fits is None or now - self._fitted_at >= REFRESH_S:
-                self._fits = self._fit(now)
+                self._fits, self._ships = self._fit(now)
                 self._fitted_at = now
             return self._fits
 
-    def _fit(self, now: float) -> dict[int | None, TimeModelFit]:
+    def _fit(self, now: float) -> tuple[dict[int | None, TimeModelFit], dict[int, dict[str, str]]]:
         if self._connect is None:
-            return {None: TimeModelFit("config", None, self.configured, 0, 0, (), {})}
+            return {None: TimeModelFit("config", None, self.configured, 0, 0, (), {})}, {}
         try:
             db = self._connect()
             try:
                 legs, stops = read_legs(db, now - self.fit_days * 86400)
+                ships = read_ships(db)
             finally:
                 db.close()
         except sqlite3.Error:
-            legs, stops = [], []
-        return fit_ships(legs, stops, self.configured)
+            legs, stops, ships = [], [], {}
+        return fit_ships(legs, stops, self.configured), ships
 
-    def fitted_for(self, ship_id: int | None) -> TimeModelFit:
-        """The ship's own fit, else the pooled one, else the configured model."""
+    def fitted_for(self, ship_id: int | None, pick: FitShip | None = None) -> TimeModelFit:
+        """The fit `pick` (default `fit_ship`) chooses for the flown ship: a ship's own fit, else the pooled
+        one, else the configured model."""
         fits = self.fits()
-        return fits.get(ship_id) or fits[None]
+        pick = self.fit_ship if pick is None else pick
+        if pick == FIT_POOLED:
+            return fits[None]
+        chosen = ship_id if pick == FIT_CURRENT else pick
+        return fits.get(chosen) or fits[None]
 
     def active(self, ship_id: int | None) -> TimeModelFit:
         if self.source != "fitted":
             return TimeModelFit("config", None, self.configured, 0, 0, (), {})
         return self.fitted_for(ship_id)
 
-    def payload(self, ship_id: int | None) -> dict[str, Any]:
-        """Both sets and which is in use, for `/api/time-model` and the trip time's source line."""
-        fitted = self.fitted_for(ship_id)
+    def payload(self, ship_id: int | None, view: FitShip | None = None) -> dict[str, Any]:
+        """Both sets and which is in use, for `/api/time-model` and the trip time's source line. `view`
+        shows another fit than `fit_ship` in `fitted`, as the Config page's ship picker does."""
+        fits = self.fits()
+        ships = self._ships
+        fitted = self.fitted_for(ship_id, view)
+        listed = sorted((fit for key, fit in fits.items() if key is not None), key=lambda fit: -fit.legs)
+
+        def labelled(fit: TimeModelFit) -> dict[str, Any]:
+            label = ship_label(fit.ship_id, ships.get(fit.ship_id)) if fit.ship_id is not None else None
+            return {**fit_payload(fit), "label": label}
+
         return {
             "source": self.source,
             "fit_days": self.fit_days,
+            "fit_ship": self.fit_ship,
+            "view": self.fit_ship if view is None else view,
             "ship_id": ship_id,
+            "ship_label": ship_label(ship_id, ships.get(ship_id)) if ship_id is not None else None,
+            # Ships with their own fit, most legs first; the pooled fit is `fit_ship = "pooled"`.
+            "ships": [{"id": fit.ship_id, "label": ship_label(fit.ship_id, ships.get(fit.ship_id)), "legs": fit.legs}
+                      for fit in listed],
+            "pooled_legs": fits[None].legs,
             "configured": asdict(self.configured),
-            "fitted": fit_payload(fitted),
-            "active": fit_payload(self.active(ship_id)),
+            "fitted": labelled(fitted),
+            "active": labelled(self.active(ship_id)),
         }
 
 
