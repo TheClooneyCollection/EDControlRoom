@@ -15,6 +15,11 @@ class ServerLogFilesTests(unittest.TestCase):
         logging.getLogger().setLevel(logging.INFO)
 
     def tearDown(self) -> None:
+        self._restore_loggers()
+
+    def _restore_loggers(self) -> None:
+        """Close the handlers a test added and put the loggers back; called before a temp dir goes
+        too, since Windows cannot delete a log file a handler still holds open."""
         for logger, (handlers, level) in zip(self._loggers, self._saved):
             for handler in logger.handlers:
                 if handler not in handlers:
@@ -40,6 +45,7 @@ class ServerLogFilesTests(unittest.TestCase):
             finally:
                 logging.getLogger("uvicorn").propagate = True
                 logging.getLogger("uvicorn.access").propagate = True
+                self._restore_loggers()
 
             server_text = server_log.read_text(encoding="utf-8")
             access_text = access_log.read_text(encoding="utf-8")

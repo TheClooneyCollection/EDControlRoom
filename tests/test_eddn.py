@@ -285,9 +285,12 @@ class EddnStoreTests(unittest.TestCase):
             apply_payload(store, frame(carrier_commodity_envelope("friends", timestamp="2026-11-10T14:00:00Z")))
             store.close()
             reopened = EddnStore.open(path)
-            self.addCleanup(reopened.close)
-            self.assertEqual(reopened.counts().markets, 1)
-            self.assertEqual(carrier_access(reopened), [(3713428992, "friends")])
+            try:
+                self.assertEqual(reopened.counts().markets, 1)
+                self.assertEqual(carrier_access(reopened), [(3713428992, "friends")])
+            finally:
+                # Closed before the directory goes: Windows cannot delete an open database.
+                reopened.close()
 
     def test_prune_drops_stale_markets_and_counts_report_the_rest(self) -> None:
         store = memory_store()
