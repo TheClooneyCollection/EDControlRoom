@@ -30,6 +30,7 @@ REQUEST_STATION_FACTS = "station_facts"
 REQUEST_HAUL_STATS = "haul_stats"
 REQUEST_MEASURED = "measured"
 REQUEST_CARRIER_NAMES = "carrier_names"
+REQUEST_MARKET_PRICES = "market_prices"
 REQUEST_TIME_MODEL = "time_model"
 
 

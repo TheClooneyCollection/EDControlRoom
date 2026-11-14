@@ -866,7 +866,7 @@ class ControlRoomServerTests(unittest.TestCase):
                      "const DEAL_CHOICES = 3;", 'name="deal-${leg}"', "tradeRoute(marketX, marketY, out, back, perHour)",
                      '"Profit per ton"', '"Profit per trip", credits(perTrip), "Full-hold round trip"',
                      '"Profit per hour"', ">Measured per hour<", 'id="deal-window"', "window: measuredWindow",
-                     "perTrip * 3600 / trip.trip_s",
+                     "perTrip * 3600 / trip.trip_s", "priceSources(payload, marketX, marketY)", "prices.hint",
                      'laden_jump_range_ly: document.getElementById("deal-laden").value.trim()'):
             self.assertIn(hook, script.text)
         self.assertEqual(listing["cargo_capacity"], 256)
@@ -890,6 +890,66 @@ class ControlRoomServerTests(unittest.TestCase):
         self.assertEqual(comparison["trip"]["jumps"], 0)
         self.assertIn("trip.hint", script.text)
         self.assertIsNone(comparison["measured"])
+
+    def test_market_compare_uses_the_eddn_stores_newer_prices_for_a_market(self) -> None:
+        """Live 2026-11-14: Best deal showed yesterday's Chauhan Dock discount while EDDN had seen it end."""
+        from edcr.eddn.messages import CommodityPrice, MarketSnapshot as EddnMarket
+        from edcr.eddn.store import EddnStore
+        from edcr.market_compare import snapshot_epoch
+        from edcr.recent_markets import record_market_json
+
+        def data_provider() -> ControlRoomDataReadModel:
+            return replace(_base_data_read_model(), ship=ShipState(system="Sol", cargo_capacity=256))
+
+        def eddn_market(market_id: int, station: str, timestamp: str, **gold: int) -> EddnMarket:
+            price = CommodityPrice(name="gold", buy=gold.get("buy", 0), sell=gold.get("sell", 0),
+                                   supply=gold.get("supply", 0), demand=gold.get("demand", 0))
+            return EddnMarket(market_id=market_id, system_name="Sol", station_name=station, is_carrier=False,
+                              timestamp=snapshot_epoch(timestamp), prices=(price,), carrier_access="")
+
+        with tempfile.TemporaryDirectory() as directory:
+            recent = Path(directory) / "recent.json"
+            for market_id, station, timestamp, items in (
+                (1, "Chauhan Dock", "2026-11-13T21:21:00Z",
+                 [{"Name": "$gold_name;", "Name_Localised": "Gold", "BuyPrice": 900, "Stock": 5000}]),
+                (2, "Sitterly", "2026-11-14T10:00:00Z",
+                 [{"Name": "$gold_name;", "Name_Localised": "Gold", "SellPrice": 9600, "Demand": 500}]),
+            ):
+                record_market_json(recent, {"MarketID": market_id, "StationName": station, "StarSystem": "Sol",
+                                            "StationType": "Orbis", "timestamp": timestamp, "Items": items},
+                                   lambda _: None, limit=10)
+            database = _facts_db(directory, recent, [])
+            store = EddnStore.open(database)
+            # EDDN saw Chauhan Dock after our visit: the discount is over. Its Sitterly message is older than our
+            # visit there, so our own prices stay.
+            store.save([eddn_market(1, "Chauhan Dock", "2026-11-14T19:29:00Z", buy=9000, supply=50),
+                        eddn_market(2, "Sitterly", "2026-11-13T08:00:00Z", sell=20000, demand=9)])
+            store.close()
+            app = build_observer_server_app(
+                data_provider=data_provider, command_handler=None, broker=InMemoryObserverSessionBroker(),
+                auth=SharedAccessTokenAuth("secret-token"), recent_markets_file=recent,
+                market_database_file=database,
+            )
+            without_store = build_observer_server_app(
+                data_provider=data_provider, command_handler=None, broker=InMemoryObserverSessionBroker(),
+                auth=SharedAccessTokenAuth("secret-token"), recent_markets_file=recent,
+            )
+            with TestClient(app) as client, TestClient(without_store) as plain:
+                compared = client.get("/api/market-compare?x=1&y=2&access_token=secret-token").json()
+                visits_only = plain.get("/api/market-compare?x=1&y=2&access_token=secret-token").json()
+
+        [deal] = compared["outbound"]
+        self.assertEqual((deal["name"], deal["buy_price"], deal["stock"], deal["sell_price"], deal["profit_per_ton"]),
+                         ("Gold", 9000, 50, 9600, 600))
+        self.assertEqual(compared["prices"], {
+            "x": {"market_id": 1, "source": "eddn", "prices_at": "2026-11-14T19:29:00Z"},
+            "y": {"market_id": 2, "source": "visit", "prices_at": "2026-11-14T10:00:00Z"},
+            "hint": None,
+        })
+        # No store (a peer without a hub yet): our own visits, and the page says where EDDN prices would come from.
+        self.assertEqual(visits_only["outbound"][0]["buy_price"], 900)
+        self.assertEqual((visits_only["prices"]["x"]["source"], visits_only["prices"]["hint"]),
+                         ("visit", "EDDN prices come from the hub."))
 
     def test_market_compare_estimates_trip_time_from_the_store_and_measures_haul_runs(self) -> None:
         import json

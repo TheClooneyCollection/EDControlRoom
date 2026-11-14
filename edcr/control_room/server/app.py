@@ -38,7 +38,8 @@ from edcr.eddn.routes import TimeModel
 from edcr.trip_time_fit import FitShip, TripTimeModels, model_from_payload, parse_fit_ship
 from edcr.haul_history import load_runs, parse_window, summarize
 from edcr.journal_trade_ledger import journal_trade_ledger
-from edcr.market_compare import compare_markets
+from edcr.market_compare import PricedMarket, compare_markets, pick_prices
+from edcr.market_db import StoredPrices, read_stored_prices
 from edcr.hub.history import ALL, filter_runs, history_options, parse_node_filter, parse_ship_filter
 from edcr.hub.nodes import HubLinkSession, HubSide, RequestHandler
 from edcr.hub.peer import PeerLink, hub_unreachable_detail, with_hub_source
@@ -46,6 +47,7 @@ from edcr.hub.relay import NODE_ACTIONS, NODE_READS, NodeOffline, node_state, re
 from edcr.hub.protocol import (
     PEER_LINK_PATH,
     REQUEST_CARRIER_NAMES,
+    REQUEST_MARKET_PRICES,
     REQUEST_EDDN_ROUTES,
     REQUEST_EDDN_STATUS,
     REQUEST_HAUL_SEARCH,
@@ -57,6 +59,7 @@ from edcr.hub.protocol import (
     LinkReply,
 )
 from edcr.recent_markets import (
+    MarketItem,
     MarketSnapshot,
     load_recent_markets,
     market_items,
@@ -692,9 +695,15 @@ def build_observer_server_app(
             market_y = by_id.get(market_y_id)
             if market_x is None or market_y is None:
                 return None
-            comparison = compare_markets(market_items(market_x), market_items(market_y), cargo_capacity)
+            # The EDDN store may have seen either market since we last docked there; the newer prices win.
+            names = {item.commodity: item.name for snapshot in snapshots for item in market_items(snapshot)}
+            stored, hint = read_market_prices([market_x_id, market_y_id], names)
+            priced_x = pick_prices(market_x, stored.get(market_x_id))
+            priced_y = pick_prices(market_y, stored.get(market_y_id))
+            comparison = compare_markets(priced_x.items, priced_y.items, cargo_capacity)
             return {
                 **asdict(comparison),
+                "prices": {"x": _priced_market_payload(priced_x), "y": _priced_market_payload(priced_y), "hint": hint},
                 **read_trip(market_x, market_y, laden, getattr(ship, "ship_id", None)),
                 **read_measured(market_x, market_y, ship, current_laden, window, since, until),
             }
@@ -703,6 +712,20 @@ def build_observer_server_app(
         if payload is None:
             return JSONResponse({"detail": "market is not in the recent markets list"}, status_code=404)
         return JSONResponse(payload)
+
+    def read_market_prices(market_ids: list[int], names: dict[str, str]) -> tuple[dict[int, StoredPrices], str | None]:
+        """EDDN prices for these markets from this server's store, or from the hub on a peer, and a hint
+        when they cannot be known (the comparison then uses our own visits alone)."""
+        if peer_link is not None:
+            try:
+                reply = peer_link.request(REQUEST_MARKET_PRICES, {"market_ids": market_ids},
+                                          timeout_s=peer_link.request_timeout_s)
+                return _stored_prices_from_payload(reply.body["markets"], names), None
+            except (HubUnreachable, KeyError, TypeError, ValueError) as exc:
+                return {}, hub_unreachable_detail(peer_link.hub_label, exc)
+        if market_database_file is None:
+            return {}, "EDDN prices come from the hub."
+        return read_stored_prices(market_database_file, market_ids, names), None
 
     def read_station_facts(stations: list[dict[str, Any]]) -> tuple[list[StationFacts], str | None]:
         """Station facts here, or from the hub on a peer, and a hint when they cannot be known."""
@@ -901,6 +924,21 @@ def build_observer_server_app(
         ):
             return LinkReply(400, {"detail": "body must be {\"stations\": [{market_id, station, system}, ...]}"})
         return LinkReply(200, {"stations": [asdict(facts) for facts in station_facts(entries)]})
+
+    def answer_market_prices(body: Any) -> LinkReply:
+        """EDDN prices by market id from this server's store, for a peer's Best deal."""
+        market_ids = body.get("market_ids") if isinstance(body, dict) else None
+        if not isinstance(market_ids, list) or not all(isinstance(market_id, int) for market_id in market_ids):
+            return LinkReply(400, {"detail": "body must be {\"market_ids\": [market_id, ...]}"})
+        names = {item.commodity: item.name for snapshot in read_recent_markets() for item in market_items(snapshot)}
+        try:
+            stored = read_stored_prices(market_database_file, market_ids, names)
+        except sqlite3.Error as exc:
+            return LinkReply(503, {"detail": f"Cannot read the market database: {exc}"})
+        return LinkReply(200, {"markets": {
+            str(market_id): {"updated_at": prices.updated_at, "items": [asdict(item) for item in prices.items]}
+            for market_id, prices in stored.items()
+        }})
 
     def answer_carrier_names(body: Any) -> LinkReply:
         """Fleet carrier display names by callsign, from this server's store; a peer's requests land here too."""
@@ -1126,6 +1164,7 @@ def build_observer_server_app(
         REQUEST_HAUL_STATS: answer_haul_stats,
         REQUEST_MEASURED: answer_measured,
         REQUEST_CARRIER_NAMES: answer_carrier_names,
+        REQUEST_MARKET_PRICES: answer_market_prices,
     }
 
     async def peer_link_endpoint(websocket: WebSocket) -> None:
@@ -1682,6 +1721,23 @@ def _ship_cargo_capacity(data: object) -> int:
 def _cargo_capacity(ship: object) -> int:
     cargo_capacity = getattr(ship, "cargo_capacity", None)
     return cargo_capacity if isinstance(cargo_capacity, int) and cargo_capacity > 0 else 0
+
+
+def _priced_market_payload(priced: PricedMarket) -> dict[str, Any]:
+    return {"market_id": priced.market_id, "source": priced.source, "prices_at": priced.prices_at}
+
+
+def _stored_prices_from_payload(markets: Any, names: dict[str, str]) -> dict[int, StoredPrices]:
+    """The hub's `answer_market_prices` body, with this node's own commodity names where it has them."""
+    if not isinstance(markets, dict):
+        raise TypeError("markets must be an object")
+    stored = {}
+    for market_id, entry in markets.items():
+        items = tuple(
+            replace(MarketItem(**item), name=names.get(item["commodity"], item["name"])) for item in entry["items"]
+        )
+        stored[int(market_id)] = StoredPrices(market_id=int(market_id), updated_at=float(entry["updated_at"]), items=items)
+    return stored
 
 
 def _market_snapshot_payload(snapshot: MarketSnapshot) -> dict[str, Any]:

@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 
-from edcr.recent_markets import MarketItem
+from edcr.market_db import StoredPrices
+from edcr.recent_markets import MarketItem, MarketSnapshot, market_items
+
+# Where a market's prices came from: our own Market.json, or the EDDN store.
+SOURCE_VISIT = "visit"
+SOURCE_EDDN = "eddn"
 
 
 @dataclass(frozen=True)
@@ -34,6 +40,39 @@ class MarketComparison:
     outbound: tuple[TradeDeal, ...]
     inbound: tuple[TradeDeal, ...]
     round_trip: RoundTrip
+
+
+@dataclass(frozen=True)
+class PricedMarket:
+    """A market's prices for the comparison, from whichever source is newer."""
+
+    market_id: int
+    items: tuple[MarketItem, ...]
+    source: str
+    # ISO 8601 UTC, like a Market.json timestamp.
+    prices_at: str
+
+
+def snapshot_epoch(timestamp: str) -> float:
+    """A Market.json timestamp (`2026-11-14T19:29:00Z`) as epoch seconds; 0 when blank or malformed."""
+    try:
+        return datetime.fromisoformat(timestamp.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return 0.0
+
+
+def pick_prices(snapshot: MarketSnapshot, stored: StoredPrices | None) -> PricedMarket:
+    """The newer of our own visit and the EDDN store, so a visit from yesterday does not hide a
+    discount EDDN saw today. The store's items take their names from our visit where it has them.
+
+    A store row at the same instant as the visit is that visit, imported into the store, so the visit wins.
+    """
+    if stored is None or stored.updated_at <= snapshot_epoch(snapshot.timestamp):
+        return PricedMarket(snapshot.market_id, market_items(snapshot), SOURCE_VISIT, snapshot.timestamp)
+    names = {item.commodity: item.name for item in market_items(snapshot)}
+    items = tuple(replace(item, name=names.get(item.commodity, item.name)) for item in stored.items)
+    prices_at = datetime.fromtimestamp(stored.updated_at, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return PricedMarket(snapshot.market_id, items, SOURCE_EDDN, prices_at)
 
 
 def trade_deals(

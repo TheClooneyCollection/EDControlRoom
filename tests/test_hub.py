@@ -722,6 +722,40 @@ class LinkedServerTests(unittest.TestCase):
         # Without the hub the peer falls back to its own configured model.
         self.assertEqual(deal_down.json()["trip"]["time_model"]["configured"]["docked_s"], TimeModel().docked_s)
 
+    def test_best_deal_prices_come_from_the_hub_store_when_newer_than_the_visit(self) -> None:
+        from edcr.eddn.messages import CommodityPrice, MarketSnapshot as EddnMarket
+        from edcr.market_compare import snapshot_epoch
+
+        # EDDN saw Galileo the day after the peer docked there (`market()`): gold is cheaper now.
+        seen = EddnMarket(market_id=GALILEO.market_id, system_name="Sol", station_name="Galileo", is_carrier=False,
+                          timestamp=snapshot_epoch("2026-11-11T14:00:00Z"), carrier_access="",
+                          prices=(CommodityPrice(name="gold", buy=1000, sell=0, supply=50, demand=0),))
+        with TemporaryDirectory() as tmp:
+            database = Path(tmp) / "markets.sqlite3"
+            store = EddnStore.open(database)
+            store.save([SOL, GALILEO, seen])
+            store.close()
+            hub_app = server(market_database_file=database, hub_side=self.r.hub_side(), ardent_lookup=None)
+            self.r.handlers.update(hub_app.state.link_handlers)
+            self.r.attach()
+            params = {"access_token": TOKEN, "x": GALILEO.market_id, "y": 2}
+            with TestClient(self.peer_app()) as peer:
+                deal = peer.get("/api/market-compare", params=params).json()
+                self.r.drop(self.r.links[-1])
+                deal_down = peer.get("/api/market-compare", params=params).json()
+            bad = hub_app.state.link_handlers["market_prices"]({"market_ids": "3"})
+
+        [out] = deal["outbound"]
+        # The hub's prices, named as the peer's own visit names the commodity (`market()` has no localised name).
+        self.assertEqual((out["name"], out["buy_price"], out["stock"], out["sell_price"]), ("gold", 1000, 50, 9400))
+        self.assertEqual(deal["prices"]["x"], {"market_id": GALILEO.market_id, "source": "eddn",
+                                               "prices_at": "2026-11-11T14:00:00Z"})
+        self.assertEqual((deal["prices"]["y"]["source"], deal["prices"]["hint"]), ("visit", None))
+        # Without the hub the peer compares its own visits and says so.
+        self.assertEqual(deal_down["outbound"], [])
+        self.assertEqual(deal_down["prices"]["hint"], "Hub Home is unreachable: not connected to the hub: cable pulled")
+        self.assertEqual(bad.status, 400)
+
     def test_carrier_names_come_from_the_hub_store(self) -> None:
         self.r.attach()
         params = [("access_token", TOKEN), ("callsign", "Q8N-BVT"), ("callsign", "K9N-54Y")]

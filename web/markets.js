@@ -355,6 +355,18 @@ function tradeRoute(marketX, marketY, out, back, perHour) {
   };
 }
 
+// Where each market's prices came from: our own visit, or the EDDN store when it has seen the market since.
+function priceSources(payload, marketX, marketY) {
+  const prices = payload.prices;
+  if (!prices) return "";
+  const source = (priced, market) => {
+    const from = priced.source === "eddn" ? "EDDN" : "your visit";
+    return `${escapeHtml(stationLabel(market.station))} from ${from} ${escapeHtml(ageLabel(priced.prices_at))}`;
+  };
+  const hint = prices.hint ? ` ${escapeHtml(prices.hint)}` : "";
+  return `<p class="deal-prices field-hint">Prices: ${source(prices.x, marketX)} · ${source(prices.y, marketY)}.${hint}</p>`;
+}
+
 function renderComparison() {
   const result = document.getElementById("deal-result");
   const { payload, marketX, marketY } = shownComparison;
@@ -363,7 +375,8 @@ function renderComparison() {
   chosenDeals = { outbound: out ? out.commodity : null, inbound: back ? back.commodity : null };
   const nameX = escapeHtml(stationLabel(marketX.station));
   const nameY = escapeHtml(stationLabel(marketY.station));
-  const legs = legTable("outbound", `Buy at ${nameX} (X), sell at ${nameY} (Y)`, payload.outbound)
+  const legs = priceSources(payload, marketX, marketY)
+    + legTable("outbound", `Buy at ${nameX} (X), sell at ${nameY} (Y)`, payload.outbound)
     + legTable("inbound", `Buy at ${nameY} (Y), sell at ${nameX} (X)`, payload.inbound);
   if (!out && !back) {
     shownTradeRoute = null;
