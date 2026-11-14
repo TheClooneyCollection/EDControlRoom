@@ -4,6 +4,10 @@ Prepend displaced older status blocks from `docs/status/control-room.md` here.
 
 Legacy pre-split global status history remains in `../../status-archive.md`.
 
+## Archived 2026-11-14 (server log files)
+
+- `connect` currently intercepts prompt-owning commands like `haul`, `haul route`, `haul search`, `dest`, `home`, `help`, `history`, and `market` locally, then sends finalized `command.dispatch_haul_loop` / `command.dispatch_destination` payloads to the headless server; structured `command.dispatch_travel` is server-first and available to TUI/web clients.
+
 ## Archived 2026-11-11 (peer link, plan 0015 step 2)
 
 - Hub mode (`docs/user/hub.md`, tried live between two LAN machines on 2026-11-11): HTTP forwarding of `/api/eddn-routes`, `/api/eddn-status` and the Inara haul search to the hub, `HubMarketPusher` (`POST /api/markets`), `hub-heartbeat` pinging `GET /api/hub-ping`, `edap.hub.HubStatus` behind `/api/hub-status` and the Hub chip, `edap.hub.httpx_transport`. Replaced by the plan 0015 peer link.

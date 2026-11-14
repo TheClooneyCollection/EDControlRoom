@@ -2,6 +2,10 @@
 haul_runs_file = ".control_room_haul_runs.jsonl"
 state_file = ".control_room_state.json"
 recent_markets_file = ".control_room_recent_markets.json"
+# serve / lan / hub / peer also write their log here (rotated at 5 MB, 3 kept); "" writes none.
+log_file = ".control_room_server.log"
+# One line per HTTP request, kept apart because page polling makes it noisy.
+access_log_file = ".control_room_access.log"
 # Stations the Markets page lists, newest first; a hub lists its peers' markets here too.
 recent_markets_limit = 20
 # lan / hub / peer bind the LAN address; this also listens on 127.0.0.1 so local tunnels

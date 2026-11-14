@@ -201,6 +201,9 @@ class ControlRoomConfig:
     lan_also_localhost: bool = True
     # A LAN-bound server listens on and advertises every LAN interface, not only the default-route one.
     lan_all_interfaces: bool = True
+    # The headless server's log files (server lines; HTTP access lines); None writes none.
+    log_file: Path | None = None
+    access_log_file: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -1234,6 +1237,12 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             ),
             lan_all_interfaces=_boolean(
                 control_room, "lan_all_interfaces", _boolean(default_control_room, "lan_all_interfaces", True)
+            ),
+            log_file=_optional_path(
+                _string(control_room, "log_file", _string(default_control_room, "log_file", ""))
+            ),
+            access_log_file=_optional_path(
+                _string(control_room, "access_log_file", _string(default_control_room, "access_log_file", ""))
             ),
         ),
         tts=TTSConfig(

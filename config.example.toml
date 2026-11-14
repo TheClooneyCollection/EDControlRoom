@@ -23,6 +23,9 @@
 # lan / hub / peer listen on and advertise every LAN interface (Wi-Fi and Ethernet on two subnets, say);
 # false keeps the default-route one only. Interfaces are read at start: restart after a network change.
 # lan_all_interfaces = true
+# serve / lan / hub / peer write their log to these files too (rotated at 5 MB, 3 kept); "" writes none.
+# log_file = ".control_room_server.log"
+# access_log_file = ".control_room_access.log"   # one line per HTTP request
 
 [eddn]
 # Live market prices for the /routes trade route search; the `lan` server listens when enabled.

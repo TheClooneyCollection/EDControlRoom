@@ -6,6 +6,7 @@ Quick checks for when input, journal detection, or bindings look wrong.
 
 - [Nothing Happens When I Fire a Command](#nothing-happens-when-i-fire-a-command)
 - [Galaxy Map / `dest` Navigates Incorrectly](#galaxy-map--dest-navigates-incorrectly)
+- [Read the Server Log](#read-the-server-log)
 - [Tail the Journal Live](#tail-the-journal-live)
 - [Confirm Key Injection Works End To End](#confirm-key-injection-works-end-to-end)
 - [Journal or Bindings Not Auto-Detected](#journal-or-bindings-not-auto-detected)
@@ -23,6 +24,20 @@ EDControlRoom sends key input to whatever window is focused. If Elite is not foc
 ## Galaxy Map / `dest` Navigates Incorrectly
 
 Almost always missing arrow-key secondaries on `UI_Up / UI_Down / UI_Left / UI_Right`. See [bindings-setup.md](bindings-setup.md).
+
+## Read the Server Log
+
+`serve`, `lan`, `hub` and `peer` print their log to the terminal and also write it to files, so past errors survive a closed terminal or a restart:
+
+- `.control_room_server.log`: EDCR's own lines (hub link, EDDN, Inara errors such as `Inara access check detected in headless mode`) and the web server's errors.
+- `.control_room_access.log`: one line per HTTP request, kept apart because pages poll.
+
+Relative paths are from the directory you start the server in. Each file rotates at 5 MB and keeps 3 older copies (`.1` to `.3`). Change or turn off either one with `[control_room] log_file` / `access_log_file` (`""` writes none).
+
+```sh
+tail -f .control_room_server.log
+grep -E "WARNING|ERROR" .control_room_server.log*
+```
 
 ## Tail the Journal Live
 

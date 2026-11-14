@@ -34,3 +34,5 @@ haul_search.toml
 .control_room_hub_voice.json
 
 .control_room_node_id
+.control_room_server.log*
+.control_room_access.log*

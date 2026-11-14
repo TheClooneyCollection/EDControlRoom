@@ -133,7 +133,7 @@ Messages in a node's `[tts] disabled_messages` are never sent up, so the hub and
 ## Is it connected?
 
 - **Sidebar Hub chip**: on a peer it shows the link (green up, red down), the last contact and how many outbox items are waiting; on the hub the number of linked peers.
-- **Log**: the peer logs `Hub link up: Desk (...)` and `Hub link to ... lost`; the hub logs `Peer Deck connected` and `disconnected`.
+- **Log**: the peer logs `Hub link up: Desk (...)` and `Hub link to ... lost`; the hub logs `Peer Deck connected` and `disconnected`. Both also write it to `.control_room_server.log` ([troubleshooting](troubleshooting.md#read-the-server-log)).
 - **API** (page token): `GET /api/hub-status` (peer: `connected`, `url`, `hub_name`, `last_contact_at`, `last_error`, `outbox_pending`; hub: `peers_connected`), `GET /api/nodes` on the hub (every node with `connected`, `last_contact_at` and `state`).
 
 ## Troubleshooting

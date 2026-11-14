@@ -18,6 +18,7 @@ from edcr.control_room.server.app import build_observer_server_app, _server_hydr
 from edcr.control_room.server.auth import SharedAccessTokenAuth
 from edcr.control_room.server.broker import InMemoryObserverSessionBroker
 from edcr.control_room.server.host import HeadlessControlRoomHost
+from edcr.control_room.server.log_files import LOG_FORMAT, log_server_to_file, log_uvicorn_to_files
 from edcr.control_room_state import write_text_atomically
 from edcr.control_room.server.sink import (
     DataHydrateFanoutSink,
@@ -191,9 +192,12 @@ def serve_observer_mode(
     runtime_host.start()
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        format=LOG_FORMAT,
         stream=sys.stderr,
     )
+    server_log_handler = log_server_to_file(loaded.config.control_room.log_file)
+    if server_log_handler is not None:
+        hub_logger.info("Logging to %s too", loaded.config.control_room.log_file)
     eddn_config = loaded.config.eddn
     eddn: EddnService | None = None
     db_logger = logging.getLogger("edcr.market_db")
@@ -346,8 +350,11 @@ def serve_observer_mode(
     try:
         hosts = bind_hosts(listen_hosts, loaded.config.control_room.lan_also_localhost)
         hub_logger.info("Listening on %s (port %s)", ", ".join(hosts), port)
-        uvicorn.Server(uvicorn.Config(app, log_level="info")).run(
-            sockets=[uvicorn.Config(app, host=h, port=port).bind_socket() for h in hosts])
+        server_config = uvicorn.Config(app, log_level="info")
+        socket_configs = [uvicorn.Config(app, host=h, port=port) for h in hosts]
+        log_uvicorn_to_files(server_log_handler, loaded.config.control_room.access_log_file)
+        sockets = [config.bind_socket() for config in socket_configs]
+        uvicorn.Server(server_config).run(sockets=sockets)
     finally:
         stop_background.set()
         if stop_advert is not None:
