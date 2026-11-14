@@ -1772,6 +1772,39 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.assertEqual(captured_targets, [])
         self.assertIn("Nothing sellable is in cargo right now", output)
 
+    def test_haul_dispatch_refuses_while_a_haul_is_paused(self) -> None:
+        # Live 2026-11-14: Start route from a hub page over a paused haul started a second worker,
+        # whose teardown of the first cleared the routine state, leaving a haul with no stop or resume.
+        self.app._haul_params = {
+            "station_1_buying": "Aluminium",
+            "station_1": "Pawelczyk Dock",
+            "station_1_system": "Sol",
+            "station_2_buying": "Bertrandite",
+            "station_2": "Trevithick Dock",
+            "station_2_system": "Achenar",
+        }
+        self.app._controls = object()
+        self.app._routine_active = True
+        self.app._active_routine_name = "haul"
+        self.app._haul_pause_requested = True
+        self.app._haul_paused = True
+        self.app._routine_worker = object()
+        refusals_before = self.app._runtime_state.busy_refusals
+
+        def fail_if_started(*args, **kwargs):
+            raise AssertionError("a second haul loop must not start over a running one")
+
+        with patch("edcr.control_room.routines_haul.haul_loop_two_way", new=fail_if_started):
+            self.app._dispatch_haul_loop()
+
+        self.assertTrue(self.app._routine_active)
+        self.assertEqual(self.app._active_routine_name, "haul")
+        self.assertTrue(self.app._haul_pause_requested)
+        self.assertTrue(self.app._haul_paused)
+        self.assertEqual(self.app._runtime_state.busy_refusals, refusals_before + 1)
+        self.assertIn("A routine is already running", "\n".join(self.app.logged))
+        self.assertNotIn("Starting haul loop:", "\n".join(self.app.logged))
+
     def test_haul_dispatch_does_not_require_starting_at_sell_station(self) -> None:
         captured: dict[str, object] = {}
 
@@ -4789,6 +4822,43 @@ class ControlRoomFailureMessageTests(unittest.TestCase):
         self.assertIsNotNone(suggestion)
         self.assertIn("commodity name", suggestion or "")
 
+    def test_replaced_worker_leaves_the_newer_routine_state_alone(self) -> None:
+        app = _HarnessApp(_make_context(Path(tempfile.mkdtemp())))
+
+        class _Worker:
+            is_cancelled = True
+
+        newer_worker = object()
+        app._routine_active = True
+        app._active_routine_name = "haul"
+        app._routine_worker = newer_worker
+
+        with patch("edcr.control_room.workers.get_current_worker", return_value=_Worker()):
+            run_routine_thread(app, lambda: None)
+
+        self.assertIn("Routine cancelled.", "\n".join(app.logged))
+        self.assertTrue(app._routine_active)
+        self.assertEqual(app._active_routine_name, "haul")
+        self.assertIs(app._routine_worker, newer_worker)
+
+    def test_finished_worker_clears_its_own_routine_state(self) -> None:
+        app = _HarnessApp(_make_context(Path(tempfile.mkdtemp())))
+
+        class _Worker:
+            is_cancelled = False
+
+        worker = _Worker()
+        app._routine_active = True
+        app._active_routine_name = "dock"
+        app._routine_worker = worker
+
+        with patch("edcr.control_room.workers.get_current_worker", return_value=worker):
+            run_routine_thread(app, lambda: None)
+
+        self.assertFalse(app._routine_active)
+        self.assertIsNone(app._active_routine_name)
+        self.assertIsNone(app._routine_worker)
+
     def test_worker_logs_failed_reason_and_try_line(self) -> None:
         app = _HarnessApp(_make_context(Path(tempfile.mkdtemp())))
 
@@ -5191,7 +5261,7 @@ class HaulRunHistoryTests(unittest.TestCase):
         # The haul ends on an error, e.g. docking denied until the retries ran out.
         self.app._time_fn = lambda: 115.0
         self.app._active_routine_name = "haul"
-        clear_routine(self.app)
+        clear_routine(self.app, None)
 
     def test_restarting_the_same_haul_continues_the_run_it_ended_in(self) -> None:
         self.suspend_mid_run()
@@ -5233,7 +5303,7 @@ class HaulRunHistoryTests(unittest.TestCase):
         self.event("MarketSell", "Alpha", 39, Type="silver", Count=5, TotalSale=70)
         self.app._time_fn = lambda: 145.0
         self.app._active_routine_name = "haul"
-        clear_routine(self.app)
+        clear_routine(self.app, None)
         self.app._haul_stats.docked_back_at_station_1 = False
         self.assertEqual(self.rows(), [])
 

@@ -538,6 +538,13 @@ def dispatch_haul_loop(
         )
         return
 
+    # The web and API start path comes straight here, unlike the TUI `haul` command, which checked
+    # before this. Without this, a Start over a paused haul started a second worker, whose exclusive
+    # group cancelled the first; the first's teardown then cleared the routine state out from under
+    # the second, which ran on with no stop, pause or resume (seen live 2026-11-14).
+    if not app._check_routine_ready():
+        return
+
     progress = app._make_progress()
     controls = app._make_controls(progress)
     sleeper = app._make_sleeper()

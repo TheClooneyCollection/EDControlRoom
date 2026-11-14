@@ -1760,7 +1760,7 @@ class ControlRoomApp(App[None]):
         _workers.run_routine_thread(self, fn)
 
     def _clear_routine(self) -> None:
-        _workers.clear_routine(self)
+        _workers.clear_routine(self, None)
 
     # ── Quit ───────────────────────────────────────────────────────────────────
 

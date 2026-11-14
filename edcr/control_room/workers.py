@@ -212,10 +212,14 @@ def run_routine_thread(
         if suggestion:
             app.call_from_thread(app._log, f"[yellow]Try: {escape(suggestion)}[/]")
     finally:
-        app.call_from_thread(clear_routine, app)
+        app.call_from_thread(clear_routine, app, worker)
 
 
-def clear_routine(app: WorkerHost) -> None:
+def clear_routine(app: WorkerHost, worker: object | None) -> None:
+    """End the routine `worker` ran (None: whichever is active). A worker that was replaced by a newer
+    one leaves the newer routine's state alone."""
+    if worker is not None and app._routine_worker is not None and app._routine_worker is not worker:
+        return
     app._routine_active = False
     app._routine_worker = None
     if app._active_routine_name == "haul":
