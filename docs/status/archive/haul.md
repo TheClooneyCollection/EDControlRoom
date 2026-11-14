@@ -4,6 +4,10 @@ Prepend displaced older status blocks from `docs/status/haul.md` here.
 
 Legacy pre-split global status history remains in `../../status-archive.md`.
 
+## Archived 2026-11-14
+
+- `haul search [system]` now treats `home` as the saved `control_room.home_system`, defaults from local ignored search config, accepts `max_station_distance_ls=any`, shows compact profit/distance detail, restores cargo capacity from latest journal `Loadout`, maps live Inara aliases, lets Enter load the highlighted route, `d` set `dest` to the first station system, `t` start travel to that station, `haul start` run the selected/saved route, and keeps `connect` search/results local until a structured route/destination/travel dispatch is submitted.
+
 ## Archived 2026-11-11
 
 - Two-way `haul` loads ignored repo-root `haul.toml` by default via `haul load [path]`; the tracked profile shape lives in `defaults/haul.toml`, and the default haul docking timeout is now `1200s`.
