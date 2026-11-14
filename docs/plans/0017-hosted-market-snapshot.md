@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (2026-11-13). Not started.
+Thought experiment (2026-11-14): a proposal for a future EDCR team, not scheduled. [Plan 0018](0018-static-routes-website.md) builds a static routes website on the same setup.
 
 ## Why
 
@@ -58,6 +58,15 @@ Measured on a hub DB, 2026-11-13: 18,985 markets, 1.56M prices, all within the 7
 3. Status Worker: `/status` page and the cron alarm to Discord.
 4. Client fetch and import, on an empty DB, on demand and on the background refresh timer, with the size and age shown in the log and the EDDN listener panel.
 5. Docs: `docs/user/trade-routes.md` and the haul status.
+
+## Rejected ideas (with the user's reasons)
+
+- Delta packs (a daily base plus hourly cumulative deltas): rejected; the full file is always current and small enough (27 MB) to download whole, and deltas add a base/delta chain to build and test.
+- A token-gated or private snapshot: rejected; the point is starting data for every install, including a sudden wave of new players.
+- Turning `eddn.enabled` on by default: not needed; background snapshot refreshes keep a client's DB current without its own listener.
+- Free always-on hosts for the listener (Oracle Cloud Always Free, a Google Cloud e2-micro, back-to-back 6 hour GitHub Actions jobs): set aside for an existing VPS; the Actions relay also sits in a grey area of GitHub's terms.
+- The hub publishing its own DB: replaced by the VPS, which holds EDDN data only, so no pilot's own markets or carrier sightings go public.
+- A rolling GitHub Release as the host: kept only as a fallback; R2 behind a custom domain has free egress and Cloudflare's cache.
 
 ## Open points
 
