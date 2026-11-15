@@ -1,6 +1,6 @@
 # Trade Routes (EDDN)
 
-The web **Routes** page (`/routes`) finds two-way trade routes from live market prices, without Inara.
+The web **Two-way haul** (`/haul`) and **Routes** (`/routes`) pages find two-way trade routes from EDDN market prices. `/haul` uses EDDN only; the Inara search code remains available to other callers.
 
 ## Where the prices come from
 
@@ -16,6 +16,20 @@ The EDDN listener is off by default; turn it on with `enabled = true` under `[ed
 - A configured snapshot fills an empty database or one whose newest market is over an hour old at startup. With the listener off, it checks every 3 hours (configurable) and downloads only a changed file; with the listener on, there is no timer. Peers use their hub. Newer local markets always win. The last filename is held in memory, so a restart can safely re-import the same file.
 - The snapshot log reports its size, data age, imported counts and duration. The Routes panel shows `snapshot` and data age without a listener, or adds snapshot age beside the listener status; it adds an activity line only when a new fetch finishes.
 - On `/routes`, the **EDDN** chip in the top bar shows the market count, and the **EDDN listener** panel adds a line every 10 seconds with what arrived since the last check.
+
+## Finding and selecting routes on Haul
+
+Search on `/haul` covers the whole store. **Route length** caps the distance between the two stations (100 Ly by default); **Distance from** only labels how far stations are from you. Blank filters use the server's `haul_search.toml` and ship defaults. EDCR trip time and Cr/h use the viewed ship's laden jump range; with no range available the configured fallback applies. `/routes` keeps its existing configured range unless a caller explicitly requests the ship range.
+
+Search never chooses a route for you. Click a row to select it, or use Copy / paste, then press **Travel**, **Start route** or **Track only**. Rows whose commodity name is unknown remain visible but cannot be selected. The result text reports markets left out by each filter.
+
+### Better routes
+
+The hub or standalone server checks every 300 seconds and searches when market data or ship/selected-route inputs changed. It compares the selected pair at current prices under the same time model. A candidate must gain both **15%** and **20 million Cr/h**. Without a selected route, or when its current price cannot be estimated, the top routes are shown; missing baseline inputs are explained.
+
+**Better routes** lists up to 10 candidates from the top 200 search results, with earnings, gain, jumps, distance and price ages. The footer counts routes below the threshold, unknown commodity names and dismissed routes. **Select** saves your choice and fills Travel's target; **Dismiss** hides that candidate until you select another route. Neither action starts travel or hauling. During a running haul, use Stop after run before starting the new route.
+
+A changed best route, or another 15% increase in its estimated earnings, can trigger a TTS callout at most once per 300 seconds, including during a haul. Normal voice, mute and browser speech settings apply; add `route_recommended` to `tts.disabled_messages` to silence only this callout. Peers receive their own ship's results from the hub. If the link drops, the last list and check time remain visible with **Hub unreachable**, actions are disabled, and no new recommendation is announced.
 
 ## Using the Routes page
 
@@ -59,6 +73,15 @@ snapshot_refresh_hours = 3.0 # positive; periodic checks only without the listen
 database_file = ".eddn_markets.sqlite3"
 max_age_days = 7.0       # drop markets older than this
 status_every_s = 30.0    # server log status line; 0 turns it off
+
+[eddn.recommend]
+enabled = true
+check_every_s = 300
+max_route_ly = 100
+min_gain = 0.15
+min_gain_cr_h = 20000000
+list_cap = 10
+tts_gap_s = 300
 
 [eddn.time_model]        # trip time for profit per hour; set only what you change
 source = "config"        # "fitted": fit them per ship from the journal events instead

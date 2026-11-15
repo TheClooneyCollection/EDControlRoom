@@ -2,7 +2,9 @@
 
 ## Status
 
-Approved 2026-11-15, not built.
+Built 2026-11-15. Automated behavior checks pass; deployment and live hub/forge validation below remain pending.
+
+Approved step 1 deviation: server wiring resolves the viewed ship laden range only with `ship_range=1` (sent by `/haul`); an explicit query override wins and no ship retains the configured fallback. `/routes` defaults are unchanged. Search no longer selects/persists the first result automatically.
 
 ## Why
 
@@ -77,7 +79,7 @@ Approved 2026-11-15, not built.
 
 Each step is one worker commit with its tests (`uv run python3 -m unittest discover -s tests`, behavior tests with plain function fakes).
 
-1. **`/haul` searches EDDN.** `web/haul-ui.js`, `web/haul-v1.html`: the search calls `/api/eddn-routes` with `view=global` and the fields above. Remove the Inara form fields, the Profit / hr Inara line and the Open in Inara link. Name-unknown rows are not selectable. `defaults/haul_search.toml` gains nothing new; `max_route_distance_ly` stays the laden-range fallback for `/routes`. Server unchanged. Check: a look-only `/haul` (no `#route=`) in a browser, then select and Copy a row.
+1. **`/haul` searches EDDN.** `web/haul-ui.js`, `web/haul-v1.html`: the search calls `/api/eddn-routes` with `view=global` and the fields above. Remove the Inara form fields, the Profit / hr Inara line and the Open in Inara link. Name-unknown rows are not selectable. `defaults/haul_search.toml` gains nothing new; `max_route_distance_ly` stays the laden-range fallback for `/routes`. Server adds the approved `ship_range=1` opt-in described above. Check: a look-only `/haul` (no `#route=`) in a browser, then select and Copy a row.
 2. **Recommender core.** `edcr/route_recommend.py` with `route_key`, `recommend(...)` and `RouteRecommendations` (to/from JSON). Tests in `tests/test_route_recommend.py`:
    - both thresholds (only one met fails)
    - no selected route lists the top `list_cap`
@@ -116,10 +118,12 @@ Each step is one worker commit with its tests (`uv run python3 -m unittest disco
 
 ## Open points
 
-- Route length default: 100 Ly, for search speed. If 250 Ly runs fast enough on the hub's store, the default may move to 250. Measure in step 5 with one search on the real store.
+- Measured the real local hub store read-only: 100 Ly 4.531 s; 250 Ly 18.271 s (1,895 eligible markets, 200 results, 720 t / 31.5 Ly fixture ship inputs). Keep the approved 100 Ly default.
 - A peer's Better routes panel needs the hub. While the link is down, the panel keeps the last list with its check time and a "hub unreachable" note, and no new TTS plays.
 
 ## Validation
+
+Automated: 1,271 tests in 0.946 s, OK (1 skipped); slower than the 0.7626 s suite budget, as before this work. Timing report identifies the Node full-script web flow (~68 ms) and existing four transit tests (~34–36 ms each). Mocked Chromium `/haul?node=forge` at 1440 px and 390 px had no page errors or overflow. Actual hub/forge deployment checks below remain pending; no game input was sent.
 
 - `/haul` on the hub and on forge (through the hub) lists EDDN routes, and Select, Travel and Start route run as before.
 - Selecting a weak route leads to a Better routes list and one TTS line within about 300 s. No second line follows within 300 s, and none for the same route.
