@@ -54,6 +54,7 @@ def dock(*args, **kwargs):
 
 
 def undock(*args, **kwargs):
+    kwargs.setdefault("read_status_fn", lambda: SimpleNamespace(gui_focus=0, flags=SimpleNamespace(docked=True)))
     kwargs.setdefault("progress_fn", noop_progress)
     kwargs.setdefault("announce_fn", noop_announce)
     return _undock(*args, **kwargs)

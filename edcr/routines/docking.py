@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from time import monotonic, sleep
 from typing import Callable
 
@@ -26,6 +27,7 @@ from edcr.routines._base import (
 )
 from edcr.routines.callbacks import AnnouncementCallback, ProgressCallback
 from edcr.tts import AnnouncementId
+from edcr.status import ShipStatus
 
 # A normal auto-launch clears the mail slot (NoTrack) roughly 37s after Undocked;
 # boosting earlier than this risks hitting the station interior.
@@ -477,6 +479,7 @@ def undock(
     controls: SupportsUndockControls,
     watcher: SupportsPollEvents,
     *,
+    read_status_fn: Callable[[], ShipStatus | None],
     undock_timeout_s: float = 30.0,
     no_track_timeout_s: float = 600.0,
     step_delay_s: float = 0.3,
@@ -488,6 +491,7 @@ def undock(
     result, pending_events = _undock_until_undocked(
         controls,
         watcher,
+        read_status_fn=read_status_fn,
         undock_timeout_s=undock_timeout_s,
         step_delay_s=step_delay_s,
         time_fn=time_fn,
@@ -540,6 +544,7 @@ def _undock_until_undocked(
     controls: SupportsUndockControls,
     watcher: SupportsPollEvents,
     *,
+    read_status_fn: Callable[[], ShipStatus | None],
     undock_timeout_s: float = 30.0,
     step_delay_s: float = 0.3,
     time_fn: Callable[[], float] = monotonic,
@@ -551,16 +556,51 @@ def _undock_until_undocked(
     if step_delay_s < 0:
         raise ValueError("step_delay_s must be non-negative")
 
-    progress_fn("Resetting UI state...")
-    dispatch = controls.ui_back(repeat=10)
-    if dispatch.status != "ok":
+    def read_launch_status() -> ShipStatus | None:
+        # Status.json can be briefly empty while the game rewrites it.
+        for attempt in range(11):
+            try:
+                status = read_status_fn()
+            except (OSError, json.JSONDecodeError):
+                status = None
+            if status is not None:
+                return status
+            if attempt < 10:
+                sleeper(0.1)
+        return None
+
+    def failure(action: str, reason: str) -> tuple[RoutineResult, list[dict[str, object]]]:
         return RoutineResult(
-            action="UI_Back",
-            dispatch=dispatch,
-            details={"phase": "reset"},
+            action=action,
+            dispatch=ActionDispatchResult(action=action, status="error", reason=reason),
+            details={"phase": "confirm_launch_menu"},
         ), []
-    if step_delay_s > 0:
-        sleeper(step_delay_s)
+
+    def menu_failure(
+        action: str, status: ShipStatus | None,
+    ) -> tuple[RoutineResult, list[dict[str, object]]] | None:
+        if status is None:
+            return failure(action, "Cannot confirm launch menu: Status.json unavailable")
+        if not status.flags.docked:
+            return failure(action, "Cannot navigate launch menu: ship is no longer docked")
+        if status.gui_focus != 0:
+            return failure(action, f"Docked launch menu not confirmed (GuiFocus {status.gui_focus})")
+        return None
+
+    progress_fn("Exiting station services and confirming launch menu...")
+    for attempt in range(11):
+        status = read_launch_status()
+        if status is None or not status.flags.docked or status.gui_focus is None:
+            return menu_failure("UI_Back", status)
+        if status.gui_focus == 0:
+            break
+        if attempt == 10:
+            return menu_failure("UI_Back", status)
+        dispatch = controls.ui_back()
+        if dispatch.status != "ok":
+            return RoutineResult(action="UI_Back", dispatch=dispatch, details={"phase": "reset"}), []
+        # Separate presses give the game time to process lost/slow UI transitions.
+        sleeper(max(step_delay_s, 0.3))
 
     dispatch = controls.head_look_reset()
     if dispatch.status != "ok":
@@ -573,6 +613,9 @@ def _undock_until_undocked(
         sleeper(step_delay_s)
 
     progress_fn("Navigating to Launch...")
+    blocked = menu_failure("UI_Down", read_launch_status())
+    if blocked is not None:
+        return blocked
     dispatch = controls.ui_down()
     if dispatch.status != "ok":
         return RoutineResult(
@@ -583,6 +626,9 @@ def _undock_until_undocked(
     if step_delay_s > 0:
         sleeper(step_delay_s)
 
+    blocked = menu_failure("UI_Select", read_launch_status())
+    if blocked is not None:
+        return blocked
     launch_dispatch = controls.ui_select()
     if launch_dispatch.status != "ok":
         return RoutineResult(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 
 from edcr.actions import ActionDispatchResult
@@ -84,6 +85,7 @@ class StandaloneUndockThreatTests(unittest.TestCase):
         result = undock(
             FakeShipControls(),
             FakeWatcher([[], [_UNDOCKED], [_UNDER_ATTACK, _SHIELDS_DOWN]]),
+            read_status_fn=lambda: SimpleNamespace(gui_focus=0, flags=SimpleNamespace(docked=True)),
             undock_timeout_s=10.0,
             no_track_timeout_s=10.0,
             step_delay_s=0.0,

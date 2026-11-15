@@ -490,6 +490,7 @@ def undock_and_route_to_system(
     result, pending_events = _undock_until_undocked(
         runtime.controls,
         runtime.watcher,
+        read_status_fn=lambda: read_status(runtime.journal_dir, require_flags=True),
         undock_timeout_s=runtime.timing.undock_timeout_s,
         step_delay_s=runtime.timing.step_delay_s,
         time_fn=runtime.time_fn,

@@ -191,7 +191,7 @@ class HardpointFlowTests(unittest.TestCase):
                     journal += '{"event":"SupercruiseEntry","StarSystem":"Sol"}\n'
                 (journal_dir / "Journal.240101000000.01.log").write_text(journal, encoding="utf-8")
                 (journal_dir / "NavRoute.json").write_text('{"Route":[{"StarSystem":"Achenar"}]}', encoding="utf-8")
-                (journal_dir / "Status.json").write_text('{"Flags":64}', encoding="utf-8")
+                (journal_dir / "Status.json").write_text('{"Flags":65, "GuiFocus":0}' if phase == "docked" else '{"Flags":64}', encoding="utf-8")
                 controls = FakeShipControls()
                 watcher = FakeWatcher([
                     [], [{"event": "Undocked", "StationName": "Lincoln"}],

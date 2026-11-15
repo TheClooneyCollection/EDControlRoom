@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from edcr.control_room.interfaces import RoutineHost
 from edcr.routines import dock, undock
+from edcr.status import read_status
 
 
 def _should_wait_for_supercruise_exit(status: str | None) -> bool:
@@ -61,6 +62,7 @@ def cmd_undock(app: RoutineHost, *, skip_delay: bool = False) -> None:
         fn=lambda: undock(
             controls,
             watcher,
+            read_status_fn=lambda: read_status(app._journal_dir, require_flags=True),
             undock_timeout_s=undock_timeout,
             no_track_timeout_s=no_track_timeout,
             step_delay_s=step_delay,

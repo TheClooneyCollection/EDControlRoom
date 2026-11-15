@@ -47,7 +47,7 @@ def haul_loop_two_way(*args, **kwargs):
     controls, watcher = args
     journal_dir = kwargs.pop("journal_dir")
     if not (journal_dir / "Status.json").exists():
-        (journal_dir / "Status.json").write_text('{"Flags": 0}', encoding="utf-8")
+        (journal_dir / "Status.json").write_text('{"Flags": 1, "GuiFocus": 0}', encoding="utf-8")
     station_1_buying = kwargs.pop("station_1_buying")
     station_2_buying = kwargs.pop("station_2_buying")
     runtime = build_haul_runtime(
@@ -1601,7 +1601,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 ],
             )
             _write_cargo(journal_dir, [])
-            (journal_dir / "Status.json").write_text(json.dumps({"Flags": 0}), encoding="utf-8")
+            (journal_dir / "Status.json").write_text(json.dumps({"Flags": 1, "GuiFocus": 0}), encoding="utf-8")
             route_failure = RoutineResult(
                 action="GalaxyMapOpen",
                 dispatch=ActionDispatchResult(
@@ -2597,7 +2597,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
             )
             _write_navroute(journal_dir, _SYSTEM_2)
             _write_cargo(journal_dir, [])
-            (journal_dir / "Status.json").write_text(json.dumps({"Flags": 0}), encoding="utf-8")
+            (journal_dir / "Status.json").write_text(json.dumps({"Flags": 1, "GuiFocus": 0}), encoding="utf-8")
 
             with patch("edcr.routines.transit.dock") as dock_mock:
                 dock_mock.return_value = RoutineResult(
