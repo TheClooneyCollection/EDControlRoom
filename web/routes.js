@@ -12,6 +12,7 @@ let range = { jumps: 4 };
 let searchRequest = 0;
 let shownRoutes = [];
 let lastListener = null;
+let lastSnapshotFetch = null;
 let eddnOffLogged = false;
 const EDDN_LOG_LIMIT = 60;
 
@@ -126,14 +127,28 @@ function statusLogLine(listener, store) {
 async function refreshStatus() {
   try {
     const status = await fetchJson("/api/eddn-status");
-    if (!status.enabled) {
+    const snapshot = status.snapshot;
+    const hasSnapshot = snapshot && snapshot.mode !== "off";
+    const snapshotAge = hasSnapshot && snapshot.newest_market_at
+      ? `${ageLabel(Math.max(0, Date.now() / 1000 - Date.parse(snapshot.newest_market_at) / 1000))} old`
+      : "awaiting data";
+    if (hasSnapshot && snapshot.last_fetch_at != null && snapshot.last_fetch_at !== lastSnapshotFetch) {
+      appendLog(`Market snapshot: ${snapshot.file}, data ${snapshotAge}, ${count(snapshot.markets_imported)} markets and ${count(snapshot.prices_imported)} prices imported`);
+      lastSnapshotFetch = snapshot.last_fetch_at;
+    }
+    if (!status.listener && hasSnapshot) {
+      setText("eddn-label", `snapshot, ${count(status.store.markets)} markets, ${snapshotAge}${status.hub ? ` (hub ${status.hub})` : ""}`);
+      lastListener = null;
+      return;
+    }
+    if (!status.listener) {
       setText("eddn-label", status.hub ? `off on hub ${status.hub}` : "off");
       if (!eddnOffLogged) appendLog(`EDDN is off${status.hub ? ` on hub ${status.hub}` : ""}: set [eddn] enabled = true in its config.toml and restart the server.`);
       eddnOffLogged = true;
       return;
     }
     const state = status.listener.connected ? "live" : "disconnected";
-    setText("eddn-label", `${state}, ${count(status.store.markets)} markets${status.hub ? ` (hub ${status.hub})` : ""}`);
+    setText("eddn-label", `${state}, ${count(status.store.markets)} markets${status.hub ? ` (hub ${status.hub})` : ""}${hasSnapshot ? `, snapshot ${snapshotAge}` : ""}`);
     appendLog(statusLogLine(status.listener, status.store));
     lastListener = status.listener;
   } catch (error) {

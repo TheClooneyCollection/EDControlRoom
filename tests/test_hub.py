@@ -649,7 +649,7 @@ class LinkedServerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.r = rig(self)
         self.hub_app = server(market_database_file=self.database, hub_side=self.r.hub_side(),
-                              eddn_status=lambda: {"store": {"markets": 3}}, ardent_lookup=None)
+                              eddn_status=lambda: {"enabled": True, "store": {"markets": 3}}, ardent_lookup=None)
         self.r.handlers.update(self.hub_app.state.link_handlers)
 
     def peer_app(self, **options: Any):

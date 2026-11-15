@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import replace
+from dataclasses import asdict, replace
 import logging
 from pathlib import Path
 import socket
 import sys
 import threading
 import time
-from typing import Callable
+from urllib.request import urlopen
+from typing import Any, Callable
 
 import uvicorn
 
@@ -46,6 +47,7 @@ from edcr.journal_sync import sync_journal_every
 from edcr.trip_time_fit import TripTimeModels, connect_read_only
 from edcr.recent_markets import load_recent_markets, record_market, watch_file
 from edcr.market_db import open_market_store, station_facts_writer
+from edcr.market_snapshot_refresh import start_snapshot_refresh
 from edcr.config import with_hub_role
 from edcr.runtime import build_runtime_context, load_config_with_fallback
 from edcr.tts import NullSpeechBackend, PiperSpeechBackend, build_speech_backend
@@ -220,6 +222,25 @@ def serve_observer_mode(
     recent_markets_file = loaded.config.control_room.recent_markets_file
     haul_runs_file = loaded.config.control_room.haul_runs_file
     stop_background = threading.Event()
+    snapshot = None
+    if store is not None and eddn_config.snapshot_url:
+        snapshot = start_snapshot_refresh(
+            store, manifest_url=eddn_config.snapshot_url,
+            refresh_s=eddn_config.snapshot_refresh_hours * 3600,
+            listener_on=eddn is not None, max_age_s=eddn_config.max_age_days * 86400,
+            urlopen=urlopen, now=time.time, log=logging.getLogger("edcr.eddn").info,
+            stop=stop_background,
+        )
+
+    def market_status() -> dict[str, Any]:
+        status: dict[str, Any] = {"enabled": eddn is not None}
+        if store is not None:
+            status["store"] = asdict(store.counts())
+            status["snapshot"] = snapshot.status() if snapshot is not None else {"mode": "off"}
+        if eddn is not None:
+            status.update(eddn.status())
+        return status
+
     # Recent markets are recorded by the Control Room whenever Market.json changes; a peer queues
     # them for the hub, a hub or standalone writes them into its own database.
     if peer_link is not None:
@@ -325,7 +346,7 @@ def serve_observer_mode(
         journal_dir=journal_dir,
         haul_runs_file=haul_runs_file,
         recent_markets_file=recent_markets_file,
-        eddn_status=eddn.status if eddn is not None else None,
+        eddn_status=market_status,
         market_database_file=eddn_config.database_file if store is not None else None,
         # Never save into the example config a server without config.toml runs on.
         config_file=None if loaded.used_example_config_fallback else Path(loaded.config_path),
@@ -357,6 +378,8 @@ def serve_observer_mode(
         uvicorn.Server(server_config).run(sockets=sockets)
     finally:
         stop_background.set()
+        if snapshot is not None:
+            snapshot.stop()
         if stop_advert is not None:
             stop_advert()
         if eddn is not None:

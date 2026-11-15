@@ -15,6 +15,19 @@ def _write_config(path: Path, content: str) -> None:
 
 
 class LoadConfigTests(unittest.TestCase):
+    def test_snapshot_settings_load_and_reject_nonpositive_or_nonfinite_interval(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "config.toml"
+            _write_config(path, '[eddn]\nsnapshot_url = "https://example.invalid/manifest.json"\nsnapshot_refresh_hours = 2.5\n')
+            config = load_config(path)
+            self.assertEqual(config.eddn.snapshot_url, "https://example.invalid/manifest.json")
+            self.assertEqual(config.eddn.snapshot_refresh_hours, 2.5)
+            for value in ("0", "-1", "nan", "inf"):
+                _write_config(path, f"[eddn]\nsnapshot_refresh_hours = {value}\n")
+                with self.assertRaisesRegex(ConfigError, "snapshot_refresh_hours"):
+                    load_config(path)
+
+
     def test_buy_top_up_limit_accepts_zero_and_flat_aliases_and_rejects_negative(self) -> None:
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.toml"

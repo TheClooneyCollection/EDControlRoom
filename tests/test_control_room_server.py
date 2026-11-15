@@ -678,7 +678,9 @@ class ControlRoomServerTests(unittest.TestCase):
 
     def test_eddn_status_api_reports_disabled_or_service_status(self) -> None:
         for status, expected in ((None, {"enabled": False}),
-                                 (lambda: {"listener": {"messages": 3}}, {"enabled": True, "listener": {"messages": 3}})):
+                                 (lambda: {"enabled": True, "listener": {"messages": 3}}, {"enabled": True, "listener": {"messages": 3}}),
+                                 (lambda: {"enabled": False, "store": {"markets": 8}, "snapshot": {"mode": "timer"}},
+                                  {"enabled": False, "store": {"markets": 8}, "snapshot": {"mode": "timer"}})):
             app = build_observer_server_app(data_provider=_base_data_read_model, command_handler=None,
                                             broker=InMemoryObserverSessionBroker(), auth=SharedAccessTokenAuth("secret-token"),
                                             eddn_status=status)

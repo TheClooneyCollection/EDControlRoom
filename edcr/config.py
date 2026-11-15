@@ -237,6 +237,8 @@ class EddnConfig:
     enabled: bool = False
     relay: str = "tcp://eddn.edcd.io:9500"
     database_file: Path = Path(".eddn_markets.sqlite3")
+    snapshot_url: str = ""
+    snapshot_refresh_hours: float = 3.0
     max_age_days: float = 7.0
     # Seconds between EDDN status lines in the server log; 0 turns them off.
     status_every_s: float = 30.0
@@ -717,6 +719,8 @@ def with_hub_role(config: AppConfig, role: str, default_token: str) -> AppConfig
 
 
 def validate_config(config: AppConfig) -> AppConfig:
+    if not math.isfinite(config.eddn.snapshot_refresh_hours) or config.eddn.snapshot_refresh_hours <= 0:
+        raise ConfigError("Config value `eddn.snapshot_refresh_hours` must be positive and finite.")
     if not config.eddn.relay.strip():
         raise ConfigError("Config value `eddn.relay` cannot be empty.")
     if not math.isfinite(config.eddn.max_age_days) or config.eddn.max_age_days <= 0:
@@ -1266,6 +1270,8 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             database_file=Path(
                 _string(eddn, "database_file", _string(default_eddn, "database_file", ""))
             ).expanduser(),
+            snapshot_url=_string(eddn, "snapshot_url", _string(default_eddn, "snapshot_url", "")),
+            snapshot_refresh_hours=_float(eddn, "snapshot_refresh_hours", _float(default_eddn, "snapshot_refresh_hours", 3.0)),
             max_age_days=_float(eddn, "max_age_days", _float(default_eddn, "max_age_days", 7.0)),
             status_every_s=_float(eddn, "status_every_s", _float(default_eddn, "status_every_s", 30.0)),
             time_model=_time_model(_optional_table(eddn, "time_model"), _optional_table(default_eddn, "time_model")),

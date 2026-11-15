@@ -6,13 +6,15 @@ The web **Routes** page (`/routes`) finds two-way trade routes from live market 
 
 A standalone or hub Control Room always keeps a local SQLite market database, `.eddn_markets.sqlite3` in the repo folder (about 3.5 KB per market); a peer keeps none and asks the hub. Your own visited markets and the systems and stations in your journal always go into it. With `[eddn]` on, the `lan` server also listens to [EDDN](https://github.com/EDCD/EDDN), the feed other commanders' tools upload market data to, and every market update goes into the same file. Markets not updated for 7 days are dropped.
 
-The EDDN listener is off by default; turn it on with `enabled = true` under `[eddn]` (see Settings below). The database starts empty, so give it a while: after an hour or so the busy parts of the bubble are covered, and coverage keeps growing while the server runs.
+The EDDN listener is off by default; turn it on with `enabled = true` under `[eddn]` (see Settings below). Set `snapshot_url` to a hosted manifest URL to fill an empty database in the background without a listener. Without a snapshot source the database starts empty, so give it a while: after an hour or so the busy parts of the bubble are covered, and coverage keeps growing while the server runs.
 
 ## Checking it works
 
 - The server log prints an EDDN status line every 30 seconds:
   `EDDN connected: 5210 msgs, 830 market updates, 0 errors | db 553 markets, 41000 prices, ...`
 - "EDDN relay silent; reconnecting." now and then is normal; the listener reconnects by itself.
+- A configured snapshot fills an empty database or one whose newest market is over an hour old at startup. With the listener off, it checks every 3 hours (configurable) and downloads only a changed file; with the listener on, there is no timer. Peers use their hub. Newer local markets always win. The last filename is held in memory, so a restart can safely re-import the same file.
+- The snapshot log reports its size, data age, imported counts and duration. The Routes panel shows `snapshot` and data age without a listener, or adds snapshot age beside the listener status; it adds an activity line only when a new fetch finishes.
 - On `/routes`, the **EDDN** chip in the top bar shows the market count, and the **EDDN listener** panel adds a line every 10 seconds with what arrived since the last check.
 
 ## Using the Routes page
@@ -51,7 +53,9 @@ In `config.toml`:
 
 ```toml
 [eddn]
-enabled = true           # off by default
+enabled = false          # optional live listener
+snapshot_url = ""        # hosted manifest URL; empty disables snapshot downloads
+snapshot_refresh_hours = 3.0 # positive; periodic checks only without the listener
 database_file = ".eddn_markets.sqlite3"
 max_age_days = 7.0       # drop markets older than this
 status_every_s = 30.0    # server log status line; 0 turns it off

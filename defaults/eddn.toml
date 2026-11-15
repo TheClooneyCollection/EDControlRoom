@@ -1,6 +1,10 @@
 [eddn]
 # Listen to the EDDN relay for live market prices (used by the /routes trade route search).
 enabled = false
+# Hosted manifest URL; empty disables snapshot downloads. Peers use their hub.
+snapshot_url = ""
+# Background interval without a listener; with a listener only fill the startup gap.
+snapshot_refresh_hours = 3.0
 relay = "tcp://eddn.edcd.io:9500"
 database_file = ".eddn_markets.sqlite3"
 # Markets not updated for this many days are dropped.

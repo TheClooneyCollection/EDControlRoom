@@ -995,7 +995,7 @@ def build_observer_server_app(
     def answer_eddn_status(_body: Any) -> LinkReply:
         if eddn_status is None:
             return LinkReply(200, {"enabled": False})
-        return LinkReply(200, {"enabled": True, **eddn_status()})
+        return LinkReply(200, eddn_status())
 
     async def eddn_status_endpoint(request: Request) -> JSONResponse:
         auth_failure = require_http_auth(request)

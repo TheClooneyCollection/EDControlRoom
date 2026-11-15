@@ -2581,6 +2581,24 @@ def main() -> None:
         record_station_facts=station_facts_writer(store, lambda msg: app._log(msg)),
         write_state_file=write_text_atomically,
     )
+    from edcr.market_snapshot_refresh import start_snapshot_refresh
+    from urllib.request import urlopen
+    import threading
+    import time
+
+    def snapshot_log(message: str) -> None:
+        # Queue UI work even when the download finishes before app.run mounts widgets.
+        app.call_later(app._log, message)
+
+    snapshot = None
+    if store is not None and loaded.config.eddn.snapshot_url:
+        snapshot = start_snapshot_refresh(
+            store, manifest_url=loaded.config.eddn.snapshot_url,
+            refresh_s=loaded.config.eddn.snapshot_refresh_hours * 3600,
+            listener_on=False, max_age_s=loaded.config.eddn.max_age_days * 86400,
+            urlopen=urlopen, now=time.time, log=snapshot_log,
+            stop=threading.Event(),
+        )
     previous_sigint = signal.getsignal(signal.SIGINT)
 
     def handle_sigint(signum, frame) -> None:  # type: ignore[no-untyped-def]
@@ -2592,6 +2610,8 @@ def main() -> None:
         app.run()
     finally:
         signal.signal(signal.SIGINT, previous_sigint)
+        if snapshot is not None:
+            snapshot.stop()
         if store is not None:
             store.close()
 

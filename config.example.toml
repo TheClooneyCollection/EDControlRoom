@@ -28,6 +28,8 @@
 # access_log_file = ".control_room_access.log"   # one line per HTTP request
 
 [eddn]
+# snapshot_url = ""            # hosted manifest URL; empty disables downloads
+# snapshot_refresh_hours = 3.0 # positive; timer only when listener is off
 # Live market prices for the /routes trade route search; the `lan` server listens when enabled.
 # enabled = true
 # database_file = ".eddn_markets.sqlite3"

@@ -2,7 +2,7 @@
 
 ## Status
 
-Scheduled; Decisions approved 2026-11-15. Step 1 built 2026-11-15: `tools/market_snapshot.py write <db_path> <out_dir>` (local snapshot and manifest). Step 2 built 2026-11-15: `tools/market_snapshot.py publish`, optional boto3 upload, status JSON and VPS deployment templates (validated locally; no live deployment yet). [Plan 0018](0018-static-routes-website.md) builds a static routes website on the same setup.
+In progress; Decisions approved 2026-11-15. Step 1 built 2026-11-15: `tools/market_snapshot.py write <db_path> <out_dir>` (local snapshot and manifest). Step 2 built 2026-11-15: `tools/market_snapshot.py publish`, optional boto3 upload, status JSON and VPS deployment templates (validated locally; no live deployment yet). Step 4 built 2026-11-15: client fetch/import, startup gap filling, refresh timer and status panel; step 5 player docs included. Step 3 remains pending. [Plan 0018](0018-static-routes-website.md) builds a static routes website on the same setup.
 
 ## Why
 
@@ -49,19 +49,20 @@ Measured again with the step 1 tool on the same hub DB, 2026-11-15: 24,597 marke
 ### Importing (client)
 
 - On start, when the DB is empty (or on demand, for example `tools/market_snapshot.py fetch`), read the manifest, stream the `.gz` while decompressing, check the sha256, then import.
-- The import uses the existing rule: newest timestamp wins and a newer snapshot replaces the whole station, so it never overwrites fresher local data and an existing DB can use it to fill gaps. Re-importing the same file changes nothing.
+- Import uses SQLite ATTACH and set-based SQL in one transaction, avoiding Python loops over prices. The import uses the existing rule: newest timestamp wins and a newer snapshot replaces the whole station, so it never overwrites fresher local data and an existing DB can use it to fill gaps. Re-importing the same file changes nothing.
 - With the listener off, refresh every 3 h by default (configurable) in the background while the Control Room runs: read the manifest on a timer and download only when `file` changed. With the listener on, check only at start and fetch once when the DB is empty or the newest local market is over 1 h old (after time offline); the listener keeps it current after that.
 - Import on a background thread so start-up and pages never wait on it (1.5M rows, not yet timed).
 - Skip markets older than `max_age_days`; refuse a manifest whose `schema` does not match.
-- Peers do not fetch; they ask the hub as today.
+- Configure `[eddn] snapshot_url` with the manifest URL (empty disables downloads), and positive `snapshot_refresh_hours` (default 3). The last imported filename is remembered in memory only; restarting may safely re-import it. Peers do not fetch; they ask the hub as today.
+- On demand: `uv run python3 tools/market_snapshot.py fetch <manifest_url> <db_path>`; normal server and local TUI refreshes run in the background. The log reports size, age, imported counts and duration; `/api/eddn-status` and the Routes panel expose the source and age.
 
 ## Build steps
 
 1. Built 2026-11-15: snapshot tool (`tools/market_snapshot.py write`): `VACUUM INTO`, gzip, manifest; local only, no upload.
 2. Built 2026-11-15: `tools/market_snapshot.py publish` uploads to an S3-compatible bucket; `--dry-run` writes local artifacts and lists uploads. VPS systemd services, timer and env template in `deploy/market-snapshot/`, [operator note](../operators/market-snapshot-vps.md). Local S3 stand-in verified; real R2/VPS deployment pending.
 3. Status Worker: `/status` page and the cron alarm to Discord.
-4. Client fetch and import, on an empty DB, on demand and on the background refresh timer, with the size and age shown in the log and the EDDN listener panel.
-5. Docs: `docs/user/trade-routes.md` and the haul status.
+4. Built 2026-11-15: client fetch and import, on an empty DB, on demand and on the background refresh timer, with the size and age shown in the log and the EDDN listener panel.
+5. Built 2026-11-15 alongside step 4. Docs: `docs/user/trade-routes.md` and the haul status.
 
 ## Rejected ideas (with the user's reasons)
 
