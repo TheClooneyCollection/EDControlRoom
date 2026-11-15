@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `394`
-- Latest generated iteration number: `527`
+- Generated iteration count: `395`
+- Latest generated iteration number: `528`
 
 ## Iteration 134
 
@@ -11244,3 +11244,29 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - `node --check web/haul-ui.js` passed. A temporary Node VM check of updateRoutinePanel verified session rate, new-run continuity, zero profit and zero/missing elapsed.
 - Full suite: 1243 tests / 1.165s, OK (1 skipped); above 0.7458s timing budget. Required timing report suite_status=ok / 1.439s; no unrelated performance changes.
 - No live deploy or browser visual check; phone behavior checked against existing media rules and the grid definition.
+
+## Iteration 528
+
+- When: `2026-11-15 18:40`
+- Area: `haul`
+- Title: `fold-projected-rate-into-current-run-text`
+- Source: [2026-11-15-18-40_____haul_____fold-projected-rate-into-current-run-text.md](iteration-logs/2026-11-15-18-40_____haul_____fold-projected-rate-into-current-run-text.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `fold-projected-rate-into-current-run-text`
+- Started: `2026-11-15 18:40`
+
+## Summary
+
+- User correction to 8dfc358: the projected rate belongs in the existing `routine-current-run` text, not a separate metric.
+
+## Changes
+
+- `routine-current-run` reads `current / accumulated / projected`, e.g. `50.3m CR / 320.0m CR / ~250.0m/h`; the third part is `-` before the first sale. Same session-based rate (`sessionProfit / session_elapsed_s × 3600`).
+- Removed the `Projected` metric and the `session-metrics` grid rule added only for it; the label is now `Current / Accumulated / Projected`.
+
+## Follow-ups
+
+- None.

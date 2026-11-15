@@ -100,20 +100,19 @@ class ControlRoomHaulWebTests(unittest.TestCase):
 
         self.assertIn("Current / Accumulated", html)
         self.assertIn(
-            "`${formatCredits(haulSession.current_run_profit || 0)} / ${formatCredits(haulSession.accumulated_profit || 0)}`",
+            "`${formatCredits(haulSession.current_run_profit || 0)} / ${formatCredits(haulSession.accumulated_profit || 0)} / ${projected}`",
             html,
         )
 
-    def test_haul_web_projected_rate_uses_session_profit_and_stays_visible_before_a_sale(self) -> None:
+    def test_haul_web_current_run_text_appends_session_projected_rate(self) -> None:
         html = _haul_web_source()
 
-        for hook in ('<div class="metric-label">Projected</div>', 'id="routine-projected"',
+        for hook in ('<div class="metric-label">Current / Accumulated / Projected</div>',
                      'Number(haulSession.session_elapsed_s || 0)',
                      'sessionProfit(haulSession) / elapsed * 3600',
-                     'formatCredits(rate).replace(/ CR$/, "/h")', '- (no sale yet)',
-                     'class="mini-metrics session-metrics"',
-                     'repeat(auto-fit, minmax(min(100%, 180px), 1fr))'):
+                     'formatCredits(rate).replace(/ CR$/, "/h")'):
             self.assertIn(hook, html)
+        self.assertNotIn('id="routine-projected"', html)
 
     def test_haul_web_summary_profit_includes_current_run(self) -> None:
         html = _haul_web_source()

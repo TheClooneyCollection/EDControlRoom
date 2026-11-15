@@ -1092,12 +1092,12 @@ let routes = [];
       document.getElementById("routine-last-run").textContent = runTime(haulSession.last_run_elapsed_s);
       document.getElementById("routine-average-run").textContent =
         runs ? formatDuration(Number(haulSession.total_run_elapsed_s || 0) / runs) : "-";
-      document.getElementById("routine-current-run").textContent =
-        `${formatCredits(haulSession.current_run_profit || 0)} / ${formatCredits(haulSession.accumulated_profit || 0)}`;
+      // Projected is the session's earning rate; "-" until the session has a sale.
       const elapsed = Number(haulSession.session_elapsed_s || 0);
       const rate = elapsed > 0 ? sessionProfit(haulSession) / elapsed * 3600 : 0;
-      document.getElementById("routine-projected").textContent =
-        rate ? `~${formatCredits(rate).replace(/ CR$/, "/h")}` : "- (no sale yet)";
+      const projected = rate ? `~${formatCredits(rate).replace(/ CR$/, "/h")}` : "-";
+      document.getElementById("routine-current-run").textContent =
+        `${formatCredits(haulSession.current_run_profit || 0)} / ${formatCredits(haulSession.accumulated_profit || 0)} / ${projected}`;
       document.getElementById("routine-cargo-moved").textContent =
         `${Number(haulSession.cargo_moved_t || 0).toLocaleString()} t`;
     }
