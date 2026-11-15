@@ -51,7 +51,7 @@ Measured again with the step 1 tool on the same hub DB, 2026-11-15: 24,597 marke
 - On start, when the DB is empty (or on demand, for example `tools/market_snapshot.py fetch`), read the manifest, stream the `.gz` while decompressing, check the sha256, then import.
 - Import uses SQLite ATTACH and set-based SQL in one transaction, avoiding Python loops over prices. The import uses the existing rule: newest timestamp wins and a newer snapshot replaces the whole station, so it never overwrites fresher local data and an existing DB can use it to fill gaps. Re-importing the same file changes nothing.
 - With the listener off, refresh every 3 h by default (configurable) in the background while the Control Room runs: read the manifest on a timer and download only when `file` changed. With the listener on, check only at start and fetch once when the DB is empty or the newest local market is over 1 h old (after time offline); the listener keeps it current after that.
-- Import on a background thread so start-up and pages never wait on it (1.5M rows, not yet timed).
+- Import on a background thread so start-up never waits for the download. The store lock serializes database access during the SQL import. Measured 2026-11-15 on a frozen copy: 25,018 markets and 2,065,946 prices imported into an empty store in 1.014 s; re-import took 0.459 s with zero market/price updates and unchanged store counts.
 - Skip markets older than `max_age_days`; refuse a manifest whose `schema` does not match.
 - Configure `[eddn] snapshot_url` with the manifest URL (empty disables downloads), and positive `snapshot_refresh_hours` (default 3). The last imported filename is remembered in memory only; restarting may safely re-import it. Peers do not fetch; they ask the hub as today.
 - On demand: `uv run python3 tools/market_snapshot.py fetch <manifest_url> <db_path>`; normal server and local TUI refreshes run in the background. The log reports size, age, imported counts and duration; `/api/eddn-status` and the Routes panel expose the source and age.
@@ -61,7 +61,7 @@ Measured again with the step 1 tool on the same hub DB, 2026-11-15: 24,597 marke
 1. Built 2026-11-15: snapshot tool (`tools/market_snapshot.py write`): `VACUUM INTO`, gzip, manifest; local only, no upload.
 2. Built 2026-11-15: `tools/market_snapshot.py publish` uploads to an S3-compatible bucket; `--dry-run` writes local artifacts and lists uploads. VPS systemd services, timer and env template in `deploy/market-snapshot/`, [operator note](../operators/market-snapshot-vps.md). Local S3 stand-in verified; real R2/VPS deployment pending.
 3. Status Worker: `/status` page and the cron alarm to Discord.
-4. Built 2026-11-15: client fetch and import, on an empty DB, on demand and on the background refresh timer, with the size and age shown in the log and the EDDN listener panel.
+4. Built 2026-11-15: `tools/market_snapshot.py fetch <manifest_url> <db_path>` and `[eddn] snapshot_url` / `snapshot_refresh_hours` enable client import and background refresh, with size and age shown in the log and the EDDN listener panel.
 5. Built 2026-11-15 alongside step 4. Docs: `docs/user/trade-routes.md` and the haul status.
 
 ## Rejected ideas (with the user's reasons)

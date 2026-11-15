@@ -1,4 +1,5 @@
 from contextlib import closing, redirect_stdout, redirect_stderr
+from datetime import datetime, timezone
 import gzip
 import hashlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -13,7 +14,7 @@ from urllib.request import urlopen
 
 from edcr.eddn.messages import CarrierName, CarrierSighting, CommodityPrice, MarketSnapshot, StationInfo, SystemPosition
 from edcr.eddn.store import EddnStore, SCHEMA_VERSION
-from edcr.market_snapshot import download_snapshot, fetch_and_import
+from edcr.market_snapshot import download_snapshot, fetch_and_import, write_snapshot
 from tools.market_snapshot import main
 
 
@@ -195,8 +196,13 @@ class SnapshotFetchTests(unittest.TestCase):
                    CarrierSighting('OLD-123', 2, 1100, False), CarrierSighting('EQL-123', 2, 1100, False),
                    CarrierSighting('REF-123', 1, 1100, False)]
         with TemporaryDirectory() as tmp, closing(sqlite3.connect(':memory:')) as actual, closing(sqlite3.connect(':memory:')) as expected:
+            original = Path(tmp) / 'original.sqlite3'
+            with closing(EddnStore.open(original)) as source_store:
+                source_store.save(updates)
+            manifest = write_snapshot(original, Path(tmp) / 'published',
+                                      now=lambda: datetime.fromtimestamp(1200, timezone.utc))
             source = Path(tmp) / 'snapshot.sqlite3'
-            source.write_bytes(packed(updates))
+            source.write_bytes(gzip.decompress((Path(tmp) / 'published' / manifest['file']).read_bytes()))
             imported, saved = EddnStore(actual), EddnStore(expected)
             imported.save(initial)
             saved.save(initial)
@@ -204,6 +210,9 @@ class SnapshotFetchTests(unittest.TestCase):
             counts = imported.import_database(source, min_updated_at=700)
             self.assertEqual(rows(actual), rows(expected))
             self.assertEqual((counts.markets, counts.prices, counts.stations, counts.systems), (2, 3, 3, 3))
+            repeated = imported.import_database(source, min_updated_at=700)
+            self.assertEqual((repeated.markets, repeated.prices), (0, 0))
+            self.assertEqual(rows(actual), rows(expected))
 
     def test_broken_database_rolls_back_import_but_preserves_pending_local_updates(self):
         with TemporaryDirectory() as tmp, closing(sqlite3.connect(':memory:')) as db:
