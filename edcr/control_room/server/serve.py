@@ -19,6 +19,10 @@ from edcr.control_room.server.app import build_observer_server_app, _server_hydr
 from edcr.control_room.server.auth import SharedAccessTokenAuth
 from edcr.control_room.protocol.data_messages import hydrate_message
 from edcr.route_recommend_node import RecommendationAnnouncer, RecommendationReceiver
+from edcr.route_recommend_service import RecommendationLoop
+from edcr.control_room.server.recommendations import recommendation_inputs, query_recommendations
+from edcr.haul_search_config import load_haul_search_config
+from edcr.recent_markets import market_items
 from edcr.control_room.server.broker import InMemoryObserverSessionBroker
 from edcr.control_room.server.host import HeadlessControlRoomHost
 from edcr.control_room.server.log_files import LOG_FORMAT, log_server_to_file, log_uvicorn_to_files
@@ -347,6 +351,15 @@ def serve_observer_mode(
         )
     broker.server_state.set_selected_trade_route(runtime_host._saved_state.selected_trade_route)
     broker.server_state.set_running_trade_route(runtime_host._saved_state.running_trade_route)
+    time_models = TripTimeModels(
+        configured=eddn_config.time_model,
+        source=eddn_config.time_model_source,
+        fit_days=eddn_config.time_model_fit_days,
+        fit_ship=eddn_config.time_model_fit_ship,
+        # A peer's hub fits for it.
+        connect=connect_read_only(hub_config.journal_events_file) if journal_store is not None else None,
+        clock=time.time,
+    )
     app = build_observer_server_app(
         data_provider=data_provider,
         command_handler=runtime_host,
@@ -360,21 +373,51 @@ def serve_observer_mode(
         market_database_file=eddn_config.database_file if store is not None else None,
         # Never save into the example config a server without config.toml runs on.
         config_file=None if loaded.used_example_config_fallback else Path(loaded.config_path),
-        time_models=TripTimeModels(
-            configured=eddn_config.time_model,
-            source=eddn_config.time_model_source,
-            fit_days=eddn_config.time_model_fit_days,
-            fit_ship=eddn_config.time_model_fit_ship,
-            # A peer's hub fits for it.
-            connect=connect_read_only(hub_config.journal_events_file) if journal_store is not None else None,
-            clock=time.time,
-        ),
+        time_models=time_models,
         ardent_lookup=ardent_lookup,
         peer_link=peer_link,
         hub_side=hub_side,
         route_compare_navroute_wait_seconds=loaded.config.control_room.route_compare_navroute_wait_seconds,
         route_compare_compare_retry_attempts=loaded.config.control_room.route_compare_compare_retry_attempts,
     )
+    recommendation_thread = None
+    if store is not None and eddn_config.recommend.enabled:
+        recommend_logger = logging.getLogger("edcr.route_recommend")
+        own_id = node.node_id if node is not None else "local"
+
+        def recommend_nodes():
+            data = data_provider()
+            ship_id = getattr(getattr(data, "ship", None), "ship_id", None)
+            own = recommendation_inputs(own_id, data, selected_route=broker.server_state.selected_trade_route(),
+                search_defaults=load_haul_search_config(), time_model=time_models.active(ship_id).model, connection="local")
+            return [own] if own is not None else []
+
+        def deliver_recommendation(node_id, recommendations):
+            if stop_background.is_set():
+                return False
+            recommendation_receiver.receive(recommendations)
+            return True
+
+        recommend_loop = RecommendationLoop(
+            settings=eddn_config.recommend, time_fn=time.time, store_counts=store.counts,
+            node_inputs=recommend_nodes,
+            run_query=lambda inputs, now: query_recommendations(inputs, settings=eddn_config.recommend,
+                database_file=eddn_config.database_file, now=now,
+                display_names={item.commodity: item.name for snapshot in load_recent_markets(recent_markets_file)
+                               for item in market_items(snapshot)}),
+            deliver=deliver_recommendation, log=recommend_logger.warning,
+        )
+        def check_recommendations():
+            while not stop_background.is_set():
+                try:
+                    recommend_loop.check()
+                except Exception as exc:
+                    recommend_logger.warning("Route recommendation check failed: %s", exc)
+                if stop_background.wait(eddn_config.recommend.check_every_s):
+                    break
+        recommendation_thread = threading.Thread(target=check_recommendations, name="route-recommend", daemon=True)
+        recommendation_thread.start()
+
     if peer_link is not None:
         # Started once the app exists: hub page channels and reads answer through it.
         threading.Thread(target=lambda: peer_link.run(stop_background.wait), name="hub-link", daemon=True).start()
@@ -388,6 +431,8 @@ def serve_observer_mode(
         uvicorn.Server(server_config).run(sockets=sockets)
     finally:
         stop_background.set()
+        if recommendation_thread is not None:
+            recommendation_thread.join(timeout=5.0)
         if snapshot is not None:
             snapshot.stop()
         if stop_advert is not None:
