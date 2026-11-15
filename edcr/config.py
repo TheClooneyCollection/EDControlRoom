@@ -10,6 +10,7 @@ import tomllib
 import yaml
 
 from edcr.eddn.routes import TimeModel
+from edcr.route_recommend import RouteRecommendSettings
 from edcr.trip_time_fit import FIT_CURRENT, parse_fit_ship
 from edcr.timing import (
     TimingChannelConfig,
@@ -250,6 +251,7 @@ class EddnConfig:
     time_model_fit_days: float = 14.0
     # Which fit "fitted" uses: "current" (the flown ship's), "pooled" (every ship's) or a ShipID.
     time_model_fit_ship: str | int = "current"
+    recommend: RouteRecommendSettings = field(default_factory=RouteRecommendSettings)
 
 
 @dataclass(frozen=True)
@@ -453,6 +455,24 @@ def _require_table(raw: dict[str, object], key: str) -> dict[str, object]:
 
 TIME_MODEL_SOURCES = ("config", "fitted")
 _TIME_MODEL_SETTINGS = ("source", "fit_days", "fit_ship")
+
+
+def _recommend_settings(raw: dict[str, object], defaults: dict[str, object]) -> RouteRecommendSettings:
+    fallback = RouteRecommendSettings()
+    unknown = sorted(set(raw) - set(fallback.__dataclass_fields__))
+    if unknown:
+        raise ConfigError(f"Unknown `eddn.recommend` keys: {', '.join(unknown)}.")
+    values = {}
+    for name in fallback.__dataclass_fields__:
+        reader = _boolean if name == "enabled" else _integer if name == "list_cap" else _float
+        values[name] = reader(raw, name, reader(defaults, name, getattr(fallback, name)))
+    for name in ("check_every_s", "max_route_ly", "min_gain", "min_gain_cr_h", "list_cap", "tts_gap_s"):
+        value = values[name]
+        positive = name in ("check_every_s", "max_route_ly", "list_cap")
+        if not math.isfinite(value) or value < 0 or (positive and value == 0):
+            requirement = "positive" if positive else "zero or positive"
+            raise ConfigError(f"Config value `eddn.recommend.{name}` must be {requirement}.")
+    return RouteRecommendSettings(**values)
 
 
 def _time_model(raw: dict[str, object], defaults: dict[str, object]) -> TimeModel:
@@ -1278,6 +1298,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             time_model_source=time_model_settings[0],
             time_model_fit_days=time_model_settings[1],
             time_model_fit_ship=time_model_settings[2],
+            recommend=_recommend_settings(_optional_table(eddn, "recommend"), _optional_table(default_eddn, "recommend")),
         ),
         hub=HubConfig(
             role=_string(hub, "role", _string(default_hub, "role", "standalone")).strip().lower(),

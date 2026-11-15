@@ -31,3 +31,14 @@ supercruise_coeff = 13.0
 unknown_dist_ls = 1000.0
 # Extra approach and landing time at a surface station.
 surface_extra_s = 30.0
+
+[eddn.recommend]
+# Suggest better routes; the pilot always chooses whether to switch.
+enabled = true
+check_every_s = 300
+max_route_ly = 100
+# Candidates must meet both the relative and absolute profit/hour gains.
+min_gain = 0.15
+min_gain_cr_h = 20000000
+list_cap = 10
+tts_gap_s = 300

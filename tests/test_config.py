@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from edcr.config import ConfigError, default_runtime_platform, load_config, save_home_system, save_piper_voice
 from edcr.eddn.routes import TimeModel
+from edcr.route_recommend import RouteRecommendSettings
 
 
 def _write_config(path: Path, content: str) -> None:
@@ -15,6 +16,32 @@ def _write_config(path: Path, content: str) -> None:
 
 
 class LoadConfigTests(unittest.TestCase):
+    def test_recommendation_defaults_and_config_overrides(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "config.toml"
+            _write_config(path, "")
+            self.assertEqual(load_config(path).eddn.recommend, RouteRecommendSettings())
+            _write_config(path, "[eddn.recommend]\nmin_gain = 0.25\n")
+            self.assertEqual(load_config(path).eddn.recommend, replace(RouteRecommendSettings(), min_gain=0.25))
+            _write_config(path, "[eddn.recommend]\nenabled = false\ncheck_every_s = 120\nmax_route_ly = 250\n"
+                          "min_gain = 0.20\nmin_gain_cr_h = 30000000\nlist_cap = 5\ntts_gap_s = 600\n")
+            self.assertEqual(load_config(path).eddn.recommend,
+                             RouteRecommendSettings(False, 120, 250, 0.20, 30000000, 5, 600))
+
+    def test_recommendation_settings_reject_invalid_values(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "config.toml"
+            for body in ("unknown = 1", "enabled = 1", "list_cap = 1.5", "list_cap = 0",
+                         "check_every_s = 0", "max_route_ly = -1", "min_gain = -0.1",
+                         "min_gain_cr_h = -1", "tts_gap_s = -1", "check_every_s = nan", "min_gain = inf"):
+                with self.subTest(body=body):
+                    _write_config(path, "[eddn.recommend]\n" + body + "\n")
+                    with self.assertRaises(ConfigError):
+                        load_config(path)
+            _write_config(path, "[eddn.recommend]\nmin_gain = 0\nmin_gain_cr_h = 0\ntts_gap_s = 0\n")
+            settings = load_config(path).eddn.recommend
+            self.assertEqual((settings.min_gain, settings.min_gain_cr_h, settings.tts_gap_s), (0, 0, 0))
+
     def test_snapshot_settings_load_and_reject_nonpositive_or_nonfinite_interval(self) -> None:
         with TemporaryDirectory() as directory:
             path = Path(directory) / "config.toml"
