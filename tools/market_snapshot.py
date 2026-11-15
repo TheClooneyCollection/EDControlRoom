@@ -1,11 +1,12 @@
-"""Write a local compressed market snapshot and manifest (no upload)."""
+"""Write or publish a compressed market snapshot and manifest."""
 from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
 import json
+import os
+from dataclasses import replace
 from pathlib import Path
-import sqlite3
 import sys
 from time import perf_counter
 
@@ -14,6 +15,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from edcr.market_snapshot import write_snapshot
+from edcr.market_publish import PublishSettings, Upload, boto3_uploader, publish
 
 
 def main(argv: list[str] | None) -> int:
@@ -22,12 +24,34 @@ def main(argv: list[str] | None) -> int:
     write = commands.add_parser("write", help="Write a snapshot from a database")
     write.add_argument("db_path", type=Path)
     write.add_argument("out_dir", type=Path)
+    publishing = commands.add_parser("publish", help="Publish to an S3-compatible bucket")
+    publishing.add_argument("db_path", type=Path)
+    publishing.add_argument("--work-dir", type=Path)
+    publishing.add_argument("--keep", type=int)
+    publishing.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     started = perf_counter()
     try:
-        manifest = write_snapshot(args.db_path, args.out_dir, now=lambda: datetime.now(timezone.utc))
-    except (OSError, sqlite3.Error, ValueError) as error:
-        print(f"Snapshot failed: {error}", file=sys.stderr)
+        if args.command == "write":
+            manifest = write_snapshot(args.db_path, args.out_dir, now=lambda: datetime.now(timezone.utc))
+        else:
+            env = dict(os.environ)
+            if args.keep is not None:
+                env["EDCR_SNAPSHOT_KEEP"] = str(args.keep)
+            settings = PublishSettings.from_env(env, dry_run=args.dry_run)
+            if args.work_dir is not None:
+                settings = replace(settings, work_dir=args.work_dir)
+
+            def show_upload(item: Upload) -> None:
+                print(f"PUT s3://{settings.bucket}/{item.key}  {item.path.stat().st_size} B  "
+                      f"{item.content_type}  {item.cache_control}")
+
+            uploader = show_upload if args.dry_run else boto3_uploader(settings)
+            manifest = publish(args.db_path, settings.work_dir, settings, upload=uploader,
+                               now=lambda: datetime.now(timezone.utc)).manifest
+    except Exception as error:
+        # CLI boundary includes optional SDK/network errors without importing botocore.
+        print("Snapshot failed: " + " ".join(str(error).splitlines()), file=sys.stderr)
         return 1
     print(json.dumps(manifest))
     print(f"{manifest['markets']} markets, {manifest['prices']} prices, "

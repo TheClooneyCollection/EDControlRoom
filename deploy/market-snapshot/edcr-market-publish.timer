@@ -1,0 +1,11 @@
+[Unit]
+Description=Publish an hourly EDControlRoom market snapshot
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=120
+Unit=edcr-market-publish.service
+
+[Install]
+WantedBy=timers.target

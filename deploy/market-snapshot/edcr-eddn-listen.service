@@ -1,0 +1,19 @@
+# Replace checkout, uv and database paths for the VPS installation.
+[Unit]
+Description=EDControlRoom EDDN-only market listener
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=edcontrolroom
+Group=edcontrolroom
+WorkingDirectory=/opt/edcontrolroom
+StateDirectory=edcontrolroom
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/local/bin/uv run --no-sync python3 tools/eddn_listen.py --db /var/lib/edcontrolroom/markets.sqlite3
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

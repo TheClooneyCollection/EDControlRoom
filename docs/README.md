@@ -11,6 +11,7 @@
 
 ## Operator Reference
 
+- [operators/market-snapshot-vps.md](operators/market-snapshot-vps.md): publish EDDN-only snapshots to an S3-compatible bucket and run the VPS timer.
 - [operators/control-room.md](operators/control-room.md): run modes, panels, and haul behavior specifics.
 - [operators/control-room-remote.md](operators/control-room-remote.md): multi-client / observer semantics.
 - [operators/bindings-files.md](operators/bindings-files.md): `.binds` backup, restore, and shipped preset apply.

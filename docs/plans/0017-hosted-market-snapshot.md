@@ -2,7 +2,7 @@
 
 ## Status
 
-Scheduled; Decisions approved 2026-11-15. Step 1 built 2026-11-15: `tools/market_snapshot.py write <db_path> <out_dir>` (local snapshot and manifest, no upload). [Plan 0018](0018-static-routes-website.md) builds a static routes website on the same setup.
+Scheduled; Decisions approved 2026-11-15. Step 1 built 2026-11-15: `tools/market_snapshot.py write <db_path> <out_dir>` (local snapshot and manifest). Step 2 built 2026-11-15: `tools/market_snapshot.py publish`, optional boto3 upload, status JSON and VPS deployment templates (validated locally; no live deployment yet). [Plan 0018](0018-static-routes-website.md) builds a static routes website on the same setup.
 
 ## Why
 
@@ -27,7 +27,7 @@ Measured again with the step 1 tool on the same hub DB, 2026-11-15: 24,597 marke
 - Runs the EDDN listener (`tools/eddn_listen.py`, or the server with `eddn.enabled = true`) on its own DB. The store keeps only the newest copy of each market and `EddnService` prunes markets older than `max_age_days`, so the DB is always the last 7 days.
 - The VPS is not a hub and takes no peer pushes, so its DB holds EDDN data only: no own `Market.json` markets and no `carrier_seen` / `carrier_scan` from a pilot's journal.
 - Snapshots copy the database verbatim; no tables or rows are stripped. Privacy comes from publishing only the VPS database holding EDDN data only, never a hub database.
-- A systemd timer hourly: `VACUUM INTO` a temp file, gzip, write the manifest, upload both to R2 through the S3 API (`rclone` or boto3) with a token scoped to that bucket.
+- A systemd timer hourly: `VACUUM INTO` a temp file, gzip, write the manifest, upload the gzip, status JSON and finally the manifest through the S3 API using boto3 (optional `publish` extra, imported only for real uploads), with a token scoped to the bucket. Deploy templates: `deploy/market-snapshot/`; [operator guide](../operators/market-snapshot-vps.md).
 - gzip, not zstd: the standard library reads it, and zstd needs a dependency before Python 3.14 for a 6 MB saving.
 - Repo docs name only "a VPS"; no host names or addresses.
 
@@ -41,7 +41,7 @@ Measured again with the step 1 tool on the same hub DB, 2026-11-15: 24,597 marke
 ### Status page and alarm
 
 - The checks run outside the VPS, so a dead VPS still raises the alarm.
-- Each upload also writes `status.json`: listener messages per minute, newest message time, disk free.
+- Each upload also writes `status.json`: newest market time, markets updated in the last hour, disk free and DB file size. `messages_per_minute` is null with a note until listener counters are persisted.
 - A Cloudflare Worker on the same domain serves `/status` from `manifest.json` and `status.json`: snapshot age, newest market age, markets, prices, size, listener rate.
 - A Worker Cron Trigger every 15 minutes alerts a Discord webhook when the snapshot is over 3 hours old or the newest market has not moved for an hour (the listener stalled while uploads still run), and again when it recovers.
 - Fallback if the Worker is too much: healthchecks.io pinged by the VPS after each upload, which catches a dead VPS but not stale data unless the VPS checks freshness before pinging.
@@ -58,7 +58,7 @@ Measured again with the step 1 tool on the same hub DB, 2026-11-15: 24,597 marke
 ## Build steps
 
 1. Built 2026-11-15: snapshot tool (`tools/market_snapshot.py write`): `VACUUM INTO`, gzip, manifest; local only, no upload.
-2. Publish: upload to R2, plus the VPS systemd service and timer (a deploy note, no personal setup).
+2. Built 2026-11-15: `tools/market_snapshot.py publish` uploads to an S3-compatible bucket; `--dry-run` writes local artifacts and lists uploads. VPS systemd services, timer and env template in `deploy/market-snapshot/`, [operator note](../operators/market-snapshot-vps.md). Local S3 stand-in verified; real R2/VPS deployment pending.
 3. Status Worker: `/status` page and the cron alarm to Discord.
 4. Client fetch and import, on an empty DB, on demand and on the background refresh timer, with the size and age shown in the log and the EDDN listener panel.
 5. Docs: `docs/user/trade-routes.md` and the haul status.

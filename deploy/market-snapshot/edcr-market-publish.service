@@ -1,0 +1,14 @@
+# Replace checkout, uv, environment-file and database paths for the VPS installation.
+[Unit]
+Description=Publish EDControlRoom market snapshot
+Wants=network-online.target
+After=network-online.target edcr-eddn-listen.service
+
+[Service]
+Type=oneshot
+User=edcontrolroom
+Group=edcontrolroom
+WorkingDirectory=/opt/edcontrolroom
+StateDirectory=edcontrolroom
+EnvironmentFile=/etc/edcontrolroom/market-publish.env
+ExecStart=/usr/local/bin/uv run --no-sync python3 tools/market_snapshot.py publish /var/lib/edcontrolroom/markets.sqlite3
