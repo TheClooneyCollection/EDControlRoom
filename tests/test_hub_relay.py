@@ -189,12 +189,19 @@ class RelayTests(unittest.TestCase):
         self.r.attach()
         params = {**PAGE, "node": "peer-node", "view": "global"}
         with TestClient(self.hub_app) as hub:
-            for state in ({}, {"ship": {"cargo_capacity": 720}}, {"current_system": "Sol", "ship": {}}):
+            for state in ({}, {"current_system": "Sol", "ship": {}}):
                 with self.subTest(state=state):
                     self.r.registry.set_state("peer-node", state)
                     missing = hub.get("/api/eddn-routes", params=params)
                     self.assertEqual(missing.status_code, 409)
                     self.assertIn("update/reconnect", missing.json()["detail"])
+            self.r.registry.set_state("peer-node", {"ship": {"cargo_capacity": 720, "id": 8}})
+            old_global = hub.get("/api/eddn-routes", params=params)
+            old_near = hub.get("/api/eddn-routes", params={**params, "view": "near"})
+            old_explicit = hub.get("/api/eddn-routes", params={**params, "view": "near", "system": "Sol"})
+            self.assertEqual((old_global.status_code, old_near.status_code, old_explicit.status_code), (200, 409, 200))
+            self.assertEqual((old_global.json()["query"]["system"], old_global.json()["query"]["capacity"]), ("", 720))
+            self.assertEqual(old_explicit.json()["query"]["system"], "Sol")
             self.r.registry.set_state("peer-node", {"current_system": "", "ship": {"cargo_capacity": None}})
             empty = hub.get("/api/eddn-routes", params=params)
             self.assertEqual(empty.status_code, 200)
@@ -203,6 +210,8 @@ class RelayTests(unittest.TestCase):
             offline = hub.get("/api/eddn-routes", params=params)
             unknown = hub.get("/api/eddn-routes", params={**params, "node": "unknown"})
         self.assertEqual((offline.status_code, unknown.status_code), (502, 502))
+        self.assertEqual(offline.json(), {"detail": "Node Deck is unreachable: not linked to the hub", "node": "peer-node"})
+        self.assertEqual(unknown.json(), {"detail": "Node unknown is unreachable: not linked to the hub", "node": "unknown"})
 
     def test_a_hub_page_sees_the_peers_session_and_drives_it(self) -> None:
         self.r.attach()

@@ -11113,7 +11113,7 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 ## Changes
 
-- Removed EDDN routes from `NODE_READS`; authenticated hub endpoint uses published peer `current_system`, cargo capacity and ship ID. It never falls back to hub ship/system. Missing/old state returns 409 with update/reconnect guidance; offline/unknown nodes return 502. Known empty ship fields remain empty/zero, matching local query semantics.
+- Removed EDDN routes from `NODE_READS`; authenticated hub endpoint uses published peer `current_system`, cargo capacity and ship ID. It never falls back to hub ship/system. Missing ship/hold state returns 409 with update/reconnect guidance; offline/unknown nodes return 502. Follow-up review allows old state without current_system for global or explicit-system queries. Known empty ship fields remain empty/zero, matching local query semantics.
 - User-confirmed defaults rule: each page uses the server serving it. Hub pages use hub `haul_search.toml` even with a peer selected; peer-local pages resolve their own defaults before asking the hub. No peer search defaults are published. Resolved peer requests no longer inherit hub defaults for any remaining empty fields.
 - Ship laden range is already published, but Routes intentionally keeps its existing blank-range fallback to the serving server's haul-search range. Ship state has no pad-size field, so no new inference was added.
 - Peer-local EDDN searches use `search_timeout_s`; other hub requests retain their existing timeout.
@@ -11122,6 +11122,34 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 ## Follow-ups
 
-- No live hub/peer restart or browser check performed. Existing peers need the new system publication before the hub can answer their routes.
+- No live hub/peer restart or browser check performed. Existing peers need the new system publication only for near queries without an explicit system (see the compatibility follow-up iteration).
 - Other `NODE_READS` are not equivalent: route comparison reads node journal/navroute and caches to its broker; route-compare config is node configuration; Spansh caches a route on that node for later execution; journal-ledger reads node-local journals. Left unchanged.
 - Direct hub HTTP queries no longer have a relay deadline. Peer-local searches still depend on the configured search timeout; queries longer than that and external HTTP proxy/client deadlines remain possible. Timing optimization outside this slice is left to integration.
+
+## Iteration 522
+
+- When: `2026-11-15 17:56`
+- Area: `control-room`
+- Title: `old-peer-route-compatibility`
+- Source: [2026-11-15-17-56_control-room_old-peer-route-compatibility.md](iteration-logs/2026-11-15-17-56_control-room_old-peer-route-compatibility.md)
+
+# Iteration Log
+
+- Area: `control-room`
+- Title: `old-peer-route-compatibility`
+- Started: `2026-11-15 17:56`
+
+## Summary
+
+- Keep older peers usable for hub global searches and searches with an explicit system.
+
+## Changes
+
+- Missing `current_system` now causes 409 only for near searches without an explicit system. Global/explicit-system queries use an empty current-system fallback, never the hub system. Published ship/cargo-capacity state remains required.
+- Offline 502 details use the registry node name and the relay wording `not linked to the hub`; the `node` field remains the ID. Unknown IDs use the ID as their display name.
+- Behavioral coverage checks old-style global 200, near 409, explicit-system near 200, missing ship/hold, and named offline/unknown responses.
+- Full suite: 1233 tests in 0.798 s, OK (1 skipped). Required timing report run because the 0.7398 s budget is exceeded; timing remains an explicit integration open point.
+
+## Follow-ups
+
+- No live check; upgrade peer state publication for near searches using the current location. No changes to server-local search defaults or route-query interfaces.

@@ -1137,14 +1137,19 @@ def build_observer_server_app(
             assert hub_side is not None
             node = next((item for item in hub_side.registry.nodes() if item["node_id"] == node_id), None)
             if node is None or not node["connected"]:
-                return JSONResponse({"detail": f"Node {node_id} is unreachable", "node": node_id}, status_code=502)
+                name = node["name"] if node is not None else node_id
+                return JSONResponse({"detail": f"Node {name} is unreachable: not linked to the hub",
+                                     "node": node_id}, status_code=502)
             state = node["state"]
-            if (not isinstance(state, dict) or not isinstance(state.get("current_system"), str)
-                    or not isinstance(state.get("ship"), dict) or "cargo_capacity" not in state["ship"]):
+            needs_current_system = ((params.get("view") or "near").strip() in {"", "near"}
+                                    and not (params.get("system") or "").strip())
+            if (not isinstance(state, dict)
+                    or not isinstance(state.get("ship"), dict) or "cargo_capacity" not in state["ship"]
+                    or (needs_current_system and not isinstance(state.get("current_system"), str))):
                 return JSONResponse({"detail": "Node route inputs are unavailable; update/reconnect the peer and wait for its state.",
                                      "node": node_id}, status_code=409)
             ship = state["ship"]
-            ship_inputs["current_system"] = state["current_system"]
+            ship_inputs["current_system"] = state.get("current_system") if isinstance(state.get("current_system"), str) else ""
             ship_inputs["cargo_capacity"] = _cargo_capacity(SimpleNamespace(cargo_capacity=ship["cargo_capacity"]))
             ship_id = _ship_id_value(ship.get("id"))
         return link_reply_response(await asyncio.to_thread(answer_eddn_routes, params, ship_id, ship_inputs))
