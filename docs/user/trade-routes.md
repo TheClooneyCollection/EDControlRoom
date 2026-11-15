@@ -29,7 +29,7 @@ The hub or standalone server checks every 300 seconds and searches when market d
 
 **Better routes** lists up to 10 candidates from the top 200 search results, with earnings, gain, jumps, distance and price ages. The footer counts routes below the threshold, unknown commodity names and dismissed routes. **Select** saves your choice and fills Travel's target; **Dismiss** hides that candidate until you select another route. Neither action starts travel or hauling. During a running haul, use Stop after run before starting the new route.
 
-A changed best route, or another 15% increase in its estimated earnings, can trigger a TTS callout at most once per 300 seconds, including during a haul. Normal voice, mute and browser speech settings apply; add `route_recommended` to `tts.disabled_messages` to silence only this callout. Peers receive their own ship's results from the hub. If the link drops, the last list and check time remain visible with **Hub unreachable**, actions are disabled, and no new recommendation is announced.
+A changed best route, or another 15% increase in its estimated earnings, can trigger a TTS callout at most once per 300 seconds, including during a haul. Normal voice, mute and browser speech settings apply; add `route_recommended` to `tts.disabled_messages` to silence only this callout. Peer recommendations are shown and heard only on the hub by default: open the hub's `/haul?node=<peer>`. The hub stores each peer's list, dismissals and repeat keys, and no recommendation is sent to or announced by the peer. Hub voice speaks the selected node with its name, using **Play on hub speakers** and/or **Play in this browser**; **Mute <node>** silences the peer, not these hub lines. The gap is per node. Set `deliver_to_peers = true` on the hub and restart when ready to restore delivery, state and callouts on peers; no code change is needed. **Select** always goes to the peer to save your explicitly chosen route. If the link drops, the last list and check time remain visible with **Hub unreachable**, actions are disabled, and no new recommendation is announced.
 
 ## Using the Routes page
 
@@ -76,6 +76,7 @@ status_every_s = 30.0    # server log status line; 0 turns it off
 
 [eddn.recommend]
 enabled = true
+deliver_to_peers = false # hub owns peer lists/voice; true restores peer delivery
 check_every_s = 300
 max_route_ly = 100
 min_gain = 0.15

@@ -45,6 +45,7 @@ from edcr.market_db import StoredPrices, read_stored_prices
 from edcr.hub.history import ALL, filter_runs, history_options, parse_node_filter, parse_ship_filter
 from edcr.hub.nodes import HubLinkSession, HubSide, RequestHandler
 from edcr.hub.peer import PeerLink, hub_unreachable_detail, with_hub_source
+from edcr.control_room.server.peer_recommendations import PeerRecommendations
 from edcr.hub.relay import NODE_ACTIONS, NODE_READS, NodeOffline, node_state, relay_error
 from edcr.hub.protocol import (
     PEER_LINK_PATH,
@@ -110,6 +111,7 @@ from edcr.control_room.protocol import (
     build_remote_observer_capabilities_payload,
     hydrate_message,
 )
+from edcr.control_room.protocol.data_messages import CONTROL_ROOM_HYDRATE, control_room_data_message
 from edcr.control_room.haul_tracking import parse_credit_amount
 from edcr.control_room.routine_stop import normalize_routine_stop_mode
 from edcr.control_room.server.messages import protocol_message
@@ -268,6 +270,7 @@ def build_observer_server_app(
     peer_link: PeerLink | None = None,
     # Hub role: the nodes that said hello, where their outbox items go and the token they present.
     hub_side: HubSide | None = None,
+    peer_recommendations: PeerRecommendations | None = None,
     route_compare_navroute_wait_seconds: float = 6.0,
     route_compare_compare_retry_attempts: int = 3,
 ) -> Starlette:
@@ -1532,6 +1535,9 @@ def build_observer_server_app(
         # Session messages, or the reason the channel ended (a str).
         queue: asyncio.Queue[dict[str, Any] | str] = asyncio.Queue()
         send_lock = asyncio.Lock()
+        owned = peer_recommendations if peer_recommendations is not None and peer_recommendations.owns else None
+        latest_hydrate = None
+        client_role = "observer"
         # Commands sent to the node and not answered yet: message id -> their timeout.
         pending: dict[str, asyncio.TimerHandle] = {}
 
@@ -1541,6 +1547,8 @@ def build_observer_server_app(
 
         def deliver(message: dict[str, Any]) -> None:
             loop.call_soon_threadsafe(queue.put_nowait, message)
+
+        remove_recommend_listener = owned.listen(node_id, lambda: deliver({"_recommendation_update": True})) if owned else None
 
         def end(detail: str) -> None:
             loop.call_soon_threadsafe(queue.put_nowait, detail)
@@ -1555,7 +1563,7 @@ def build_observer_server_app(
         channel_id: str | None = None
 
         async def pump() -> None:
-            nonlocal channel_id
+            nonlocal channel_id, latest_hydrate, client_role
             told_offline = False
             while True:
                 try:
@@ -1582,6 +1590,17 @@ def build_observer_server_app(
                     timer = pending.pop(answered, None) if isinstance(answered, str) else None
                     if timer is not None:
                         timer.cancel()
+                    if item.get("_recommendation_update"):
+                        if latest_hydrate is None:
+                            continue
+                        item = control_room_data_message(CONTROL_ROOM_HYDRATE, latest_hydrate["payload"])
+                    elif item.get("message_type") == "control_room.hydrate" and owned:
+                        latest_hydrate = item
+                        owned.selection(node_id, item["payload"].get("selected_trade_route"))
+                    elif item.get("message_type") == "event.connection_ready":
+                        client_role = item["payload"].get("client_role", "observer")
+                    if owned and item.get("message_type") == "control_room.hydrate":
+                        item = {**item, "payload": {**item["payload"], "route_recommendations": owned.current(node_id)}}
                     await send(item)
                 await asyncio.sleep(NODE_RETRY_S)
 
@@ -1595,6 +1614,16 @@ def build_observer_server_app(
                 if channel_id is None:
                     if message_id is not None:
                         await send(unreachable(message_id, "not linked to the hub"))
+                    continue
+                if owned and message["message_type"] == "command.dismiss_route_recommendation":
+                    payload = message.get("payload")
+                    key = payload.get("key") if isinstance(payload, dict) else None
+                    if client_role != "active_operator":
+                        await send(relay_error(message_id, "active_operator_required", "An active operator is required."))
+                    elif not isinstance(key, str) or not owned.dismiss(node_id, key):
+                        await send(relay_error(message_id, "invalid_command", "Recommendation is no longer available."))
+                    else:
+                        await send(protocol_message("response.success", {"accepted": True}, correlation_message_id=message_id))
                     continue
                 if message_id is not None:
                     timeout_s = relay.command_timeout_s(str(message["message_type"]))
@@ -1621,6 +1650,8 @@ def build_observer_server_app(
                 task.cancel()
             for timer in pending.values():
                 timer.cancel()
+            if remove_recommend_listener is not None:
+                remove_recommend_listener()
             if channel_id is not None:
                 relay.close_channel(channel_id)
 

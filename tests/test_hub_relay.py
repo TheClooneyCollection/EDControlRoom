@@ -192,6 +192,97 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(state.route_recommendations()['routes'], result.routes)
         self.assertEqual(len(spoken), 1)
 
+    def test_hub_owned_recommendations_refresh_dismiss_locally_and_select_on_peer(self):
+        self.background = lambda work: threading.Thread(target=work, daemon=True).start()
+        from edcr.control_room.server.peer_recommendations import PeerRecommendations
+        from edcr.route_recommend import RouteRecommendSettings
+        from tests.test_route_recommend import row, recommendations
+        from tests.test_peer_recommendations import rendered
+        owned = PeerRecommendations(settings=RouteRecommendSettings(), time_fn=lambda: 0, send=self.fail,
+            render=rendered, callout=lambda node, text: None, name=str)
+        self.hub_app = server(data_provider=hub_data, hub_side=self.r.hub_side(), peer_recommendations=owned)
+        self.r.attach()
+        result = recommendations([row('C')])
+        owned.deliver(PEER_NODE.node_id, result)
+        with TestClient(self.hub_app) as hub:
+            with hub.websocket_connect('/session', params={**PAGE, 'node': PEER_NODE.node_id}) as page:
+                page.receive_json()
+                first = page.receive_json()
+                self.assertEqual(first['payload']['route_recommendations']['routes'], result.routes)
+                owned.deliver(PEER_NODE.node_id, recommendations([row('D')]))
+                updated = page.receive_json()
+                self.assertNotEqual(updated['message_id'], first['message_id'])
+                page.send_json({'message_type': 'command.dismiss_route_recommendation', 'message_id': 'bad', 'payload': []})
+                self.assertEqual(page.receive_json()['payload']['error_code'], 'invalid_command')
+                candidate = updated['payload']['route_recommendations']['routes'][0]
+                page.send_json({'message_type': 'command.dismiss_route_recommendation', 'message_id': 'dismiss',
+                                'payload': {'key': candidate['key']}})
+                messages = [page.receive_json(), page.receive_json()]
+                response = next(m for m in messages if m['message_type'] == 'response.success')
+                hydrated = next(m for m in messages if m['message_type'] == 'control_room.hydrate')
+                self.assertEqual(response['correlation_message_id'], 'dismiss')
+                self.assertEqual(hydrated['payload']['route_recommendations']['dismissed'], 1)
+                self.assertEqual(hydrated['payload']['route_recommendations']['routes'], [])
+                self.assertIsNone(self.peer_broker.server_state.route_recommendations())
+                page.send_json({'message_type': 'command.select_trade_route', 'message_id': 'select',
+                                'payload': {'route': candidate['trade_route']}})
+                selected_messages = [page.receive_json(), page.receive_json()]
+                selected = next(m for m in selected_messages if m['message_type'] == 'control_room.hydrate')
+                self.assertEqual(selected['payload']['selected_trade_route']['from_station'], 'D')
+                self.assertIsNone(selected['payload']['route_recommendations'])
+                self.assertEqual(self.peer_broker.server_state.selected_trade_route().from_station, 'D')
+                self.assertIsNone(self.commands.persisted_running_trade_route)
+                self.assertEqual(self.recommendations, [])
+                self.assertIsNone(owned.current(PEER_NODE.node_id))
+
+    def test_dismiss_refreshes_all_hub_pages_for_peer_but_not_peer_state(self):
+        from edcr.control_room.server.peer_recommendations import PeerRecommendations
+        from edcr.route_recommend import RouteRecommendSettings
+        from tests.test_route_recommend import row, recommendations
+        from tests.test_peer_recommendations import rendered
+        owned = PeerRecommendations(settings=RouteRecommendSettings(), time_fn=lambda: 0, send=self.fail,
+            render=rendered, callout=lambda node, text: None, name=str)
+        self.hub_app = server(data_provider=hub_data, hub_side=self.r.hub_side(), peer_recommendations=owned)
+        self.r.attach()
+        result = recommendations([row()])
+        owned.deliver(PEER_NODE.node_id, result)
+        with TestClient(self.hub_app) as hub:
+            with hub.websocket_connect('/session', params={**PAGE, 'node': PEER_NODE.node_id}) as one, \
+                 hub.websocket_connect('/session', params={**PAGE, 'node': PEER_NODE.node_id}) as two:
+                for page in (one, two):
+                    page.receive_json()
+                    page.receive_json()
+                one.send_json({'message_type': 'command.dismiss_route_recommendation', 'message_id': 'dismiss',
+                               'payload': {'key': result.routes[0]['key']}})
+                messages = [one.receive_json(), one.receive_json()]
+                self.assertTrue(any(message['message_type'] == 'response.success' for message in messages))
+                self.assertEqual(two.receive_json()['payload']['route_recommendations']['dismissed'], 1)
+        self.assertIsNone(self.peer_broker.server_state.route_recommendations())
+
+    def test_opt_in_hub_page_keeps_peer_owned_hydrate_and_dismiss_path(self):
+        self.background = lambda work: threading.Thread(target=work, daemon=True).start()
+        from edcr.control_room.server.peer_recommendations import PeerRecommendations
+        from edcr.route_recommend import RouteRecommendSettings
+        from tests.test_route_recommend import row, recommendations
+        owned = PeerRecommendations(settings=replace(RouteRecommendSettings(), deliver_to_peers=True),
+            time_fn=lambda: 0, send=self.r.relay.send, render=self.fail, callout=self.fail, name=str)
+        self.hub_app = server(data_provider=hub_data, hub_side=self.r.hub_side(), peer_recommendations=owned)
+        self.r.attach()
+        result = recommendations([row('C')])
+        self.peer_relay._receive_recommendation = self.peer_broker.server_state.set_route_recommendations
+        self.assertTrue(owned.deliver(PEER_NODE.node_id, result))
+        with TestClient(self.hub_app) as hub:
+            with hub.websocket_connect('/session', params={**PAGE, 'node': PEER_NODE.node_id}) as page:
+                page.receive_json()
+                self.assertEqual(page.receive_json()['payload']['route_recommendations']['routes'], result.routes)
+                page.send_json({'message_type': 'command.dismiss_route_recommendation', 'message_id': 'dismiss',
+                                'payload': {'key': result.routes[0]['key']}})
+                messages = [page.receive_json(), page.receive_json()]
+                hydrated = next(m for m in messages if m['message_type'] == 'control_room.hydrate')
+                self.assertEqual(hydrated['payload']['route_recommendations']['dismissed'], 1)
+        self.assertEqual(self.peer_broker.server_state.route_recommendations()['dismissed'], 1)
+        self.assertIsNone(owned.current(PEER_NODE.node_id))
+
     def activity(self, text: str) -> None:
         self.peer_broker.publish_activity_log(ActivityLogEntry(entry_id=text, timestamp="2026-11-11T09:00:00Z",
                                                                message_text=text))

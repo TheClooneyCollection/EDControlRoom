@@ -2,7 +2,7 @@
 
 ## Status
 
-Built 2026-11-15. Automated behavior checks pass; deployment and live hub/forge validation below remain pending.
+Built 2026-11-15, including the approved hub-only peer recommendation follow-up. Automated behavior checks pass; hub restart remains on hold and deployment/live hub/forge validation below remain pending.
 
 Approved step 1 deviation: server wiring resolves the viewed ship laden range only with `ship_range=1` (sent by `/haul`); an explicit query override wins and no ship retains the configured fallback. `/routes` defaults are unchanged. Search no longer selects/persists the first result automatically.
 
@@ -20,7 +20,8 @@ Approved step 1 deviation: server wiring resolves the viewed ship laden range on
 - A route qualifies when it beats the selected route by both +15% and +20m Cr/h. With no route selected, the top routes qualify.
 - The page lists every qualifying route, up to a cap, each with Select, and says how many routes fell below the threshold.
 - TTS speaks at most once per 300 s, any time, including mid-haul (no hold until docking). The page list updates silently between TTS lines.
-- Peers are in v1. The hub computes for each linked node (forge runs the user's hauls) and for its own game, and each node voices its own recommendation.
+- Peers are in v1. The hub computes for each linked node and its own game. User follow-up: peer recommendations are shown and heard **only on the hub** by default. `[eddn.recommend] deliver_to_peers = false` keeps peer lists, dismissals and repeat/TTS keys on the hub; no recommendation frame is sent to a peer. Set it to `true` and restart later to restore the original node delivery without code changes.
+- Hub-only peer lines name the node and use existing Hub voice: only the voiced node, with Play on hub speakers and/or Play in this browser enabled. Mute <node> silences that peer, not the hub line. The 300 s gap and repeat filter are per node; `tts.disabled_messages` on the hub applies. Select stays relayed to the peer as an explicit user action.
 - The recommender is on by default.
 
 ## Design
@@ -52,13 +53,13 @@ Approved step 1 deviation: server wiring resolves the viewed ship laden range on
 - Nodes: the hub's own game (its data provider and `broker.server_state.selected_trade_route()`), and every connected peer from the registry `node_state`.
   - `node_state` (`edcr/hub/relay.py`) gains `selected_route`: from/to station and system, the two commodities. A peer with no ship state is skipped and logged once.
   - `haul_search.toml` is the hub's own for every node, as with `/api/eddn-routes?node=` today, since peer defaults are not published. The time model is `time_models.active(ship_id)` per node.
-- Delivery: the hub's own result goes straight to its local handler. A peer's result goes down the link as a `route_recommendation` frame (like `voice_mute`) with the JSON payload. A peer never computes.
+- Delivery: the hub's own result goes straight to its local handler. For peers, `server/peer_recommendations.py` owns state and announcements on the hub by default. Hub sessions overlay the recommendation field in peer hydrates and push fresh hydrates on updates; Dismiss is handled on the hub, while Select stays relayed. With `deliver_to_peers = true`, the retained `route_recommendation` frame/peer handler path is used unchanged. A peer never computes.
 
-### Node side (the same code on hub, standalone and peer)
+### State and announcements (hub-owned for peers by default)
 
-- It stores the latest `RouteRecommendations` in `server/state.py` and publishes it in hydrate as `route_recommendations`. A hub page viewing a peer gets it through the relayed hydrate.
-- Dismissed keys live on the node. The key is (station 1, station 2, outbound commodity, inbound commodity). They clear when the selected route changes. Dismissed routes leave the list but are counted (`dismissed: n`).
-- TTS: when the best undismissed route's key, or its Cr/h by another 15%, differs from the last spoken one, and 300 s have passed since the last recommendation TTS, it announces `AnnouncementId.ROUTE_RECOMMENDED` through `_announce_tts`. That path publishes it, so browser `speech.js`, the hub voice when this node is voiced, and Mute all apply as for any callout. The phrase in `defaults/tts.toml`:
+- It stores the latest `RouteRecommendations` in `server/state.py` and publishes it in hydrate as `route_recommendations`. A hub page viewing a peer overlays its hub-owned recommendation state onto the relayed hydrate; with delivery enabled it uses the peer's hydrate unchanged.
+- Dismissed keys live on the hub for each peer by default, or on the receiving node when delivery is enabled. The key is (station 1, station 2, outbound commodity, inbound commodity). They clear when the selected route changes. Dismissed routes leave the list but are counted (`dismissed: n`).
+- Local/opt-in node TTS: when the best undismissed route's key, or its Cr/h by another 15%, differs from the last spoken one, and 300 s have passed since the last recommendation TTS, it announces `AnnouncementId.ROUTE_RECOMMENDED` through `_announce_tts`. That path publishes it, so browser `speech.js`, the hub voice when this node is voiced, and Mute all apply as for any callout. The phrase in `defaults/tts.toml`:
   - `route_recommended = "{count} better routes. Best: {from_station} to {to_station}, about {gain_short} per hour more."`
   - With one route, `{count}` reads "One better route". With no selected route, the `{gain_short}` part is replaced by `{cr_h_short} per hour`.
   - It can be turned off with `tts.disabled_messages`.
@@ -73,7 +74,7 @@ Approved step 1 deviation: server wiring resolves the viewed ship laden range on
 
 ### Settings (`[eddn.recommend]` in `defaults/eddn.toml`, `EddnConfig`)
 
-`enabled = true`, `check_every_s = 300`, `max_route_ly = 100`, `min_gain = 0.15`, `min_gain_cr_h = 20000000`, `list_cap = 10`, `tts_gap_s = 300`.
+`enabled = true`, `deliver_to_peers = false`, `check_every_s = 300`, `max_route_ly = 100`, `min_gain = 0.15`, `min_gain_cr_h = 20000000`, `list_cap = 10`, `tts_gap_s = 300`.
 
 ## Build steps
 
@@ -123,8 +124,8 @@ Each step is one worker commit with its tests (`uv run python3 -m unittest disco
 
 ## Validation
 
-Automated: 1,271 tests in 0.946 s, OK (1 skipped); slower than the 0.7626 s suite budget, as before this work. Timing report identifies the Node full-script web flow (~68 ms) and existing four transit tests (~34–36 ms each). Mocked Chromium `/haul?node=forge` at 1440 px and 390 px had no page errors or overflow. Actual hub/forge deployment checks below remain pending; no game input was sent.
+Follow-up automated: 1,279 tests in 1.103 s, OK (1 skipped); slower than the 0.7674 s suite budget, as before this work. Both delivery modes and hub websocket Select/Dismiss roundtrips pass. Timing report identifies the Node full-script web flow (~68 ms) and existing four transit tests (~34–36 ms each). Mocked Chromium `/haul?node=forge` at 1440 px and 390 px had no page errors or overflow. Actual hub/forge deployment checks below remain pending; no game input was sent.
 
 - `/haul` on the hub and on forge (through the hub) lists EDDN routes, and Select, Travel and Start route run as before.
 - Selecting a weak route leads to a Better routes list and one TTS line within about 300 s. No second line follows within 300 s, and none for the same route.
-- During a running haul on forge, a recommendation is spoken and listed, the selected and running route stay unchanged, and Start route stays refused until the haul stops.
+- During a running haul on forge, a recommendation is spoken and listed on the hub only by default, the selected and running route stay unchanged, and Start route stays refused until the haul stops.

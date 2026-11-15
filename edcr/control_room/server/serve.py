@@ -20,6 +20,7 @@ from edcr.control_room.server.auth import SharedAccessTokenAuth
 from edcr.control_room.protocol.data_messages import hydrate_message
 from edcr.route_recommend_node import RecommendationAnnouncer, RecommendationReceiver
 from edcr.route_recommend_service import RecommendationLoop
+from edcr.control_room.server.peer_recommendations import PeerRecommendations
 from edcr.control_room.server.recommendations import PeerRecommendationInputs, recommendation_inputs, query_recommendations
 from edcr.haul_search_config import load_haul_search_config
 from edcr.recent_markets import market_items
@@ -45,7 +46,7 @@ from edcr.hub.history import CentralHistory, HubRuns
 from edcr.hub.nodes import HubSide, NodeRegistry, store_link_item
 from edcr.hub.outbox import Outbox
 from edcr.hub.peer import NODE_ID_FILE_NAME, NodeHello, PeerLink, load_node_id, new_node_id, websocket_dialer
-from edcr.hub.relay import HubRelay, PeerRelay, ROUTE_RECOMMENDATION_FRAME, node_state
+from edcr.hub.relay import HubRelay, PeerRelay, node_state
 from edcr.hub.voice import HubVoice, callout_text, node_muter
 from edcr.platform.lan import local_ipv4_interfaces
 from edcr.journal_store import JournalStore
@@ -361,6 +362,11 @@ def serve_observer_mode(
         connect=connect_read_only(hub_config.journal_events_file) if journal_store is not None else None,
         clock=time.time,
     )
+    peer_recommendations = PeerRecommendations(
+        settings=eddn_config.recommend, time_fn=time.time, send=hub_side.relay.send,
+        render=runtime_host._tts.render_announcement, callout=hub_side.voice.callout,
+        name=hub_side.relay.name,
+    ) if hub_side is not None else None
     app = build_observer_server_app(
         data_provider=data_provider,
         command_handler=runtime_host,
@@ -378,6 +384,7 @@ def serve_observer_mode(
         ardent_lookup=ardent_lookup,
         peer_link=peer_link,
         hub_side=hub_side,
+        peer_recommendations=peer_recommendations,
         route_compare_navroute_wait_seconds=loaded.config.control_room.route_compare_navroute_wait_seconds,
         route_compare_compare_retry_attempts=loaded.config.control_room.route_compare_compare_retry_attempts,
     )
@@ -396,6 +403,9 @@ def serve_observer_mode(
             own = recommendation_inputs(own_id, data, selected_route=broker.server_state.selected_trade_route(),
                 search_defaults=load_haul_search_config(), time_model=time_models.active(ship_id).model, connection="local")
             peers = peer_inputs.collect(load_haul_search_config()) if peer_inputs is not None else []
+            if peer_recommendations is not None:
+                for peer in peers:
+                    peer_recommendations.selection(peer.node_id, peer.selected_route)
             return ([own] if own is not None else []) + peers
 
         def deliver_recommendation(node_id, recommendations):
@@ -404,8 +414,7 @@ def serve_observer_mode(
             if node_id == own_id:
                 recommendation_receiver.receive(recommendations)
                 return True
-            return hub_side.relay.send(node_id, {"type": ROUTE_RECOMMENDATION_FRAME,
-                                                "recommendations": recommendations.to_payload()})
+            return peer_recommendations.deliver(node_id, recommendations)
 
         recommend_loop = RecommendationLoop(
             settings=eddn_config.recommend, time_fn=time.time, store_counts=store.counts,
