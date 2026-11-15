@@ -27,6 +27,7 @@
         "command.dispatch_route_all_in_one",
         "command.search_haul_routes",
         "command.select_trade_route",
+        "command.dismiss_route_recommendation",
         "command.cancel_active_routine",
         "response.success",
         "response.error"
@@ -49,6 +50,7 @@
     }
   },
   "allOf": [
+    {"if": {"properties": {"message_type": {"const": "command.dismiss_route_recommendation"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/command_dismiss_route_recommendation_payload"}}}},
     {
       "if": {
         "properties": {
@@ -243,6 +245,7 @@
     }
   ],
   "$defs": {
+    "command_dismiss_route_recommendation_payload": {"type": "object", "required": ["key"], "properties": {"key": {"type": "string"}}, "additionalProperties": false},
     "string_list": {
       "type": "array",
       "items": { "type": "string", "minLength": 1 }

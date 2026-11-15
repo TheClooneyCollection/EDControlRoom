@@ -1975,6 +1975,7 @@ def _server_hydrate_data(
         selected_trade_route=selected_trade_route,
         running_trade_route=running_trade_route,
         active_spansh_route=active_spansh_route,
+        route_recommendations=broker.server_state.route_recommendations(),
     )
 
 
@@ -2800,6 +2801,16 @@ def _handle_session_message(
             },
             correlation_message_id=correlation_message_id,
         )
+
+    if message_type == "command.dismiss_route_recommendation":
+        key = payload.get("key")
+        if not isinstance(key, str) or not broker.server_state.dismiss_route_recommendation(key):
+            return protocol_message("response.error", {
+                "error_code": "invalid_command", "error_message": "Recommendation is no longer available.",
+                "retryable": False,
+            }, correlation_message_id=correlation_message_id)
+        _publish_route_hydrate(broker=broker, data_provider=data_provider)
+        return protocol_message("response.success", {"accepted": True}, correlation_message_id=correlation_message_id)
 
     if message_type == "command.select_trade_route":
         trade_route = trade_route_from_payload(payload.get("route"))

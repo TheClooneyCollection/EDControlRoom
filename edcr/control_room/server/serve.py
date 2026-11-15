@@ -17,6 +17,8 @@ from edcr.control_room import error_text
 from edcr.control_room.app import _ALL_ROUTINE_ACTIONS, DefaultVersionSource
 from edcr.control_room.server.app import build_observer_server_app, _server_hydrate_data
 from edcr.control_room.server.auth import SharedAccessTokenAuth
+from edcr.control_room.protocol.data_messages import hydrate_message
+from edcr.route_recommend_node import RecommendationAnnouncer, RecommendationReceiver
 from edcr.control_room.server.broker import InMemoryObserverSessionBroker
 from edcr.control_room.server.host import HeadlessControlRoomHost
 from edcr.control_room.server.log_files import LOG_FORMAT, log_server_to_file, log_uvicorn_to_files
@@ -180,6 +182,14 @@ def serve_observer_mode(
             runtime_host.dependencies.data_source.current(),
             broker=broker,
         )
+
+    recommendation_receiver = RecommendationReceiver(
+        store=broker.server_state.set_route_recommendations,
+        current=broker.server_state.route_recommendations,
+        publish=lambda: broker.publish_data_message(hydrate_message(data_provider())),
+        announcer=RecommendationAnnouncer(settings=loaded.config.eddn.recommend, time_fn=time.time,
+                                          announce=runtime_host._announce_tts),
+    )
 
     runtime_host._protocol_event_sink = FanoutControlRoomEventSink(
         [

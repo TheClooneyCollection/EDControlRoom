@@ -101,6 +101,7 @@ class ControlRoomDataReadModel:
     selected_trade_route: TradeRoute | None = None
     running_trade_route: TradeRoute | None = None
     active_spansh_route: dict[str, Any] | None = None
+    route_recommendations: dict[str, Any] | None = None
 
 
 class ControlRoomDataSource(Protocol):
@@ -288,6 +289,7 @@ def _web_form_defaults(app: ControlRoomApp) -> dict[str, str]:
         "startingCapital": str(app._ship.credits or ""),
         "cargoCapacity": search_defaults.get("cargo_capacity", ""),
         "maxRouteDistanceLy": search_defaults.get("max_route_distance_ly", ""),
+        "recommendMaxRouteLy": str(getattr(getattr(getattr(getattr(app, "_config", None), "eddn", None), "recommend", None), "max_route_ly", 100)),
         "maxStationDistanceLs": search_defaults.get("max_station_distance_ls", ""),
         "minSupply": search_defaults.get("min_supply", ""),
         "minDemand": search_defaults.get("min_demand", ""),

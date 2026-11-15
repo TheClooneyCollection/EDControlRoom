@@ -57,6 +57,7 @@ class AnnouncementId(str, Enum):
     SHIP_SERVICED = "ship_serviced"
     UNDOCKING = "undocking"
     CARGO_LOADED = "cargo_loaded"
+    ROUTE_RECOMMENDED = "route_recommended"
     ROUTE_COMPLETE = "route_complete"
     ROUTE_PROFIT_DELTA = "route_profit_delta"
     SESSION_COMPLETE = "session_complete"

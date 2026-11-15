@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import asdict
+from threading import RLock
+from typing import Any
+
+from edcr.route_recommend import RouteRecommendations, route_key
+
 from edcr.control_room.protocol.events import ActivityLogEntry, AnnouncementEvent
 from edcr.inara.trade_routes import TradeRoute
 from edcr.routing.route_cache import RouteCache, RouteRequestKey
@@ -14,6 +20,9 @@ class ControlRoomServerState:
         announcement_limit: int = 100,
         spansh_route_cache_size: int = 16,
     ) -> None:
+        self._recommend_lock = RLock()
+        self._recommendations: RouteRecommendations | None = None
+        self._dismissed_recommendations: set[str] = set()
         self._activity_log_limit = activity_log_limit
         self._announcement_limit = announcement_limit
         self._activity_log: list[ActivityLogEntry] = []
@@ -41,10 +50,37 @@ class ControlRoomServerState:
         return list(self._announcements)
 
     def set_selected_trade_route(self, route: TradeRoute | None) -> None:
-        self._selected_trade_route = route
+        with self._recommend_lock:
+            old = route_key(asdict(self._selected_trade_route)) if self._selected_trade_route else None
+            new = route_key(asdict(route)) if route else None
+            if old != new:
+                self._dismissed_recommendations.clear()
+                # Previous gains were measured against a different selection.
+                self._recommendations = None
+            self._selected_trade_route = route
 
     def selected_trade_route(self) -> TradeRoute | None:
         return self._selected_trade_route
+
+    def set_route_recommendations(self, recommendations: RouteRecommendations) -> None:
+        with self._recommend_lock:
+            self._recommendations = recommendations
+
+    def dismiss_route_recommendation(self, key: str) -> bool:
+        with self._recommend_lock:
+            if self._recommendations is None or not any(row["key"] == key for row in self._recommendations.routes):
+                return False
+            self._dismissed_recommendations.add(key)
+            return True
+
+    def route_recommendations(self) -> dict[str, Any] | None:
+        with self._recommend_lock:
+            if self._recommendations is None:
+                return None
+            payload = self._recommendations.to_payload()
+            payload["routes"] = [row for row in payload["routes"] if row["key"] not in self._dismissed_recommendations]
+            payload["dismissed"] = len(self._recommendations.routes) - len(payload["routes"])
+            return payload
 
     def set_running_trade_route(self, route: TradeRoute | None) -> None:
         self._running_trade_route = route

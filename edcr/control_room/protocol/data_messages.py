@@ -103,6 +103,7 @@ def data_read_model_from_payload(payload: dict[str, Any]) -> ControlRoomDataRead
         server_status=_server_status(_mapping(payload.get("server_status", {}))),
         home_system=str(payload.get("home_system", "")),
         voice=_voice(_mapping(payload.get("voice", {}))),
+        route_recommendations=_mapping(payload.get("route_recommendations")) or None,
         selected_trade_route=_trade_route(payload.get("selected_trade_route")),
         running_trade_route=_trade_route(payload.get("running_trade_route")),
         active_spansh_route=_mapping(payload.get("active_spansh_route")) or None
