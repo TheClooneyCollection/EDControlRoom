@@ -16,6 +16,25 @@ def _write_config(path: Path, content: str) -> None:
 
 
 class LoadConfigTests(unittest.TestCase):
+    def test_recommendation_peer_delivery_requires_explicit_opt_in(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "config.toml"
+            for body, expected in (("", False), ("deliver_to_peers = true", True),
+                                   ("deliver_to_peers = false", False)):
+                with self.subTest(body=body):
+                    _write_config(path, "[eddn.recommend]\n" + body + "\n")
+                    self.assertIs(load_config(path).eddn.recommend.deliver_to_peers, expected)
+        self.assertIs(RouteRecommendSettings().deliver_to_peers, False)
+
+    def test_recommendation_peer_delivery_rejects_non_boolean_values(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "config.toml"
+            for value in ('"true"', '"false"', "0", "1", "1.0", "[]", "{}"):
+                with self.subTest(value=value):
+                    _write_config(path, "[eddn.recommend]\ndeliver_to_peers = " + value + "\n")
+                    with self.assertRaisesRegex(ConfigError, "`deliver_to_peers` must be true or false"):
+                        load_config(path)
+
     def test_recommendation_defaults_and_config_overrides(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "config.toml"

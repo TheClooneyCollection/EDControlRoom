@@ -17,6 +17,7 @@ class RouteRecommendSettings:
     min_gain_cr_h: float = 20_000_000
     list_cap: int = 10
     tts_gap_s: float = 300
+    deliver_to_peers: bool = False
 
 
 @dataclass(frozen=True)

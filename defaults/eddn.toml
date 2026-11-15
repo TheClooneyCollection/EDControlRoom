@@ -33,6 +33,7 @@ unknown_dist_ls = 1000.0
 surface_extra_s = 30.0
 
 [eddn.recommend]
+deliver_to_peers = false
 # Suggest better routes; the pilot always chooses whether to switch.
 enabled = true
 check_every_s = 300

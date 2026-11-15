@@ -464,7 +464,7 @@ def _recommend_settings(raw: dict[str, object], defaults: dict[str, object]) -> 
         raise ConfigError(f"Unknown `eddn.recommend` keys: {', '.join(unknown)}.")
     values = {}
     for name in fallback.__dataclass_fields__:
-        reader = _boolean if name == "enabled" else _integer if name == "list_cap" else _float
+        reader = _boolean if name in ("enabled", "deliver_to_peers") else _integer if name == "list_cap" else _float
         values[name] = reader(raw, name, reader(defaults, name, getattr(fallback, name)))
     for name in ("check_every_s", "max_route_ly", "min_gain", "min_gain_cr_h", "list_cap", "tts_gap_s"):
         value = values[name]
