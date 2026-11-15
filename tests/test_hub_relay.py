@@ -163,6 +163,47 @@ class RelayTests(unittest.TestCase):
         self.peer_broker.publish_activity_log(ActivityLogEntry(entry_id=text, timestamp="2026-11-11T09:00:00Z",
                                                                message_text=text))
 
+    def test_hub_routes_use_peer_ship_and_system_with_hub_search_defaults_without_relay(self) -> None:
+        self.r.attach()
+
+        def unexpected_peer_work(work):
+            self.fail("A hub-owned route query must not contact the peer")
+
+        self.background = unexpected_peer_work
+        defaults = {"max_route_distance_ly": "22", "min_supply": "123", "min_landing_pad": "M"}
+        with patch("edcr.control_room.server.app.load_haul_search_config", return_value=defaults), TestClient(self.hub_app) as hub:
+            params = {**PAGE, "node": "peer-node", "view": "global", "max_age_hours": "any"}
+            response = hub.get("/api/eddn-routes", params=params)
+            overridden = hub.get("/api/eddn-routes", params={**params, "system": "Sol", "capacity": "12", "pad": "S"})
+            unauthorized = hub.get("/api/eddn-routes", params={"node": "peer-node"})
+        self.assertEqual(response.status_code, 200, response.text)
+        query = response.json()["query"]
+        self.assertEqual((query["system"], query["capacity"], query["laden_jump_range_ly"]), ("Achenar", 720, 22))
+        self.assertEqual((query["filters"]["min_supply"], query["filters"]["min_pad"]), (123, "M"))
+        self.assertEqual(response.json()["time_model"]["ship_id"], 8)
+        query = overridden.json()["query"]
+        self.assertEqual((query["system"], query["capacity"], query["filters"]["min_pad"]), ("Sol", 12, "S"))
+        self.assertEqual(unauthorized.status_code, 401)
+
+    def test_hub_routes_explain_missing_old_or_offline_peer_state_without_using_hub_ship(self) -> None:
+        self.r.attach()
+        params = {**PAGE, "node": "peer-node", "view": "global"}
+        with TestClient(self.hub_app) as hub:
+            for state in ({}, {"ship": {"cargo_capacity": 720}}, {"current_system": "Sol", "ship": {}}):
+                with self.subTest(state=state):
+                    self.r.registry.set_state("peer-node", state)
+                    missing = hub.get("/api/eddn-routes", params=params)
+                    self.assertEqual(missing.status_code, 409)
+                    self.assertIn("update/reconnect", missing.json()["detail"])
+            self.r.registry.set_state("peer-node", {"current_system": "", "ship": {"cargo_capacity": None}})
+            empty = hub.get("/api/eddn-routes", params=params)
+            self.assertEqual(empty.status_code, 200)
+            self.assertEqual((empty.json()["query"]["system"], empty.json()["query"]["capacity"]), ("", 0))
+            self.r.drop(self.r.links[-1])
+            offline = hub.get("/api/eddn-routes", params=params)
+            unknown = hub.get("/api/eddn-routes", params={**params, "node": "unknown"})
+        self.assertEqual((offline.status_code, unknown.status_code), (502, 502))
+
     def test_a_hub_page_sees_the_peers_session_and_drives_it(self) -> None:
         self.r.attach()
         with TestClient(self.hub_app) as hub:
@@ -439,7 +480,7 @@ class RelayTests(unittest.TestCase):
         self.assertEqual({key: first[0]["state"]["ship"][key] for key in ("id", "type", "name")},
                          {"id": 7, "type": "cutter", "name": "Home Run"})
         self.assertEqual(first[1]["state"], {"ship": {"id": 8, "type": "type9", "name": "Lugger", "cargo_capacity": 720,
-                                                      "laden_jump_range_ly": 31.5}, "routine": None})
+                                                      "laden_jump_range_ly": 31.5}, "routine": None, "current_system": "Achenar"})
         self.assertEqual(hauling[1]["state"]["routine"], "haul")
         self.assertEqual((offline[1]["connected"], offline[1]["state"]), (False, None))
 

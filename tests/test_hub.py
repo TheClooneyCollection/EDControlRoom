@@ -929,6 +929,13 @@ class LinkedServerTests(unittest.TestCase):
         self.assertEqual(pong, {"type": "pong"})
         self.assertFalse(self.r.registry.nodes()[1]["connected"])
 
+    def test_peer_route_request_does_not_inherit_hub_defaults_for_fields_the_peer_left_empty(self) -> None:
+        with patch("edcr.control_room.server.app.load_haul_search_config", return_value={"min_supply": "9999"}):
+            reply = self.hub_app.state.link_handlers["eddn_routes"]({"view": "global", "max_age_hours": "any"})
+        self.assertEqual(reply.status, 200)
+        query = reply.body["query"]
+        self.assertEqual((query["system"], query["capacity"], query["filters"]["min_supply"]), ("", 0, 0))
+
     def test_resolved_params_parse_the_same_on_a_hub_without_defaults(self) -> None:
         saved = {"max_route_distance_ly": "17.2", "min_supply": "5000", "min_landing_pad": "medium",
                  "use_surface_stations": "yes_with_odyssey", "max_price_age_hours": "8", "max_station_distance_ls": "1000"}

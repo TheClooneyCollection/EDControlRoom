@@ -1096,9 +1096,10 @@ def build_observer_server_app(
         if not isinstance(body, dict):
             return LinkReply(400, {"detail": "route params must be an object"})
         params = dict(body)
-        return answer_eddn_routes(params, _ship_id_value(params.pop("ship_id", None)))
+        return answer_eddn_routes(params, _ship_id_value(params.pop("ship_id", None)),
+                                  {"search_defaults": {}, "current_system": "", "cargo_capacity": 0})
 
-    def answer_eddn_routes(params: Any, ship_id: int | None) -> LinkReply:
+    def answer_eddn_routes(params: Any, ship_id: int | None, ship_inputs: dict[str, Any]) -> LinkReply:
         """Routes from this server's market store."""
         if not isinstance(params, dict):
             return LinkReply(400, {"detail": "route params must be an object"})
@@ -1107,7 +1108,7 @@ def build_observer_server_app(
         if not market_database_file.exists():
             return LinkReply(404, {"detail": "The market database has no data yet"})
         try:
-            query = parse_route_query({str(k): str(v) for k, v in params.items()}, **route_ship_inputs())
+            query = parse_route_query({str(k): str(v) for k, v in params.items()}, **ship_inputs)
         except ValueError as exc:
             return LinkReply(400, {"detail": str(exc)})
         names = {item.commodity: item.name for snapshot in read_recent_markets() for item in market_items(snapshot)}
@@ -1129,7 +1130,30 @@ def build_observer_server_app(
             ship_inputs = await asyncio.to_thread(route_ship_inputs)
             body = {**resolve_route_params(params, **ship_inputs), "ship_id": own_ship_id()}
             return await ask_hub(REQUEST_EDDN_ROUTES, body)
-        return link_reply_response(await asyncio.to_thread(answer_eddn_routes, params, own_ship_id()))
+        ship_inputs = await asyncio.to_thread(route_ship_inputs)
+        ship_id = own_ship_id()
+        node_id = viewed_node(params)
+        if node_id is not None:
+            assert hub_side is not None
+            node = next((item for item in hub_side.registry.nodes() if item["node_id"] == node_id), None)
+            if node is None or not node["connected"]:
+                return JSONResponse({"detail": f"Node {node_id} is unreachable", "node": node_id}, status_code=502)
+            state = node["state"]
+            if (not isinstance(state, dict) or not isinstance(state.get("current_system"), str)
+                    or not isinstance(state.get("ship"), dict) or "cargo_capacity" not in state["ship"]):
+                return JSONResponse({"detail": "Node route inputs are unavailable; update/reconnect the peer and wait for its state.",
+                                     "node": node_id}, status_code=409)
+            ship = state["ship"]
+            ship_inputs["current_system"] = state["current_system"]
+            ship_inputs["cargo_capacity"] = _cargo_capacity(SimpleNamespace(cargo_capacity=ship["cargo_capacity"]))
+            ship_id = _ship_id_value(ship.get("id"))
+        return link_reply_response(await asyncio.to_thread(answer_eddn_routes, params, ship_id, ship_inputs))
+
+    async def eddn_routes_endpoint(request: Request) -> JSONResponse:
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        return await eddn_routes(request.query_params)
 
     def link_reply_response(reply: LinkReply) -> JSONResponse:
         return JSONResponse(reply.body, status_code=reply.status)
@@ -1137,7 +1161,10 @@ def build_observer_server_app(
     async def ask_hub(kind: str, body: Any) -> JSONResponse:
         assert peer_link is not None
         try:
-            reply = await asyncio.to_thread(peer_link.request, kind, body, timeout_s=peer_link.request_timeout_s)
+            reply = await asyncio.to_thread(
+                peer_link.request, kind, body,
+                timeout_s=peer_link.search_timeout_s if kind == REQUEST_EDDN_ROUTES else peer_link.request_timeout_s,
+            )
         except HubUnreachable as exc:
             label = peer_link.hub_label
             return JSONResponse({"detail": hub_unreachable_detail(label, exc), "hub": label}, status_code=502)
@@ -1359,7 +1386,6 @@ def build_observer_server_app(
         "/api/route-compare": route_compare,
         "/api/route-compare/config": route_compare_config,
         "/api/spansh-route": spansh_route,
-        "/api/eddn-routes": eddn_routes,
         "/api/journal-ledger": journal_ledger,
     }
     assert node_reads.keys() == NODE_READS
@@ -1613,7 +1639,7 @@ def build_observer_server_app(
             Route("/api/haul-trips", haul_trips, methods=["POST"]),
             Route("/api/eddn-status", eddn_status_endpoint),
             Route("/api/carrier-names", carrier_names_endpoint),
-            Route("/api/eddn-routes", node_read_endpoint("/api/eddn-routes")),
+            Route("/api/eddn-routes", eddn_routes_endpoint),
             Route("/api/time-model", time_model_route, methods=["GET", "POST"]),
             Route("/api/hub-status", hub_status_endpoint),
             Route("/api/nodes", nodes_endpoint),

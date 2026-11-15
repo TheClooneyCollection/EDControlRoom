@@ -32,8 +32,6 @@ NODE_READS = frozenset({
     "/api/route-compare",
     "/api/route-compare/config",
     "/api/spansh-route",
-    # The hub owns the market store, but routes start from the node's ship; the peer asks the hub back.
-    "/api/eddn-routes",
     # The node's own journal trade ledger, shown beside the hub's central haul history.
     "/api/journal-ledger",
 })
@@ -73,10 +71,11 @@ def relay_error(message_id: Any, error_code: str, error_message: str) -> dict[st
 
 def node_state(data: object) -> dict[str, Any]:
     """What the hub's node picker shows for a node: its ship and the routine it runs. The hub's Markets
-    page prices trips with the ship's hold and laden range."""
+    page prices trips with the ship's hold and laden range; Routes also needs its current system."""
     ship = getattr(data, "ship", None)
     routine = getattr(data, "routine", None)
     return {
+        "current_system": getattr(ship, "system", None) or "",
         "ship": {"id": getattr(ship, "ship_id", None), "type": getattr(ship, "ship_type", None),
                  "name": getattr(ship, "ship_name", None), "cargo_capacity": getattr(ship, "cargo_capacity", None),
                  "laden_jump_range_ly": getattr(ship, "laden_jump_range_ly", None)},
