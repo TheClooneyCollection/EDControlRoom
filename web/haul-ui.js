@@ -3,6 +3,9 @@ let routes = [];
     let selectedRouteOutsideResults = null;
     let searchBusy = false;
     let searchSummary = "";
+    let routeRecommendations = null;
+    let recommendationPending = false;
+    let recommendationMessage = "";
     let hasSearchedRoutes = false;
     // Why the last search failed, shown in the results table instead of an empty list.
     let searchError = "";
@@ -36,6 +39,7 @@ let routes = [];
     const activityEntries = new Map();
     const WEB_DEFAULTS = {
       cargoCapacity: "",
+      recommendMaxRouteLy: 100,
       maxStationDistanceLs: "any",
       minSupply: "",
       surfaceStations: "no",
@@ -294,11 +298,16 @@ let routes = [];
       setText("status-version", serverVersionLabel(WEB_CONFIG.serverVersion, WEB_CONFIG.serverCommit));
     }
 
+    function recommendationRouteLimit() {
+      return String(WEB_DEFAULTS.recommendMaxRouteLy || 100);
+    }
+
     function applySearchDefaults() {
       for (const id of ["origin", "station-distance", "capacity", "min-supply", "max-age"]) {
         setElementValue(id, "");
       }
-      setElementValue("route-distance", "100");
+      setElementValue("route-distance", recommendationRouteLimit());
+      document.getElementById("route-distance").placeholder = recommendationRouteLimit();
       setSelectValue("route-distance-preset", "");
       setSelectValue("surface-stations", "");
       document.getElementById("origin").placeholder = hydratedCurrentSystem || "Current system";
@@ -392,6 +401,103 @@ let routes = [];
       };
       return Object.entries(result.markets_left_out || {}).filter(([, count]) => count > 0)
         .map(([reason, count]) => `${count} left out: ${labels[reason] || reason}`).join("; ");
+    }
+
+    function recommendationsHubUnreachable() {
+      const picker = document.getElementById("node-picker");
+      const chip = document.getElementById("hub-chip");
+      return Boolean((picker && !picker.hidden && picker.dataset.state === "down")
+        || (chip && !chip.hidden && ["down", "unknown"].includes(chip.dataset.state))
+        || ((window.EDCRNode.id() || (chip && !chip.hidden)) && !isSocketReady()));
+    }
+
+    function recommendationAge(seconds) {
+      if (seconds == null || !Number.isFinite(Number(seconds))) return "unknown";
+      const minutes = Math.floor(Math.max(0, Number(seconds)) / 60);
+      if (minutes < 1) return "just now";
+      if (minutes < 60) return `${minutes} min ago`;
+      const hours = Math.floor(minutes / 60);
+      return hours < 24 ? `${hours} h ago` : `${Math.floor(hours / 24)} d ago`;
+    }
+
+    function renderRecommendations() {
+      const panel = document.getElementById("route-recommendations");
+      panel.hidden = routeRecommendations == null;
+      if (!routeRecommendations) return;
+      const recs = routeRecommendations;
+      const unavailable = recommendationsHubUnreachable();
+      const disabled = recommendationPending || unavailable || !isSocketReady() || clientRole !== "active_operator";
+      const checkedAgo = Math.max(0, Date.now() / 1000 - recs.generated_at);
+      const baseline = recs.baseline_cr_h;
+      const rows = recs.routes || [];
+      const content = rows.map((row) => {
+        const a = row.station_1, b = row.station_2;
+        const gain = baseline == null ? "" : row.profit_per_hour - baseline;
+        const gainLabel = baseline == null ? "" : baseline > 0
+          ? `+${(gain / baseline * 100).toFixed(0)}% / +${(gain / 1000000).toFixed(1)} m/h`
+          : `+${(gain / 1000000).toFixed(1)} m/h (baseline 0 Cr/h)`;
+        const age = (station) => recommendationAge(station.age_s == null ? null : station.age_s + checkedAgo);
+        return `<li class="recommendation-row">
+          <div class="recommendation-detail">
+            <div class="route-main">${escapeHtml(stationLabel(a.station))} (${escapeHtml(a.system)}) → ${escapeHtml(stationLabel(b.station))} (${escapeHtml(b.system)})</div>
+            <div class="route-sub">${escapeHtml([row.outbound?.name, row.inbound?.name].filter(Boolean).join(" / "))}</div>
+            <div class="recommendation-rate mono">EDCR: ${escapeHtml(perHourLabel(row.profit_per_hour))}${gainLabel ? ` · ${escapeHtml(gainLabel)}` : ""}</div>
+            <div class="route-sub mono">${escapeHtml(row.jumps)} jumps · ${escapeHtml(row.distance_ly)} Ly</div>
+            <div class="route-sub">Prices: ${escapeHtml(a.station)} ${age(a)}; ${escapeHtml(b.station)} ${age(b)}</div>
+          </div>
+          <div class="recommendation-actions">
+            <button class="btn primary" type="button" data-recommend-action="select" data-recommend-key="${escapeHtml(row.key)}"${disabled ? " disabled" : ""}>Select</button>
+            <button class="btn ghost" type="button" data-recommend-action="dismiss" data-recommend-key="${escapeHtml(row.key)}"${disabled ? " disabled" : ""}>Dismiss</button>
+          </div>
+        </li>`;
+      }).join("");
+      const list = document.getElementById("recommendation-rows");
+      // Journal hydrates often carry the same list; don't replace buttons under a pending click.
+      if (list.innerHTML !== content) list.innerHTML = content;
+      const empty = document.getElementById("recommendations-empty");
+      empty.hidden = rows.length > 0;
+      empty.textContent = `No better route (${recs.below_threshold || 0} below threshold)`;
+      const missing = recs.baseline_missing || [];
+      setText("recommendations-baseline", baseline == null && missing.length
+        ? `Selected route not priced: ${missing.join(", ")}` : "");
+      setText("recommendations-footer", `${recs.below_threshold || 0} below threshold of the top ${recs.searched_limit || 200}, ${recs.name_unknown || 0} names unknown, ${recs.dismissed || 0} dismissed · EDDN, checked ${recommendationAge(checkedAgo)}`);
+      setText("recommendations-connection", unavailable ? "Hub unreachable — showing the last checked routes." : "");
+      setText("recommendations-message", recommendationMessage);
+    }
+
+    async function actOnRecommendation(event) {
+      const button = event.target.closest("button[data-recommend-action]");
+      if (!button || recommendationPending || recommendationsHubUnreachable()
+          || !isSocketReady() || clientRole !== "active_operator") return;
+      const row = routeRecommendations?.routes.find((item) => item.key === button.dataset.recommendKey);
+      if (!row) return;
+      const action = button.dataset.recommendAction;
+      if (action !== "select" && action !== "dismiss") return;
+      recommendationPending = true;
+      recommendationMessage = "";
+      renderRecommendations();
+      try {
+        if (action === "select") {
+          // A hydrate can precede the response; keep the supplied estimate available for both paths.
+          edcrTrips.set(routeKey(routeFromApi(row.trade_route, 0)), row);
+          await sendCommand("command.select_trade_route", { route: row.trade_route });
+          mergeHydratedRoute(row.trade_route);
+          travelTargetDirty = false;
+          renderRows();
+          renderSelected();
+          routeRecommendations = null;
+          appendActivity("Recommended route selected. Travel or start it when ready.", "Haul", "success");
+        } else {
+          await sendCommand("command.dismiss_route_recommendation", { key: row.key });
+          // The node owns dismissals and sends a fresh hydrate, including its updated count.
+        }
+      } catch (error) {
+        recommendationMessage = error.message;
+        appendActivity(error.message, "Haul", "warning");
+      } finally {
+        recommendationPending = false;
+        renderRecommendations();
+      }
     }
 
     function tradeRoutePayload(route) {
@@ -696,6 +802,7 @@ let routes = [];
     }
 
     function updateOperatorState() {
+      renderRecommendations();
       const active = clientRole === "active_operator";
       const routineActive = Boolean(currentRoutine.routine_active);
       const instantMode = Boolean(currentRoutine.instant_mode);
@@ -1223,6 +1330,10 @@ let routes = [];
       const routine = payload.routine || {};
       const activity = payload.activity_log || {};
       const serverStatus = payload.server_status || {};
+      if (Object.hasOwn(payload, "route_recommendations")) {
+        routeRecommendations = payload.route_recommendations;
+        recommendationMessage = "";
+      }
       currentRoutine = routine;
       haulTracking = Boolean(haulSession.tracking && haulSession.active);
       setText("status-runtime", serverStatus.runtime_platform || WEB_CONFIG.runtimePlatform || "-");
@@ -1273,6 +1384,15 @@ let routes = [];
       renderActivityLog();
     }
 
+    document.getElementById("recommendation-rows").addEventListener("click", actOnRecommendation);
+    // Reuse nav.js and hub-status.js link state; no additional polling requests or peer traffic.
+    const recommendationLinkObserver = new MutationObserver(renderRecommendations);
+    for (const id of ["node-picker", "hub-chip"]) {
+      const element = document.getElementById(id);
+      if (element) recommendationLinkObserver.observe(element, { attributes: true, attributeFilter: ["data-state", "hidden"] });
+    }
+    window.setInterval(renderRecommendations, 30000);
+
     document.getElementById("route-rows").addEventListener("click", (event) => {
       const row = event.target.closest("tr[data-index]");
       if (!row || searchBusy || !routeByIndex(Number(row.dataset.index))) {
@@ -1310,7 +1430,7 @@ let routes = [];
       url.searchParams.set("ship_range", "1");
       for (const [key, id] of Object.entries(fields)) {
         const value = document.getElementById(id).value.trim();
-        url.searchParams.set(key, key === "max_route_ly" ? value || "100" : value);
+        url.searchParams.set(key, key === "max_route_ly" ? value || recommendationRouteLimit() : value);
       }
       window.EDCRNode.addTo(url.searchParams);
       url.searchParams.set(AUTH_QUERY_PARAMETER_NAME, accessToken);

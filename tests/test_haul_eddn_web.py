@@ -7,7 +7,7 @@ import unittest
 
 @unittest.skipUnless(shutil.which("node"), "Node is required for web behavior checks")
 class HaulEddnWebTests(unittest.TestCase):
-    def test_search_select_copy_and_retry_with_peer_and_unknown_names(self):
+    def test_search_and_recommendations_keep_route_choice_with_the_operator(self):
         result = subprocess.run(
             [shutil.which("node"), "-e", WEB_FLOW],
             cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True,
@@ -29,6 +29,17 @@ function element() {
 }
 const elements = Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m => [m[1], element()]));
 const button = element();
+elements['node-picker'] = element();
+elements['node-picker'].dataset.state = 'ok';
+elements['hub-chip'].hidden = true;
+const observers = [], intervals = [];
+class Observer {
+  constructor(callback) { this.callback = callback; observers.push(this); }
+  observe() {}
+}
+let now = 1800000000000;
+class Clock extends Date { static now() { return now; } }
+
 const get = id => { assert.ok(elements[id], `missing HTML element ${id}`); return elements[id]; };
 const document = {getElementById: get, activeElement: null,
   querySelector(selector) {
@@ -37,24 +48,28 @@ const document = {getElementById: get, activeElement: null,
     throw Error(`unexpected selector ${selector}`);
   }, querySelectorAll() { return []; }, execCommand(action) { assert.equal(action, 'copy'); return true; }};
 const sent = [], requests = [];
-let socket;
+let socket, commandFailure = '', onCommand = () => {};
 class Socket {
   static OPEN = 1;
   constructor() { socket = this; this.readyState = 1; this.handlers = {}; }
   addEventListener(type, handler) { this.handlers[type] = handler; }
   send(raw) {
     const message = JSON.parse(raw); sent.push(message);
-    queueMicrotask(() => this.message('response.success', {}, message.message_id));
+    queueMicrotask(() => {
+      if (!commandFailure) onCommand(message);
+      this.message(commandFailure ? 'response.error' : 'response.success',
+        commandFailure ? {error_message: commandFailure} : {}, message.message_id);
+    });
   }
   message(message_type, payload, correlation_message_id) {
     this.handlers.message({data: JSON.stringify({message_type, payload, correlation_message_id})});
   }
 }
 const window = {location: new URL('http://test/haul?access_token=test&node=forge'),
-  EDCR_WEB_CONFIG: {webDefaults: {maxRouteDistanceLy: '999', maxPriceAgeHours: '48'}},
+  EDCR_WEB_CONFIG: {webDefaults: {maxRouteDistanceLy: '999', maxPriceAgeHours: '48', recommendMaxRouteLy: 140}},
   localStorage: {getItem() { return null; }},
   EDCRNode: {id: () => 'forge', addTo: params => params.set('node', 'forge')},
-  setTimeout: () => 1, clearTimeout() {}, clearInterval() {}, dispatchEvent() {},
+  setTimeout: () => 1, setInterval: callback => intervals.push(callback), clearTimeout() {}, clearInterval() {}, dispatchEvent() {},
   history: {replaceState() { throw Error('unexpected navigation'); }}};
 const trade = {from_station: 'Alpha Port', from_system: 'Alpha', to_station: 'Beta Port', to_system: 'Beta',
   source_buy_commodity: 'Gold', target_buy_commodity: 'Silver',
@@ -78,20 +93,21 @@ async function fetch(url, options) {
 }
 vm.runInNewContext(fs.readFileSync('web/haul-ui.js', 'utf8'),
   {window, document, URL, URLSearchParams, WebSocket: Socket, fetch,
-   navigator: {}, CustomEvent: function() {}, Option: function(text, value) { this.value = value; }, console});
+   navigator: {}, MutationObserver: Observer, Date: Clock, CustomEvent: function() {}, Option: function(text, value) { this.value = value; }, console});
 const click = id => get(id).handlers.click({});
 const select = index => get('route-rows').handlers.click({target: {closest: () => ({dataset: {index}})}});
 const search = () => get('search-form').handlers.submit({preventDefault() {}});
 (async () => {
   socket.message('event.connection_ready', {client_role: 'active_operator'});
-  assert.equal(get('route-distance').value, '100');
+  assert.equal(get('route-distance').value, '140');
+  assert.equal(get('route-distance').placeholder, '140');
   assert.equal(get('capacity').value, '');
   assert.match(get('max-age').placeholder, /48/);
   await search();
   const query = requests[0].url.searchParams;
   assert.equal(query.get('view'), 'global'); assert.equal(query.get('ship_range'), '1');
   assert.equal(query.get('node'), 'forge'); assert.equal(query.get('access_token'), 'test');
-  assert.equal(query.get('max_route_ly'), '100');
+  assert.equal(query.get('max_route_ly'), '140');
   for (const key of ['capacity', 'system', 'surface', 'min_supply', 'max_age_hours', 'max_station_distance_ls'])
     assert.equal(query.get(key), '', `${key} delegates blank defaults`);
   assert.equal(query.has('laden_jump_range_ly'), false);
@@ -119,7 +135,7 @@ const search = () => get('search-form').handlers.submit({preventDefault() {}});
   reply = {...normal, routes: []};
   await search();
   const custom = requests.at(-1).url.searchParams;
-  for (const [key, value] of Object.entries({system: 'Sol', capacity: '720', max_route_ly: '100',
+  for (const [key, value] of Object.entries({system: 'Sol', capacity: '720', max_route_ly: '140',
     surface: 'yes_with_odyssey', max_age_hours: '24', min_supply: '800', max_station_distance_ls: '1000'}))
     assert.equal(custom.get(key), value);
   assert.equal(sent.length, 1); assert.match(get('route-rows').innerHTML, /No EDDN routes found/);
@@ -154,6 +170,105 @@ const search = () => get('search-form').handlers.submit({preventDefault() {}});
   assert.equal(sent.at(-1).payload.params.mode, 'track');
   assert.equal(get('origin').value, 'Sol', 'hydrate preserves edited fields');
   assert.equal(get('capacity').value, '720');
-  click('reset-search'); assert.equal(get('origin').value, ''); assert.equal(get('route-distance').value, '100');
+  click('reset-search'); assert.equal(get('origin').value, ''); assert.equal(get('route-distance').value, '140');
+
+  const recommendation = {...row, key: 'key<one>', station_1: {...row.station_1, age_s: 60},
+    station_2: {...row.station_2, age_s: 120}};
+  const betterTrade = {...trade, from_station: 'Gamma <Port>', from_system: 'Gamma'};
+  const second = {...recommendation, key: 'second', trade_route: betterTrade,
+    station_1: {...recommendation.station_1, station: 'Gamma <Port>', system: 'Gamma'},
+    profit_per_hour: 80000000};
+  const recs = {routes: [recommendation, second], below_threshold: 15, name_unknown: 2, dismissed: 1,
+    baseline_cr_h: 40000000, baseline_source: 'search', baseline_missing: [],
+    generated_at: now / 1000 - 180, searched_limit: 200};
+  const hydrate = recommendations => socket.message('control_room.hydrate', {
+    selected_trade_route: trade, route_recommendations: recommendations, ship: {}, haul_session: {}});
+  const act = (action, key) => get('recommendation-rows').handlers.click({target: {
+    closest: () => ({dataset: {recommendAction: action, recommendKey: key}})}});
+  hydrate(null); assert.equal(get('route-recommendations').hidden, true);
+  const beforeRecommendations = sent.length;
+  hydrate(recs);
+  assert.equal(get('route-recommendations').hidden, false);
+  assert.equal(sent.length, beforeRecommendations, 'new recommendations never select or start');
+  assert.match(get('recommendation-rows').innerHTML, /Gamma &lt;Port&gt;/);
+  assert.match(get('recommendation-rows').innerHTML, /Gold \/ Silver/);
+  assert.match(get('recommendation-rows').innerHTML, /EDCR: 60.0m Cr\/h · \+50% \/ \+20.0 m\/h/);
+  assert.match(get('recommendation-rows').innerHTML, /2 jumps · 25 Ly/);
+  assert.match(get('recommendation-rows').innerHTML, /Alpha Port 4 min ago; Beta Port 5 min ago/);
+  assert.match(get('recommendation-rows').innerHTML, /data-recommend-key="key&lt;one&gt;"/);
+  assert.match(get('recommendations-footer').textContent, /15 below threshold of the top 200, 2 names unknown, 1 dismissed/);
+  assert.match(get('recommendations-footer').textContent, /EDDN, checked 3 min ago/);
+  now += 60000; intervals.forEach(callback => callback());
+  assert.match(get('recommendations-footer').textContent, /checked 4 min ago/);
+  hydrate({...recs, baseline_cr_h: null, baseline_missing: ['station coordinates', 'selected route prices']});
+  assert.match(get('recommendations-baseline').textContent, /Selected route not priced: station coordinates, selected route prices/);
+  assert.doesNotMatch(get('recommendation-rows').innerHTML, /\+50%/);
+  hydrate({...recs, baseline_cr_h: 0});
+  assert.match(get('recommendation-rows').innerHTML, /baseline 0 Cr\/h/);
+  assert.doesNotMatch(get('recommendation-rows').innerHTML, /Infinity/);
+  hydrate({...recs, routes: [], dismissed: 3});
+  assert.equal(get('route-recommendations').hidden, false);
+  assert.match(get('recommendations-empty').textContent, /No better route \(15 below threshold\)/);
+  assert.match(get('recommendations-footer').textContent, /3 dismissed/);
+  hydrate({...recs, routes: [], dismissed: 0});
+  assert.equal(get('route-recommendations').hidden, false, 'checked empty differs from never checked');
+
+  hydrate(recs);
+  get('node-picker').dataset.state = 'down'; observers.forEach(observer => observer.callback());
+  assert.match(get('recommendations-connection').textContent, /Hub unreachable/);
+  assert.match(get('recommendation-rows').innerHTML, /Gamma &lt;Port&gt;/);
+  assert.match(get('recommendation-rows').innerHTML, / disabled/);
+  await act('select', 'second'); assert.equal(sent.length, beforeRecommendations);
+  get('node-picker').dataset.state = 'ok'; observers.forEach(observer => observer.callback());
+  assert.equal(get('recommendations-connection').textContent, '');
+  // Peer-local pages receive link state from the existing hub chip instead of the node picker.
+  get('hub-chip').hidden = false; get('hub-chip').dataset.state = 'down';
+  observers.forEach(observer => observer.callback());
+  assert.match(get('recommendations-connection').textContent, /Hub unreachable/);
+  get('hub-chip').dataset.state = 'ok'; observers.forEach(observer => observer.callback());
+  assert.equal(get('recommendations-connection').textContent, '');
+  socket.readyState = 3; intervals.forEach(callback => callback());
+  assert.match(get('recommendations-connection').textContent, /Hub unreachable/);
+  socket.readyState = 1;
+  socket.message('event.connection_ready', {client_role: 'observer'});
+  await act('dismiss', 'second'); assert.equal(sent.length, beforeRecommendations);
+  socket.message('event.connection_ready', {client_role: 'active_operator'});
+
+  commandFailure = 'Node unreachable';
+  await act('dismiss', 'second');
+  assert.match(get('recommendations-message').textContent, /Node unreachable/);
+  assert.match(get('recommendation-rows').innerHTML, /Gamma &lt;Port&gt;/);
+  commandFailure = '';
+  onCommand = message => {
+    if (message.message_type === 'command.dismiss_route_recommendation')
+      hydrate({...recs, routes: [recommendation], dismissed: 2});
+  };
+  await act('dismiss', 'second');
+  assert.equal(sent.at(-1).message_type, 'command.dismiss_route_recommendation');
+  assert.equal(sent.at(-1).payload.key, 'second');
+  assert.doesNotMatch(get('recommendation-rows').innerHTML, /Gamma &lt;Port&gt;/);
+  assert.match(get('recommendations-footer').textContent, /2 dismissed/);
+
+  hydrate(recs);
+  commandFailure = 'Selection refused';
+  await act('select', 'second');
+  assert.match(get('recommendations-message').textContent, /Selection refused/);
+  assert.match(get('selected-title').textContent, /Alpha Port/);
+  commandFailure = '';
+  onCommand = message => {
+    if (message.message_type === 'command.select_trade_route') socket.message('control_room.hydrate', {
+      selected_trade_route: betterTrade, route_recommendations: null, ship: {}, haul_session: {}});
+  };
+  const beforeSelect = sent.length;
+  await act('select', 'second');
+  assert.equal(sent.length, beforeSelect + 1, 'Select sends no travel or start command');
+  assert.equal(sent.at(-1).message_type, 'command.select_trade_route');
+  assert.deepEqual(sent.at(-1).payload.route, betterTrade);
+  assert.equal(get('travel-system').value, 'Gamma');
+  assert.equal(get('travel-station').value, 'Gamma <Port>');
+  assert.match(get('selected-title').textContent, /Gamma/);
+  assert.equal(get('route-recommendations').hidden, true, 'selection clears stale recommendations');
+  await click('copy-route'); assert.equal(JSON.parse(get('route-transfer-text').value).from_system, 'Gamma');
+
 })().catch(error => { console.error(error); process.exitCode = 1; });
 '''

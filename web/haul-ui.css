@@ -2032,6 +2032,23 @@
   display: none;
 }
 
+
+.better-routes { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.better-routes h3 { margin: 0 0 10px; font-size: 14px; }
+.better-routes p { margin: 8px 0 0; overflow-wrap: anywhere; }
+.better-routes p:empty { display: none; }
+.recommendation-list { margin: 0; padding: 0; list-style: none; }
+.recommendation-row { display: flex; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.recommendation-row:last-child { border-bottom: 0; }
+.recommendation-detail { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.recommendation-rate { margin: 5px 0; color: var(--text-1); }
+.recommendation-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.recommendation-note { color: var(--text-2); }
+@media (max-width: 760px) {
+  .recommendation-row { align-items: stretch; flex-direction: column; gap: 10px; }
+  .recommendation-actions .btn { flex: 1; min-height: 44px; }
+}
+
 @media (max-width: 760px) {
   /* Keep the links direct children of the sidebar row, as they were before the nav was shared. */
   .site-nav {
