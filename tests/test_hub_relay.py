@@ -185,6 +185,21 @@ class RelayTests(unittest.TestCase):
         self.assertEqual((query["system"], query["capacity"], query["filters"]["min_pad"]), ("Sol", 12, "S"))
         self.assertEqual(unauthorized.status_code, 401)
 
+    def test_haul_opts_into_peer_ship_range_without_changing_routes_defaults(self) -> None:
+        self.r.attach()
+        self.background = lambda work: self.fail("Hub must answer from published peer state")
+        defaults = {"max_route_distance_ly": "22"}
+        params = {**PAGE, "node": "peer-node", "view": "global", "max_age_hours": "any"}
+        with patch("edcr.control_room.server.app.load_haul_search_config", return_value=defaults), TestClient(self.hub_app) as hub:
+            ordinary = hub.get("/api/eddn-routes", params=params)
+            haul = hub.get("/api/eddn-routes", params={**params, "ship_range": "1"})
+            explicit = hub.get("/api/eddn-routes", params={**params, "ship_range": "1", "laden_jump_range_ly": "40"})
+            self.r.registry.set_state("peer-node", {"ship": {"cargo_capacity": 720, "id": 8}})
+            missing = hub.get("/api/eddn-routes", params={**params, "ship_range": "1"})
+        for response, expected in ((ordinary, 22), (haul, 31.5), (explicit, 40), (missing, 22)):
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()["query"]["laden_jump_range_ly"], expected)
+
     def test_hub_routes_explain_missing_old_or_offline_peer_state_without_using_hub_ship(self) -> None:
         self.r.attach()
         params = {**PAGE, "node": "peer-node", "view": "global"}

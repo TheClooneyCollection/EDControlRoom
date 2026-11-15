@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from edcr.control_room.server.route_inputs import with_ship_laden_range
+
 import asyncio
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime
@@ -1125,6 +1127,8 @@ def build_observer_server_app(
 
     async def eddn_routes(query: Mapping[str, str]) -> JSONResponse:
         params = dict(query)
+        if params.get("ship_range") == "1":
+            params = with_ship_laden_range(params, viewed_ship(params))
         if peer_link is not None:
             # The hub answers for this ship and this server's search settings, not its own.
             ship_inputs = await asyncio.to_thread(route_ship_inputs)

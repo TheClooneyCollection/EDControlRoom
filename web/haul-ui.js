@@ -1,5 +1,8 @@
 let routes = [];
     let selectedRouteIndex = 0;
+    let selectedRouteOutsideResults = null;
+    let searchBusy = false;
+    let searchSummary = "";
     let hasSearchedRoutes = false;
     // Why the last search failed, shown in the results table instead of an empty list.
     let searchError = "";
@@ -22,7 +25,6 @@ let routes = [];
     let commandSequence = 1;
     let hydratedCurrentSystem = "";
     let lastHydratedRouteKey = "";
-    const hydratedFieldValues = new Map();
     let currentRoutine = {};
     let haulTracking = false;
     let reconnectDelayMs = RECONNECT_INITIAL_DELAY_MS;
@@ -34,11 +36,8 @@ let routes = [];
     const activityEntries = new Map();
     const WEB_DEFAULTS = {
       cargoCapacity: "",
-      maxRouteDistanceLy: "500",
       maxStationDistanceLs: "any",
       minSupply: "",
-      minDemand: "",
-      metric: "Profit / hour",
       surfaceStations: "no",
       galaxyMapSettle: "2.0",
       dockTimeout: "1200",
@@ -229,7 +228,8 @@ let routes = [];
     }
 
     function routeByIndex(index) {
-      return routes.find((route) => route.index === index) || routes[0] || null;
+      return routes.find((route) => route.index === index && route.selectable !== false)
+        || (index === -1 ? selectedRouteOutsideResults : null);
     }
 
     function escapeHtml(value) {
@@ -260,23 +260,6 @@ let routes = [];
       }
     }
 
-    // Hydrates arrive on every journal change, so only refill a field the operator has not edited or focused.
-    function syncHydratedField(id, value) {
-      const element = document.getElementById(id);
-      const next = String(value ?? "");
-      if (!element) {
-        return;
-      }
-      const previous = hydratedFieldValues.get(id);
-      hydratedFieldValues.set(id, next);
-      if (element === document.activeElement) {
-        return;
-      }
-      if (element.value === "" || element.value === previous) {
-        element.value = next;
-      }
-    }
-
     function selectHasValue(select, value) {
       return Array.from(select.options).some((option) => option.value === value);
     }
@@ -291,26 +274,6 @@ let routes = [];
         select.add(new Option(resolved, resolved));
       }
       select.value = resolved;
-    }
-
-    function routeDistanceLabel(value) {
-      const raw = String(value || WEB_DEFAULTS.maxRouteDistanceLy || "").trim();
-      if (!raw) {
-        return "";
-      }
-      return raw.toLowerCase().includes("ly") ? raw : `${raw} Ly`;
-    }
-
-    function stationDistanceLabel(value) {
-      const raw = String(value || WEB_DEFAULTS.maxStationDistanceLs || "").trim();
-      if (!raw || raw.toLowerCase() === "any") {
-        return "Any";
-      }
-      const numeric = Number(raw.replace(/,/g, "").split(/\s+/)[0]);
-      if (Number.isFinite(numeric)) {
-        return `${numeric.toLocaleString()} ls`;
-      }
-      return raw;
     }
 
     function serverVersionLabel(version, commit) {
@@ -332,20 +295,22 @@ let routes = [];
     }
 
     function applySearchDefaults() {
-      setElementValue("origin", hydratedCurrentSystem);
-      setElementValue("destination", "");
-      setElementValue("route-distance", routeDistanceLabel(WEB_DEFAULTS.maxRouteDistanceLy));
+      for (const id of ["origin", "station-distance", "capacity", "min-supply", "max-age"]) {
+        setElementValue(id, "");
+      }
+      setElementValue("route-distance", "100");
       setSelectValue("route-distance-preset", "");
-      setSelectValue("station-distance", stationDistanceLabel(WEB_DEFAULTS.maxStationDistanceLs));
-      setElementValue("capacity", WEB_DEFAULTS.cargoCapacity);
-      setElementValue("min-supply", WEB_DEFAULTS.minSupply);
-      setElementValue("min-demand", WEB_DEFAULTS.minDemand);
-      setSelectValue("metric", WEB_DEFAULTS.metric);
-      setSelectValue("surface-stations", WEB_DEFAULTS.surfaceStations);
+      setSelectValue("surface-stations", "");
+      document.getElementById("origin").placeholder = hydratedCurrentSystem || "Current system";
+      document.getElementById("capacity").placeholder = WEB_DEFAULTS.cargoCapacity || "Current ship";
+      for (const [id, value] of [["station-distance", WEB_DEFAULTS.maxStationDistanceLs],
+        ["min-supply", WEB_DEFAULTS.minSupply], ["max-age", WEB_DEFAULTS.maxPriceAgeHours]]) {
+        document.getElementById(id).placeholder = value ? `${value} (haul search)` : "Haul search default";
+      }
     }
 
     function searchScopeLabel() {
-      return document.getElementById("surface-stations").value === "no" ? "station/carrier routes" : "routes";
+      return "EDDN routes";
     }
 
     function applyHaulDefaults() {
@@ -390,8 +355,47 @@ let routes = [];
       };
     }
 
+    function routeFromEddn(row, offset) {
+      const a = row.station_1, b = row.station_2;
+      const out = row.outbound, back = row.inbound;
+      // Unknown in-game names remain visible, but cannot become a runnable route.
+      const display = row.trade_route || {
+        from_station: a.station, from_system: a.system,
+        to_station: b.station, to_system: b.system,
+        from_station_distance: a.dist_ls == null ? "-" : `${a.dist_ls} Ls`,
+        to_station_distance: b.dist_ls == null ? "-" : `${b.dist_ls} Ls`,
+        source_buy_commodity: out?.name, target_buy_commodity: back?.name,
+        from_supply: out?.supply, to_demand: out?.demand,
+        to_supply: back?.supply, from_demand: back?.demand,
+        from_buy_price: out?.buy_price, to_sell_price: out?.sell_price,
+        to_buy_price: back?.buy_price, from_sell_price: back?.sell_price,
+        profit_per_trip: formatCredits(row.profit_per_trip),
+        route_distance: `${row.distance_ly} Ly`
+      };
+      return {
+        ...routeFromApi(display, offset + 1), index: offset + 1,
+        selectable: Boolean(row.trade_route), edcrTrip: row,
+        buyAway: a.ly_from_system, sellAway: b.ly_from_system,
+        routeDistance: `${row.distance_ly} Ly`, routeJumps: row.jumps
+      };
+    }
+
+    function marketsLeftOutLabel(result) {
+      const filters = result.query?.filters || {};
+      const labels = {
+        age: `older than ${filters.max_age_s / 3600} h`, coordinates: "missing coordinates",
+        carriers: "fleet carriers excluded", construction_depot: "construction depots",
+        departed_carrier: "departed carriers", carrier_access: "carriers not open to all",
+        pad: `pad smaller than ${filters.min_pad} or unknown`, surface: "surface stations excluded",
+        station_distance: `over ${filters.max_station_distance_ls} Ls`,
+        no_trade_prices: `no usable buy/sell prices (min export supply ${filters.min_supply})`
+      };
+      return Object.entries(result.markets_left_out || {}).filter(([, count]) => count > 0)
+        .map(([reason, count]) => `${count} left out: ${labels[reason] || reason}`).join("; ");
+    }
+
     function tradeRoutePayload(route) {
-      if (!route) {
+      if (!route || route.selectable === false) {
         return null;
       }
       return {
@@ -454,14 +458,15 @@ let routes = [];
       const existingIndex = routes.findIndex((route) => routeKey(route) === hydratedKey);
       if (existingIndex >= 0) {
         hydratedRoute.index = routes[existingIndex].index;
-        routes[existingIndex] = hydratedRoute;
+        routes[existingIndex] = { ...routes[existingIndex], ...hydratedRoute };
       } else {
+        hydratedRoute.index = Math.max(0, ...routes.map((route) => route.index)) + 1;
         routes = [hydratedRoute, ...routes];
       }
       hasSearchedRoutes = true;
       searchError = "";
       selectedRouteIndex = hydratedRoute.index;
-      requestEdcrTrips([hydratedRoute]);
+      requestEdcrTrips([routeByIndex(selectedRouteIndex)]);
       const routeOffset = routes.findIndex((route) => route.index === selectedRouteIndex);
       routePage = routeOffset >= 0 ? Math.floor(routeOffset / ROUTES_PER_PAGE) + 1 : 1;
       return hydratedRoute;
@@ -543,13 +548,6 @@ let routes = [];
       importPastedRoute();
     }
 
-    function profitHourLabel(route) {
-      if (!route.profitHour || route.profitHour === "-") {
-        return "-";
-      }
-      return route.profitHour.includes("/") ? route.profitHour : `${route.profitHour}/h`;
-    }
-
     // EDCR's own trip time and profit per hour for each route (`/api/haul-trips`), by `routeKey`, for the
     // ship the page looks at; `edcrTripShip` is that ship.
     const edcrTrips = new Map();
@@ -558,7 +556,7 @@ let routes = [];
     let edcrTripsRequest = 0;
 
     async function requestEdcrTrips(list) {
-      const wanted = list.filter((route) => !edcrTrips.has(routeKey(route)));
+      const wanted = list.filter((route) => route && !route.edcrTrip && route.selectable !== false && !edcrTrips.has(routeKey(route)));
       if (!wanted.length || !accessToken) {
         return;
       }
@@ -604,36 +602,22 @@ let routes = [];
       return (edcrTripShip && edcrTripShip.label) || "current ship";
     }
 
-    // Inara's profit per hour and trip time above EDCR's own for the same route and ship, so they compare.
+    // EDDN rows already carry the EDCR estimate; imported routes request it separately.
     function profitCompareCell(route) {
-      const trip = edcrTrips.get(routeKey(route));
-      const inaraHour = trip ? perHourLabel(trip.inara_profit_per_hour) : profitHourLabel(route);
-      const inaraTrip = trip ? ` ${minutesPerTrip(trip.inara_trip_s)}` : "";
+      const trip = route.edcrTrip || edcrTrips.get(routeKey(route));
       let edcr;
       if (!trip) {
         edcr = `EDCR: ${edcrTripsStatus || "-"}`;
       } else if (trip.trip_s) {
         edcr = `EDCR: ${perHourLabel(trip.profit_per_hour)} ${minutesPerTrip(trip.trip_s)} (${edcrShipLabel()})`;
       } else {
-        edcr = `EDCR: - (${edcrShipLabel()}; missing ${trip.missing.join(", ") || "profit per trip"})`;
+        edcr = `EDCR: - (${edcrShipLabel()}; missing ${(trip.missing || []).join(", ") || "profit per trip"})`;
       }
-      return `<div class="route-main">Inara: ${escapeHtml(inaraHour + inaraTrip)}</div>
-            <div class="route-sub mono">${escapeHtml(edcr)}</div>`;
+      return `<div class="route-main mono">${escapeHtml(edcr)}</div>`;
     }
 
     function setResultCount(text) {
       document.getElementById("result-count").textContent = text;
-    }
-
-    // The search's Inara URL, so the operator can check results against Inara's own page.
-    function setInaraSearchLink(url) {
-      const link = document.getElementById("inara-search-link");
-      if (url) {
-        link.href = url;
-      } else {
-        link.removeAttribute("href");
-      }
-      link.hidden = !url;
     }
 
     function isSocketReady() {
@@ -733,7 +717,7 @@ let routes = [];
       document.getElementById("stop-haul-stats").disabled = !active || routineActive;
       document.getElementById("reconnect-websocket").disabled = !accessToken;
       document.getElementById("connection-reconnect").disabled = !accessToken;
-      document.querySelector("#search-form .btn.primary").disabled = !active;
+      document.querySelector("#search-form .btn.primary").disabled = !active || searchBusy;
       document.getElementById("access-token").value = accessToken;
       if (!accessToken) {
         setResultCount("Backend token required");
@@ -741,8 +725,8 @@ let routes = [];
         setResultCount("Connecting to backend...");
       } else if (!active) {
         setResultCount("Operator connection required");
-      } else if (routes.length) {
-        setResultCount(`Found ${routes.length} ${searchScopeLabel()}`);
+      } else if (!searchBusy && searchSummary) {
+        setResultCount(searchSummary);
       }
     }
 
@@ -1126,23 +1110,24 @@ let routes = [];
       const startIndex = (routePage - 1) * ROUTES_PER_PAGE;
       const visibleRoutes = routes.slice(startIndex, startIndex + ROUTES_PER_PAGE);
       tbody.innerHTML = visibleRoutes.map((route) => `
-        <tr class="${route.index === selectedRouteIndex ? "selected" : ""}" data-index="${route.index}">
+        <tr class="${route.index === selectedRouteIndex ? "selected" : ""}" data-index="${route.index}" aria-disabled="${route.selectable === false}">
           <td class="mono" data-label="#">${escapeHtml(route.index)}</td>
           <td class="num profit" data-label="Profit / hr">${profitCompareCell(route)}</td>
           <td class="num profit" data-label="Profit / trip">${escapeHtml(route.profitTrip || "-")}</td>
           <td class="cargo-legs" data-label="Cargo">
             ${cargoCellHtml(route)}
+            ${route.selectable === false ? '<div class="route-sub">commodity name unknown</div>' : ""}
           </td>
           <td data-label="Station 1">
             <div class="route-main">${escapeHtml(stationLabel(route.buyStation))}</div>
-            <div class="route-sub mono">${escapeHtml(route.buySystem)} / ${escapeHtml(route.buyStationDistance)}${route.buyManualLanding ? " / manual landing" : ""}</div>
+            <div class="route-sub mono">${escapeHtml(route.buySystem)} / ${escapeHtml(route.buyStationDistance)}${route.buyManualLanding ? " / manual landing" : ""}${route.buyAway == null ? "" : ` / ${escapeHtml(route.buyAway)} Ly away`}</div>
           </td>
           <td data-label="Station 2">
             <div class="route-main">${escapeHtml(stationLabel(route.sellStation))}</div>
-            <div class="route-sub mono">${escapeHtml(route.sellSystem)} / ${escapeHtml(route.sellStationDistance)}${route.sellManualLanding ? " / manual landing" : ""}</div>
+            <div class="route-sub mono">${escapeHtml(route.sellSystem)} / ${escapeHtml(route.sellStationDistance)}${route.sellManualLanding ? " / manual landing" : ""}${route.sellAway == null ? "" : ` / ${escapeHtml(route.sellAway)} Ly away`}</div>
           </td>
           <td class="num" data-label="Distance">${escapeHtml(route.distanceFromSystem)}</td>
-          <td class="num" data-label="Route">${escapeHtml(route.routeDistance)}</td>
+          <td class="num" data-label="Route">${escapeHtml(route.routeDistance)}${route.routeJumps == null ? "" : ` / ${escapeHtml(route.routeJumps)} jumps`}</td>
         </tr>
       `).join("");
       updateRoutePager(startIndex + 1, startIndex + visibleRoutes.length, routes.length, totalPages);
@@ -1253,7 +1238,7 @@ let routes = [];
       document.getElementById("summary-runs").textContent = haulSession.completed_runs || 0;
       if (ship.system) {
         hydratedCurrentSystem = ship.system;
-        syncHydratedField("origin", hydratedCurrentSystem);
+        document.getElementById("origin").placeholder = hydratedCurrentSystem;
       }
       window.EDCR_HAUL = window.EDCR_HAUL || {};
       window.EDCR_HAUL.shipState = {
@@ -1266,7 +1251,7 @@ let routes = [];
       window.dispatchEvent(new CustomEvent("edcr:hydrate", { detail: payload }));
       if (ship.cargo_capacity) {
         WEB_DEFAULTS.cargoCapacity = String(ship.cargo_capacity);
-        syncHydratedField("capacity", ship.cargo_capacity);
+        document.getElementById("capacity").placeholder = String(ship.cargo_capacity);
       }
       // Only a route change from the server moves the selection: repeat hydrates must not undo the operator's
       // row or page choice, or re-render rows under a tap between mousedown and mouseup.
@@ -1290,7 +1275,7 @@ let routes = [];
 
     document.getElementById("route-rows").addEventListener("click", (event) => {
       const row = event.target.closest("tr[data-index]");
-      if (!row) {
+      if (!row || searchBusy || !routeByIndex(Number(row.dataset.index))) {
         return;
       }
       selectedRouteIndex = Number(row.dataset.index);
@@ -1302,60 +1287,63 @@ let routes = [];
     document.getElementById("copy-route").addEventListener("click", copySelectedRoute);
     document.getElementById("import-route").addEventListener("click", importPastedRoute);
 
-    document.getElementById("search-form").addEventListener("submit", (event) => {
+    document.getElementById("search-form").addEventListener("submit", async (event) => {
       event.preventDefault();
-      if (!accessToken) {
-        setResultCount("Backend token required");
-        appendActivity("Enter and save an access token to search live routes.", "Search", "warning");
+      if (searchBusy) return;
+      if (!accessToken || clientRole !== "active_operator") {
+        setResultCount("Operator connection and token required");
         return;
       }
-      if (clientRole !== "active_operator") {
-        setResultCount("Operator connection required");
-        appendActivity("Connect to the backend before searching routes.", "Search", "warning");
-        return;
-      }
+      let selected = routeByIndex(selectedRouteIndex);
+      searchBusy = true;
+      searchSummary = "";
+      document.querySelector("#search-form .btn.primary").disabled = true;
+      document.getElementById("route-rows").inert = true;
       setResultCount(`Searching ${searchScopeLabel()}...`);
-      setInaraSearchLink("");
-      const body = {
-        origin: document.getElementById("origin").value,
-        destination: document.getElementById("destination").value,
-        cargo_capacity: document.getElementById("capacity").value,
-        max_route_distance_ly: document.getElementById("route-distance").value,
-        max_station_distance_ls: document.getElementById("station-distance").value,
-        min_supply: document.getElementById("min-supply").value,
-        min_demand: document.getElementById("min-demand").value,
-        metric: document.getElementById("metric").value,
-        use_surface_stations: document.getElementById("surface-stations").value
+      const url = new URL("/api/eddn-routes", window.location.origin);
+      const fields = {
+        system: "origin", max_route_ly: "route-distance", capacity: "capacity",
+        max_station_distance_ls: "station-distance", min_supply: "min-supply",
+        surface: "surface-stations", max_age_hours: "max-age"
       };
-      sendCommand("command.search_haul_routes", body)
-        .then((payload) => {
-          const result = payload.result || {};
-          routes = (result.routes || []).map(routeFromApi);
-          hasSearchedRoutes = true;
-          searchError = "";
-          // A new search estimates again, for the ship flown now; before the first draw, so rows say so.
-          edcrTrips.clear();
-          requestEdcrTrips(routes);
-          routePage = 1;
-          selectedRouteIndex = routes[0] ? routes[0].index : 0;
-          renderRows();
-          renderSelected();
-          persistSelectedRoute(routeByIndex(selectedRouteIndex));
-          setResultCount(`Found ${result.route_count || 0} ${searchScopeLabel()}${result.hub ? ` via hub ${result.hub}` : ""}`);
-          setInaraSearchLink(result.query_url || "");
-          appendActivity(`Route search returned ${result.route_count || 0} result(s).`, "Search", "success");
-        })
-        .catch((error) => {
-          setResultCount("Search failed");
-          setInaraSearchLink("");
-          // The old results would read as this search's; the table says why there are none.
-          routes = [];
-          hasSearchedRoutes = true;
-          searchError = error.message;
-          renderRows();
-          renderSelected();
-          appendActivity(error.message, "Search", "warning");
-        });
+      url.searchParams.set("view", "global");
+      url.searchParams.set("ship_range", "1");
+      for (const [key, id] of Object.entries(fields)) {
+        const value = document.getElementById(id).value.trim();
+        url.searchParams.set(key, key === "max_route_ly" ? value || "100" : value);
+      }
+      window.EDCRNode.addTo(url.searchParams);
+      url.searchParams.set(AUTH_QUERY_PARAMETER_NAME, accessToken);
+      try {
+        const response = await fetch(url, { method: "GET" });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.detail || `HTTP ${response.status}`);
+        selected = routeByIndex(selectedRouteIndex);
+        routes = (result.routes || []).map(routeFromEddn);
+        searchError = "";
+        const leftOut = marketsLeftOutLabel(result);
+        searchSummary = `Found ${routes.length} EDDN routes, from ${result.markets_considered || 0} markets${result.hub ? ` via hub ${result.hub}` : ""}${leftOut ? `; ${leftOut}` : ""}`;
+        appendActivity(`Route search returned ${routes.length} result(s).`, "Search", "success");
+      } catch (error) {
+        selected = routeByIndex(selectedRouteIndex);
+        routes = [];
+        searchError = error.message;
+        searchSummary = `Search failed: ${error.message}`;
+        appendActivity(error.message, "Search", "warning");
+      } finally {
+        hasSearchedRoutes = true;
+        routePage = 1;
+        // Searching never changes the node's selected route, including when it is absent from results.
+        const match = selected && routes.find((route) => route.selectable && routeKey(route) === routeKey(selected));
+        selectedRouteOutsideResults = selected;
+        selectedRouteIndex = match ? match.index : selected ? -1 : 0;
+        searchBusy = false;
+        document.getElementById("route-rows").inert = false;
+        renderRows();
+        renderSelected();
+        updateOperatorState();
+        setResultCount(searchSummary);
+      }
     });
 
     document.getElementById("reset-search").addEventListener("click", () => {

@@ -204,47 +204,26 @@
                 <div class="panel-action">Operator connection required</div>
               </div>
               <div class="panel-body">
-                <div class="banner">
-                  <div class="banner-title">Station and carrier routes only</div>
-                  <div class="banner-text">V1 search excludes land settlements. Surface destinations are intentionally disabled until route metadata is reliable.</div>
-                </div>
-
                 <form class="form-grid" id="search-form">
                   <label>
-                    <span class="field-label">Origin system</span>
+                    <span class="field-label">Distance from</span>
                     <input class="field" id="origin" value="" placeholder="Current system" autocomplete="off">
-                  </label>
-                  <label>
-                    <span class="field-label">Destination system or station</span>
-                    <input class="field" id="destination" value="" autocomplete="off">
                   </label>
                   <div class="field-row">
                     <label>
-                      <span class="field-label">Max route distance</span>
+                      <span class="field-label">Route length (Ly)</span>
                       <span class="combo-field">
-                        <input class="field mono" id="route-distance" value="500 Ly" inputmode="numeric" autocomplete="off">
+                        <input class="field mono" id="route-distance" value="100" placeholder="100" inputmode="numeric" autocomplete="off">
                         <select class="select combo-select" id="route-distance-preset" aria-label="Route distance presets">
                           <option value="" selected>Presets</option>
-                          <option value="10 Ly">10 Ly</option>
-                          <option value="20 Ly">20 Ly</option>
-                          <option value="30 Ly">30 Ly</option>
-                          <option value="40 Ly">40 Ly</option>
-                          <option value="50 Ly">50 Ly</option>
-                          <option value="60 Ly">60 Ly</option>
-                          <option value="70 Ly">70 Ly</option>
-                          <option value="80 Ly">80 Ly</option>
-                          <option value="500 Ly">500 Ly</option>
-                          <option value="1,000 Ly">1,000 Ly</option>
+                          <option value="100">100 Ly</option>
+                          <option value="250">250 Ly</option>
                         </select>
                       </span>
                     </label>
                     <label>
                       <span class="field-label">Station distance</span>
-                      <select class="select" id="station-distance">
-                        <option selected>Any</option>
-                        <option>1,000 ls</option>
-                        <option>5,000 ls</option>
-                      </select>
+                      <input class="field mono" id="station-distance" value="" placeholder="Haul search default" inputmode="numeric">
                     </label>
                   </div>
                   <div class="field-row">
@@ -252,19 +231,14 @@
                       <span class="field-label">Cargo capacity</span>
                       <input class="field mono" id="capacity" value="" inputmode="numeric">
                     </label>
-                    <label>
-                      <span class="field-label">Profit metric</span>
-                      <select class="select" id="metric">
-                        <option selected>Profit / hour</option>
-                        <option>Profit / trip</option>
-                      </select>
-                    </label>
+
                   </div>
                   <div class="field-row">
                     <label>
                       <span class="field-label">Surface stations</span>
                       <select class="select" id="surface-stations">
-                        <option value="no" selected>No</option>
+                        <option value="" selected>Haul search default</option>
+                        <option value="no">No</option>
                         <option value="yes_exclude_odyssey">Yes, exclude Odyssey settlements</option>
                         <option value="yes_with_odyssey">Yes, with Odyssey settlements</option>
                       </select>
@@ -276,8 +250,8 @@
                       <input class="field mono" id="min-supply" value="" inputmode="numeric" autocomplete="off">
                     </label>
                     <label>
-                      <span class="field-label">Min demand</span>
-                      <input class="field mono" id="min-demand" value="" inputmode="numeric" autocomplete="off">
+                      <span class="field-label">Max data age (hours)</span>
+                      <input class="field mono" id="max-age" value="" inputmode="numeric" autocomplete="off">
                     </label>
                   </div>
                   <div class="btn-row">
@@ -365,7 +339,6 @@
               <div class="panel-title" id="results-title">Route results</div>
               <div class="panel-head-actions">
                 <div class="panel-action" id="result-count">Search routes to load results</div>
-                <a class="panel-action panel-link" id="inara-search-link" target="_blank" rel="noopener" hidden>Open in Inara</a>
               </div>
             </div>
             <div class="panel-body">

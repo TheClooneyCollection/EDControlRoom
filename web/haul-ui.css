@@ -2073,3 +2073,7 @@
     white-space: nowrap;
   }
 }
+
+/* Unmapped commodities stay visible, without suggesting that the row can be selected. */
+.route-table tr[aria-disabled="true"] { cursor: default; }
+.route-table tbody[inert] { opacity: 0.55; }

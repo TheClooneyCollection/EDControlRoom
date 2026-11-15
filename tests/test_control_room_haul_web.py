@@ -125,47 +125,28 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         )
         self.assertIn('formatCredits(sessionProfit(haulSession))', html)
 
-    def test_haul_web_search_sends_inara_surface_station_choice(self) -> None:
+    def test_haul_web_search_exposes_eddn_surface_filter(self) -> None:
         html = _haul_web_source()
-
-        # Inara pi4: 1 = No, 2 = Yes (exclude Odyssey stations), 0 = Yes (with Odyssey stations).
         for value in ("no", "yes_exclude_odyssey", "yes_with_odyssey"):
             self.assertIn(f'<option value="{value}"', html)
-        self.assertIn('use_surface_stations: document.getElementById("surface-stations").value', html)
-        self.assertIn('setSelectValue("surface-stations", WEB_DEFAULTS.surfaceStations)', html)
+        self.assertIn('surface: "surface-stations"', html)
+        self.assertIn('setSelectValue("surface-stations", "")', html)
 
-    def test_haul_web_links_the_inara_search_next_to_the_result_count(self) -> None:
+    def test_haul_web_search_exposes_only_eddn(self) -> None:
         html = _haul_web_source()
+        self.assertNotIn('id="inara-search-link"', html)
+        self.assertNotIn('command.search_haul_routes', html)
+        self.assertIn('/api/eddn-routes', html)
+        self.assertIn('"ship_range", "1"', html)
 
-        self.assertIn('id="inara-search-link" target="_blank" rel="noopener" hidden>Open in Inara</a>', html)
-        self.assertIn('setInaraSearchLink(result.query_url || "");', html)
-        self.assertIn('setResultCount("Search failed");\n          setInaraSearchLink("");', html)
-        self.assertIn("link.hidden = !url;", html)
-
-    def test_haul_web_route_distance_matches_inara_defaults_and_allows_custom_input(self) -> None:
+    def test_haul_web_route_length_offers_global_presets(self) -> None:
         html = _haul_web_source()
-
-        self.assertIn('id="route-distance" value="500 Ly" inputmode="numeric"', html)
-        self.assertIn('id="route-distance-preset" aria-label="Route distance presets"', html)
-        self.assertIn('max_route_distance_ly: document.getElementById("route-distance").value', html)
-        self.assertIn('setElementValue("route-distance", routeDistanceLabel(WEB_DEFAULTS.maxRouteDistanceLy))', html)
-        self.assertIn('setSelectValue("route-distance-preset", "")', html)
-        self.assertIn('document.getElementById("route-distance-preset").addEventListener("change"', html)
+        self.assertIn('Route length (Ly)', html)
+        self.assertIn('id="route-distance" value="100"', html)
+        for option in (100, 250):
+            self.assertIn(f'<option value="{option}">{option} Ly</option>', html)
+        self.assertIn('max_route_ly: "route-distance"', html)
         self.assertIn('document.getElementById("route-distance").value = value;', html)
-        self.assertIn('return raw.toLowerCase().includes("ly") ? raw : `${raw} Ly`;', html)
-        for option in (
-            "10 Ly",
-            "20 Ly",
-            "30 Ly",
-            "40 Ly",
-            "50 Ly",
-            "60 Ly",
-            "70 Ly",
-            "80 Ly",
-            "500 Ly",
-            "1,000 Ly",
-        ):
-            self.assertIn(f'<option value="{option}">{option}</option>', html)
 
     def test_haul_web_active_routine_shows_secondary_route_context(self) -> None:
         html = _multi_haul_web_source()
@@ -302,14 +283,11 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn("route_profit_per_trip: route.profitTrip !== \"-\" ? route.profitTrip : \"\"", html)
         self.assertIn("apiRoute: { ...route, index, from_manual_landing: buyManualLanding, to_manual_landing: sellManualLanding }", html)
 
-    def test_haul_web_hydrates_do_not_undo_operator_edits_or_route_choice(self) -> None:
+    def test_haul_web_hydrates_update_search_placeholders(self) -> None:
         html = _haul_web_source()
-
         self.assertIn("if (hydratedRouteKey !== lastHydratedRouteKey) {", html)
-        self.assertIn('syncHydratedField("origin", hydratedCurrentSystem);', html)
-        self.assertIn('syncHydratedField("capacity", ship.cargo_capacity);', html)
-        self.assertIn("if (element === document.activeElement) {", html)
-        self.assertIn('if (element.value === "" || element.value === previous) {', html)
+        self.assertIn('document.getElementById("origin").placeholder = hydratedCurrentSystem;', html)
+        self.assertIn('document.getElementById("capacity").placeholder = String(ship.cargo_capacity);', html)
         self.assertNotIn('document.getElementById("capacity").value = ship.cargo_capacity;', html)
 
     def test_haul_web_copies_selected_route_and_imports_a_pasted_one_without_searching(self) -> None:
@@ -382,15 +360,12 @@ class ControlRoomHaulWebTests(unittest.TestCase):
         self.assertIn('data-label="Profit / trip">${escapeHtml(route.profitTrip || "-")}</td>', html)
         self.assertIn('colspan="8"', html)
 
-    def test_haul_web_route_table_compares_inara_and_edcr_profit_per_hour(self) -> None:
+    def test_haul_web_route_table_uses_eddn_estimates(self) -> None:
         html = _haul_web_source()
-
-        for hook in ('data-label="Profit / hr">${profitCompareCell(route)}</td>', '"/api/haul-trips"',
-                     "Inara: ${escapeHtml(inaraHour + inaraTrip)}",
-                     "EDCR: ${perHourLabel(trip.profit_per_hour)} ${minutesPerTrip(trip.trip_s)} (${edcrShipLabel()})",
-                     'missing ${trip.missing.join(", ")',
-                     "window.EDCRNode.addTo(url.searchParams)"):
-            self.assertIn(hook, html)
+        self.assertIn('data-label="Profit / hr">${profitCompareCell(route)}</td>', html)
+        self.assertIn('route.edcrTrip || edcrTrips.get(routeKey(route))', html)
+        self.assertNotIn('Inara: ${', html)
+        self.assertIn('commodity name unknown', html)
 
     def test_haul_web_failed_search_says_why_in_the_results_table(self) -> None:
         html = _haul_web_source()
