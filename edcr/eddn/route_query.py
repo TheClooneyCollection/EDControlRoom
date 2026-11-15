@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-from edcr.eddn.routes import FoundRoute, RouteFilters, RouteLeg, TimeModel, find_routes, load_route_markets
+from edcr.eddn.routes import FoundRoute, RouteFilters, RouteLeg, TimeModel, find_routes, load_route_market_selection
 from edcr.inara.trade_routes import parse_surface_stations
 
 DEFAULT_ROUTE_JUMPS = 4
@@ -174,7 +174,7 @@ def run_route_query(
         ).fetchone() if query.system else None
         if near and origin is None:
             raise RouteQueryError(f"{query.system} has no coordinates in the EDDN database yet.")
-        markets = load_route_markets(db, query.filters, now=now)
+        markets, left_out = load_route_market_selection(db, query.filters, now=now)
     finally:
         db.close()
     routes = find_routes(
@@ -191,6 +191,7 @@ def run_route_query(
         "query": asdict(query),
         "generated_at": now,
         "markets_considered": len(markets),
+        "markets_left_out": left_out,
         # The system each station's `ly_from_system` is measured from; None when it has no coordinates.
         "distance_system": query.system if origin is not None else None,
         "routes": [route_payload(route, display_names=display_names, now=now, origin=origin) for route in routes],

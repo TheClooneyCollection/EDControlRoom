@@ -18,7 +18,7 @@ from edcr.control_room.server.broker import InMemoryObserverSessionBroker
 from edcr.eddn.listener import apply_payload
 from edcr.eddn.messages import CarrierSighting
 from edcr.eddn.route_query import parse_route_query, run_route_query
-from edcr.eddn.routes import RouteFilters, TimeModel, find_routes, load_route_markets
+from edcr.eddn.routes import RouteFilters, TimeModel, find_routes, load_route_market_selection, load_route_markets
 from edcr.eddn.store import EddnStore
 from edcr.trip_time_fit import TripTimeModels
 from tests.shared_loop import TestClient
@@ -80,6 +80,44 @@ class EddnRouteFinderTests(unittest.TestCase):
         self.assertEqual((route.inbound.commodity, route.inbound.tons, route.inbound.profit), ("silver", 500, 600_000))
         self.assertEqual(route.profit_per_trip, 4_011_000)
         self.assertEqual(route.profit_per_hour, round(4_011_000 * 3600 / route.trip_s))
+
+    def test_market_counts_explain_each_exclusion_once_and_supply_only_filters_exports(self) -> None:
+        store = galaxy()
+        self.addCleanup(store.close)
+        selling = [price("gold", sell=12000, demand=1)]
+        add_station(store, 6, "Pergamon Workshop", "Alpha", 10.0, "Coriolis", LARGE, selling, dist_ls=1279.7)
+        add_station(store, 7, "Surface", "Alpha", 10.0, "CraterPort", LARGE, selling)
+        add_station(store, 8, "Depot", "Alpha", 10.0, "SpaceConstructionDepot", LARGE, selling)
+        add_station(store, 9, "Closed", "Alpha", 10.0, "FleetCarrier", LARGE, selling, access="friends")
+        add_station(store, 10, "Departed", "Alpha", 10.0, "FleetCarrier", LARGE, selling)
+        store.save([CarrierSighting(callsign="Departed", system_address=1000, timestamp=NOW + 1, complete=False)])
+        add_station(store, 11, "No prices", "Alpha", 10.0, "Coriolis", LARGE, [price("gold")])
+        add_station(store, 12, "Boundary", "Alpha", 10.0, "Coriolis", LARGE, selling, dist_ls=1000)
+        # An old market fails age even though its coordinates and station facts are missing too.
+        apply_payload(store, frame(commodity_envelope(market_id=13, station="Old", timestamp="2026-11-10T05:59:59Z")))
+        unknown = commodity_envelope(market_id=14, station="Unknown", commodities=selling)
+        unknown["message"]["systemName"] = "Uncharted"
+        apply_payload(store, frame(unknown))
+        # A low-supply export still has an import price: the market remains eligible.
+        add_station(store, 15, "Low stock", "Alpha", 10.0, "Coriolis", LARGE,
+                    [price("gold", buy=9000, stock=999, sell=12000)])
+        filters = dict(max_age_s=8 * 3600, max_station_distance_ls=1000, min_supply=1000)
+        markets, left_out = load_route_market_selection(store._db, RouteFilters(**filters), now=NOW)
+        self.assertEqual(left_out, {"age": 1, "coordinates": 1, "carriers": 3, "construction_depot": 1,
+                                    "pad": 1, "surface": 1, "station_distance": 1, "no_trade_prices": 1})
+        self.assertEqual(len(markets) + sum(left_out.values()), 15)
+        low_stock = next(m for m in markets if m.station == "Low stock")
+        self.assertEqual(low_stock.exports, {})
+        self.assertEqual(low_stock.imports, {"gold": (12000, 0)})
+        self.assertIn("Boundary", {m.station for m in markets})
+        _, carriers = load_route_market_selection(store._db, RouteFilters(include_carriers=True, **filters), now=NOW)
+        self.assertNotIn("carriers", carriers)
+        self.assertEqual((carriers["carrier_access"], carriers["departed_carrier"]), (1, 1))
+        any_ls = {**filters, "max_station_distance_ls": None}
+        unrestricted, relaxed = load_route_market_selection(store._db, RouteFilters(**any_ls), now=NOW)
+        self.assertEqual(len(unrestricted) - len(markets), left_out["station_distance"])
+        self.assertIn("Pergamon Workshop", {m.station for m in unrestricted})
+        self.assertNotIn("station_distance", relaxed)
 
     def test_more_jumps_rank_by_profit_per_hour_and_near_view_needs_station_1_close(self) -> None:
         store = galaxy()
@@ -226,6 +264,8 @@ class EddnRoutesApiTests(unittest.TestCase):
                 display_names={"gold": "Gold"},
                 now=NOW,
             )
+            self.assertEqual(payload["markets_considered"], 3)
+            self.assertEqual(payload["markets_left_out"], {"pad": 1, "carriers": 1})
             [route] = payload["routes"]
             self.assertEqual((route["outbound"]["name"], route["inbound"]["name"]), ("Gold", "silver"))
             self.assertEqual({key: route["station_1"][key] for key in ("is_carrier", "carrier_access", "carrier_name")},

@@ -213,6 +213,27 @@ function timeModelLabel(timeModel) {
   return timeModel.source === "fitted" ? "configured trip time (too few legs to fit)" : "configured trip time";
 }
 
+// Counts use the first failed market filter, before route pairing and ranking.
+function marketsLeftOutLabel(payload) {
+  const filters = payload.query.filters;
+  const labels = {
+    age: `older than ${count(filters.max_age_s / 3600)} h`,
+    coordinates: "missing coordinates",
+    carriers: "fleet carriers excluded",
+    construction_depot: "construction depots",
+    departed_carrier: "departed carriers",
+    carrier_access: "carriers not open to all",
+    pad: `pad smaller than ${filters.min_pad} or unknown`,
+    surface: "surface stations excluded",
+    station_distance: `over ${count(filters.max_station_distance_ls)} Ls`,
+    no_trade_prices: `no usable buy/sell prices (min export supply ${count(filters.min_supply)})`,
+  };
+  return Object.entries(payload.markets_left_out || {})
+    .filter(([, total]) => total > 0)
+    .map(([reason, total]) => `${count(total)} left out: ${labels[reason] || reason}`)
+    .join("; ");
+}
+
 function renderRoutes(payload) {
   const table = document.getElementById("route-table");
   const query = payload.query;
@@ -221,7 +242,8 @@ function renderRoutes(payload) {
   const where = query.view === "near" ? `near ${query.system}${away}` : `anywhere${away}`;
   const source = payload.hub ? ` via hub ${payload.hub}` : "";
   const timing = timeModelLabel(payload.time_model);
-  setText("routes-status", `${payload.routes.length} routes ${where}, ${reach}, from ${count(payload.markets_considered)} markets${source}${timing ? `; ${timing}` : ""}`);
+  const leftOut = marketsLeftOutLabel(payload);
+  setText("routes-status", `${payload.routes.length} routes ${where}, ${reach}, from ${count(payload.markets_considered)} markets${source}${leftOut ? `; ${leftOut}` : ""}${timing ? `; ${timing}` : ""}`);
   if (!payload.routes.length) {
     table.innerHTML = `<p class="empty-note">No profitable round trips match these filters.</p>`;
     return;

@@ -8,6 +8,7 @@ lists a sell price for, even its own exports showing a demand of 1.
 from __future__ import annotations
 
 import math
+from collections import Counter
 import sqlite3
 from dataclasses import dataclass, field
 from typing import Iterable
@@ -133,6 +134,21 @@ class FoundRoute:
 
 
 def load_route_markets(db: sqlite3.Connection, filters: RouteFilters, *, now: float) -> list[RouteMarket]:
+    return load_route_market_selection(db, filters, now=now)[0]
+
+
+def load_route_market_selection(
+    db: sqlite3.Connection, filters: RouteFilters, *, now: float
+) -> tuple[list[RouteMarket], dict[str, int]]:
+    """Return eligible markets and first-failing-filter counts (each market counted once).
+
+    Age uses the market_updated_at index without joining stale rows. Counts describe
+    all stored markets, before route distance, origin and profitability selection.
+    """
+    left_out: Counter[str] = Counter()
+    stale = db.execute("SELECT COUNT(*) FROM market WHERE updated_at < ?", (now - filters.max_age_s,)).fetchone()[0]
+    if stale:
+        left_out["age"] = stale
     rows = db.execute(
         """
         SELECT m.market_id, m.station_name, m.system_name, m.is_carrier, m.updated_at,
@@ -159,23 +175,35 @@ def load_route_markets(db: sqlite3.Connection, filters: RouteFilters, *, now: fl
         # A newer commodity message rewrites market.is_carrier from the name alone, so a
         # named carrier ("VAON") loses the flag; its station type still says FleetCarrier.
         is_carrier = bool(is_carrier) or station_type == "FleetCarrier"
-        if x is None or (is_carrier and not filters.include_carriers) or "ConstructionDepot" in station_type:
+        if x is None:
+            left_out["coordinates"] += 1
+            continue
+        if is_carrier and not filters.include_carriers:
+            left_out["carriers"] += 1
+            continue
+        if "ConstructionDepot" in station_type:
+            left_out["construction_depot"] += 1
             continue
         if is_carrier and carrier_departed(
             system, updated_at, address=address, station_system=station_system, station_at=station_at,
             seen_address=seen_address, seen_at=seen_at, scanned_at=scanned_at,
         ):
+            left_out["departed_carrier"] += 1
             continue
         access = (access or "") if is_carrier else ""
         if access and access != "all" and filters.carriers_open_only:
+            left_out["carrier_access"] += 1
             continue
         pad = max_pad or _TYPE_PADS.get(station_type, "")
         if PAD_ORDER.get(pad, 0) < PAD_ORDER[filters.min_pad]:
+            left_out["pad"] += 1
             continue
         is_surface = station_type in SURFACE_TYPES
         if is_surface and not filters.include_surface:
+            left_out["surface"] += 1
             continue
         if filters.max_station_distance_ls is not None and dist_ls is not None and dist_ls > filters.max_station_distance_ls:
+            left_out["station_distance"] += 1
             continue
         markets[market_id] = RouteMarket(
             market_id=market_id, station=station, system=system, x=x, y=y, z=z,
@@ -192,7 +220,12 @@ def load_route_markets(db: sqlite3.Connection, filters: RouteFilters, *, now: fl
             market.exports[commodity] = (buy, supply)
         if sell > 0:
             market.imports[commodity] = (sell, demand)
-    return [market for market in markets.values() if market.exports or market.imports]
+    eligible = [market for market in markets.values() if market.exports or market.imports]
+    # Supply filters exports, never imports. An otherwise usable market is only
+    # dropped here when it has neither imports nor exports that meet the query.
+    if len(eligible) < len(markets):
+        left_out["no_trade_prices"] = len(markets) - len(eligible)
+    return eligible, dict(left_out)
 
 
 def carrier_departed(
