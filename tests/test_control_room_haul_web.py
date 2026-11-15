@@ -104,6 +104,17 @@ class ControlRoomHaulWebTests(unittest.TestCase):
             html,
         )
 
+    def test_haul_web_projected_rate_uses_session_profit_and_stays_visible_before_a_sale(self) -> None:
+        html = _haul_web_source()
+
+        for hook in ('<div class="metric-label">Projected</div>', 'id="routine-projected"',
+                     'Number(haulSession.session_elapsed_s || 0)',
+                     'sessionProfit(haulSession) / elapsed * 3600',
+                     'formatCredits(rate).replace(/ CR$/, "/h")', '- (no sale yet)',
+                     'class="mini-metrics session-metrics"',
+                     'repeat(auto-fit, minmax(min(100%, 180px), 1fr))'):
+            self.assertIn(hook, html)
+
     def test_haul_web_summary_profit_includes_current_run(self) -> None:
         html = _haul_web_source()
 

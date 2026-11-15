@@ -1094,6 +1094,10 @@ let routes = [];
         runs ? formatDuration(Number(haulSession.total_run_elapsed_s || 0) / runs) : "-";
       document.getElementById("routine-current-run").textContent =
         `${formatCredits(haulSession.current_run_profit || 0)} / ${formatCredits(haulSession.accumulated_profit || 0)}`;
+      const elapsed = Number(haulSession.session_elapsed_s || 0);
+      const rate = elapsed > 0 ? sessionProfit(haulSession) / elapsed * 3600 : 0;
+      document.getElementById("routine-projected").textContent =
+        rate ? `~${formatCredits(rate).replace(/ CR$/, "/h")}` : "- (no sale yet)";
       document.getElementById("routine-cargo-moved").textContent =
         `${Number(haulSession.cargo_moved_t || 0).toLocaleString()} t`;
     }

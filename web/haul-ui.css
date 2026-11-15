@@ -1215,6 +1215,10 @@
       gap: 10px;
     }
 
+    .session-metrics {
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+    }
+
     .mini-metrics.run-times {
       margin-top: 10px;
     }
