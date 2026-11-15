@@ -19,10 +19,11 @@ from __future__ import annotations
 
 import itertools
 import threading
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any, Callable
 
 from edcr.control_room.server.messages import protocol_message
+from edcr.route_recommend import RouteRecommendations
 from edcr.hub.peer import NodeHello
 from edcr.hub.protocol import LinkReply
 from edcr.hub.voice import CALLOUT_FRAME, VOICE_MUTE_FRAME, callout_text
@@ -43,7 +44,8 @@ NODE_ACTIONS = frozenset({"/api/command", "/api/stop"})
 SLOW_COMMANDS = frozenset({"command.search_haul_routes", "command.dispatch_route_all_in_one",
                            "command.dispatch_spansh_route"})
 # Frames from the hub that belong to the relay.
-HUB_RELAY_FRAMES = frozenset({"channel_open", "channel_close", "channel_command", "read", "act", VOICE_MUTE_FRAME})
+ROUTE_RECOMMENDATION_FRAME = "route_recommendation"
+HUB_RELAY_FRAMES = frozenset({"channel_open", "channel_close", "channel_command", "read", "act", VOICE_MUTE_FRAME, ROUTE_RECOMMENDATION_FRAME})
 # Frames from a peer that belong to the relay.
 RELAY_FRAMES = frozenset({"channel", "read_response", "node_state"})
 
@@ -74,7 +76,9 @@ def node_state(data: object) -> dict[str, Any]:
     page prices trips with the ship's hold and laden range; Routes also needs its current system."""
     ship = getattr(data, "ship", None)
     routine = getattr(data, "routine", None)
+    selected = getattr(data, "selected_trade_route", None)
     return {
+        "selected_route": asdict(selected) if selected is not None else None,
         "current_system": getattr(ship, "system", None) or "",
         "ship": {"id": getattr(ship, "ship_id", None), "type": getattr(ship, "ship_type", None),
                  "name": getattr(ship, "ship_name", None), "cargo_capacity": getattr(ship, "cargo_capacity", None),
@@ -287,6 +291,7 @@ class PeerRelay:
         answer_action: Callable[[str, Any], LinkReply],
         state: Callable[[], dict[str, Any]],
         set_muted: Callable[[bool], None],
+        receive_recommendation: Callable[[RouteRecommendations], None],
         run_in_background: Callable[[Callable[[], None]], None],
         log: Callable[[str], None],
     ) -> None:
@@ -296,6 +301,7 @@ class PeerRelay:
         self._answer_read = answer_read
         self._answer_action = answer_action
         self._state = state
+        self._receive_recommendation = receive_recommendation
         self._set_muted = set_muted
         self._muted = False
         self._run_in_background = run_in_background
@@ -346,6 +352,13 @@ class PeerRelay:
         kind = frame.get("type")
         if kind == VOICE_MUTE_FRAME:
             self._mute(frame.get("muted") is True)
+        elif kind == ROUTE_RECOMMENDATION_FRAME:
+            try:
+                recommendation = RouteRecommendations.from_payload(frame["recommendations"])
+            except (KeyError, TypeError, ValueError) as exc:
+                self._log(f"Invalid route recommendation: {exc}")
+            else:
+                self._receive_recommendation(recommendation)
         elif kind == "channel_open":
             self._open(str(frame.get("channel")))
         elif kind == "channel_close":

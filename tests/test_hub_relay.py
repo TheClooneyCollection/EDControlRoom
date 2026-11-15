@@ -137,6 +137,7 @@ class RelayTests(unittest.TestCase):
         self.background = run_now
         # Each mute the hub set on the peer's own callouts.
         self.peer_mutes: list[bool] = []
+        self.recommendations = []
         self.peer_relay = PeerRelay(
             open_session=lambda channel_id: self.peer_app.state.open_node_session(channel_id),
             add_listener=self.peer_broker.add_listener,
@@ -145,6 +146,7 @@ class RelayTests(unittest.TestCase):
             answer_action=lambda path, body: self.peer_app.state.answer_node_action(path, body),
             state=lambda: node_state(peer_data(self.routine)),
             set_muted=self.peer_mutes.append,
+            receive_recommendation=self.recommendations.append,
             run_in_background=lambda work: self.background(work),
             log=self.logs.append,
         )
@@ -158,6 +160,37 @@ class RelayTests(unittest.TestCase):
                                peer_link=self.r.peer, recent_markets_file=self.peer_recent,
                                command_handler=self.commands,
                                journal_dir=self.peer_journals)
+
+    def test_recommendation_link_frame_updates_node_hydrate_and_speaks_once(self):
+        from edcr.route_recommend_node import RecommendationAnnouncer, RecommendationReceiver
+        from edcr.route_recommend import RouteRecommendSettings
+        from edcr.control_room.server.app import _server_hydrate_data
+        from edcr.control_room.server.commands import trade_route_from_payload
+        from tests.test_route_recommend import row, recommendations
+        state = self.peer_broker.server_state
+        hydrated, spoken = [], []
+        receiver = RecommendationReceiver(store=state.set_route_recommendations, current=state.route_recommendations,
+            publish=lambda: hydrated.append(_server_hydrate_data(peer_data(), broker=self.peer_broker)),
+            announcer=RecommendationAnnouncer(settings=RouteRecommendSettings(), time_fn=lambda: 0,
+                announce=lambda message, **values: spoken.append(values)))
+        self.peer_relay._receive_recommendation = receiver.receive
+        self.r.attach()
+        result = recommendations([row()])
+        for _ in range(2):
+            self.assertTrue(self.r.relay.send(PEER_NODE.node_id,
+                {"type": "route_recommendation", "recommendations": result.to_payload()}))
+        self.assertEqual(hydrated[-1].route_recommendations['routes'], result.routes)
+        self.assertEqual(len(spoken), 1)
+        self.assertIsNone(state.selected_trade_route())
+        selected = trade_route_from_payload(row()['trade_route'])
+        reported = node_state(replace(peer_data(), selected_trade_route=selected))
+        self.assertEqual(reported['selected_route']['from_station'], 'A')
+        self.r.relay.send(PEER_NODE.node_id, {"type": "future_unknown_frame"})
+        self.assertTrue(self.r.relay.send(PEER_NODE.node_id, {"type": "voice_mute", "muted": True}))
+        self.assertEqual(self.peer_mutes[-1], True)
+        self.r.drop(self.r.links[-1])
+        self.assertEqual(state.route_recommendations()['routes'], result.routes)
+        self.assertEqual(len(spoken), 1)
 
     def activity(self, text: str) -> None:
         self.peer_broker.publish_activity_log(ActivityLogEntry(entry_id=text, timestamp="2026-11-11T09:00:00Z",
@@ -504,7 +537,7 @@ class RelayTests(unittest.TestCase):
         self.assertEqual({key: first[0]["state"]["ship"][key] for key in ("id", "type", "name")},
                          {"id": 7, "type": "cutter", "name": "Home Run"})
         self.assertEqual(first[1]["state"], {"ship": {"id": 8, "type": "type9", "name": "Lugger", "cargo_capacity": 720,
-                                                      "laden_jump_range_ly": 31.5}, "routine": None, "current_system": "Achenar"})
+                                                      "laden_jump_range_ly": 31.5}, "routine": None, "current_system": "Achenar", "selected_route": None})
         self.assertEqual(hauling[1]["state"]["routine"], "haul")
         self.assertEqual((offline[1]["connected"], offline[1]["state"]), (False, None))
 

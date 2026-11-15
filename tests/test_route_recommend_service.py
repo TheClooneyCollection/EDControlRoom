@@ -99,3 +99,37 @@ class RecommendationServiceTests(unittest.TestCase):
             self.assertIn('Missing buy/sell prices', missing.missing)
         self.assertIsNone(recommendation_inputs('x', SimpleNamespace(), selected_route=None,
             search_defaults={}, time_model=TimeModel(), connection='local'))
+
+
+class PeerRecommendationTests(unittest.TestCase):
+    def test_two_connected_peers_get_their_own_model_and_missing_ship_is_logged_once(self):
+        from edcr.control_room.server.recommendations import PeerRecommendationInputs
+        from edcr.hub.nodes import NodeRegistry
+        from edcr.hub.peer import NodeHello
+        registry = NodeRegistry(NodeHello('hub', 'Hub', '1'), lambda: 0)
+        for name in ('one', 'two', 'unknown'):
+            registry.connect(NodeHello(name, name, '1'))
+        for index, name in enumerate(('one', 'two')):
+            registry.set_state(name, {'current_system': 'Sol', 'ship': {
+                'id': index, 'cargo_capacity': 100 + index, 'laden_jump_range_ly': 10 + index},
+                'selected_route': row(name)['trade_route']})
+        logs, frames = [], []
+        models = {0: TimeModel(docked_s=100), 1: TimeModel(docked_s=200)}
+        peers = PeerRecommendationInputs(nodes=registry.nodes, time_model=models.__getitem__, log=logs.append)
+        nodes = peers.collect({})
+        self.assertEqual([node.time_model.docked_s for node in nodes], [100, 200])
+        self.assertEqual([node.laden_jump_range_ly for node in nodes], [10, 11])
+        now = [0]
+        def deliver(node, result):
+            frames.append((node, result.to_payload()))
+            return True
+        loop = RecommendationLoop(settings=RouteRecommendSettings(), time_fn=lambda: now[0],
+            store_counts=lambda: EddnStoreCounts(0, 0, 0, 0, None, 1), node_inputs=lambda: peers.collect({}),
+            run_query=lambda node, clock: recommendations([row(node.node_id)]), deliver=deliver, log=self.fail)
+        loop.check()
+        now[0] = 300
+        loop.check()
+        self.assertEqual([node for node, payload in frames], ['one', 'two'])
+        self.assertEqual(len(logs), 1)
+        registry.disconnect('two', 1)
+        self.assertEqual([node.node_id for node in peers.collect({})], ['one'])

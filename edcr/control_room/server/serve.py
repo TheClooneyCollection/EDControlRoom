@@ -20,7 +20,7 @@ from edcr.control_room.server.auth import SharedAccessTokenAuth
 from edcr.control_room.protocol.data_messages import hydrate_message
 from edcr.route_recommend_node import RecommendationAnnouncer, RecommendationReceiver
 from edcr.route_recommend_service import RecommendationLoop
-from edcr.control_room.server.recommendations import recommendation_inputs, query_recommendations
+from edcr.control_room.server.recommendations import PeerRecommendationInputs, recommendation_inputs, query_recommendations
 from edcr.haul_search_config import load_haul_search_config
 from edcr.recent_markets import market_items
 from edcr.control_room.server.broker import InMemoryObserverSessionBroker
@@ -45,7 +45,7 @@ from edcr.hub.history import CentralHistory, HubRuns
 from edcr.hub.nodes import HubSide, NodeRegistry, store_link_item
 from edcr.hub.outbox import Outbox
 from edcr.hub.peer import NODE_ID_FILE_NAME, NodeHello, PeerLink, load_node_id, new_node_id, websocket_dialer
-from edcr.hub.relay import HubRelay, PeerRelay, node_state
+from edcr.hub.relay import HubRelay, PeerRelay, ROUTE_RECOMMENDATION_FRAME, node_state
 from edcr.hub.voice import HubVoice, callout_text, node_muter
 from edcr.platform.lan import local_ipv4_interfaces
 from edcr.journal_store import JournalStore
@@ -137,6 +137,7 @@ def serve_observer_mode(
             answer_action=lambda path, body: app.state.answer_node_action(path, body),
             state=lambda: node_state(data_provider()),
             set_muted=mute_own_callouts,
+            receive_recommendation=lambda result: recommendation_receiver.receive(result),
             run_in_background=lambda work: threading.Thread(target=work, name="hub-relay", daemon=True).start(),
             log=hub_logger.info,
         )
@@ -385,18 +386,26 @@ def serve_observer_mode(
         recommend_logger = logging.getLogger("edcr.route_recommend")
         own_id = node.node_id if node is not None else "local"
 
+        peer_inputs = PeerRecommendationInputs(
+            nodes=hub_side.registry.nodes, time_model=lambda ship_id: time_models.active(ship_id).model,
+            log=recommend_logger.info) if hub_side is not None else None
+
         def recommend_nodes():
             data = data_provider()
             ship_id = getattr(getattr(data, "ship", None), "ship_id", None)
             own = recommendation_inputs(own_id, data, selected_route=broker.server_state.selected_trade_route(),
                 search_defaults=load_haul_search_config(), time_model=time_models.active(ship_id).model, connection="local")
-            return [own] if own is not None else []
+            peers = peer_inputs.collect(load_haul_search_config()) if peer_inputs is not None else []
+            return ([own] if own is not None else []) + peers
 
         def deliver_recommendation(node_id, recommendations):
             if stop_background.is_set():
                 return False
-            recommendation_receiver.receive(recommendations)
-            return True
+            if node_id == own_id:
+                recommendation_receiver.receive(recommendations)
+                return True
+            return hub_side.relay.send(node_id, {"type": ROUTE_RECOMMENDATION_FRAME,
+                                                "recommendations": recommendations.to_payload()})
 
         recommend_loop = RecommendationLoop(
             settings=eddn_config.recommend, time_fn=time.time, store_counts=store.counts,

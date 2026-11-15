@@ -5,6 +5,7 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 import sqlite3
 from typing import Any, Mapping
+from collections.abc import Callable
 
 from edcr.control_room.server.route_inputs import with_ship_laden_range
 from edcr.eddn.route_query import parse_route_query, run_route_query
@@ -71,3 +72,31 @@ def query_recommendations(node: RecommendationInputs, *, settings: RouteRecommen
             db.close()
     return recommend(result, selected_route=node.selected_route, estimate_baseline=baseline,
                      settings=settings, generated_at=now)
+
+
+class PeerRecommendationInputs:
+    """Hub-owned snapshots; missing ship state is logged once until it recovers."""
+    def __init__(self, *, nodes: Callable[[], list[dict[str, Any]]],
+                 time_model: Callable[[int | None], TimeModel], log: Callable[[str], None]) -> None:
+        self._nodes, self._model, self._log = nodes, time_model, log
+        self._missing: set[str] = set()
+
+    def collect(self, search_defaults: dict[str, str]) -> list[RecommendationInputs]:
+        result = []
+        for node in self._nodes():
+            if node["local"] or not node["connected"]:
+                continue
+            state = node.get("state") or {}
+            ship = state.get("ship") or {}
+            capacity = ship.get("cargo_capacity")
+            node_id = node["node_id"]
+            if not isinstance(capacity, int) or capacity <= 0:
+                if node_id not in self._missing:
+                    self._log(f"Route recommendations skip {node_id}: ship hold not available")
+                    self._missing.add(node_id)
+                continue
+            self._missing.discard(node_id)
+            result.append(RecommendationInputs(node_id, state.get("current_system") or "", ship.get("id"),
+                capacity, ship.get("laden_jump_range_ly"), state.get("selected_route"), search_defaults,
+                self._model(ship.get("id")), node.get("connected_since") or ""))
+        return result

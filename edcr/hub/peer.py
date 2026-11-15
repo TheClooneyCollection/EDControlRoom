@@ -237,7 +237,7 @@ class PeerLink:
         kind = frame.get("type")
         # Hub pages looking at and driving this node (`edcr.hub.relay.HUB_RELAY_FRAMES`); they arrive
         # only here, on the link this peer dialled to its own hub.
-        if kind in {"channel_open", "channel_close", "channel_command", "read", "act", VOICE_MUTE_FRAME}:
+        if kind in {"channel_open", "channel_close", "channel_command", "read", "act", VOICE_MUTE_FRAME, "route_recommendation"}:
             with self._lock:
                 self._last_contact = self._now()
             self._relay.on_frame(frame)
