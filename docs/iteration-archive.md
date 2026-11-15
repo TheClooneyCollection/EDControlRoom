@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `389`
-- Latest generated iteration number: `522`
+- Generated iteration count: `390`
+- Latest generated iteration number: `523`
 
 ## Iteration 134
 
@@ -11126,7 +11126,7 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - Other `NODE_READS` are not equivalent: route comparison reads node journal/navroute and caches to its broker; route-compare config is node configuration; Spansh caches a route on that node for later execution; journal-ledger reads node-local journals. Left unchanged.
 - Direct hub HTTP queries no longer have a relay deadline. Peer-local searches still depend on the configured search timeout; queries longer than that and external HTTP proxy/client deadlines remain possible. Timing optimization outside this slice is left to integration.
 
-## Iteration 522
+## Iteration 523
 
 - When: `2026-11-15 17:56`
 - Area: `control-room`
