@@ -19,7 +19,7 @@ from edcr.routines._base import (
     _wait_for_event_with_pending,
 )
 from edcr.routines.callbacks import AnnouncementCallback, ProgressCallback
-from edcr.status import read_status
+from edcr.status import ShipStatus, read_status
 from edcr.tts import AnnouncementId
 
 
@@ -472,15 +472,27 @@ def _market_ui_reset(
     return dispatch
 
 
+def _market_docked_failure(status: ShipStatus | None, side: str) -> RoutineResult | None:
+    action = "MarketBuy" if side == "buy" else "MarketSell"
+    if status is None:
+        return _market_error(action, f"cannot confirm docked during {side}: Status.json unavailable")
+    if not status.flags.docked:
+        return _market_error(action, f"undocked during {side}")
+    return None
+
+
 def _open_commodities_market(
     controls: SupportsMarketControls,
     *,
+    read_status_fn: Callable[[], ShipStatus | None],
+    time_fn: Callable[[], float],
+    side: str,
     step_delay_s: float,
     nav_delay_s: float,
     sleeper: Callable[[float], None],
     progress_fn: ProgressCallback,
 ) -> RoutineResult | None:
-    """Reset to the station menu and open the commodities market. Returns a result only on a dispatch failure."""
+    """Open the market only after services focus is confirmed, without a blind Down in the docked menu."""
     dispatch = _market_ui_reset(
         controls,
         step_delay_s=step_delay_s,
@@ -492,12 +504,48 @@ def _open_commodities_market(
 
     progress_fn("Navigating to commodities market...")
 
-    progress_fn("  UI_Select (enter station services)")
-    dispatch = controls.ui_select()
-    if dispatch.status != "ok":
-        return RoutineResult(action=dispatch.action, dispatch=dispatch, details={"phase": "navigate_to_market"})
-    # Station services UI takes a moment to populate after selection
-    sleeper(7.0)
+    # A lost Select leaves Down pointing at Launch. Only retry Select from the
+    # unchanged docked-menu focus, and never navigate until services is confirmed.
+    for attempt in range(3):
+        if attempt:
+            status = read_status_fn()
+            failure = _market_docked_failure(status, side)
+            if failure is not None:
+                return failure
+            if status.gui_focus == 5:
+                break
+            if status.gui_focus != 0:
+                return _market_error("UI_Select", f"Starport Services did not open (GuiFocus {status.gui_focus})")
+        progress_fn("  UI_Select (enter station services)")
+        dispatch = controls.ui_select()
+        if dispatch.status != "ok":
+            return RoutineResult(action=dispatch.action, dispatch=dispatch, details={"phase": "navigate_to_market"})
+        deadline = time_fn() + 10.0
+        while True:
+            status = read_status_fn()
+            failure = _market_docked_failure(status, side)
+            if failure is not None:
+                return failure
+            if status.gui_focus == 5:
+                break
+            remaining = deadline - time_fn()
+            if remaining <= 0:
+                break
+            sleeper(min(0.25, remaining))
+        if status.gui_focus == 5:
+            break
+        if status.gui_focus != 0 or attempt == 2:
+            return _market_error("UI_Select", f"Starport Services did not open (GuiFocus {status.gui_focus})")
+
+    # Focus identifies services, not which page is open. Let its list populate;
+    # Market.json's station check still verifies the market after navigation.
+    sleeper(1.5)
+    status = read_status_fn()
+    failure = _market_docked_failure(status, side)
+    if failure is not None:
+        return failure
+    if status.gui_focus != 5:
+        return _market_error("UI_Select", f"Starport Services did not open (GuiFocus {status.gui_focus})")
 
     for fn, label, delay in [
         (controls.ui_down, "UI_Down (to commodities market)", nav_delay_s),
@@ -589,6 +637,7 @@ def market_buy(
     watcher: SupportsPollEvents,
     *,
     market_path: Path,
+    read_status_fn: Callable[[], ShipStatus | None],
     target: str,
     amount: int | str,
     step_delay_s: float = 1.0,
@@ -610,7 +659,7 @@ def market_buy(
 ) -> RoutineResult:
     return _market_trade(
         controls, watcher,
-        market_path=market_path, target=target, amount=amount, side="buy",
+        market_path=market_path, read_status_fn=read_status_fn, target=target, amount=amount, side="buy",
         step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
         buy_hold_segments=buy_hold_segments,
         sell_quantity_restore_taps=0,
@@ -627,6 +676,7 @@ def market_sell(
     watcher: SupportsPollEvents,
     *,
     market_path: Path,
+    read_status_fn: Callable[[], ShipStatus | None],
     target: str,
     amount: int | str,
     step_delay_s: float = 1.0,
@@ -650,7 +700,7 @@ def market_sell(
 ) -> RoutineResult:
     return _market_trade(
         controls, watcher,
-        market_path=market_path, target=target, amount=amount, side="sell",
+        market_path=market_path, read_status_fn=read_status_fn, target=target, amount=amount, side="sell",
         step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
         buy_hold_segments=buy_hold_segments,
         sell_quantity_restore_taps=sell_quantity_restore_taps,
@@ -667,6 +717,7 @@ def _market_trade(
     watcher: SupportsPollEvents,
     *,
     market_path: Path,
+    read_status_fn: Callable[[], ShipStatus | None],
     target: str,
     amount: int | str,
     side: str,
@@ -691,6 +742,9 @@ def _market_trade(
 
     last_failure: RoutineResult | None = None
     for attempt in range(1, max_attempts + 1):
+        failure = _market_docked_failure(read_status_fn(), side)
+        if failure is not None:
+            return failure
         if attempt > 1:
             progress_fn(
                 f"Retrying {side} of '{target}' "
@@ -704,7 +758,7 @@ def _market_trade(
 
         result = _market_trade_attempt(
             controls, watcher,
-            market_path=market_path, target=target, amount=amount, side=side,
+            market_path=market_path, read_status_fn=read_status_fn, target=target, amount=amount, side=side,
             event_type=event_type,
             step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
             buy_hold_segments=buy_hold_segments,
@@ -744,6 +798,7 @@ def _market_trade_attempt(
     watcher: SupportsPollEvents,
     *,
     market_path: Path,
+    read_status_fn: Callable[[], ShipStatus | None],
     target: str,
     amount: int | str,
     side: str,
@@ -773,8 +828,14 @@ def _market_trade_attempt(
     _ATTEMPTS = 3
     data: dict = {}
     for attempt in range(1, _ATTEMPTS + 1):
+        failure = _market_docked_failure(read_status_fn(), side)
+        if failure is not None:
+            return failure
         navigation_failure = _open_commodities_market(
             controls,
+            read_status_fn=read_status_fn,
+            time_fn=time_fn,
+            side=side,
             step_delay_s=step_delay_s,
             nav_delay_s=nav_delay_s,
             sleeper=sleeper,
@@ -782,6 +843,9 @@ def _market_trade_attempt(
         )
         if navigation_failure is not None:
             return navigation_failure
+        failure = _market_docked_failure(read_status_fn(), side)
+        if failure is not None:
+            return failure
         if skip_station_check:
             if not market_path.exists():
                 return _market_error(event_type, "Market.json not found")

@@ -23,6 +23,7 @@ from edcr.routines.transit import (
     undock_and_route_to_system,
     wait_for_arrival_or_approach_event,
 )
+from edcr.status import read_status
 from edcr.tts import AnnouncementId
 
 
@@ -124,6 +125,7 @@ def _run_sell(ctx: _Ctx, stop: RouteStop) -> RoutineResult:
             runtime.controls,
             runtime.watcher,
             market_path=runtime.market_path,
+            read_status_fn=lambda: read_status(runtime.market_path.parent),
             target=cargo.commodity,
             amount=str(min(available, cargo.amount)),
             step_delay_s=runtime.timing.step_delay_s,
@@ -164,6 +166,7 @@ def _run_buy(ctx: _Ctx, stop: RouteStop) -> RoutineResult:
                 runtime.controls,
                 runtime.watcher,
                 market_path=runtime.market_path,
+                read_status_fn=lambda: read_status(runtime.market_path.parent),
                 target=cargo.commodity,
                 amount=str(remaining),
                 step_delay_s=runtime.timing.step_delay_s,

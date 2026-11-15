@@ -12,6 +12,7 @@ from edcr.control_room.history import now_iso
 from edcr.control_room.interfaces import TradeHost
 from edcr.control_room_state import CommandHistoryEntry
 from edcr.routines import market_buy, market_sell
+from edcr.status import read_status
 
 
 def _parse_amount(s: str) -> int | str | None:
@@ -113,6 +114,7 @@ def cmd_buy(app: TradeHost, rest: str, *, skip_delay: bool = False) -> None:
             controls,
             watcher,
             market_path=market_path,
+            read_status_fn=lambda: read_status(market_path.parent),
             target=target,
             amount=amount,
             step_delay_s=step_delay,
@@ -195,6 +197,7 @@ def sell_item(app: TradeHost, target: str, amount: int | str, *, skip_delay: boo
         fn=lambda: market_sell(
             controls, watcher,
             market_path=market_path,
+            read_status_fn=lambda: read_status(market_path.parent),
             target=target,
             amount=amount,
             step_delay_s=step_delay,
@@ -253,6 +256,7 @@ def sell_all(app: TradeHost, *, skip_delay: bool = False) -> None:
                 result = market_sell(
                     controls, watcher,
                     market_path=market_path,
+                    read_status_fn=lambda: read_status(market_path.parent),
                     target=name,
                     amount="MAX",
                     step_delay_s=step_delay,

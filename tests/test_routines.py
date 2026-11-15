@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from edcr.actions import ActionDispatchResult
 from edcr.binding_lookup import NormalizedBinding
@@ -59,12 +60,14 @@ def undock(*args, **kwargs):
 
 
 def market_buy(*args, **kwargs):
+    kwargs.setdefault("read_status_fn", lambda: SimpleNamespace(gui_focus=5, flags=SimpleNamespace(docked=True)))
     kwargs.setdefault("progress_fn", noop_progress)
     kwargs.setdefault("announce_fn", noop_announce)
     return _market_buy(*args, **kwargs)
 
 
 def market_sell(*args, **kwargs):
+    kwargs.setdefault("read_status_fn", lambda: SimpleNamespace(gui_focus=5, flags=SimpleNamespace(docked=True)))
     kwargs.setdefault("progress_fn", noop_progress)
     kwargs.setdefault("announce_fn", noop_announce)
     return _market_sell(*args, **kwargs)
@@ -78,6 +81,140 @@ def escape_mass_lock(*args, **kwargs):
 def set_gal_map_destination(*args, **kwargs):
     kwargs.setdefault("progress_fn", noop_progress)
     return _set_gal_map_destination(*args, **kwargs)
+
+
+class MarketServicesGateTests(unittest.TestCase):
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.market_path = Path(directory.name) / "Market.json"
+        self.market_path.with_name("Journal.240101000000.01.log").write_text(
+            json.dumps({"event": "Docked", "StationName": "Here", "MarketID": 1}) + "\n", encoding="utf-8")
+        self.market_path.write_text(json.dumps({"StationName": "Here", "MarketID": 1, "Items": [
+            {"Name": "silver", "Category": "Metals", "Stock": 1000, "DemandBracket": 1, "SellPrice": 10},
+        ]}), encoding="utf-8")
+        self.controls = FakeShipControls()
+        self.now = 0.0
+        self.status = SimpleNamespace(gui_focus=5, flags=SimpleNamespace(docked=True))
+
+    def sleep(self, seconds: float) -> None:
+        self.now += seconds
+
+    def trade(self, side: str, **overrides):
+        # Most scenarios only exercise navigation; a successful trade is immediate.
+        options = dict(market_path=self.market_path, target="silver", amount=1,
+                       read_status_fn=lambda: self.status, time_fn=lambda: self.now,
+                       sleeper=self.sleep, step_delay_s=0.0, nav_delay_s=0.0)
+        options.update(overrides)
+        routine = market_buy if side == "buy" else market_sell
+        event = "MarketBuy" if side == "buy" else "MarketSell"
+        watcher = FakeWatcher([[{"event": event, "Type": "silver", "Count": 1}]])
+        return routine(self.controls, watcher, **options)
+
+    def test_lost_services_select_retries_without_down_and_fails_docked_for_buy_and_sell(self) -> None:
+        for side in ("buy", "sell"):
+            with self.subTest(side=side):
+                self.controls.calls.clear()
+                self.now = 0.0
+                self.status.gui_focus = 0
+                result = self.trade(side)
+                self.assertEqual(result.dispatch.status, "error")
+                self.assertEqual(result.dispatch.reason, "Starport Services did not open (GuiFocus 0)")
+                self.assertEqual([call["action"] for call in self.controls.calls],
+                                 ["UI_Back"] * 4 + ["UI_Select"] * 3)
+                self.assertEqual(self.now, 30.0)
+                self.assertTrue(self.status.flags.docked)
+
+    def test_late_services_focus_on_third_poll_settles_before_entering_market(self) -> None:
+        def read_status():
+            self.status.gui_focus = 5 if self.now >= 0.5 else 0
+            return self.status
+
+        down_times = []
+        dispatch_down = self.controls.ui_down
+
+        def down():
+            down_times.append(self.now)
+            return dispatch_down()
+
+        self.controls.ui_down = down
+        result = self.trade("sell", read_status_fn=read_status)
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(result.trigger_event["event"], "MarketSell")
+        self.assertEqual(down_times[0], 2.0)  # Two 0.25 s polls, then the 1.5 s settle.
+        self.assertEqual([call["action"] for call in self.controls.calls[:7]],
+                         ["UI_Back"] * 4 + ["UI_Select", "UI_Down", "UI_Select"])
+
+    def test_unknown_or_other_focus_does_not_retry_select_or_move_to_launch(self) -> None:
+        for focus in (None, 7):
+            with self.subTest(focus=focus):
+                self.controls.calls.clear()
+                self.status.gui_focus = focus
+                result = self.trade("buy")
+                self.assertEqual(result.dispatch.status, "error")
+                self.assertIn(f"GuiFocus {focus}", result.dispatch.reason)
+                self.assertEqual([call["action"] for call in self.controls.calls], ["UI_Back"] * 4 + ["UI_Select"])
+
+    def test_undocking_during_services_wait_or_settle_stops_without_down(self) -> None:
+        for focus in (0, 5):
+            with self.subTest(focus=focus):
+                self.controls.calls.clear()
+                self.status.gui_focus = focus
+                self.status.flags.docked = True
+
+                def leave_station(seconds):
+                    self.sleep(seconds)
+                    self.status.flags.docked = False
+
+                result = self.trade("sell", sleeper=leave_station)
+                self.assertEqual(result.dispatch.reason, "undocked during sell")
+                self.assertEqual([call["action"] for call in self.controls.calls], ["UI_Back"] * 4 + ["UI_Select"])
+
+    def test_undocked_between_station_attempts_stops_before_any_more_presses(self) -> None:
+        self.market_path.write_text('{"StationName": "Previous", "MarketID": 2}', encoding="utf-8")
+        at_undock = []
+
+        def progress(line):
+            if line.startswith("Station check failed"):
+                self.status.flags.docked = False
+                at_undock.extend(self.controls.calls)
+
+        result = self.trade("sell", progress_fn=progress)
+        self.assertTrue(at_undock)
+        self.assertEqual(result.dispatch.reason, "undocked during sell")
+        self.assertEqual(self.controls.calls, at_undock)
+
+    def test_undocked_between_outer_trade_attempts_stops_before_back_or_select(self) -> None:
+        for side in ("buy", "sell"):
+            with self.subTest(side=side):
+                self.controls.calls.clear()
+                self.status.flags.docked = True
+                at_undock = []
+
+                def progress(line):
+                    if line.startswith("Waiting for Market"):
+                        self.status.flags.docked = False
+                        at_undock.extend(self.controls.calls)
+
+                # No journal confirmation, so the outer loop would normally retry.
+                routine = market_buy if side == "buy" else market_sell
+                def poll():
+                    self.now += 0.25
+                    return []
+
+                result = routine(self.controls, SimpleNamespace(poll=poll), market_path=self.market_path,
+                                 target="silver", amount=1, read_status_fn=lambda: self.status,
+                                 time_fn=lambda: self.now, sleeper=self.sleep, step_delay_s=0.0,
+                                 nav_delay_s=0.0, trade_timeout_s=0.0, progress_fn=progress)
+                self.assertTrue(at_undock)
+                self.assertEqual(result.dispatch.reason, f"undocked during {side}")
+                self.assertEqual(self.controls.calls, at_undock)
+
+    def test_missing_status_stops_before_any_input(self) -> None:
+        result = self.trade("buy", read_status_fn=lambda: None)
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertIn("Status.json unavailable", result.dispatch.reason)
+        self.assertEqual(self.controls.calls, [])
 
 
 class RoutinesTests(unittest.TestCase):
