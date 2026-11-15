@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `392`
-- Latest generated iteration number: `525`
+- Generated iteration count: `393`
+- Latest generated iteration number: `526`
 
 ## Iteration 134
 
@@ -11203,3 +11203,23 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - `uv run python3 -m unittest discover -s tests`: 1241 tests / 0.790s, OK (1 skipped), above 0.7446s budget already exceeded on main.
 - Required timing report: suite_status=ok, 1241 tests / 0.706s; largest existing central-history test 0.012s. No unrelated timing edits.
 - Not run against the live game; coordinator owns deployment and forge validation.
+
+## Iteration 526
+
+- When: `2026-11-15 18:24`
+- Area: `haul`
+- Title: `tolerate-market-status-rewrites`
+- Source: [2026-11-15-18-24_____haul_____tolerate-market-status-rewrites.md](iteration-logs/2026-11-15-18-24_____haul_____tolerate-market-status-rewrites.md)
+
+# Tolerate transient market Status.json rewrites
+
+## Changes
+- Market-only `_read_market_status` wraps the existing injected reader, with explicit sleeper/time functions; the public callback signature and `edcr/status.py` remain unchanged.
+- None, JSONDecodeError and OSError mean unknown. Retry every 0.1s until a usable status arrives or a 1s deadline expires; never reuse stale docked/focus values or issue input during that wait.
+- Every new market navigation/docked gate uses this wrapper. Valid undocked state still stops immediately; persistent unknown produces the existing clear unavailable error.
+
+## Validation
+- Behavior cases: one None, JSONDecodeError or OSError during the first services poll followed by focus 5 all complete a sell with no extra Select; persistent None fails after 1s with no inputs.
+- `uv run python3 -m unittest tests/test_routines.py`: 71 tests / 0.024s, OK.
+- Full suite: 1242 tests / 0.768s, OK (1 skipped), above 0.7452s budget; required timing report suite_status=ok / 0.790s. No unrelated optimization.
+- No live run or deployment; follows c5f77d9 on the same branch.

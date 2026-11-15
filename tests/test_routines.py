@@ -210,10 +210,40 @@ class MarketServicesGateTests(unittest.TestCase):
                 self.assertEqual(result.dispatch.reason, f"undocked during {side}")
                 self.assertEqual(self.controls.calls, at_undock)
 
+    def test_services_gate_recovers_from_a_transient_status_rewrite(self) -> None:
+        for blip in (None, json.JSONDecodeError("partial", "{", 1), OSError("rewrite")):
+            with self.subTest(blip=blip):
+                self.controls.calls.clear()
+                blipped = False
+                waits = []
+
+                def read_status():
+                    nonlocal blipped
+                    # The first services poll lands in the game's file rewrite.
+                    if not blipped and self.controls.calls and self.controls.calls[-1]["action"] == "UI_Select":
+                        blipped = True
+                        if isinstance(blip, Exception):
+                            raise blip
+                        return None
+                    return self.status
+
+                def sleep(seconds):
+                    waits.append(seconds)
+                    self.sleep(seconds)
+
+                result = self.trade("sell", read_status_fn=read_status, sleeper=sleep)
+                self.assertTrue(blipped)
+                self.assertEqual(result.dispatch.status, "ok")
+                self.assertEqual(result.trigger_event["event"], "MarketSell")
+                self.assertIn(0.1, waits)
+                self.assertEqual([call["action"] for call in self.controls.calls[:7]],
+                                 ["UI_Back"] * 4 + ["UI_Select", "UI_Down", "UI_Select"])
+
     def test_missing_status_stops_before_any_input(self) -> None:
         result = self.trade("buy", read_status_fn=lambda: None)
         self.assertEqual(result.dispatch.status, "error")
         self.assertIn("Status.json unavailable", result.dispatch.reason)
+        self.assertAlmostEqual(self.now, 1.0)
         self.assertEqual(self.controls.calls, [])
 
 

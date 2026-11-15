@@ -472,6 +472,27 @@ def _market_ui_reset(
     return dispatch
 
 
+def _read_market_status(
+    read_status_fn: Callable[[], ShipStatus | None],
+    *,
+    time_fn: Callable[[], float],
+    sleeper: Callable[[float], None],
+) -> ShipStatus | None:
+    """Allow a short Status.json rewrite window without reusing stale ship state."""
+    deadline = time_fn() + 1.0
+    while True:
+        try:
+            status = read_status_fn()
+        except (json.JSONDecodeError, OSError):
+            status = None
+        if status is not None:
+            return status
+        remaining = deadline - time_fn()
+        if remaining <= 0:
+            return None
+        sleeper(min(0.1, remaining))
+
+
 def _market_docked_failure(status: ShipStatus | None, side: str) -> RoutineResult | None:
     action = "MarketBuy" if side == "buy" else "MarketSell"
     if status is None:
@@ -508,7 +529,7 @@ def _open_commodities_market(
     # unchanged docked-menu focus, and never navigate until services is confirmed.
     for attempt in range(3):
         if attempt:
-            status = read_status_fn()
+            status = _read_market_status(read_status_fn, time_fn=time_fn, sleeper=sleeper)
             failure = _market_docked_failure(status, side)
             if failure is not None:
                 return failure
@@ -522,7 +543,7 @@ def _open_commodities_market(
             return RoutineResult(action=dispatch.action, dispatch=dispatch, details={"phase": "navigate_to_market"})
         deadline = time_fn() + 10.0
         while True:
-            status = read_status_fn()
+            status = _read_market_status(read_status_fn, time_fn=time_fn, sleeper=sleeper)
             failure = _market_docked_failure(status, side)
             if failure is not None:
                 return failure
@@ -540,7 +561,7 @@ def _open_commodities_market(
     # Focus identifies services, not which page is open. Let its list populate;
     # Market.json's station check still verifies the market after navigation.
     sleeper(1.5)
-    status = read_status_fn()
+    status = _read_market_status(read_status_fn, time_fn=time_fn, sleeper=sleeper)
     failure = _market_docked_failure(status, side)
     if failure is not None:
         return failure
@@ -742,7 +763,7 @@ def _market_trade(
 
     last_failure: RoutineResult | None = None
     for attempt in range(1, max_attempts + 1):
-        failure = _market_docked_failure(read_status_fn(), side)
+        failure = _market_docked_failure(_read_market_status(read_status_fn, time_fn=time_fn, sleeper=sleeper), side)
         if failure is not None:
             return failure
         if attempt > 1:
@@ -828,7 +849,7 @@ def _market_trade_attempt(
     _ATTEMPTS = 3
     data: dict = {}
     for attempt in range(1, _ATTEMPTS + 1):
-        failure = _market_docked_failure(read_status_fn(), side)
+        failure = _market_docked_failure(_read_market_status(read_status_fn, time_fn=time_fn, sleeper=sleeper), side)
         if failure is not None:
             return failure
         navigation_failure = _open_commodities_market(
@@ -843,7 +864,7 @@ def _market_trade_attempt(
         )
         if navigation_failure is not None:
             return navigation_failure
-        failure = _market_docked_failure(read_status_fn(), side)
+        failure = _market_docked_failure(_read_market_status(read_status_fn, time_fn=time_fn, sleeper=sleeper), side)
         if failure is not None:
             return failure
         if skip_station_check:
