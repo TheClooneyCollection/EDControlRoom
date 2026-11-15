@@ -10,6 +10,7 @@ let view = "near";
 // Either a jump count (measured with the laden jump range) or a flat light-year range.
 let range = { jumps: 4 };
 let searchRequest = 0;
+let searchTimer = null;
 let shownRoutes = [];
 let lastListener = null;
 let lastSnapshotFetch = null;
@@ -213,6 +214,30 @@ function timeModelLabel(timeModel) {
   return timeModel.source === "fitted" ? "configured trip time (too few legs to fit)" : "configured trip time";
 }
 
+const LEFT_OUT_FIELDS = {
+  station_distance: "route-station-ls", age: "route-age", carriers: "route-carriers",
+  carrier_access: "route-carriers-open", surface: "route-surface"
+};
+const LEFT_OUT_TOOLTIP = "Each market counts only against its first failed filter; a market over both the age and distance limits counts only as age.";
+
+function renderFilterCounts(counts) {
+  Object.entries(LEFT_OUT_FIELDS).forEach(([reason, field]) => {
+    const hint = document.getElementById(`${field}-left-out`);
+    const total = counts[reason] || 0;
+    hint.textContent = total > 0 ? `${count(total)} left out` : "";
+    hint.title = LEFT_OUT_TOOLTIP;
+  });
+}
+
+function setSearchBusy(busy) {
+  const button = document.getElementById("routes-search");
+  button.disabled = busy;
+  button.setAttribute("aria-busy", String(busy));
+  const table = document.getElementById("route-table");
+  table.classList.toggle("searching", busy);
+  table.inert = busy;
+}
+
 // Counts use the first failed market filter, before route pairing and ranking.
 function marketsLeftOutLabel(payload) {
   const filters = payload.query.filters;
@@ -229,7 +254,7 @@ function marketsLeftOutLabel(payload) {
     no_trade_prices: `no usable buy/sell prices (min export supply ${count(filters.min_supply)})`,
   };
   return Object.entries(payload.markets_left_out || {})
-    .filter(([, total]) => total > 0)
+    .filter(([reason, total]) => total > 0 && !LEFT_OUT_FIELDS[reason])
     .map(([reason, total]) => `${count(total)} left out: ${labels[reason] || reason}`)
     .join("; ");
 }
@@ -242,6 +267,7 @@ function renderRoutes(payload) {
   const where = query.view === "near" ? `near ${query.system}${away}` : `anywhere${away}`;
   const source = payload.hub ? ` via hub ${payload.hub}` : "";
   const timing = timeModelLabel(payload.time_model);
+  renderFilterCounts(payload.markets_left_out || {});
   const leftOut = marketsLeftOutLabel(payload);
   setText("routes-status", `${payload.routes.length} routes ${where}, ${reach}, from ${count(payload.markets_considered)} markets${source}${leftOut ? `; ${leftOut}` : ""}${timing ? `; ${timing}` : ""}`);
   if (!payload.routes.length) {
@@ -293,14 +319,30 @@ async function search() {
   params.surface = document.getElementById("route-surface").checked ? "yes" : "no";
   params.carriers = document.getElementById("route-carriers").checked ? "yes" : "no";
   params.carrier_access = document.getElementById("route-carriers-open").checked ? "all" : "any";
-  setText("routes-status", "Searching");
+  window.clearInterval(searchTimer);
+  renderFilterCounts({});
+  setSearchBusy(true);
+  const started = performance.now();
+  const tick = () => {
+    if (request === searchRequest) {
+      setText("routes-status", `Searching… ${Math.floor((performance.now() - started) / 1000)} s`);
+    }
+  };
+  tick();
+  searchTimer = window.setInterval(tick, 1000);
   try {
     const payload = await fetchJson("/api/eddn-routes", params);
     if (request === searchRequest) renderRoutes(payload);
   } catch (error) {
     if (request !== searchRequest) return;
-    setText("routes-status", "Search failed");
+    setText("routes-status", `Search failed: ${error.message}`);
     document.getElementById("route-table").innerHTML = `<p class="empty-note">${escapeHtml(error.message)}</p>`;
+  } finally {
+    if (request === searchRequest) {
+      window.clearInterval(searchTimer);
+      searchTimer = null;
+      setSearchBusy(false);
+    }
   }
 }
 

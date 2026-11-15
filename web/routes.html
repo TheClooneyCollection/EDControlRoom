@@ -29,6 +29,22 @@
       max-width: 100%;
       overflow-x: auto;
     }
+    #route-table.searching {
+      opacity: 0.45;
+      pointer-events: none;
+    }
+    .filter-left-out {
+      display: block;
+      color: var(--text-2);
+      font-size: 11px;
+      font-weight: normal;
+    }
+    .routes-form .filter-left-out {
+      min-height: 1.4em;
+    }
+    .routes-form .spansh-field:not(:has(.filter-left-out)) {
+      padding-bottom: 1.4em;
+    }
     .route-table {
       width: 100%;
       min-width: 760px;
@@ -201,16 +217,18 @@
               <label class="spansh-field">
                 <span class="field-label"><input type="checkbox" id="route-station-ls-on" checked> Max station distance (Ls)</span>
                 <input class="field mono" id="route-station-ls" placeholder="haul_search" autocomplete="off">
+                <span class="filter-left-out" id="route-station-ls-left-out"></span>
               </label>
               <label class="spansh-field">
                 <span class="field-label"><input type="checkbox" id="route-age-on" checked> Max data age (h)</span>
                 <input class="field mono" id="route-age" placeholder="haul_search" inputmode="decimal" autocomplete="off">
+                <span class="filter-left-out" id="route-age-left-out"></span>
               </label>
             </div>
             <div class="routes-tools">
-              <label><input type="checkbox" id="route-surface"> Surface stations</label>
-              <label><input type="checkbox" id="route-carriers"> Fleet carriers</label>
-              <label class="carrier-open" title="Hides carriers known to dock only squadron or friends; carriers whose access is unknown stay, marked access unknown"><input type="checkbox" id="route-carriers-open" checked> Open to all only</label>
+              <label><input type="checkbox" id="route-surface"> Surface stations<span class="filter-left-out" id="route-surface-left-out"></span></label>
+              <label><input type="checkbox" id="route-carriers"> Fleet carriers<span class="filter-left-out" id="route-carriers-left-out"></span></label>
+              <label class="carrier-open" title="Hides carriers known to dock only squadron or friends; carriers whose access is unknown stay, marked access unknown"><input type="checkbox" id="route-carriers-open" checked> Open to all only<span class="filter-left-out" id="route-carriers-open-left-out"></span></label>
               <button class="btn" type="button" id="routes-search">Search</button>
             </div>
             <div class="route-table-scroll" id="route-table">
