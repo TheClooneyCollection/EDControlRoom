@@ -49,7 +49,9 @@ def write_snapshot(db_path: Path, out_dir: Path, *, now: Callable[[], datetime])
             if version not in (0, SCHEMA_VERSION):
                 raise ValueError(f"Unsupported market schema {version}; expected {SCHEMA_VERSION}")
             source.execute("VACUUM INTO ?", (str(frozen),))
-        with closing(sqlite3.connect(frozen.resolve().as_uri() + "?mode=ro", uri=True)) as snapshot:
+        with closing(sqlite3.connect(frozen)) as snapshot:
+            # A store created before SCHEMA_VERSION existed is still 0; the copy always carries the version.
+            snapshot.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             markets, newest = snapshot.execute("SELECT COUNT(*), MAX(updated_at) FROM market").fetchone()
             prices = snapshot.execute("SELECT COUNT(*) FROM price").fetchone()[0]
         compressed = Path(tmp) / filename

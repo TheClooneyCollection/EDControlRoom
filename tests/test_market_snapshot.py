@@ -90,6 +90,10 @@ class MarketSnapshotTests(unittest.TestCase):
             self.assertEqual(manifest['schema'], SCHEMA_VERSION)
             with closing(sqlite3.connect(database)) as db:
                 self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 0)
+            copy = root / "copy.sqlite3"
+            copy.write_bytes(gzip.decompress((root / "out" / manifest['file']).read_bytes()))
+            with closing(sqlite3.connect(copy)) as db:
+                self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
             EddnStore.open(database).close()
             with closing(sqlite3.connect(database)) as db:
                 self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
