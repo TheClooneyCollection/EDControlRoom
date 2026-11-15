@@ -89,6 +89,16 @@ CREATE TABLE IF NOT EXISTS carrier_scan (
 
 
 @dataclass(frozen=True)
+class SnapshotImport:
+    """Rows accepted from a snapshot; carriers sums access, names, sightings and scans."""
+    markets: int
+    prices: int
+    stations: int
+    systems: int
+    carriers: int
+
+
+@dataclass(frozen=True)
 class EddnStoreCounts:
     systems: int
     stations: int
@@ -176,6 +186,96 @@ class EddnStore:
             oldest_market_at=oldest,
             newest_market_at=newest,
         )
+
+    def import_database(self, path: Path, *, min_updated_at: float) -> SnapshotImport:
+        """Merge a frozen database atomically, preserving already pending listener writes.
+
+        Carrier scan membership is represented by matching sighting/scan timestamps.
+        Counts include accepted equal-time facts, just as apply() does.
+        """
+        with self._lock:
+            db = self._db
+            # Pending listener updates belong to the caller, not the import transaction.
+            db.commit()
+            db.execute("ATTACH DATABASE ? AS snapshot", (str(path.resolve(strict=True)),))
+            try:
+                version = db.execute("PRAGMA snapshot.user_version").fetchone()[0]
+                if version != SCHEMA_VERSION:
+                    raise ValueError(f"Unsupported market schema {version}; expected {SCHEMA_VERSION}")
+                db.execute("BEGIN")
+                db.execute("CREATE TEMP TABLE import_markets (market_id INTEGER PRIMARY KEY)")
+                db.execute(
+                    "INSERT INTO import_markets SELECT s.market_id FROM snapshot.market s"
+                    " LEFT JOIN main.market m USING (market_id)"
+                    " WHERE s.updated_at >= ? AND (m.market_id IS NULL OR s.updated_at > m.updated_at)",
+                    (min_updated_at,),
+                )
+                db.execute("DELETE FROM main.price WHERE market_id IN (SELECT market_id FROM import_markets)")
+                markets = db.execute(
+                    "INSERT OR REPLACE INTO main.market SELECT s.* FROM snapshot.market s"
+                    " JOIN import_markets USING (market_id)"
+                ).rowcount
+                prices = db.execute(
+                    "INSERT INTO main.price SELECT s.* FROM snapshot.price s JOIN import_markets USING (market_id)"
+                ).rowcount
+                systems = db.execute(
+                    "INSERT INTO main.system SELECT * FROM snapshot.system WHERE true"
+                    " ON CONFLICT(address) DO UPDATE SET name=excluded.name, x=excluded.x,"
+                    " y=excluded.y, z=excluded.z, updated_at=excluded.updated_at"
+                    " WHERE excluded.updated_at >= system.updated_at"
+                ).rowcount
+                # Capture accepted station facts before upsert, so older facts cannot mark a market.
+                db.execute(
+                    "CREATE TEMP TABLE import_stations AS SELECT s.* FROM snapshot.station s"
+                    " LEFT JOIN main.station t USING (market_id)"
+                    " WHERE t.market_id IS NULL OR s.updated_at >= t.updated_at"
+                )
+                stations = db.execute(
+                    "INSERT INTO main.station SELECT * FROM import_stations WHERE true"
+                    " ON CONFLICT(market_id) DO UPDATE SET system_address=excluded.system_address,"
+                    " system_name=excluded.system_name, name=excluded.name, type=excluded.type,"
+                    " dist_ls=COALESCE(excluded.dist_ls, station.dist_ls),"
+                    " max_pad=CASE WHEN excluded.max_pad != '' THEN excluded.max_pad ELSE station.max_pad END,"
+                    " updated_at=excluded.updated_at"
+                ).rowcount
+                db.execute(
+                    "UPDATE main.market SET is_carrier=1 WHERE market_id IN"
+                    " (SELECT market_id FROM import_stations WHERE type='FleetCarrier'"
+                    " OR name GLOB '[A-Z0-9][A-Z0-9][A-Z0-9]-[A-Z0-9][A-Z0-9][A-Z0-9]')"
+                )
+                carriers = db.execute(
+                    "INSERT INTO main.carrier_access SELECT * FROM snapshot.carrier_access WHERE true"
+                    " ON CONFLICT(market_id) DO UPDATE SET access=excluded.access, updated_at=excluded.updated_at"
+                    " WHERE excluded.updated_at >= carrier_access.updated_at"
+                ).rowcount
+                carriers += db.execute(
+                    "INSERT INTO main.carrier_name SELECT * FROM snapshot.carrier_name WHERE true"
+                    " ON CONFLICT(callsign) DO UPDATE SET name=excluded.name, updated_at=excluded.updated_at"
+                    " WHERE excluded.name != carrier_name.name AND excluded.updated_at >= carrier_name.updated_at"
+                ).rowcount
+                carriers += db.execute(
+                    "INSERT INTO main.carrier_seen SELECT * FROM snapshot.carrier_seen WHERE true"
+                    " ON CONFLICT(callsign) DO UPDATE SET system_address=excluded.system_address, seen_at=excluded.seen_at"
+                    " WHERE excluded.seen_at > carrier_seen.seen_at AND"
+                    " (excluded.system_address != carrier_seen.system_address OR"
+                    " excluded.seen_at >= carrier_seen.seen_at + ? OR EXISTS"
+                    " (SELECT 1 FROM snapshot.carrier_scan s WHERE s.system_address=excluded.system_address"
+                    " AND s.scanned_at=excluded.seen_at))", (_SIGHTING_REFRESH_S,),
+                ).rowcount
+                carriers += db.execute(
+                    "INSERT INTO main.carrier_scan SELECT * FROM snapshot.carrier_scan WHERE true"
+                    " ON CONFLICT(system_address) DO UPDATE SET scanned_at=excluded.scanned_at"
+                    " WHERE excluded.scanned_at > carrier_scan.scanned_at"
+                ).rowcount
+                db.execute("DROP TABLE import_stations")
+                db.execute("DROP TABLE import_markets")
+                db.commit()
+                return SnapshotImport(markets, prices, stations, systems, carriers)
+            except BaseException:
+                db.rollback()
+                raise
+            finally:
+                db.execute("DETACH DATABASE snapshot")
 
     def _apply_market(self, snapshot: MarketSnapshot) -> bool:
         if snapshot.carrier_access:

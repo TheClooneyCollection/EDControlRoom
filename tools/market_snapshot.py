@@ -1,4 +1,4 @@
-"""Write or publish a compressed market snapshot and manifest."""
+"""Write, publish or fetch a compressed market snapshot and manifest."""
 from __future__ import annotations
 
 import argparse
@@ -8,13 +8,17 @@ import os
 from dataclasses import replace
 from pathlib import Path
 import sys
-from time import perf_counter
+from time import perf_counter, time
+from contextlib import closing
+from urllib.request import urlopen
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from edcr.market_snapshot import write_snapshot
+from edcr.market_snapshot import fetch_and_import, write_snapshot
+from edcr.eddn.store import EddnStore
+from edcr.config import EddnConfig
 from edcr.market_publish import PublishSettings, Upload, boto3_uploader, publish
 
 
@@ -29,9 +33,23 @@ def main(argv: list[str] | None) -> int:
     publishing.add_argument("--work-dir", type=Path)
     publishing.add_argument("--keep", type=int)
     publishing.add_argument("--dry-run", action="store_true")
+    fetching = commands.add_parser("fetch", help="Download and merge a market snapshot")
+    fetching.add_argument("manifest_url")
+    fetching.add_argument("db_path", type=Path)
+    fetching.add_argument("--max-age-days", type=float, default=EddnConfig().max_age_days)
     args = parser.parse_args(argv)
     started = perf_counter()
     try:
+        if args.command == "fetch":
+            with closing(EddnStore.open(args.db_path)) as store:
+                result = fetch_and_import(args.manifest_url, store, urlopen=urlopen, now=time,
+                                          max_age_s=args.max_age_days * 86400, known_file=None)
+            assert result is not None
+            age = time() - datetime.fromisoformat(result.created_at.replace("Z", "+00:00")).timestamp()
+            print(f"{result.file}: {result.bytes / 1_000_000:.2f} MB, snapshot age {age / 3600:.1f} h, "
+                  f"imported {result.counts.markets} markets, {result.counts.prices} prices, "
+                  f"{result.seconds:.3f} seconds")
+            return 0
         if args.command == "write":
             manifest = write_snapshot(args.db_path, args.out_dir, now=lambda: datetime.now(timezone.utc))
         else:
