@@ -23,6 +23,8 @@ from edcr.eddn.messages import (
     is_carrier_station,
 )
 
+SCHEMA_VERSION = 1
+
 _SIGHTING_REFRESH_S = 600.0
 
 _SCHEMA = """
@@ -100,6 +102,8 @@ class EddnStore:
     def __init__(self, connection: sqlite3.Connection) -> None:
         self._db = connection
         self._db.executescript(_SCHEMA)
+        if self._db.execute("PRAGMA user_version").fetchone()[0] == 0:
+            self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         # The listener thread writes while other threads read counts through the same connection.
         self._lock = threading.RLock()
 
