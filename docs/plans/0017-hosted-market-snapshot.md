@@ -10,6 +10,8 @@ A fresh install opens an empty market DB (`.eddn_markets.sqlite3`), so `/routes`
 
 Measured on a hub DB, 2026-11-13: 18,985 markets, 1.56M prices, all within the 7 day `max_age_days`, 7,645 updated in the last 24 hours. `VACUUM INTO` gives 70 MB; gzip -9 gives 27 MB, zstd -19 gives 21 MB.
 
+Measured again with the step 1 tool on the same hub DB, 2026-11-15: 24,597 markets, 2.03M prices, 35.5 MB gzip, 6.8 s read-only against the live WAL file while the hub kept writing.
+
 ## Decisions (confirmed with the user)
 
 - A VPS runs the listener and publishes; Cloudflare R2 stores and serves the snapshot. Downloads go out through Cloudflare, not the VPS.
@@ -72,7 +74,7 @@ Measured on a hub DB, 2026-11-13: 18,985 markets, 1.56M prices, all within the 7
 
 ## Open points
 
-- How often to publish: hourly is the proposal (about 650 MB a day uploaded from the VPS; every 2 to 3 hours if its traffic allowance is tight).
+- How often to publish, resolved 2026-11-15: hourly (about 650 MB a day uploaded from the VPS), see Decisions. Revisit only if the VPS traffic allowance turns out tight.
 - Client traffic resolved 2026-11-15: refresh every 3 h by default only without a listener (about 216 MB/day at 27 MB per snapshot); with a listener, only the startup gap fetch described in Decisions.
 
 ## Validation
