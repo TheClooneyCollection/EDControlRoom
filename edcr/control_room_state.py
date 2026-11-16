@@ -38,6 +38,7 @@ class ControlRoomState:
     session_expected_profit_per_trip_text: str = ""
     selected_trade_route: TradeRoute | None = None
     running_trade_route: TradeRoute | None = None
+    haul_phase_times: dict[str, Any] = field(default_factory=dict)
 
 
 _LEGACY_HAUL_KEYS = frozenset({"commodity", "buy_station", "sell_station", "buy_system", "sell_system"})
@@ -136,6 +137,7 @@ def load_control_room_state(path: Path) -> ControlRoomState:
     running_trade_route = _trade_route_from_payload(raw.get("running_trade_route"))
 
     return ControlRoomState(
+        haul_phase_times=raw.get("haul_phase_times") if isinstance(raw.get("haul_phase_times"), dict) else {},
         haul_current_run=raw.get("haul_current_run"),
         haul_pending_runs=raw.get("haul_pending_runs", []),
         default_haul={str(key): str(value) for key, value in default_haul.items()},
@@ -163,6 +165,7 @@ def load_control_room_state(path: Path) -> ControlRoomState:
 def save_control_room_state(path: Path, state: ControlRoomState, write_text: Callable[[Path, str], None]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
+        "haul_phase_times": state.haul_phase_times,
         "haul_current_run": state.haul_current_run,
         "haul_pending_runs": state.haul_pending_runs,
         "default_haul": state.default_haul,

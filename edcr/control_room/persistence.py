@@ -14,6 +14,7 @@ from edcr.control_room_state import (
     save_control_room_state,
 )
 
+from edcr.haul_phase_times import PhaseTimes
 from edcr.haul_stats_cache import TodayHaulCache
 from edcr.haul_history import abort_run, append_run, snapshot_duration, utc_timestamp
 
@@ -108,6 +109,7 @@ def clear_session_stats(app: PersistenceHost) -> None:
     now = now_fn() if callable(now_fn) else 0.0
     stats.session_started_at = now if stats.active and not stats.paused else None
     stats.session_elapsed_s = 0.0
+    stats.phase_times.reset_session()
     stats.session_active = True
     stats.accumulated_profit = 0
     stats.cargo_moved_t = 0
@@ -145,6 +147,7 @@ def _restore_persisted_session(app: PersistenceHost) -> None:
     stats = app._haul_stats
     now_fn = app._time_fn
     now = now_fn() if callable(now_fn) else 0.0
+    stats.phase_times = PhaseTimes.restore(saved.haul_phase_times)
     stats.session_elapsed_s = saved.session_elapsed_seconds
     stats.session_active = saved.session_active
     if saved.session_active and stats.active and not stats.paused:
@@ -170,6 +173,7 @@ def _capture_persisted_session(app: PersistenceHost) -> None:
     if stats.session_started_at is not None:
         session_elapsed = max(0.0, now - stats.session_started_at)
     snapshot_duration(stats, now)
+    saved.haul_phase_times = stats.phase_times.checkpoint(session_elapsed)
     saved.haul_current_run = stats.current_run
     saved.haul_pending_runs = stats.pending_runs
     saved.session_profit = stats.accumulated_profit + stats.current_run_profit

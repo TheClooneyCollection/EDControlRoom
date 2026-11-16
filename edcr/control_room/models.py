@@ -5,6 +5,7 @@ from typing import Any
 
 from edcr.control_room_state import CommandHistoryEntry
 from edcr.inara.trade_routes import TradeRoute
+from edcr.haul_phase_times import PhaseTimes
 
 
 @dataclass
@@ -78,6 +79,7 @@ class HaulStats:
     suspended: bool = False
     # Track only: the commander flies and trades by hand; stats come from the journal, no routine runs.
     tracking: bool = False
+    phase_times: PhaseTimes = field(default_factory=PhaseTimes)
 
 
 @dataclass

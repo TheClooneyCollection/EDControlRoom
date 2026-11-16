@@ -8,6 +8,7 @@ from edcr.control_room.rendering import fmt_duration
 from edcr.control_room_state import ControlRoomState
 from edcr.haul_history import abort_run, close_run, record_event, snapshot_duration, utc_timestamp
 from edcr.tts import AnnouncementId, format_credits_short
+from edcr.haul_phase_times import PhaseTimes
 
 _CREDIT_AMOUNT_RE = re.compile(
     r"(?P<amount>[+-]?\d+(?:[\d,]*\d)?(?:\.\d+)?)\s*"
@@ -56,10 +57,14 @@ def start_haul_stats(
         and app._ship.station
         and app._ship.station.lower() == station_1.lower()
     )
+    timing_route = tuple(str(value).casefold() for value in (
+        station_1, station_2, station_1_buying, station_2_buying, app._ship.ship_id, tracking))
     previous = app._haul_stats
     if previous.suspended and previous.current_run is not None and _same_haul(
         previous, (station_1_buying, station_2_buying, station_1, station_2)
     ):
+        if previous.phase_times.route != timing_route:
+            previous.phase_times = PhaseTimes(route=timing_route)
         previous.suspended = False
         previous.active = True
         previous.paused = True
@@ -80,7 +85,9 @@ def start_haul_stats(
         previous = HaulStats(pending_runs=previous.pending_runs)
     started_at = app._time_fn()
     expected_profit_per_trip = parse_credit_amount(expected_profit_per_trip_text)
+    phase_times = previous.phase_times if previous.phase_times.route == timing_route else PhaseTimes(route=timing_route)
     app._haul_stats = HaulStats(
+        phase_times=phase_times,
         pending_runs=previous.pending_runs,
         station_1_buying=station_1_buying,
         station_2_buying=station_2_buying,

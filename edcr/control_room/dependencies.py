@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
 from edcr.control_room.models import HaulStats, MarketData, ShipState
+from edcr.haul_phase_times import session_seconds
 from edcr.control_room.routine_stop import RoutineStopMode
 from edcr.control_room_state import CommandHistoryEntry
 from edcr.haul_search_config import HaulSearchConfigError, load_haul_search_config
@@ -49,6 +50,7 @@ class RoutineReadModel:
     shutdown_finalized: bool
     haul_phase: str | None = None
     haul_phase_station_index: int | None = None
+    haul_phase_timings: dict[str, dict[str, float | int | None]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -196,6 +198,8 @@ class LocalControlRoomDataSource:
                 )
             ),
             routine=RoutineReadModel(
+                haul_phase_timings=(app._haul_stats.phase_times.snapshot(session_seconds(app._haul_stats, now))
+                                    if not app._haul_stats.tracking else {}),
                 routine_active=app._runtime_state.routine_active,
                 active_routine_name=app._runtime_state.active_routine_name,
                 haul_stop_requested=app._runtime_state.haul_stop_requested,

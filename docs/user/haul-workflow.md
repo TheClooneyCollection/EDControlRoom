@@ -5,6 +5,7 @@
 ## Contents
 
 - [What Haul Does](#what-haul-does)
+- [Stage Times](#stage-times)
 - [The Simple Path](#the-simple-path)
 - [Reusable Setup: `haul.toml`](#reusable-setup-haultoml)
 - [Saved Default](#saved-default)
@@ -35,6 +36,17 @@ The phases in a full station-side cycle are:
 There is no auto-align. When the ship is clear and the drive is primed, TTS calls the commander by title or name and says the ship is ready to jump. That is your cue to take over alignment and the next jump.
 
 This makes it directly useful for high-volume A-to-B cargo work such as community goal loops, where the repetitive trading cycle is the part worth automating.
+
+## Stage Times
+
+The five **Active haul routine** cards on `/haul` show **Min / Curr / Avg** for Buy, Undock, Depart, Transit and Sell:
+
+- **Curr** is time spent in that stage on this leg. The active stage updates with server status refreshes; completed stages keep their measured time and pending stages show `—`.
+- **Min** and **Avg** use completed stages in the current session, separately for each direction. Hover over the timings to see the sample count. No sample means `—`.
+- Pause and stopped time are excluded. Restarting the same suspended haul continues its frozen stage; a stage whose completion was not observed is not included in Min/Avg.
+- `new_session` clears the samples. Changing route or ship starts fresh stage statistics. Saved session samples survive a server restart, but an interrupted stage after restart is not treated as a complete sample.
+
+These measurements come from assisted two-way haul stage transitions, not estimates or old journal history. Track only and older peers without this field show `—`. On a hub viewing a peer, the peer supplies the timings; both must run a version with this feature.
 
 ## The Simple Path
 

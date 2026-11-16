@@ -63,6 +63,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.events import MouseScrollDown, MouseScrollUp
 from textual.widgets import Footer, Header, Input, OptionList, RichLog, Static, Tab, Tabs
 
+from edcr.haul_phase_times import session_seconds
 from edcr.haul_history import WARNING_IDS
 from edcr.haul_search_config import HaulSearchConfigError, load_haul_search_config
 from edcr.haul_stats_cache import TodayHaulCache
@@ -721,6 +722,8 @@ class ControlRoomApp(App[None]):
         self._runtime_state.haul_paused = value
 
     def _set_haul_phase(self, phase: str | None, station_index: int | None) -> None:
+        if not self._haul_stats.tracking:
+            self._haul_stats.phase_times.transition(phase, station_index, session_seconds(self._haul_stats, self._time_fn()))
         if self._haul_stats.current_run is not None:
             self._haul_stats.current_run["phase"] = phase
             self._save_saved_state()

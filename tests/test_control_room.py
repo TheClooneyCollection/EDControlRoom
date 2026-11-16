@@ -3836,6 +3836,75 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.app._time_fn = lambda: 30.0
         self._assert_timer_views(80.0, 20.0)
 
+    def test_haul_stage_times_follow_real_phase_pause_resume_and_session_reset(self) -> None:
+        from edcr.control_room.dependencies import LocalControlRoomDataSource
+        from edcr.control_room.protocol.data_messages import hydrate_message, data_read_model_from_message
+        self._start_timer_test_haul(100.0)
+        self.app._set_haul_phase('buy', 1)
+        def timings(now):
+            self.app._time_fn = lambda: now
+            data = LocalControlRoomDataSource(self.app).current()
+            return data_read_model_from_message(hydrate_message(data)).routine.haul_phase_timings
+        self.assertEqual(timings(110)['buy']['current_s'], 10)
+        self.app._set_haul_phase('undock', 1)
+        self.assertEqual(timings(120)['buy']['avg_s'], 10)
+        self.app._pause_haul_stats()
+        self.assertEqual(timings(500)['undock']['current_s'], 10)
+        self.app._resume_haul_stats()
+        self.assertEqual(timings(510)['undock']['current_s'], 20)
+        self.app._set_haul_phase('depart', 1)
+        self.assertEqual(timings(520)['undock']['min_s'], 20)
+        self.app._dispatch_command('new_session')
+        self.assertEqual(timings(525)['depart']['current_s'], 5)
+        self.assertIsNone(timings(525)['buy']['min_s'])
+        self.app._set_haul_phase('transit', 2)
+        self.assertEqual(timings(530)['depart']['samples'], 0)
+        self.app._set_haul_phase('sell', 2)
+        self.assertEqual(timings(535)['transit']['avg_s'], 5)
+        self.app._stop_haul_stats()
+        self.app._set_haul_phase(None, None)
+        self.assertEqual(timings(900)['sell']['current_s'], 5)
+        self._start_timer_test_haul(1000)
+        self.assertEqual(timings(1001), {})
+
+    def test_haul_phase_samples_reset_when_route_or_ship_changes(self) -> None:
+        from edcr.control_room.dependencies import LocalControlRoomDataSource
+        self._start_timer_test_haul(100)
+        self.app._set_haul_phase('buy', 1)
+        self.app._time_fn = lambda: 110
+        self.app._set_haul_phase('undock', 1)
+        self.assertEqual(LocalControlRoomDataSource(self.app).current().routine.haul_phase_timings['buy']['min_s'], 10)
+        self.app._ship.ship_id = 99
+        self._start_timer_test_haul(120)
+        self.assertEqual(LocalControlRoomDataSource(self.app).current().routine.haul_phase_timings, {})
+        self.app._set_haul_phase('buy', 1)
+        self.app._time_fn = lambda: 130
+        self.app._set_haul_phase('undock', 1)
+        self.app._start_haul_stats(tracking=False, station_1_buying='Gold', station_2_buying='Silver',
+                                    station_1='Different', station_2='Beta')
+        self.assertEqual(LocalControlRoomDataSource(self.app).current().routine.haul_phase_timings, {})
+
+    def test_haul_stage_averages_restore_but_partial_stage_does_not_become_a_sample(self) -> None:
+        from edcr.control_room.dependencies import LocalControlRoomDataSource
+        self._start_timer_test_haul(100.0)
+        self.app._set_haul_phase('buy', 1)
+        self.app._time_fn = lambda: 110.0
+        self.app._set_haul_phase('undock', 1)
+        self.app._time_fn = lambda: 120.0
+        self.app._save_saved_state()
+        self.app._haul_stats = HaulStats()
+        self.app._time_fn = lambda: 0.0
+        self.app._load_saved_state()
+        self.assertEqual(LocalControlRoomDataSource(self.app).current().routine.haul_phase_timings['buy']['avg_s'], 10)
+        self._start_timer_test_haul(10.0)
+        self.app._set_haul_phase('undock', 1)
+        self.app._time_fn = lambda: 20.0
+        self.app._set_haul_phase('depart', 1)
+        view = LocalControlRoomDataSource(self.app).current().routine.haul_phase_timings
+        self.assertEqual(view['undock']['current_s'], 20)
+        self.assertEqual(view['undock']['samples'], 0)
+        self.assertEqual(view['buy']['avg_s'], 10)
+
     def test_new_session_while_idle_stays_frozen_until_haul_starts(self) -> None:
         self._start_timer_test_haul(100.0)
         self.app._time_fn = lambda: 160.0

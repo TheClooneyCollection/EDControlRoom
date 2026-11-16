@@ -240,6 +240,7 @@ def _routine(payload: dict[str, Any]) -> RoutineReadModel:
         shutdown_finalized=bool(payload.get("shutdown_finalized", False)),
         haul_phase=_optional_str(payload.get("haul_phase")),
         haul_phase_station_index=_optional_int(payload.get("haul_phase_station_index")),
+        haul_phase_timings=payload.get("haul_phase_timings") if isinstance(payload.get("haul_phase_timings"), dict) else {},
     )
 
 
