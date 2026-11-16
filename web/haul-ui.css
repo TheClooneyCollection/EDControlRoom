@@ -1141,6 +1141,22 @@
       font-weight: 600;
     }
 
+    .step-timings {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 3px;
+      margin: 8px 0 0;
+      font-size: 10px;
+      color: var(--text-3);
+    }
+
+    .step-timings dd {
+      margin: 2px 0 0;
+      color: var(--text-2);
+      font-variant-numeric: tabular-nums;
+      overflow-wrap: anywhere;
+    }
+
     .step.done .step-value {
       color: var(--green);
     }

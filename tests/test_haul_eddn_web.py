@@ -28,6 +28,20 @@ function element() {
     add(option) { this.options.push(option); }};
 }
 const elements = Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m => [m[1], element()]));
+const steps = [...html.matchAll(/<div class="step" data-phase="([^"]+)">([\s\S]*?)<\/dl><\/div>/g)].map(([, phase, markup]) => {
+  const step = element(), value = element(), timing = element(), classes = new Set();
+  const fields = [...markup.matchAll(/data-time="([^"]+)"/g)].map(([, time]) =>
+    Object.assign(element(), {dataset: {time}}));
+  assert.deepEqual(fields.map(field => field.dataset.time), ['min_s', 'current_s', 'avg_s']);
+  step.dataset.phase = phase;
+  step.classList = {add: name => classes.add(name), remove: (...names) => names.forEach(name => classes.delete(name)),
+    contains: name => classes.has(name)};
+  timing.querySelectorAll = selector => { assert.equal(selector, '[data-time]'); return fields; };
+  step.querySelector = selector => ({'.step-value': value, '.step-timings': timing})[selector];
+  step.times = () => fields.map(field => field.textContent);
+  return step;
+});
+assert.deepEqual(steps.map(step => step.dataset.phase), ['buy', 'undock', 'depart', 'transit', 'sell']);
 const button = element();
 elements['node-picker'] = element();
 elements['node-picker'].dataset.state = 'ok';
@@ -46,7 +60,7 @@ const document = {getElementById: get, activeElement: null,
     if (selector === '#search-form .btn.primary') return button;
     if (selector === '.history-details') return null;
     throw Error(`unexpected selector ${selector}`);
-  }, querySelectorAll() { return []; }, execCommand(action) { assert.equal(action, 'copy'); return true; }};
+  }, querySelectorAll(selector) { return selector === '#routine-steps .step' ? steps : []; }, execCommand(action) { assert.equal(action, 'copy'); return true; }};
 const sent = [], requests = [];
 let socket, commandFailure = '', onCommand = () => {};
 class Socket {
@@ -99,6 +113,41 @@ const select = index => get('route-rows').handlers.click({target: {closest: () =
 const search = () => get('search-form').handlers.submit({preventDefault() {}});
 (async () => {
   socket.message('event.connection_ready', {client_role: 'active_operator'});
+  // Phase cards follow each server snapshot, including frozen and direction-reset snapshots.
+  const phaseHydrate = routine => socket.message('control_room.hydrate', {routine, ship: {}, haul_session: {}});
+  phaseHydrate({});
+  for (const step of steps) assert.deepEqual(step.times(), ['—', '—', '—']);
+  const active = {routine_active: true, active_routine_name: 'haul', haul_phase: 'transit', haul_phase_station_index: 2,
+    haul_phase_timings: Object.fromEntries(steps.map((step, index) => [step.dataset.phase,
+      {min_s: index * 60, current_s: index === 4 ? null : 61.9 + index, avg_s: 3661, samples: 3}]))};
+  phaseHydrate(active);
+  assert.deepEqual(steps[0].times(), ['00:00', '01:01', '1:01:01']);
+  assert.deepEqual(steps[3].times(), ['03:00', '01:04', '1:01:01']);
+  assert.deepEqual(steps[4].times(), ['04:00', '—', '1:01:01']);
+  assert.equal(steps[0].classList.contains('done'), true);
+  assert.equal(steps[3].classList.contains('current'), true);
+  assert.equal(steps[3].querySelector('.step-value').textContent, 'To Station 2');
+  assert.match(steps[3].querySelector('.step-timings').title, /Current session · same direction · 3 completed samples/);
+  const paused = {...active, haul_paused: true};
+  phaseHydrate(paused);
+  now += 120000;
+  for (const tick of intervals) tick();
+  assert.deepEqual(steps[3].times(), ['03:00', '01:04', '1:01:01']);
+  phaseHydrate(paused);
+  assert.deepEqual(steps[3].times(), ['03:00', '01:04', '1:01:01']);
+  assert.match(get('routine-status').textContent, /Paused/);
+  phaseHydrate({...active, haul_phase_timings: {...active.haul_phase_timings,
+    transit: {...active.haul_phase_timings.transit, current_s: 125}}});
+  assert.deepEqual(steps[3].times(), ['03:00', '02:05', '1:01:01']);
+  phaseHydrate({...active, routine_active: false});
+  assert.equal(get('routine-status').textContent, 'Idle');
+  assert.deepEqual(steps[0].times(), ['00:00', '01:01', '1:01:01']);
+  phaseHydrate({...active, haul_phase: 'buy', haul_phase_station_index: 1,
+    haul_phase_timings: {buy: {current_s: 0, min_s: null, avg_s: null, samples: 0}}});
+  assert.deepEqual(steps[0].times(), ['—', '00:00', '—']);
+  for (const step of steps.slice(1)) assert.deepEqual(step.times(), ['—', '—', '—']);
+  phaseHydrate({...active, haul_phase_timings: undefined});
+  for (const step of steps) assert.deepEqual(step.times(), ['—', '—', '—']);
   assert.equal(get('route-distance').value, '140');
   assert.equal(get('route-distance').placeholder, '140');
   assert.equal(get('capacity').value, '');

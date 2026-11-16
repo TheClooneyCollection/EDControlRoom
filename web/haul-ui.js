@@ -1140,6 +1140,16 @@ let routes = [];
       return Number(haulSession.accumulated_profit || 0) + Number(haulSession.current_run_profit || 0);
     }
 
+    function formatPhaseDuration(seconds) {
+      if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds < 0) return "—";
+      const total = Math.floor(seconds);
+      const minutes = Math.floor(total / 60);
+      const secs = String(total % 60).padStart(2, "0");
+      return minutes < 60
+        ? `${String(minutes).padStart(2, "0")}:${secs}`
+        : `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${secs}`;
+    }
+
     function updateRoutinePanel(routine, haulSession, ship) {
       const phase = routine.haul_phase || null;
       const stationIndex = routine.haul_phase_station_index || null;
@@ -1163,6 +1173,14 @@ let routes = [];
       document.querySelectorAll("#routine-steps .step").forEach((step, index) => {
         const stepPhase = step.dataset.phase;
         const value = step.querySelector(".step-value");
+        const timing = routine.haul_phase_timings?.[stepPhase];
+        const timings = step.querySelector(".step-timings");
+        if (timings) {
+          timings.title = `Current session · same direction · ${timing?.samples ?? 0} completed samples`;
+          timings.querySelectorAll("[data-time]").forEach((field) => {
+            field.textContent = formatPhaseDuration(timing?.[field.dataset.time]);
+          });
+        }
         step.classList.remove("done", "current");
         if (!showSteps) {
           value.textContent = "Pending";
