@@ -2317,8 +2317,8 @@ manual_landing = true
         step({"event": "MarketSell", "TotalSale": 200_000}, "Pawelczyk Dock")
 
         self.assertEqual(phases, [
-            ("buy", 2), ("undock", 2), ("depart", 2), ("transit", 2), ("transit", 2),
-            ("sell", 2), ("buy", 1), ("undock", 1), ("transit", 1), ("sell", 1),
+            ("buy", 1), ("depart", 1), ("transit", 2), ("transit", 2), ("sell", 2),
+            ("sell", 2), ("buy", 2), ("depart", 2), ("sell", 1), ("sell", 1),
         ])
         self.assertEqual(stats.completed_runs, 1)
         self.assertEqual(stats.last_run_profit, 300_000)
@@ -2377,7 +2377,7 @@ manual_landing = true
             if not phases or phases[-1] != phase:
                 phases.append(phase)
 
-        loop = ["buy2", "undock2", "depart2", "transit2", "sell2", "buy1", "undock1", "depart1", "transit1", "sell1"]
+        loop = ["buy1", "depart1", "transit2", "sell2", "buy2", "depart2", "transit1", "sell1"]
         self.assertEqual(phases, loop * 3)
         stats = self.app._haul_stats
         self.assertEqual(
@@ -3866,6 +3866,66 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertEqual(timings(900)['sell']['current_s'], 5)
         self._start_timer_test_haul(1000)
         self.assertEqual(timings(1001), {})
+
+    def test_journal_depart_and_transit_times_agree_for_assisted_and_tracked_multihop_hauls(self) -> None:
+        from edcr.control_room.dependencies import LocalControlRoomDataSource
+        from edcr.control_room.haul_tracking import set_routine_haul_phase
+        from edcr.control_room.protocol.data_messages import hydrate_message, data_read_model_from_message
+
+        for tracking in (False, True):
+            with self.subTest(tracking=tracking):
+                self.app._haul_stats = HaulStats()
+                self.app._set_haul_phase(None, None)
+                self._start_timer_test_haul(100)
+                self.app._haul_stats.tracking = tracking
+                self.app._runtime_state.routine_active = not tracking
+                self.app._runtime_state.active_routine_name = "haul" if not tracking else None
+
+                def event(now, name, station=None):
+                    self.app._time_fn = lambda: now
+                    payload = {"event": name}
+                    if station:
+                        payload["StationName"] = station
+                    self.app._handle_haul_event(payload, station_before=station)
+
+                def view(now):
+                    self.app._time_fn = lambda: now
+                    return data_read_model_from_message(hydrate_message(
+                        LocalControlRoomDataSource(self.app).current())).routine
+
+                for source, target, station, destination, start in (
+                    (1, 2, 'Alpha', 'Beta', 100), (2, 1, 'Beta', 'Alpha', 300),
+                ):
+                    event(start, 'MarketBuy', station)
+                    if not tracking:
+                        set_routine_haul_phase(self.app, 'buy', source)
+                        self.app._time_fn = lambda: start + 5
+                        set_routine_haul_phase(self.app, 'undock', source)
+                    event(start + 10, 'Undocked', station)
+                    if not tracking:
+                        # The combined undock helper returns before the jump journal arrives.
+                        set_routine_haul_phase(self.app, 'transit', target)
+                    during_depart = view(start + 20)
+                    self.assertEqual(during_depart.haul_phase, 'depart')
+                    self.assertEqual(during_depart.haul_phase_station_index, source)
+                    self.assertEqual(during_depart.haul_phase_timings['depart']['current_s'], 10)
+                    event(start + 40, 'StartJump')
+                    event(start + 60, 'FSDJump')
+                    event(start + 70, 'StartJump')
+                    event(start + 90, 'FSDJump')
+                    event(start + 100, 'SupercruiseExit')
+                    event(start + 130, 'Docked', destination)
+                    if not tracking:
+                        # A late routine notification must not restart Transit after Docked.
+                        set_routine_haul_phase(self.app, 'transit', target)
+                        set_routine_haul_phase(self.app, 'sell', target)
+                    result = view(start + 150)
+                    self.assertEqual(result.haul_phase, 'sell')
+                    self.assertEqual(result.haul_phase_station_index, target)
+                    for phase, seconds in (('depart', 30), ('transit', 90)):
+                        self.assertEqual(result.haul_phase_timings[phase], dict(
+                            current_s=seconds, min_s=seconds, avg_s=seconds, samples=1))
+                    self.assertEqual(result.haul_phase_timings['undock']['current_s'], None if tracking else 5)
 
     def test_haul_phase_samples_reset_when_route_or_ship_changes(self) -> None:
         from edcr.control_room.dependencies import LocalControlRoomDataSource

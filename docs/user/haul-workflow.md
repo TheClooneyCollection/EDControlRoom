@@ -46,7 +46,13 @@ The five **Active haul routine** cards on `/haul` show **Min / Curr / Avg** for 
 - Pause and stopped time are excluded. Restarting the same suspended haul continues its frozen stage; a stage whose completion was not observed is not included in Min/Avg.
 - `new_session` clears the samples. Changing route or ship starts fresh stage statistics. Saved session samples survive a server restart, but an interrupted stage after restart is not treated as a complete sample.
 
-These measurements come from assisted two-way haul stage transitions, not estimates or old journal history. Track only and older peers without this field show `—`. On a hub viewing a peer, the peer supplies the timings; both must run a version with this feature.
+Assisted and Track only share flight boundaries observed from the live journal:
+
+- **Undock** (assisted): the routine starts undocking → `Undocked` (leaving the pad).
+- **Depart**: `Undocked` → the first `StartJump`, whether hyperspace or supercruise.
+- **Transit**: that first `StartJump` → `Docked` at a route station. Later jumps stay in Transit.
+
+Track only cannot observe the launch request, so Undock stays `—`; its Buy/Sell boundaries use market events. Timers use the pause-aware session clock when events are processed, not a historical journal backfill. Old samples from before these event boundaries are reset when starting the haul. Older peers without timings show `—`. On a hub viewing a peer, the peer supplies the timings; update both hub and peer.
 
 ## The Simple Path
 

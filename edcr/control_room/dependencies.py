@@ -198,8 +198,7 @@ class LocalControlRoomDataSource:
                 )
             ),
             routine=RoutineReadModel(
-                haul_phase_timings=(app._haul_stats.phase_times.snapshot(session_seconds(app._haul_stats, now))
-                                    if not app._haul_stats.tracking else {}),
+                haul_phase_timings=app._haul_stats.phase_times.snapshot(session_seconds(app._haul_stats, now)),
                 routine_active=app._runtime_state.routine_active,
                 active_routine_name=app._runtime_state.active_routine_name,
                 haul_stop_requested=app._runtime_state.haul_stop_requested,
@@ -211,14 +210,16 @@ class LocalControlRoomDataSource:
                 shutdown_finalized=app._runtime_state.shutdown_finalized,
                 haul_phase=(
                     app._runtime_state.haul_phase
-                    if app._runtime_state.routine_active
-                    and app._runtime_state.active_routine_name == "haul"
+                    if (app._haul_stats.active and app._haul_stats.tracking)
+                    or (app._runtime_state.routine_active
+                        and app._runtime_state.active_routine_name == "haul")
                     else None
                 ),
                 haul_phase_station_index=(
                     app._runtime_state.haul_phase_station_index
-                    if app._runtime_state.routine_active
-                    and app._runtime_state.active_routine_name == "haul"
+                    if (app._haul_stats.active and app._haul_stats.tracking)
+                    or (app._runtime_state.routine_active
+                        and app._runtime_state.active_routine_name == "haul")
                     else None
                 ),
             ),

@@ -722,8 +722,7 @@ class ControlRoomApp(App[None]):
         self._runtime_state.haul_paused = value
 
     def _set_haul_phase(self, phase: str | None, station_index: int | None) -> None:
-        if not self._haul_stats.tracking:
-            self._haul_stats.phase_times.transition(phase, station_index, session_seconds(self._haul_stats, self._time_fn()))
+        self._haul_stats.phase_times.transition(phase, station_index, session_seconds(self._haul_stats, self._time_fn()))
         if self._haul_stats.current_run is not None:
             self._haul_stats.current_run["phase"] = phase
             self._save_saved_state()

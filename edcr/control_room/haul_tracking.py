@@ -58,7 +58,7 @@ def start_haul_stats(
         and app._ship.station.lower() == station_1.lower()
     )
     timing_route = tuple(str(value).casefold() for value in (
-        station_1, station_2, station_1_buying, station_2_buying, app._ship.ship_id, tracking))
+        station_1, station_2, station_1_buying, station_2_buying, app._ship.ship_id, tracking, 'journal-stages-v1'))
     previous = app._haul_stats
     if previous.suspended and previous.current_run is not None and _same_haul(
         previous, (station_1_buying, station_2_buying, station_1, station_2)
@@ -325,8 +325,7 @@ def handle_haul_event(
         and current_station.lower() == stats.station_2.lower()
     )
 
-    if stats.tracking:
-        _track_phase(app, event, at_station_1=at_station_1, at_station_2=at_station_2)
+    _track_phase(app, event, at_station_1=at_station_1, at_station_2=at_station_2)
 
     if (at_station_1 and stats.current_run is not None
             and stats.current_run.get("partial_start")
@@ -390,14 +389,14 @@ def handle_haul_event(
     app._save_saved_state()
 
 
-# Track only: no routine sets the haul phase, so the journal does.
+# Flight boundaries are shared by assisted and tracked hauls.
 _TRACKED_PHASES = {
     "MarketBuy": "buy",
-    "Undocked": "undock",
-    "StartJump": "depart",
+    "Undocked": "depart",
+    "StartJump": "transit",
     "FSDJump": "transit",
     "SupercruiseExit": "transit",
-    "Docked": "transit",
+    "Docked": "sell",
     "MarketSell": "sell",
 }
 
@@ -409,10 +408,35 @@ def _track_phase(app: HaulTrackingHost, event: str, *, at_station_1: bool, at_st
     phase = _TRACKED_PHASES.get(event)
     if phase is None:
         return
+    if not app._haul_stats.tracking and event in {"MarketBuy", "MarketSell"}:
+        return
+    current_phase = app._runtime_state.haul_phase
     station_index = app._runtime_state.haul_phase_station_index
-    # Only station events name the station; in flight the ship's station can still be the one just left.
-    if event in _STATION_EVENTS and (at_station_1 or at_station_2):
-        here = 1 if at_station_1 else 2
-        # Buying and undocking head for the other station; docking and selling are at this one.
-        station_index = 3 - here if phase in {"buy", "undock"} else here
+    # Station phases name the actual station; flight phases name the destination.
+    if event in _STATION_EVENTS:
+        if not (at_station_1 or at_station_2):
+            return
+        station_index = 1 if at_station_1 else 2
+    elif current_phase in {"buy", "undock", "depart"} and station_index in (1, 2):
+        station_index = 3 - station_index
+    # A later hop cannot restart Transit, nor can a delayed arrival regress a docked stage.
+    if phase == "transit" and current_phase in {"transit", "sell"}:
+        return
+    app._set_haul_phase(phase, station_index)
+
+
+def set_routine_haul_phase(app: HaulTrackingHost, phase: str, station_index: int) -> None:
+    """Routine callbacks start station work; journal events own flight boundaries."""
+    current = app._runtime_state.haul_phase
+    current_station = app._runtime_state.haul_phase_station_index
+    if phase == "transit" and (
+        (current in {"undock", "depart"} and current_station == 3 - station_index)
+        or (current == "sell" and current_station == station_index)
+    ):
+        return
+    if phase == "undock" and (
+        (current == "depart" and current_station == station_index)
+        or (current == "transit" and current_station == 3 - station_index)
+    ):
+        return
     app._set_haul_phase(phase, station_index)

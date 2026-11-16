@@ -6,6 +6,7 @@ from pathlib import Path
 from rich.markup import escape
 
 from edcr.control_room import error_text
+from edcr.control_room.haul_tracking import set_routine_haul_phase
 from edcr.control_room.history import now_iso
 from edcr.control_room.interfaces import HaulHost
 from edcr.control_room.models import TradeRoutesData
@@ -658,7 +659,8 @@ def dispatch_haul_loop(
             pause_requested_fn=lambda: app._haul_pause_requested,
             pause_fn=lambda phase: app._wait_for_haul_resume(_project_two_way_phase(phase)[1] or 0),
             phase_updated_fn=lambda phase: app.call_from_thread(
-                app._set_haul_phase,
+                set_routine_haul_phase,
+                app,
                 *_project_two_way_phase(phase),
             ),
         ),
