@@ -69,6 +69,12 @@ class FakeClock:
         self.now += seconds
 
 
+def setUpModule() -> None:
+    from tests.fixtures.timezone import use_utc_timezone
+
+    use_utc_timezone("edcr.control_room.server.app")
+
+
 def market(timestamp: str = "2026-11-10T14:00:00Z", market_id: int = 3229359104, station: str = "Galileo",
            system: str = "Sol", sell_gold: int = 9400) -> MarketSnapshot:
     snapshot = snapshot_from_market_json({

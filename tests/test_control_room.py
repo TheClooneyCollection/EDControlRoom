@@ -65,6 +65,12 @@ from rich.text import Text
 from textual.widgets import Static
 
 
+def setUpModule() -> None:
+    from tests.fixtures.timezone import use_utc_timezone
+
+    use_utc_timezone("edcr.control_room.app")
+
+
 def _make_timing_config() -> TimingConfig:
     channel = TimingChannelConfig(sigma=0.0, min_factor=1.0, max_factor=1.0, min_seconds=0.0)
     return TimingConfig(enabled=False, distribution="log_normal", delay=channel, hold=channel, typing=channel)

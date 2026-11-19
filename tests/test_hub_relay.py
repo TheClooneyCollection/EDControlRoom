@@ -29,6 +29,12 @@ from tests.test_hub import GALILEO, HUB_TOKEN, PEER_NODE, SOL, TOKEN, market, ri
 PAGE = {"access_token": TOKEN}
 
 
+def setUpModule() -> None:
+    from tests.fixtures.timezone import use_utc_timezone
+
+    use_utc_timezone("edcr.control_room.server.app")
+
+
 def peer_data(routine: str | None = None) -> object:
     data = _base_data_read_model()
     ship = replace(data.ship, system="Achenar", ship_id=8, ship_type="type9", ship_name="Lugger", cargo_capacity=720,
