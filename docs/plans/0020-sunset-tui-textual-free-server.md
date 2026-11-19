@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft, not approved. Design only; nothing built. Revision 2: the TUI is deleted, not ported.
+Decisions confirmed 2026-11-19; nothing built. Revision 2: the TUI is deleted, not ported. Decisions below; the `/controls` `home set` fix is folded in (step 7).
 
 ## Why
 
@@ -61,7 +61,7 @@ Deletable once the TUI is gone:
 - `app_view_actions.py`, `view_actions.py`, `view_models.py`: only the TUI uses them. In `rendering.py`, the panel renderers go; `activity_line`, `read_cargo_inventory`, `fmt_duration`, ledger and history lines stay (`bootstrap.py:84`, `haul_tracking.py:7`, `commands.py:16`).
 - The host's widget stubs and overrides (`host.py:37-172`).
 
-Kept, to check during the step: command history recording (`_record_history_entry`, `saved_state.history`, `default_haul`) is written to the state file and published in hydrate but read by nothing on the web. Keep it in this plan so old state files load; drop it later (Open questions).
+Kept, to check during the step: command history recording (`_record_history_entry`, `saved_state.history`, `default_haul`) is written to the state file and published in hydrate but read by nothing on the web. Keep it in this plan so old state files load; drop it later (Decisions).
 
 Found while checking: `/controls` Set home sends `home set <system>`, and the host refuses every `home` command as client-local (`host.py:23`, `_CLIENT_LOCAL_REMOTE_VERBS`), logging "Unknown command". With prompts gone, the filter shrinks to verbs that still need a prompt, and `home set` runs.
 
@@ -111,7 +111,7 @@ One `run_watcher_loop(journal_dir, stop, handle_event, sync_status, load_market,
 
 ### 5. No-arg start
 
-Today `local` serves on `127.0.0.1` and prints the URL; it does not open a browser (`app.py:2503-2520`). No arguments becomes `local`. Opening the page is new behavior; see Open questions.
+Today `local` serves on `127.0.0.1` and prints the URL; it does not open a browser (`app.py:2503-2520`). No arguments becomes `local` and, like it, prints the URL without opening a browser.
 
 ## Build steps
 
@@ -142,13 +142,13 @@ Test estimate: about 42 (client) + 3 (remote exit) + 60-80 (TUI-only in `test_co
 - **Users on the TUI or `connect`.** Both go without a deprecation release. The release notes and README say the web page replaces them.
 - **Test timing.** No step adds a subprocess or a real sleep: runner tests use inline threads and token events, the watcher an injected clock, the guard a source scan.
 
-## Open questions (with proposed defaults)
+## Decisions (confirmed with the user, 2026-11-19)
 
-1. Should no arguments open the browser? `local` does not today. **Default: yes for the no-arg form only** (`webbrowser.open` once the server listens, `--no-open` to skip); explicit `local` stays as is, so second-instance scripts (`docs/user/haul-workflow.md:146`) do not open tabs.
-2. Keep command history (`saved_state.history`, `default_haul`, the hydrate `command_history`)? **Default: keep in this plan** so old state files load; drop it in a follow-up once nothing reads it.
-3. What do `help` / `commands` do in the web command box? Today the host refuses them. **Default: answer in the activity feed**, keeping `help.py`; `replay` / `history` go.
-4. Keep the name `ControlRoomCore`, or fold `HeadlessControlRoomHost` into it? **Default: keep both**: core for logic, host for server-only hooks (say, mute, the command filter). Merge later if the host stays thin.
-5. `current_token()` outside a routine: raise or return a never-cancelled token? **Default: raise** `NoActiveRoutine`, as Textual does.
-6. Should `close()` cancel a running routine on exit? **Default: yes**, cancel and join for 1 s.
-7. Simplify `NodeLoop` once routines no longer need a loop? **Default: not in this plan**; note it in status.
-8. Release: one release after step 9, or one after step 1 (connect gone)? **Default: one release after step 9**, titled for the TUI sunset; `pyproject.toml` version per the release style.
+1. No arguments does not open a browser; it prints the URL like `local`.
+2. Command history (`saved_state.history`, `default_haul`, the hydrate `command_history`) stays in this plan so old state files load; drop it in a follow-up once nothing reads it.
+3. `help` / `commands` stay as they are. No web page has a free-text command box (`/controls` buttons send fixed strings), so nothing sends them; `replay` / `history` go.
+4. Keep both `ControlRoomCore` (logic) and `HeadlessControlRoomHost` (say, mute, the command filter). Merge later if the host stays thin.
+5. `current_token()` outside a routine raises `NoActiveRoutine`, as Textual does.
+6. `close()` cancels a running routine on exit and joins for 1 s.
+7. `NodeLoop` is not simplified in this plan; note it in status.
+8. One release after step 9, titled for the TUI sunset; `pyproject.toml` version per the release style.
