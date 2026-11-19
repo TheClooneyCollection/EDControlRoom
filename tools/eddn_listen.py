@@ -5,39 +5,32 @@ import argparse
 from pathlib import Path
 import sys
 import time
+from typing import Callable
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from edcr.config import load_config
+from edcr.config import DEFAULT_CONFIG_PATH, DEFAULT_EDDN_CONFIG_PATH, load_config
 from edcr.eddn.listener import EddnListener, open_zmq_socket
 from edcr.eddn.service import status_line
 from edcr.eddn.store import EddnStore
 
 
-def main(argv: list[str] | None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--db", type=Path, help="Override eddn.database_file")
-    parser.add_argument("--relay", help="Override eddn.relay")
-    parser.add_argument("--max-age-days", type=float, help="Override eddn.max_age_days")
-    parser.add_argument("--status-every", type=float, default=30.0, help="Seconds between status lines")
-    args = parser.parse_args(argv)
-    eddn = load_config().eddn
-    relay = args.relay or eddn.relay
-    store = EddnStore.open(args.db or eddn.database_file)
+def run_listener(database: Path, relay: str, max_age_s: float, status_every: float) -> None:
+    store = EddnStore.open(database)
     listener = EddnListener(
         store=store,
         open_socket=lambda: open_zmq_socket(relay),
         time_fn=time.time,
-        max_age_s=(args.max_age_days or eddn.max_age_days) * 86400,
+        max_age_s=max_age_s,
         log=print,
     )
     print(f"Listening to {relay}; Ctrl-C to stop.")
     listener.start()
     try:
         while True:
-            time.sleep(args.status_every)
+            time.sleep(status_every)
             print(status_line(listener.stats(), store.counts()), flush=True)
     except KeyboardInterrupt:
         pass
@@ -49,6 +42,28 @@ def main(argv: list[str] | None) -> int:
             # A second Ctrl-C (uv forwards one too) only cuts the wait short.
             pass
         store.close()
+
+
+def main(
+    argv: list[str] | None,
+    *,
+    listen: Callable[[Path, str, float, float], None] = run_listener,
+) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--db", type=Path, help="Override eddn.database_file")
+    parser.add_argument("--relay", help="Override eddn.relay")
+    parser.add_argument("--max-age-days", type=float, help="Override eddn.max_age_days")
+    parser.add_argument("--status-every", type=float, default=30.0, help="Seconds between status lines")
+    args = parser.parse_args(argv)
+    # Standalone collectors need only the shipped defaults, not a local config.
+    config_path = DEFAULT_CONFIG_PATH if DEFAULT_CONFIG_PATH.exists() else DEFAULT_EDDN_CONFIG_PATH
+    eddn = load_config(config_path).eddn
+    listen(
+        args.db or eddn.database_file,
+        args.relay or eddn.relay,
+        (args.max_age_days or eddn.max_age_days) * 86400,
+        args.status_every,
+    )
     return 0
 
 
