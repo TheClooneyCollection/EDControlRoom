@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import cache
 import unittest
 import warnings
 from pathlib import Path
@@ -49,7 +50,8 @@ def add_station(
 LARGE = {"Small": 4, "Medium": 4, "Large": 2}
 
 
-def galaxy() -> EddnStore:
+@cache
+def _galaxy_database() -> bytes:
     store = memory_store()
     add_station(store, 1, "Galileo", "Sol", 0.0, "Ocellus", LARGE,
                 [price("gold", buy=9000, stock=5000), price("silver", sell=5200, demand=9000)])
@@ -60,6 +62,17 @@ def galaxy() -> EddnStore:
     add_station(store, 4, "K7Q-BQL", "Sol", 0.0, "FleetCarrier", LARGE, [price("gold", buy=100, stock=9000)])
     add_station(store, 5, "Far Hub", "Far", 100.0, "Orbis", LARGE, [price("gold", sell=50000, demand=8000)])
     store.commit()
+    try:
+        return store._db.serialize()
+    finally:
+        store.close()
+
+
+def galaxy() -> EddnStore:
+    # Each caller gets independent rows; only immutable seed bytes are shared.
+    database = _galaxy_database()
+    store = memory_store()
+    store._db.deserialize(database)
     return store
 
 
@@ -251,11 +264,7 @@ class EddnRoutesApiTests(unittest.TestCase):
     def test_api_runs_near_search_from_the_database_file(self) -> None:
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "eddn.sqlite3"
-            store = EddnStore.open(path)
-            source = galaxy()
-            self.addCleanup(source.close)
-            source._db.backup(store._db)
-            store.close()
+            path.write_bytes(_galaxy_database())
 
             payload = run_route_query(
                 path,

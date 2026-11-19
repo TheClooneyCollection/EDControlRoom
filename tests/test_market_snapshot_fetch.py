@@ -1,5 +1,4 @@
 from contextlib import closing, redirect_stdout, redirect_stderr
-from datetime import datetime, timezone
 import gzip
 import hashlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -10,15 +9,19 @@ import sqlite3
 from tempfile import TemporaryDirectory
 from threading import Thread
 import unittest
-from urllib.request import urlopen
+from unittest.mock import patch
+from urllib.request import ProxyHandler, build_opener
 
 from edcr.eddn.messages import CarrierName, CarrierSighting, CommodityPrice, MarketSnapshot, StationInfo, SystemPosition
 from edcr.eddn.store import EddnStore, SCHEMA_VERSION
-from edcr.market_snapshot import download_snapshot, fetch_and_import, write_snapshot
+from edcr.market_snapshot import download_snapshot, fetch_and_import
 from tools.market_snapshot import main
+from tests.test_eddn import memory_store
 
 
 URL = 'https://snapshots.example/data/manifest.json'
+# Loopback requests must not consult the operators system proxy settings.
+urlopen = build_opener(ProxyHandler({})).open
 TABLES = ('system', 'station', 'market', 'price', 'carrier_access', 'carrier_name', 'carrier_seen', 'carrier_scan')
 
 
@@ -32,10 +35,9 @@ def rows(db):
 
 
 def packed(updates):
-    with closing(sqlite3.connect(':memory:')) as db:
-        store = EddnStore(db)
+    with closing(memory_store()) as store:
         store.save(updates)
-        return db.serialize()
+        return store._db.serialize()
 
 
 class SnapshotFetchTests(unittest.TestCase):
@@ -65,8 +67,8 @@ class SnapshotFetchTests(unittest.TestCase):
         return result, requested
 
     def test_empty_install_gets_prices_and_keeps_newer_local_prices_on_refresh(self):
-        with closing(sqlite3.connect(':memory:')) as db:
-            store = EddnStore(db)
+        with closing(memory_store()) as store:
+            db = store._db
             result, _ = self.fetch(store)
             self.assertEqual((result.counts.markets, result.counts.prices), (1, 2))
             store.save([market(timestamp=1100, names=('platinum',))])
@@ -75,8 +77,8 @@ class SnapshotFetchTests(unittest.TestCase):
             self.assertEqual(db.execute('SELECT commodity FROM price').fetchall(), [('platinum',)])
 
     def test_known_file_checks_only_the_manifest(self):
-        with closing(sqlite3.connect(':memory:')) as db:
-            result, requested = self.fetch(EddnStore(db), known_file=self.manifest['file'])
+        with closing(memory_store()) as store:
+            result, requested = self.fetch(store, known_file=self.manifest['file'])
             self.assertIsNone(result)
             self.assertEqual(requested, [URL])
 
@@ -87,16 +89,15 @@ class SnapshotFetchTests(unittest.TestCase):
             requested.append(url)
             return io.BytesIO(json.dumps(dict(self.manifest, schema=999)).encode())
 
-        with closing(sqlite3.connect(':memory:')) as db:
-            store = EddnStore(db)
+        with closing(memory_store()) as store:
             with self.assertRaisesRegex(ValueError, 'Unsupported market schema'):
                 fetch_and_import(URL, store, urlopen=open_url, now=lambda: 1200, max_age_s=500, known_file=None)
             self.assertEqual(requested, [URL])
             self.assertEqual(store.counts().markets, 0)
 
     def test_bad_hash_leaves_local_database_unchanged(self):
-        with closing(sqlite3.connect(':memory:')) as db:
-            store = EddnStore(db)
+        with closing(memory_store()) as store:
+            db = store._db
             store.save([market(timestamp=900)])
             before, counts = rows(db), store.counts()
             with self.assertRaisesRegex(ValueError, 'sha256'):
@@ -122,8 +123,8 @@ class SnapshotFetchTests(unittest.TestCase):
             with self.assertRaisesRegex(OSError, 'offline'):
                 download_snapshot(self.manifest, URL, Path(tmp), urlopen=offline)
             self.assertEqual(list(Path(tmp).iterdir()), [])
-        with closing(sqlite3.connect(':memory:')) as db:
-            store = EddnStore(db)
+        with closing(memory_store()) as store:
+            db = store._db
             store.save([market()])
             before = rows(db)
             with self.assertRaises(OSError):
@@ -154,13 +155,13 @@ class SnapshotFetchTests(unittest.TestCase):
             worker = Thread(target=serve_requests, daemon=True)
             worker.start()
             try:
-                with closing(sqlite3.connect(':memory:')) as db:
-                    store = EddnStore(db)
+                with closing(memory_store()) as store:
                     result = fetch_and_import(f'http://127.0.0.1:{server.server_port}/manifest.json', store,
                                               urlopen=urlopen, now=lambda: 1200, max_age_s=500, known_file=None)
                     self.assertEqual(result.counts.prices, 2)
                     self.assertEqual(store.counts().markets, 1)
-                with TemporaryDirectory() as tmp, redirect_stdout(io.StringIO()) as output:
+                with TemporaryDirectory() as tmp, redirect_stdout(io.StringIO()) as output, \
+                        patch('tools.market_snapshot.urlopen', new=urlopen):
                     self.assertEqual(main(['fetch', f'http://127.0.0.1:{server.server_port}/manifest.json',
                                            str(Path(tmp) / 'cli.sqlite3'), '--max-age-days', '999999']), 0)
                     self.assertIn('imported 1 markets, 2 prices', output.getvalue())
@@ -196,13 +197,9 @@ class SnapshotFetchTests(unittest.TestCase):
                    CarrierSighting('OLD-123', 2, 1100, False), CarrierSighting('EQL-123', 2, 1100, False),
                    CarrierSighting('REF-123', 1, 1100, False)]
         with TemporaryDirectory() as tmp, closing(sqlite3.connect(':memory:')) as actual, closing(sqlite3.connect(':memory:')) as expected:
-            original = Path(tmp) / 'original.sqlite3'
-            with closing(EddnStore.open(original)) as source_store:
-                source_store.save(updates)
-            manifest = write_snapshot(original, Path(tmp) / 'published',
-                                      now=lambda: datetime.fromtimestamp(1200, timezone.utc))
             source = Path(tmp) / 'snapshot.sqlite3'
-            source.write_bytes(gzip.decompress((Path(tmp) / 'published' / manifest['file']).read_bytes()))
+            # Import equivalence needs the stored rows; snapshot publication has its own tests.
+            source.write_bytes(packed(updates))
             imported, saved = EddnStore(actual), EddnStore(expected)
             imported.save(initial)
             saved.save(initial)
@@ -246,7 +243,8 @@ class SnapshotFetchTests(unittest.TestCase):
             self.assertEqual(store.counts().markets, 0)
 
     def test_cli_reports_one_line_on_download_failure(self):
-        with TemporaryDirectory() as tmp, redirect_stderr(io.StringIO()) as error:
+        with TemporaryDirectory() as tmp, redirect_stderr(io.StringIO()) as error, \
+                patch('tools.market_snapshot.urlopen', new=urlopen):
             self.assertEqual(main(['fetch', 'invalid-url', str(Path(tmp) / 'cli.sqlite3')]), 1)
             self.assertEqual(len(error.getvalue().splitlines()), 1)
             self.assertIn('Snapshot failed:', error.getvalue())

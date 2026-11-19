@@ -13,11 +13,18 @@ from edcr.eddn.messages import CarrierSighting, CommodityPrice, MarketSnapshot
 from edcr.eddn.store import EddnStore, SCHEMA_VERSION
 from edcr.market_snapshot import write_snapshot
 from tools.market_snapshot import main
+from tests.test_eddn import memory_store
 
 NOW = datetime(2026, 11, 15, 13, 30, tzinfo=timezone(timedelta(hours=2)))
 
 
 class MarketSnapshotTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Snapshot cases need a database file, not repeated disk schema creation.
+        with closing(memory_store()) as store:
+            cls.empty_database = store._db.serialize()
+
     def test_operator_snapshots_a_live_store_and_gets_a_matching_manifest(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -52,7 +59,7 @@ class MarketSnapshotTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             database = root / "markets.sqlite3"
-            EddnStore.open(database).close()
+            database.write_bytes(self.empty_database)
             manifest = write_snapshot(database, root / "out", now=lambda: NOW)
             self.assertEqual((manifest['markets'], manifest['prices'], manifest['newest_market_at']), (0, 0, None))
             stdout, stderr = io.StringIO(), io.StringIO()
@@ -67,7 +74,7 @@ class MarketSnapshotTests(unittest.TestCase):
             with self.subTest(keep=keep), TemporaryDirectory() as tmp:
                 root = Path(tmp)
                 database = root / "markets.sqlite3"
-                EddnStore.open(database).close()
+                database.write_bytes(self.empty_database)
                 out = root / "out"
                 out.mkdir()
                 old_names = [f"markets-20000101T0{hour}00Z.sqlite3.gz" for hour in range(3)]
@@ -116,7 +123,7 @@ class MarketSnapshotTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             database = root / "markets.sqlite3"
-            EddnStore.open(database).close()
+            database.write_bytes(self.empty_database)
             with closing(sqlite3.connect(database)) as db:
                 db.execute(f"PRAGMA user_version = {SCHEMA_VERSION + 1}")
             # Opening a future database must not relabel it as the current schema.
@@ -133,7 +140,7 @@ class MarketSnapshotTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             database = root / "markets.sqlite3"
-            EddnStore.open(database).close()
+            database.write_bytes(self.empty_database)
             with closing(sqlite3.connect(database)) as db:
                 db.execute("PRAGMA user_version = 0")
             manifest = write_snapshot(database, root / "out", now=lambda: NOW)
