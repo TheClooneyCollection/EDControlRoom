@@ -1674,7 +1674,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                     {"Category": "Minerals", "Name": "bertrandite", "Name_Localised": _CARGO_2, "DemandBracket": 1, "Stock": 1000},
                 ],
             )
-            _write_cargo(journal_dir, [])
+            # Carry outbound cargo so the sell stub ends the flow after docking.
+            _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 1}])
             with patch("edcr.routines.haul_two_way.market_sell") as market_sell_mock:
                 market_sell_mock.return_value = RoutineResult(
                     action="market_sell",
@@ -1706,6 +1707,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 )
 
         self.assertEqual(result.dispatch.status, "error")
+        self.assertEqual(result.dispatch.reason, "stop after transit")
         actions = [call["action"] for call in controls.calls]
         self.assertEqual(actions.count("FocusLeftPanel"), 2)
         self.assertLess(actions.index("FocusLeftPanel"), actions.index("UseBoostJuice"))
@@ -1736,7 +1738,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                     {"Category": "Minerals", "Name": "bertrandite", "Name_Localised": _CARGO_2, "DemandBracket": 1, "Stock": 1000},
                 ],
             )
-            _write_cargo(journal_dir, [])
+            # Carry outbound cargo so the sell stub ends the flow after docking.
+            _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 1}])
             with patch("edcr.routines.haul_two_way.market_sell") as market_sell_mock:
                 market_sell_mock.return_value = RoutineResult(
                     action="market_sell",
@@ -1768,6 +1771,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 )
 
         self.assertEqual(result.dispatch.status, "error")
+        self.assertEqual(result.dispatch.reason, "stop after transit")
         self.assertEqual([call["action"] for call in controls.calls].count("FocusLeftPanel"), 1)
         self.assertNotIn(3.0, sleep_calls)
 
@@ -1792,7 +1796,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                     {"Category": "Minerals", "Name": "bertrandite", "Name_Localised": _CARGO_2, "DemandBracket": 1, "Stock": 1000},
                 ],
             )
-            _write_cargo(journal_dir, [])
+            # Carry outbound cargo so the sell stub ends the flow after docking.
+            _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 1}])
             with patch("edcr.routines.haul_two_way.market_sell") as market_sell_mock:
                 market_sell_mock.return_value = RoutineResult(
                     action="market_sell",
@@ -1824,6 +1829,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 )
 
         self.assertEqual(result.dispatch.status, "error")
+        self.assertEqual(result.dispatch.reason, "stop after transit")
         self.assertIn(1.5, sleep_calls)
         self.assertNotIn(3.0, sleep_calls)
 
@@ -2129,7 +2135,8 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 journal_dir,
                 {"event": "FSDJump", "StarSystem": _SYSTEM_2},
             )
-            _write_cargo(journal_dir, [])
+            # Carry outbound cargo so the sell stub ends the flow after docking.
+            _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 1}])
             with patch("edcr.routines.haul_two_way.market_sell") as market_sell_mock:
                 market_sell_mock.return_value = RoutineResult(
                     action="market_sell",
@@ -2159,6 +2166,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 )
 
         self.assertEqual(result.dispatch.status, "error")
+        self.assertEqual(result.dispatch.reason, "stop after transit")
         self.assertEqual([call["action"] for call in controls.calls].count("FocusLeftPanel"), 2)
 
     def test_auto_detects_station_2_sell_when_docked_with_station_1_cargo(self) -> None:
