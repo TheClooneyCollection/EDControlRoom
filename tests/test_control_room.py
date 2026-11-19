@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import replace
 from functools import cache
 import io
@@ -235,7 +236,11 @@ class _CachedThemeVariables:
 
 
 class _HarnessApp(_CachedThemeVariables, ControlRoomApp):
-    def __init__(self, ctx: RuntimeContext, *, activity_log_max_lines: int | None = None) -> None:
+    def __init__(self, ctx: RuntimeContext, *, activity_log_max_lines: int | None = None,
+                 write_state_file: Callable[[Path, str], None] | None = None) -> None:
+        # Most command flows only need to record what would be persisted. Tests
+        # that restore state explicitly opt into the real filesystem writer.
+        self.written_state: dict[Path, str] = {}
         self.version_source = _FakeVersionSource()
         self.station_facts: list = []
         with patch("edcr.tts.which", _cached_which):
@@ -244,7 +249,7 @@ class _HarnessApp(_CachedThemeVariables, ControlRoomApp):
                 activity_log_max_lines=activity_log_max_lines,
                 version_source=self.version_source,
                 record_station_facts=self.station_facts.extend,
-                write_state_file=write_text_plain,
+                write_state_file=(self.written_state.__setitem__ if write_state_file is None else write_state_file),
             )
         self._journal_artifact_log_path = ctx.config.control_room.state_file.parent / "control-room-artifact.log"
         self.logged: list[str] = []
@@ -3213,6 +3218,8 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertEqual(entry.command, "frobnicate")
         self.assertEqual(entry.raw, "frobnicate now")
         self.assertEqual(entry.params, {"value": "now"})
+        saved = json.loads(self.app.written_state[self.app._state_path])
+        self.assertEqual(saved["history"][-1]["raw"], "frobnicate now")
 
     def test_invalid_buy_amount_records_history(self) -> None:
         self.app._controls = object()
@@ -3637,6 +3644,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertIn("does not support hwnd-targeted input", "\n".join(self.app.logged))
 
     def test_load_saved_state_restores_persisted_instant_mode(self) -> None:
+        self.app._write_state_file = write_text_plain
         self.app._instant_mode = True
         self.app._save_saved_state()
         self.app._instant_mode = False
@@ -3646,6 +3654,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertTrue(self.app._instant_mode)
 
     def test_load_saved_state_restores_persisted_session_summary(self) -> None:
+        self.app._write_state_file = write_text_plain
         self.app._haul_stats.session_started_at = 100.0
         self.app._haul_stats.session_active = True
         self.app._haul_stats.accumulated_profit = 1_250_000
@@ -3670,6 +3679,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertEqual(self.app._haul_stats.session_elapsed_s, 360.0)
 
     def test_load_saved_state_clears_persisted_session_when_configured(self) -> None:
+        self.app._write_state_file = write_text_plain
         self.app._haul_stats.session_started_at = 50.0
         self.app._haul_stats.accumulated_profit = 999_000
         self.app._time_fn = lambda: 200.0
@@ -3826,6 +3836,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
                 self._assert_timer_views(80.0, 60.0)
 
     def test_relaunch_keeps_session_frozen_then_resumes_accumulated_duration(self) -> None:
+        self.app._write_state_file = write_text_plain
         self._start_timer_test_haul(100.0)
         self.app._time_fn = lambda: 160.0
         self.app._save_saved_state()
@@ -3951,6 +3962,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertEqual(LocalControlRoomDataSource(self.app).current().routine.haul_phase_timings, {})
 
     def test_haul_stage_averages_restore_but_partial_stage_does_not_become_a_sample(self) -> None:
+        self.app._write_state_file = write_text_plain
         from edcr.control_room.dependencies import LocalControlRoomDataSource
         self._start_timer_test_haul(100.0)
         self.app._set_haul_phase('buy', 1)
@@ -5232,7 +5244,7 @@ class HaulRunHistoryTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmpdir.cleanup)
-        self.app = _HarnessApp(_make_context(Path(self.tmpdir.name)))
+        self.app = _HarnessApp(_make_context(Path(self.tmpdir.name)), write_state_file=write_text_plain)
         self.app._tts = _FakeTTS()
         self.app._ship.status = "in_station"
         self.app._ship.station = "Alpha"
@@ -5316,7 +5328,7 @@ class HaulRunHistoryTests(unittest.TestCase):
         from edcr.control_room.persistence import load_saved_state
         self.event("Undocked", "Alpha", 0)
         self.event("MarketSell", "Beta", 10, Type="gold", Count=2, TotalSale=50)
-        restarted = _HarnessApp(_make_context(Path(self.tmpdir.name)))
+        restarted = _HarnessApp(_make_context(Path(self.tmpdir.name)), write_state_file=write_text_plain)
         load_saved_state(restarted)
         row, = self.rows()
         self.assertEqual(row["status"], "aborted")
@@ -5354,7 +5366,7 @@ class HaulRunHistoryTests(unittest.TestCase):
         self.assertEqual(saved.haul_pending_runs[0]["cost"], 10)
         self.assertTrue(any("failed to append haul history" in text for text in self.app.logged))
         self.path.rmdir()
-        restarted = _HarnessApp(_make_context(Path(self.tmpdir.name)))
+        restarted = _HarnessApp(_make_context(Path(self.tmpdir.name)), write_state_file=write_text_plain)
         load_saved_state(restarted)
         row, = self.rows()
         self.assertEqual(row["cost"], 10)
