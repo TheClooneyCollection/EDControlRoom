@@ -62,6 +62,56 @@ class MarketSnapshotTests(unittest.TestCase):
             self.assertEqual(json.loads(stdout.getvalue()), json.loads((root / "cli" / "manifest.json").read_text()))
             self.assertIn("0 markets, 0 prices,", stderr.getvalue())
 
+    def test_cli_write_retains_requested_snapshots_and_unrelated_files(self) -> None:
+        for keep in (None, 1, 2, 5):
+            with self.subTest(keep=keep), TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                database = root / "markets.sqlite3"
+                EddnStore.open(database).close()
+                out = root / "out"
+                out.mkdir()
+                old_names = [f"markets-20000101T0{hour}00Z.sqlite3.gz" for hour in range(3)]
+                for name in old_names:
+                    (out / name).write_bytes(b"old")
+                (out / "notes.txt").write_text("keep me", encoding="utf-8")
+                args = ["write", str(database), str(out)]
+                if keep is not None:
+                    args.extend(["--keep", str(keep)])
+                with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                    self.assertEqual(main(args), 0)
+                manifest = json.loads((out / "manifest.json").read_text())
+                expected = sorted(old_names + [manifest["file"]])
+                if keep is not None:
+                    expected = expected[-keep:]
+                self.assertEqual(sorted(p.name for p in out.glob("markets-*.sqlite3.gz")), expected)
+                artifact = (out / manifest["file"]).read_bytes()
+                self.assertEqual(hashlib.sha256(artifact).hexdigest(), manifest["sha256"])
+                self.assertEqual((out / "notes.txt").read_text(), "keep me")
+
+    def test_cli_write_rejects_invalid_retention_before_writing(self) -> None:
+        for keep in ("0", "-1", "bad", "1.5"):
+            with self.subTest(keep=keep), TemporaryDirectory() as tmp:
+                out = Path(tmp) / "out"
+                stderr = io.StringIO()
+                with redirect_stderr(stderr), self.assertRaises(SystemExit) as error:
+                    main(["write", str(Path(tmp) / "missing.sqlite3"), str(out), "--keep", keep])
+                self.assertEqual(error.exception.code, 2)
+                self.assertIn("must be a positive integer", stderr.getvalue())
+                self.assertFalse(out.exists())
+
+    def test_failed_write_keeps_existing_manifest_and_snapshots(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            old = root / "markets-20000101T0000Z.sqlite3.gz"
+            old.write_bytes(b"old")
+            pointer = root / "manifest.json"
+            pointer.write_text(json.dumps({"file": old.name}), encoding="utf-8")
+            with redirect_stderr(io.StringIO()):
+                result = main(["write", str(root / "missing.sqlite3"), str(root), "--keep", "1"])
+            self.assertEqual(result, 1)
+            self.assertEqual(old.read_bytes(), b"old")
+            self.assertEqual(json.loads(pointer.read_text()), {"file": old.name})
+
     def test_incompatible_database_is_refused_without_publishing(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

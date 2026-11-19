@@ -28,6 +28,48 @@ prepared above so the listener and publisher do not change it concurrently.
 Repeat `uv sync --extra publish` after updating the checkout while the services
 are stopped. The publishing adapter uses region `auto` and client-default addressing.
 
+## Private snapshot over Tailscale
+
+For private hub gap filling, serve a snapshot directory over Tailscale. From the
+checkout, a oneshot service running as `edcontrolroom` writes the dedicated
+EDDN-only database snapshot:
+
+```sh
+uv run --no-sync python3 tools/market_snapshot.py write <db_path> <snapshot_dir> --keep 3
+```
+
+Use a write timer with `OnCalendar=hourly`, `Persistent=true` and
+`RandomizedDelaySec=120`. Give the service user a writable snapshot directory;
+keep the directory readable (0755) and its files readable (0644) by tailscaled.
+The manifest is replaced after the gzip is complete; only then are older gzip
+files pruned. `--keep` requires a positive integer; omitting it keeps every file.
+Run one writer per directory, with at least a minute between writes, and retain
+three snapshots to allow downloads of the preceding manifest to finish.
+
+Serve the directory using a dedicated HTTPS port:
+
+```sh
+tailscale serve --https=<port> <snapshot_dir>
+```
+
+Keep this Serve configuration running persistently through the deployment's
+service manager. Serve makes it available within the tailnet; do not enable
+Funnel or a public web listener. Set the hub's local configuration to:
+
+```toml
+[eddn]
+enabled = true
+snapshot_url = "<served HTTPS base URL>/manifest.json"
+```
+
+With its EDDN listener enabled, the hub fetches only at startup when its database
+is empty or its newest market is over one hour old. There is no periodic snapshot
+refresh while that listener runs. A merge replaces a station only when the
+snapshot's market is newer, preserving fresher hub and peer data. Check the
+startup `Market snapshot: ...` log and the Routes source/age display after
+configuring the URL and restarting the hub. The write timer and Serve service
+are deployment configuration; this section does not install them.
+
 ## Set up the bucket by hand
 
 1. Create the bucket in R2 and attach the custom domain for public reads.

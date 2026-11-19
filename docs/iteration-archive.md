@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `401`
-- Latest generated iteration number: `534`
+- Generated iteration count: `402`
+- Latest generated iteration number: `535`
 
 ## Iteration 134
 
@@ -11456,3 +11456,34 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - Existing suite timing exceeds the 0.7752s target. Unmodified main baseline: 1287 tests in 1.086s (target 0.7722s). Required timing report passed; top five hotspots are existing haul web/two-way tests (~0.24s combined). No unrelated timing optimization included.
 - No live EDDN relay verification; listener loop behavior is unchanged.
+
+## Iteration 535
+
+- When: `2026-11-19 22:57`
+- Area: `haul`
+- Title: `private-snapshot-retention`
+- Source: [2026-11-19-22-57_____haul_____private-snapshot-retention.md](iteration-logs/2026-11-19-22-57_____haul_____private-snapshot-retention.md)
+
+# Iteration Log
+
+- Area: `haul`
+- Title: `private-snapshot-retention`
+- Started: `2026-11-19 22:57`
+
+## Summary
+
+- Implemented the EDCR portion of plan 0021: optional local snapshot retention and private Tailscale operator instructions.
+
+## Changes
+
+- `write --keep N` accepts positive integers and prunes only after writing the manifest; omission retains all artifacts. Shared pruning keeps the existing publish upload-before-prune behavior.
+- CLI tests cover retention counts, manifest artifact integrity, unrelated files, invalid values and failed writes; publish tests remain unchanged.
+- Added private snapshot timer/Serve/hub configuration guidance and consolidated the haul snapshot status within its 20-line cap.
+- Focused suite: 13 tests in 0.052s, OK (1 opt-in integration skipped). Full suite: 1295 tests in 1.042s, OK (1 skipped).
+- Timing budget remains unmet (0.777s): prescribed timing report identified existing haul web/two-way hotspots; stashed baseline also exceeded its budget (1292 tests in 1.158s). Existing SQLite ResourceWarnings appeared in the full suite.
+
+## Follow-ups
+
+- Interface review and integration; no merge, push, deployment or live verification performed.
+- Deployment owns the write timer, persistent Serve process and local hub URL. Address the pre-existing full-suite timing excess separately.
+- Retention uses the existing UTC filename order; the writer assumes chronological timestamps and one writer per directory.

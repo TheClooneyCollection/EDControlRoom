@@ -11,7 +11,7 @@ import shutil
 import sqlite3
 from typing import Protocol
 
-from edcr.market_snapshot import Manifest, write_snapshot
+from edcr.market_snapshot import Manifest, prune_snapshots, write_snapshot
 
 
 @dataclass(frozen=True)
@@ -96,8 +96,7 @@ def publish(
     ):
         key = f"{settings.prefix}/{name}" if settings.prefix else name
         upload(Upload(key, work_dir / name, content_type, cache))
-    for old in sorted(work_dir.glob("markets-*.sqlite3.gz"), reverse=True)[settings.keep:]:
-        old.unlink()
+    prune_snapshots(work_dir, settings.keep)
     return PublishResult(manifest, status)
 
 

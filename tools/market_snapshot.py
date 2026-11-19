@@ -16,10 +16,20 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from edcr.market_snapshot import fetch_and_import, write_snapshot
+from edcr.market_snapshot import fetch_and_import, prune_snapshots, write_snapshot
 from edcr.eddn.store import EddnStore
 from edcr.config import EddnConfig
 from edcr.market_publish import PublishSettings, Upload, boto3_uploader, publish
+
+
+def positive_int(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("must be a positive integer") from None
+    if number < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return number
 
 
 def main(argv: list[str] | None) -> int:
@@ -28,6 +38,7 @@ def main(argv: list[str] | None) -> int:
     write = commands.add_parser("write", help="Write a snapshot from a database")
     write.add_argument("db_path", type=Path)
     write.add_argument("out_dir", type=Path)
+    write.add_argument("--keep", type=positive_int, help="Keep the newest N snapshots (default: keep all)")
     publishing = commands.add_parser("publish", help="Publish to an S3-compatible bucket")
     publishing.add_argument("db_path", type=Path)
     publishing.add_argument("--work-dir", type=Path)
@@ -52,6 +63,8 @@ def main(argv: list[str] | None) -> int:
             return 0
         if args.command == "write":
             manifest = write_snapshot(args.db_path, args.out_dir, now=lambda: datetime.now(timezone.utc))
+            if args.keep is not None:
+                prune_snapshots(args.out_dir, args.keep)
         else:
             env = dict(os.environ)
             if args.keep is not None:

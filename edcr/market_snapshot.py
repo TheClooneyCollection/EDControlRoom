@@ -75,6 +75,14 @@ def write_snapshot(db_path: Path, out_dir: Path, *, now: Callable[[], datetime])
     return manifest
 
 
+def prune_snapshots(out_dir: Path, keep: int) -> None:
+    """Keep the newest timestamped artifacts after their manifest is published."""
+    if keep < 1:
+        raise ValueError("keep must be a positive integer")
+    for old in sorted(out_dir.glob("markets-*.sqlite3.gz"), reverse=True)[keep:]:
+        old.unlink()
+
+
 class DownloadStream(Protocol):
     def read(self, size: int = -1) -> bytes: ...
 
