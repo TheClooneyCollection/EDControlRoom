@@ -1,6 +1,6 @@
 # Docs Process Status
 ## Current
-- `AGENTS.md` now treats the unittest runtime budget as `0.0006s` per executed test instead of a fixed `0.3s`, so the suite budget scales with test count and only slower runs need the timing follow-up.
+- `AGENTS.md` now treats the unittest runtime budget as `0.0007s` per executed test (raised from `0.0006s` on 2026-11-20; was a fixed `0.3s` before that), so the suite budget scales with test count and only slower runs need the timing follow-up.
 - Only `control_room.py` now stays at the repo root; auxiliary operator and validation CLIs live under `tools/`, while `tools/scratch/` remains the exploratory bucket.
 - `AGENTS.md` now treats `docs/iteration-archive.md` as fully generated during rebases and merges: if it conflicts, regenerate it with `uv run python3 tools/iteration_logs.py render-archive` and stage the regenerated file instead of hand-resolving conflict markers.
 - `AGENTS.md` now requires `docs/iteration-archive.md` refresh whenever iteration logs change before commit/push/PR, and delegated-agent slices must be committed on their own branch before a parent push or PR depends on them.

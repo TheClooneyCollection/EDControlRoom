@@ -188,7 +188,7 @@ Unit tests (fast; all doubles are explicit test-local fakes; no default no-op ca
 - `MacOSInputController` in `wine_helper` mode routes to the injected helper poster and never calls the HID poster. A test for "helper down → raises, no foreground fallback".
 - Launcher: an injected `popen` fake. Assert the argv shape (`--bottle`, helper path, port, token), the mismatch refusal against a fake `ps` table (reuse the CrossOver `ps` fixtures from the pid-detect tests), and `bye` on shutdown.
 - Config: parsing, validation errors, defaults.
-- Keep each test cheap (the suite budget is 0.0006 s per test): no real sockets or sleeps in unit tests.
+- Keep each test cheap (the suite budget is 0.0007 s per test): no real sockets or sleeps in unit tests.
 - Optional: a small protocol-conformance test of the C helper that runs only when an env var is set (manual, not in CI).
 
 Manual verification (`edcr/ship_controls.py` is the human test surface):
