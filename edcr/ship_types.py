@@ -54,3 +54,58 @@ SHIP_TYPE_NAMES = {
 def ship_type_name(ship_type: str) -> str:
     """The in-game name, or the journal's type as written when it is not listed."""
     return SHIP_TYPE_NAMES.get(ship_type.strip().lower(), ship_type)
+
+
+SHIP_PAD_SIZES: dict[str, str] = {
+    "adder": "S",
+    "anaconda": "L",
+    "asp": "M",
+    "asp_scout": "M",
+    "belugaliner": "L",
+    "cobramkiii": "S",
+    "cobramkiv": "S",
+    "cobramkv": "S",
+    "corsair": "M",
+    "cutter": "L",
+    "diamondback": "S",
+    "diamondbackxl": "S",
+    "dolphin": "S",
+    "eagle": "S",
+    "empire_courier": "S",
+    "empire_eagle": "S",
+    "empire_trader": "L",
+    "explorer_nx": "L",
+    "federation_corvette": "L",
+    "federation_dropship": "M",
+    "federation_dropship_mkii": "M",
+    "federation_gunship": "M",
+    "ferdelance": "M",
+    "hauler": "S",
+    "independant_trader": "M",
+    "krait_light": "M",
+    "krait_mkii": "M",
+    "lakonminer": "M",
+    "mamba": "M",
+    "mandalay": "M",
+    "orca": "L",
+    "panthermkii": "L",
+    "python": "M",
+    "python_nx": "M",
+    "sidewinder": "S",
+    "type6": "M",
+    "type7": "L",
+    "type8": "M",
+    "type9": "L",
+    "type9_military": "L",
+    "typex": "M",
+    "typex_2": "M",
+    "typex_3": "M",
+    "viper": "S",
+    "viper_mkiv": "S",
+    "vulture": "S",
+}
+
+
+def ship_pad_size(ship_type: str) -> str:
+    """Required landing pad, or an empty string for an unknown journal type."""
+    return SHIP_PAD_SIZES.get(ship_type.strip().lower(), "")

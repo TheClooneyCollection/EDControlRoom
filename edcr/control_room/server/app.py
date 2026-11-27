@@ -35,6 +35,11 @@ from edcr.eddn.route_query import (
     resolve_route_params,
     run_route_query,
 )
+from edcr.cheapest_markets import (
+    CheapestResult, UnknownSystemError, cheapest_payload, merge_offers, parse_cheapest_query, query_hub_store,
+)
+from edcr.ship_types import ship_pad_size
+from edcr.spansh_stations import PostJson, post_json, search_cheapest
 from edcr.config import TIME_MODEL_SOURCES, ConfigError, save_time_model
 from edcr.eddn.routes import TimeModel
 from edcr.trip_time_fit import FitShip, TripTimeModels, model_from_payload, parse_fit_ship
@@ -50,6 +55,7 @@ from edcr.hub.relay import NODE_ACTIONS, NODE_READS, NodeOffline, node_state, re
 from edcr.hub.protocol import (
     PEER_LINK_PATH,
     REQUEST_CARRIER_NAMES,
+    REQUEST_CHEAPEST_MARKETS,
     REQUEST_MARKET_PRICES,
     REQUEST_EDDN_ROUTES,
     REQUEST_EDDN_STATUS,
@@ -271,6 +277,7 @@ def build_observer_server_app(
     # Hub role: the nodes that said hello, where their outbox items go and the token they present.
     hub_side: HubSide | None = None,
     peer_recommendations: PeerRecommendations | None = None,
+    spansh_post: PostJson = post_json,
     route_compare_navroute_wait_seconds: float = 6.0,
     route_compare_compare_retry_attempts: int = 3,
 ) -> Starlette:
@@ -1167,6 +1174,76 @@ def build_observer_server_app(
             return auth_failure
         return await eddn_routes(request.query_params)
 
+    def answer_cheapest_markets(body: Any) -> LinkReply:
+        """Resolved peer or local filters; only the hub/standalone owns these sources."""
+        if not isinstance(body, dict) or any(not isinstance(v, str) for v in body.values()):
+            return LinkReply(400, {"detail": "cheapest params must be an object of strings"})
+        try:
+            query = parse_cheapest_query(body, current_system="", cargo_capacity=0, ship_pad="L")
+        except ValueError as exc:
+            return LinkReply(400, {"detail": str(exc)})
+        if market_database_file is None or not market_database_file.exists():
+            return LinkReply(404, {"detail": "The market database has no data yet"})
+        names = {item.commodity: item.name for snapshot in read_recent_markets() for item in market_items(snapshot)}
+        name = names.get(query.commodity, query.commodity.title())
+        now = time.time()
+        try:
+            hub, hidden = query_hub_store(market_database_file, query, now=now)
+        except UnknownSystemError:
+            return LinkReply(404, {"detail": "Unknown system"})
+        except sqlite3.Error as exc:
+            return LinkReply(503, {"detail": f"Cannot read the market database: {exc}"})
+        spansh, count, error = [], None, ""
+        if query.use_spansh:
+            try:
+                spansh, count = search_cheapest(query, name, spansh_post, now=now)
+            except Exception as exc:
+                error = str(exc) or type(exc).__name__
+        result = CheapestResult(merge_offers(hub, spansh, query), hidden, count, error)
+        return LinkReply(200, cheapest_payload(result, query, name))
+
+    async def cheapest_markets_endpoint(request: Request) -> JSONResponse:
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        params = dict(request.query_params)
+        inputs = await asyncio.to_thread(route_ship_inputs)
+        ship_type = getattr(getattr(data_provider(), "ship", None), "ship_type", "") or ""
+        node_id = viewed_node(params)
+        if node_id is not None:
+            assert hub_side is not None
+            node = next((item for item in hub_side.registry.nodes() if item["node_id"] == node_id), None)
+            if node is None or not node["connected"]:
+                name = node["name"] if node is not None else node_id
+                return JSONResponse({"detail": f"Node {name} is unreachable: not linked to the hub",
+                                     "node": node_id}, status_code=502)
+            state = node["state"]
+            if (not isinstance(state, dict) or not isinstance(state.get("ship"), dict)
+                    or "cargo_capacity" not in state["ship"]
+                    or ("system" not in params and not isinstance(state.get("current_system"), str))):
+                return JSONResponse({"detail": "Node market inputs are unavailable; update/reconnect the peer and wait for its state.",
+                                     "node": node_id}, status_code=409)
+            ship = state["ship"]
+            inputs["current_system"] = state.get("current_system") or ""
+            inputs["cargo_capacity"] = _cargo_capacity(SimpleNamespace(cargo_capacity=ship["cargo_capacity"]))
+            ship_type = ship.get("type") or ""
+        fallback = str(inputs["search_defaults"].get("min_landing_pad") or "L").strip().upper()
+        fallback = {"SMALL": "S", "MEDIUM": "M", "LARGE": "L", "ANY": "S"}.get(fallback, fallback)
+        try:
+            query = parse_cheapest_query(params, current_system=inputs["current_system"],
+                                         cargo_capacity=inputs["cargo_capacity"],
+                                         ship_pad=ship_pad_size(ship_type) or fallback)
+        except ValueError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=400)
+        body = {"commodity": query.commodity, "system": query.reference_system,
+                "radius_ly": "" if query.radius_ly is None else str(query.radius_ly),
+                "min_supply": str(query.min_supply), "pad": query.pad,
+                "max_age_hours": str(query.max_age_hours),
+                "carriers": str(int(query.include_carriers)), "spansh": str(int(query.use_spansh))}
+        if peer_link is not None:
+            return await ask_hub(REQUEST_CHEAPEST_MARKETS, body)
+        return link_reply_response(await asyncio.to_thread(answer_cheapest_markets, body))
+
     def link_reply_response(reply: LinkReply) -> JSONResponse:
         return JSONResponse(reply.body, status_code=reply.status)
 
@@ -1175,7 +1252,8 @@ def build_observer_server_app(
         try:
             reply = await asyncio.to_thread(
                 peer_link.request, kind, body,
-                timeout_s=peer_link.search_timeout_s if kind == REQUEST_EDDN_ROUTES else peer_link.request_timeout_s,
+                timeout_s=(peer_link.search_timeout_s if kind in {REQUEST_EDDN_ROUTES, REQUEST_CHEAPEST_MARKETS}
+                           else peer_link.request_timeout_s),
             )
         except HubUnreachable as exc:
             label = peer_link.hub_label
@@ -1197,6 +1275,7 @@ def build_observer_server_app(
     link_handlers: dict[str, RequestHandler] = {
         REQUEST_HAUL_SEARCH: answer_haul_search,
         REQUEST_EDDN_ROUTES: answer_peer_eddn_routes,
+        REQUEST_CHEAPEST_MARKETS: answer_cheapest_markets,
         REQUEST_TIME_MODEL: answer_time_model,
         REQUEST_EDDN_STATUS: answer_eddn_status,
         REQUEST_STATION_FACTS: answer_station_facts,
@@ -1680,6 +1759,7 @@ def build_observer_server_app(
             Route("/api/eddn-status", eddn_status_endpoint),
             Route("/api/carrier-names", carrier_names_endpoint),
             Route("/api/eddn-routes", eddn_routes_endpoint),
+            Route("/api/cheapest-markets", cheapest_markets_endpoint),
             Route("/api/time-model", time_model_route, methods=["GET", "POST"]),
             Route("/api/hub-status", hub_status_endpoint),
             Route("/api/nodes", nodes_endpoint),

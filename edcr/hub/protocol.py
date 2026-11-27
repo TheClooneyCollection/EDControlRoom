@@ -25,6 +25,7 @@ ITEM_JOURNAL_EVENTS = "journal_events"
 # Requests a peer asks the hub.
 REQUEST_HAUL_SEARCH = "haul_search"
 REQUEST_EDDN_ROUTES = "eddn_routes"
+REQUEST_CHEAPEST_MARKETS = "cheapest_markets"
 REQUEST_EDDN_STATUS = "eddn_status"
 REQUEST_STATION_FACTS = "station_facts"
 REQUEST_HAUL_STATS = "haul_stats"
