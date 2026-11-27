@@ -15,7 +15,7 @@ from tests.test_eddn import docked_envelope
 class StationServicesStoreTests(unittest.TestCase):
     def setUp(self):
         self.db = sqlite3.connect(':memory:')
-        self.store = EddnStore(self.db)
+        self.store = EddnStore(self.db, backup=lambda start, target: None)
         self.addCleanup(self.store.close)
         self.station = StationInfo(1, 7, 'Sol', 'Port', 'Ocellus', 50, 'L', 100, ('dock', 'shipyard'))
 
@@ -25,7 +25,7 @@ class StationServicesStoreTests(unittest.TestCase):
 
     def test_listener_open_upgrades_v1_without_a_manual_migration(self):
         self.db.executescript('DROP TABLE station_service; DROP TABLE station_services_seen;')
-        EddnStore(self.db)
+        EddnStore(self.db, backup=lambda start, target: None)
         self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(), (1,))
         for event in ('Docked', 'Location'):
             self.store.save(parse_eddn_message(docked_envelope(event=event, Docked=True, MarketID=1,
@@ -67,7 +67,7 @@ class StationServicesStoreTests(unittest.TestCase):
     def test_v1_snapshot_without_service_tables_still_imports(self):
         self.store.apply(self.station)
         with TemporaryDirectory() as directory, closing(sqlite3.connect(':memory:')) as source:
-            snapshot = EddnStore(source)
+            snapshot = EddnStore(source, backup=lambda start, target: None)
             snapshot.save([replace(self.station, timestamp=200, type='Coriolis', services=None)])
             source.executescript('DROP TABLE station_service; DROP TABLE station_services_seen;')
             path = Path(directory) / 'old.sqlite3'
@@ -81,7 +81,7 @@ class StationServicesStoreTests(unittest.TestCase):
         # Station metadata is newer than service data; it must not block services import.
         self.store.apply(replace(self.station, timestamp=300, services=None))
         with TemporaryDirectory() as directory, closing(sqlite3.connect(':memory:')) as source:
-            snapshot = EddnStore(source)
+            snapshot = EddnStore(source, backup=lambda start, target: None)
             snapshot.save([replace(self.station, timestamp=101, services=('repair',)),
                            replace(self.station, market_id=2, timestamp=99, services=('repair',)),
                            replace(self.station, market_id=3, timestamp=100, services=('repair',)),
@@ -102,7 +102,7 @@ class StationServicesStoreTests(unittest.TestCase):
     def test_broken_services_snapshot_rolls_back_other_imported_facts(self):
         self.store.apply(self.station)
         with TemporaryDirectory() as directory, closing(sqlite3.connect(':memory:')) as source:
-            snapshot = EddnStore(source)
+            snapshot = EddnStore(source, backup=lambda start, target: None)
             snapshot.save([replace(self.station, timestamp=200, type='Coriolis')])
             source.execute('DROP TABLE station_service')
             source.commit()
