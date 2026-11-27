@@ -2,7 +2,6 @@
 from dataclasses import replace
 from pathlib import Path
 import tempfile
-import time
 import unittest
 
 from edcr.cheapest_markets import (
@@ -92,7 +91,7 @@ class HubStoreTests(unittest.TestCase):
         cls.temp.cleanup()
 
     def test_ship_search_counts_first_failure_and_keeps_unknown_pads(self):
-        offers, hidden = query_hub_store(self.db, QUERY, now=NOW)
+        offers, hidden, hidden_markets = query_hub_store(self.db, QUERY, now=NOW)
         self.assertEqual([o.market_id for o in offers], [7, 1, 12, 13])
         self.assertEqual(hidden, {'carrier': 3, 'pad': 1, 'supply': 1, 'age': 1, 'radius': 2})
         self.assertEqual(offers[0].distance_ly, 5.0)
@@ -100,7 +99,7 @@ class HubStoreTests(unittest.TestCase):
         self.assertEqual((offers[-1].station_type, offers[-1].dist_ls), ('', None))
 
     def test_carrier_toggle_exposes_suspect_prices_strictly_below_threshold(self):
-        offers, hidden = query_hub_store(self.db, replace(QUERY, include_carriers=True), now=NOW)
+        offers, hidden, hidden_markets = query_hub_store(self.db, replace(QUERY, include_carriers=True), now=NOW)
         self.assertEqual([(o.market_id, o.suspect_price) for o in offers[:2]], [(10, True), (11, False)])
         self.assertEqual(hidden['carrier'], 0)
         self.assertEqual(hidden['pad'], 2)
@@ -109,34 +108,43 @@ class HubStoreTests(unittest.TestCase):
         query = replace(QUERY, reference_system='Missing')
         with self.assertRaisesRegex(UnknownSystemError, 'Unknown system: Missing'):
             query_hub_store(self.db, replace(query, use_spansh=False), now=NOW)
-        offers, hidden = query_hub_store(self.db, query, now=NOW)
+        offers, hidden, hidden_markets = query_hub_store(self.db, query, now=NOW)
         self.assertEqual(len(offers), 6)
         self.assertTrue(all(o.distance_ly is None for o in offers))
         self.assertEqual(hidden['radius'], 0)
 
     def test_no_reference_means_no_distance_and_no_radius(self):
-        offers, hidden = query_hub_store(self.db, replace(QUERY, reference_system=''), now=NOW)
+        offers, hidden, hidden_markets = query_hub_store(self.db, replace(QUERY, reference_system=''), now=NOW)
         self.assertEqual(len(offers), 6)
         self.assertTrue(all(o.distance_ly is None for o in offers))
         self.assertEqual(hidden['radius'], 0)
 
     def test_global_radius_keeps_distance_and_unknown_locations(self):
-        offers, hidden = query_hub_store(self.db, replace(QUERY, radius_ly=None), now=NOW)
+        offers, hidden, hidden_markets = query_hub_store(self.db, replace(QUERY, radius_ly=None), now=NOW)
         self.assertEqual(len(offers), 6)
         self.assertEqual(hidden['radius'], 0)
         self.assertEqual(next(o for o in offers if o.market_id == 6).distance_ly, 101)
 
     def test_radius_and_age_boundaries_are_inclusive_case_insensitive_reference(self):
-        offers, _ = query_hub_store(self.db, replace(QUERY, reference_system='sOL', radius_ly=5), now=NOW)
+        offers, _, _ = query_hub_store(self.db, replace(QUERY, reference_system='sOL', radius_ly=5), now=NOW)
         self.assertIn(12, [o.market_id for o in offers])
 
     def test_commodity_without_sellers_is_empty(self):
-        offers, hidden = query_hub_store(self.db, replace(QUERY, commodity='gold'), now=NOW)
+        offers, hidden, hidden_markets = query_hub_store(self.db, replace(QUERY, commodity='gold'), now=NOW)
         self.assertEqual(offers, [])
         self.assertEqual(sum(hidden.values()), 0)
 
+    def test_hidden_hub_rows_block_older_or_equal_remote_snapshots(self):
+        hub, hidden, excluded = query_hub_store(self.db, QUERY, now=NOW)
+        remote = [replace(row, source='spansh', supply=900, max_pad='', updated_at=row.updated_at - delta)
+                  for row in excluded.values() for delta in (0, 1)]
+        offers, total = merge_offers(hub, remote, QUERY, excluded)
+        self.assertEqual([o.market_id for o in offers], [7, 1, 12, 13])
+        self.assertEqual(total, 4)
+        self.assertEqual(sum(hidden.values()), 8)
+
     def test_hub_does_not_limit_before_merge(self):
-        offers, _ = query_hub_store(self.db, replace(QUERY, limit=1), now=NOW)
+        offers, _, _ = query_hub_store(self.db, replace(QUERY, limit=1), now=NOW)
         self.assertEqual(len(offers), 4)
 
 
@@ -146,7 +154,7 @@ class MergeAndPayloadTests(unittest.TestCase):
         for delta in [-1, 0, 1]:
             with self.subTest(delta=delta):
                 remote = replace(OFFER, source='spansh', max_pad='', updated_at=NOW + delta)
-                offers = merge_offers([hub], [remote], QUERY)
+                offers = merge_offers([hub], [remote], replace(QUERY, pad='M'), {})[0]
                 self.assertEqual(offers[0].source, 'spansh' if delta > 0 else 'hub')
                 self.assertEqual(offers[0].max_pad, 'M')
         self.assertEqual(hub.max_pad, 'M')
@@ -156,37 +164,57 @@ class MergeAndPayloadTests(unittest.TestCase):
                   replace(OFFER, market_id=2, distance_ly=50),
                   replace(OFFER, market_id=3, distance_ly=0),
                   replace(OFFER, market_id=4, buy_price=999, distance_ly=100)]
-        self.assertEqual([o.market_id for o in merge_offers(offers, [], replace(QUERY, limit=3))], [4, 3, 2])
+        self.assertEqual([o.market_id for o in merge_offers(offers, [], replace(QUERY, limit=3), {})[0]], [4, 3, 2])
 
     def test_carrier_flag_uses_merged_station_median_before_limit(self):
         rows = [OFFER, replace(OFFER, market_id=2, buy_price=3000),
                 replace(OFFER, market_id=3, buy_price=199, is_carrier=True, source='spansh'),
                 replace(OFFER, market_id=4, buy_price=200, is_carrier=True)]
-        offers = merge_offers(rows[:2], rows[2:], replace(QUERY, limit=2))
+        offers = merge_offers(rows[:2], rows[2:], replace(QUERY, limit=2), {})[0]
         self.assertEqual([o.suspect_price for o in offers], [True, False])
 
     def test_prior_hub_suspect_flag_survives_filtered_station_baseline(self):
         carrier = replace(OFFER, is_carrier=True, suspect_price=True)
-        self.assertTrue(merge_offers([carrier], [], QUERY)[0].suspect_price)
-        self.assertFalse(merge_offers([], [replace(carrier, suspect_price=False)], QUERY)[0].suspect_price)
+        self.assertTrue(merge_offers([carrier], [], QUERY, {})[0][0].suspect_price)
+        self.assertFalse(merge_offers([], [replace(carrier, suspect_price=False)], QUERY, {})[0][0].suspect_price)
+
+    def test_medium_ship_cannot_use_hidden_small_settlement_even_with_newer_spansh(self):
+        hub = replace(OFFER, max_pad='S', station_type='Settlement')
+        for delta in (-1, 0, 1):
+            remote = replace(hub, source='spansh', max_pad='', updated_at=NOW + delta)
+            self.assertEqual(merge_offers([], [remote], replace(QUERY, pad='M'), {1: hub}), ([], 0))
+
+    def test_recent_supply_drop_overrides_old_remote_supply_but_new_report_can_recover(self):
+        hub = replace(OFFER, supply=200, updated_at=NOW - 3600)
+        query = replace(QUERY, min_supply=500)
+        remote = replace(OFFER, source='spansh', supply=900, updated_at=NOW - 5 * 86400)
+        self.assertEqual(merge_offers([], [remote], query, {1: hub}), ([], 0))
+        offers, total = merge_offers([], [replace(remote, updated_at=NOW)], query, {1: hub})
+        self.assertEqual((offers[0].supply, total), (900, 1))
+
+    def test_payload_reports_total_before_limit(self):
+        rows = [replace(OFFER, market_id=i) for i in range(312)]
+        offers, total = merge_offers(rows, [], QUERY, {})
+        payload = cheapest_payload(CheapestResult(offers, {}, None, '', total), QUERY, 'Tritium', now=NOW)
+        self.assertEqual((len(payload['offers']), payload['total']), (50, 312))
 
     def test_payload_retains_hub_results_and_spansh_failure(self):
-        now = time.time()
+        now = NOW
         offer = replace(OFFER, updated_at=now - 60)
         hidden = {'carrier': 12, 'pad': 0, 'supply': 0, 'age': 0, 'radius': 0}
-        payload = cheapest_payload(CheapestResult([offer], hidden, None, 'Timed out'), QUERY, 'Tritium')
+        payload = cheapest_payload(CheapestResult([offer], hidden, None, 'Timed out', 1), QUERY, 'Tritium', now=NOW)
         self.assertEqual(payload['commodity'], 'tritium')
         self.assertEqual(payload['name'], 'Tritium')
         self.assertEqual(payload['query']['reference_system'], 'Sol')
         self.assertEqual(payload['spansh'], {'asked': True, 'count': None, 'error': 'Timed out'})
         self.assertEqual(payload['hidden'], hidden)
-        self.assertAlmostEqual(payload['offers'][0]['age_s'], 60, delta=1)
+        self.assertEqual(payload['offers'][0]['age_s'], 60)
         self.assertEqual(payload['offers'][0]['source'], 'hub')
 
     def test_empty_payload_spansh_count_and_future_age(self):
-        result = CheapestResult([], {}, 123, '')
-        self.assertEqual(cheapest_payload(result, QUERY, 'Tritium')['spansh']['count'], 123)
-        result = CheapestResult([replace(OFFER, updated_at=time.time() + 60)], {}, None, '')
-        payload = cheapest_payload(result, replace(QUERY, use_spansh=False), 'Tritium')
+        result = CheapestResult([], {}, 123, '', 0)
+        self.assertEqual(cheapest_payload(result, QUERY, 'Tritium', now=NOW)['spansh']['count'], 123)
+        result = CheapestResult([replace(OFFER, updated_at=NOW + 60)], {}, None, '', 1)
+        payload = cheapest_payload(result, replace(QUERY, use_spansh=False), 'Tritium', now=NOW)
         self.assertFalse(payload['spansh']['asked'])
         self.assertEqual(payload['offers'][0]['age_s'], 0)

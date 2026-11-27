@@ -46,7 +46,7 @@ const get = (id) => {
 let chosen = "saved-peer";
 const requests = [];
 const fixture = {
-  name: "Tritium", commodity: "tritium",
+  name: "Tritium", commodity: "tritium", total: 312,
   query: {reference_system: "Adach", radius_ly: 100, min_supply: 720, pad: "L", max_age_hours: 168, include_carriers: false, use_spansh: true},
   offers: [{buy_price: 10, supply: 1000, station_name: '<img src=x onerror="alert(1)">', system_name: "A&B", is_carrier: true, suspect_price: true, distance_ly: 0, dist_ls: null, max_pad: "", age_s: 90000, source: "hub"}],
   hidden: {carrier: 12, supply: 20, pad: 2, radius: 3, age: 4},
@@ -67,6 +67,7 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
   assert.equal(get("system").value, "Adach");
   assert.equal(get("min_supply").value, 720);
   assert.equal(get("spansh").checked, true);
+  assert.match(get("results-status").textContent, /1 of 312 shown/);
   assert.match(get("results").innerHTML, /&lt;img/);
   assert.doesNotMatch(get("results").innerHTML, /<img/);
   assert.match(get("results").innerHTML, /A&amp;B/);
@@ -104,6 +105,25 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
   await settle();
   assert.match(get("results-status").textContent, /No matching markets/);
   assert.equal(get("spansh-status").textContent, "Spansh: not requested.");
+  // A fresh page whose initial defaults request fails must send edited form values.
+  elements.clear();
+  ok = false;
+  reply = {detail: "First load failed"};
+  const retryContext = vm.createContext({...context});
+  vm.runInContext(fs.readFileSync("web/cheapest.js", "utf8"), retryContext);
+  await settle();
+  get("system").value = "Edited system";
+  get("min_supply").value = "200";
+  get("pad").value = "M";
+  get("cheapest-form").input();
+  ok = true;
+  reply = fixture;
+  get("cheapest-form").submit({preventDefault() {}});
+  await settle();
+  assert.equal(requests.at(-1).searchParams.get("system"), "Edited system");
+  assert.equal(requests.at(-1).searchParams.get("min_supply"), "200");
+  assert.equal(requests.at(-1).searchParams.get("pad"), "M");
+  assert.equal(get("system").value, "Edited system");
 })().catch(error => {console.error(error); process.exitCode = 1;});
 '''
         result = subprocess.run(

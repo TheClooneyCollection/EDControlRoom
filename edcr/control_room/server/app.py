@@ -1206,7 +1206,7 @@ def build_observer_server_app(
         name = names.get(query.commodity, query.commodity.title())
         now = time.time()
         try:
-            hub, hidden = query_hub_store(market_database_file, query, now=now)
+            hub, hidden, hidden_markets = query_hub_store(market_database_file, query, now=now)
         except UnknownSystemError:
             return LinkReply(404, {"detail": "Unknown system"})
         except sqlite3.Error as exc:
@@ -1214,11 +1214,14 @@ def build_observer_server_app(
         spansh, count, error = [], None, ""
         if query.use_spansh:
             try:
-                spansh, count = search_cheapest(query, name, spansh_post, now=now)
+                spansh, count, skipped = search_cheapest(query, name, spansh_post, now=now)
+                if skipped:
+                    error = f"{skipped} Spansh rows skipped"
             except Exception as exc:
                 error = str(exc) or type(exc).__name__
-        result = CheapestResult(merge_offers(hub, spansh, query), hidden, count, error)
-        return LinkReply(200, cheapest_payload(result, query, name))
+        offers, total = merge_offers(hub, spansh, query, hidden_markets)
+        result = CheapestResult(offers, hidden, count, error, total)
+        return LinkReply(200, cheapest_payload(result, query, name, now=now))
 
     async def cheapest_markets_endpoint(request: Request) -> JSONResponse:
         auth_failure = require_http_auth(request)

@@ -29,7 +29,7 @@ class SpanshStationsTests(unittest.TestCase):
             requests.append((url, body, timeout))
             return {"results": [station()], "count": 3366}
 
-        offers, count = search_cheapest(QUERY, "Tritium", post, now=NOW)
+        offers, count, skipped = search_cheapest(QUERY, "Tritium", post, now=NOW)
         self.assertEqual(count, 3366)
         offer, = offers
         self.assertEqual((offer.source, offer.market_id, offer.system_name, offer.station_name),
@@ -74,7 +74,7 @@ class SpanshStationsTests(unittest.TestCase):
         for key in ("has_large_pad", "type", "distance"):
             self.assertNotIn(key, body["filters"])
         self.assertNotIn("reference_system", body)
-        offers, _ = search_cheapest(query, "Tritium", lambda *_: {
+        offers, _, _ = search_cheapest(query, "Tritium", lambda *_: {
             "results": [station(type="Fleet Carrier", has_large_pad=False,
                                 distance_to_arrival=None, distance=None,
                                 market_updated_at="2026-11-27T10:00:00Z")], "count": 1,
@@ -97,7 +97,7 @@ class SpanshStationsTests(unittest.TestCase):
     def test_empty_search_is_successful(self):
         self.assertEqual(search_cheapest(QUERY, "Tritium", lambda *_: {
             "results": [], "count": 0,
-        }, now=NOW), ([], 0))
+        }, now=NOW), ([], 0, 0))
 
     def test_network_error_reaches_caller(self):
         def offline(*_):
@@ -113,7 +113,7 @@ class SpanshStationsTests(unittest.TestCase):
             with self.subTest(response=response), self.assertRaisesRegex(ValueError, "Spansh"):
                 search_cheapest(QUERY, "Tritium", lambda *_: response, now=NOW)
 
-    def test_malformed_station_or_commodity_is_a_clear_error(self):
+    def test_malformed_rows_are_counted_while_valid_rows_survive(self):
         for row in (None, station(market=None), station(market=[None]), station(market=[]),
                     station(market=[station()["market"][1]] * 2),
                     station(market=[{"commodity": "Tritium", "buy_price": "1", "supply": 1}]),
@@ -121,13 +121,15 @@ class SpanshStationsTests(unittest.TestCase):
                     station(has_large_pad="yes"), station(distance=float("nan")),
                     station(distance_to_arrival=-1), station(market_updated_at=None),
                     station(market_updated_at="invalid")):
-            with self.subTest(row=row), self.assertRaisesRegex(ValueError, "Spansh response"):
-                search_cheapest(QUERY, "Tritium", lambda *_: {
-                    "results": [row], "count": 1,
+            with self.subTest(row=row):
+                offers, count, skipped = search_cheapest(QUERY, "Tritium", lambda *_: {
+                    "results": [row, station()], "count": 2,
                 }, now=NOW)
+                self.assertEqual((len(offers), count, skipped), (1, 2, 1))
+                self.assertEqual(offers[0].market_id, 123)
 
     def test_timestamp_without_offset_is_utc(self):
-        offers, _ = search_cheapest(QUERY, "Tritium", lambda *_: {
+        offers, _, _ = search_cheapest(QUERY, "Tritium", lambda *_: {
             "results": [station(market_updated_at="2026-11-27 10:00:00")], "count": 1,
         }, now=NOW)
         self.assertEqual(offers[0].updated_at, NOW)

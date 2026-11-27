@@ -74,10 +74,12 @@ class CheapestEndpointTests(unittest.TestCase):
             return {'count': 2, 'results': [{'market_id': 2, 'system_name': 'Sol', 'name': 'Cheap Port',
                 'type': 'Coriolis Starport', 'has_large_pad': True, 'distance': 0,
                 'market_updated_at': datetime.fromtimestamp(self.now, timezone.utc).isoformat(),
-                'market': [{'commodity': 'Tritium', 'buy_price': 900, 'supply': 1000}]}]}
+                'market': [{'commodity': 'Tritium', 'buy_price': 900, 'supply': 1000}]}, None]}
         result = self.get(self.app(spansh_post=post)).json()
         self.assertEqual([o['source'] for o in result['offers']], ['spansh', 'hub'])
         self.assertEqual(result['spansh']['count'], 2)
+        self.assertEqual(result['spansh']['error'], '1 Spansh rows skipped')
+        self.assertEqual(result['total'], 2)
         self.assertEqual(sent[0]['filters']['market'][0]['name'], 'Tritium')
 
     def test_spansh_failure_keeps_hub_rows(self):

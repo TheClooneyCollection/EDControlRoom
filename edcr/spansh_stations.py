@@ -108,7 +108,7 @@ def _offer(row: object, query: CheapestQuery, commodity_name: str) -> MarketOffe
 
 
 def search_cheapest(query: CheapestQuery, commodity_name: str, post: PostJson,
-                    *, now: float) -> tuple[list[MarketOffer], int]:
+                    *, now: float) -> tuple[list[MarketOffer], int, int]:
     body = spansh_search_body(query, commodity_name)
     body["filters"]["market_updated_at"] = {
         "comparison": "<=>",
@@ -126,4 +126,11 @@ def search_cheapest(query: CheapestQuery, commodity_name: str, post: PostJson,
     count = _number(response.get("count"), "count", integer=True)
     if count < len(rows):
         raise ValueError("Spansh response: count is smaller than the result list")
-    return [_offer(row, query, commodity_name) for row in rows], int(count)
+    offers = []
+    skipped = 0
+    for row in rows:
+        try:
+            offers.append(_offer(row, query, commodity_name))
+        except (ValueError, OverflowError, OSError):
+            skipped += 1
+    return offers, int(count), skipped

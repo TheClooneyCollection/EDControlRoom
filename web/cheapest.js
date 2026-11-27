@@ -6,6 +6,7 @@ let cachedToken = "";
 try { cachedToken = window.localStorage.getItem(TOKEN_STORAGE_KEY) || ""; } catch (error) { /* Private window. */ }
 let accessToken = queryParams.get(AUTH_QUERY_PARAMETER_NAME) || queryParams.get("access_token") || cachedToken || WEB_CONFIG.defaultAccessToken || "";
 let defaultsLoaded = false;
+let formEdited = false;
 let searchRequest = 0;
 const FIELDS = ["system", "radius_ly", "min_supply", "pad", "max_age_hours"];
 const field = (id) => document.getElementById(id);
@@ -50,7 +51,8 @@ function searchParams(useDefaults) {
 
 function renderResults(payload) {
   const offers = payload.offers || [];
-  setText("results-status", offers.length ? `${offers.length} markets · ${payload.name || payload.commodity} · cheapest first` : "No matching markets. Try widening the radius or relaxing the filters.");
+  const shown = payload.total > offers.length ? `${offers.length} of ${payload.total} shown` : `${offers.length} markets`;
+  setText("results-status", offers.length ? `${shown} · ${payload.name || payload.commodity} · cheapest first` : "No matching markets. Try widening the radius or relaxing the filters.");
   const showDistance = Boolean(payload.query.reference_system);
   const rows = offers.map((offer) => {
     const price = `${escapeHtml(numberLabel(offer.buy_price))} Cr`;
@@ -90,7 +92,8 @@ async function search(useDefaults) {
     const payload = await response.json();
     if (request !== searchRequest) return;
     if (!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
-    if (!defaultsLoaded) { prefill(payload.query); defaultsLoaded = true; }
+    if (!defaultsLoaded && !formEdited) prefill(payload.query);
+    defaultsLoaded = true;
     renderResults(payload);
   } catch (error) {
     if (request === searchRequest) setText("results-status", `Markets unavailable: ${error.message}`);
@@ -99,12 +102,14 @@ async function search(useDefaults) {
   }
 }
 
-field("cheapest-form").addEventListener("submit", (event) => { event.preventDefault(); search(!defaultsLoaded); });
+field("cheapest-form").addEventListener("input", () => { formEdited = true; });
+field("cheapest-form").addEventListener("change", () => { formEdited = true; });
+field("cheapest-form").addEventListener("submit", (event) => { event.preventDefault(); search(false); });
 field("access-token").value = accessToken;
 field("save-token").addEventListener("click", () => {
   accessToken = field("access-token").value.trim();
   try { window.localStorage.setItem(TOKEN_STORAGE_KEY, accessToken); } catch (error) { /* This tab still works. */ }
-  search(!defaultsLoaded);
+  search(false);
 });
 setText("host-label", WEB_CONFIG.hostLabel || window.location.host || "-");
 setText("status-runtime", WEB_CONFIG.runtimePlatform || "-");

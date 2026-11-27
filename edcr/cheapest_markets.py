@@ -9,7 +9,6 @@ import math
 from pathlib import Path
 import sqlite3
 import statistics
-import time
 from typing import Any
 
 from edcr.recent_markets import commodity_key
@@ -53,6 +52,7 @@ class CheapestResult:
     hidden: dict[str, int]
     spansh_count: int | None
     spansh_error: str
+    total: int
 
 
 class UnknownSystemError(ValueError):
@@ -99,7 +99,7 @@ def _toggle(params: Mapping[str, str], name: str, default: str) -> bool:
     return value == "1"
 
 
-def query_hub_store(db: Path, query: CheapestQuery, *, now: float) -> tuple[list[MarketOffer], dict[str, int]]:
+def query_hub_store(db: Path, query: CheapestQuery, *, now: float) -> tuple[list[MarketOffer], dict[str, int], dict[int, MarketOffer]]:
     """Read all selling rows before filtering so each exclusion has one reason.
 
     UnknownSystemError maps to HTTP 404. With Spansh enabled an unknown reference
@@ -131,6 +131,7 @@ def query_hub_store(db: Path, query: CheapestQuery, *, now: float) -> tuple[list
         candidates.append(MarketOffer("hub", mid, system, station, kind, bool(carrier), pad,
                                       arrival, distance, buy, supply, updated, False))
     offers = []
+    hidden_markets = {}
     for offer in _flag_prices(candidates):
         reason = ""
         if offer.is_carrier and not query.include_carriers:
@@ -147,9 +148,10 @@ def query_hub_store(db: Path, query: CheapestQuery, *, now: float) -> tuple[list
             reason = "radius"
         if reason:
             hidden[reason] += 1
+            hidden_markets[offer.market_id] = offer
         else:
             offers.append(offer)
-    return sorted(offers, key=_offer_order), hidden
+    return sorted(offers, key=_offer_order), hidden, hidden_markets
 
 
 def _offer_order(offer: MarketOffer) -> tuple[int, float, int]:
@@ -163,24 +165,33 @@ def _flag_prices(offers: list[MarketOffer]) -> list[MarketOffer]:
                     (offer.suspect_price or offer.buy_price < threshold)) for offer in offers]
 
 
-def merge_offers(hub: list[MarketOffer], spansh: list[MarketOffer], query: CheapestQuery) -> list[MarketOffer]:
+def merge_offers(hub: list[MarketOffer], spansh: list[MarketOffer], query: CheapestQuery,
+                 hidden_markets: Mapping[int, MarketOffer]) -> tuple[list[MarketOffer], int]:
     """Newest market snapshot wins; hub wins ties and supplies missing pad facts."""
     merged = {offer.market_id: offer for offer in hub}
-    hub_pads = {offer.market_id: offer.max_pad for offer in hub}
+    hub_pads = {mid: offer.max_pad for mid, offer in hidden_markets.items()}
+    hub_pads.update({offer.market_id: offer.max_pad for offer in hub})
     for offer in spansh:
+        hidden = hidden_markets.get(offer.market_id)
+        if hidden is not None and hidden.updated_at >= offer.updated_at:
+            continue
+        offer = replace(offer, max_pad=hub_pads.get(offer.market_id) or offer.max_pad)
+        if offer.max_pad and PAD_ORDER[offer.max_pad] < PAD_ORDER[query.pad]:
+            continue
         previous = merged.get(offer.market_id)
         if previous is None or offer.updated_at > previous.updated_at:
-            merged[offer.market_id] = replace(offer, max_pad=offer.max_pad or hub_pads.get(offer.market_id, ""))
-    return sorted(_flag_prices(list(merged.values())), key=_offer_order)[:query.limit]
+            merged[offer.market_id] = offer
+    return sorted(_flag_prices(list(merged.values())), key=_offer_order)[:query.limit], len(merged)
 
 
-def cheapest_payload(result: CheapestResult, query: CheapestQuery, display_name: str) -> dict[str, Any]:
-    now = time.time()
+def cheapest_payload(result: CheapestResult, query: CheapestQuery, display_name: str,
+                     *, now: float) -> dict[str, Any]:
     return {
         "commodity": query.commodity,
         "name": display_name,
         "query": asdict(query),
         "offers": [dict(asdict(offer), age_s=max(0.0, now - offer.updated_at)) for offer in result.offers],
         "hidden": dict(result.hidden),
+        "total": result.total,
         "spansh": {"asked": query.use_spansh, "count": result.spansh_count, "error": result.spansh_error},
     }
