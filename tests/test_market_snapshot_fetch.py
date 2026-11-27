@@ -76,6 +76,14 @@ class SnapshotFetchTests(unittest.TestCase):
             self.assertEqual((result.counts.markets, result.counts.prices), (0, 0))
             self.assertEqual(db.execute('SELECT commodity FROM price').fetchall(), [('platinum',)])
 
+    def test_older_snapshot_is_migrated_before_exact_version_import(self):
+        with patch('edcr.eddn.store.SCHEMA_VERSION', 2), patch('edcr.market_snapshot.SCHEMA_VERSION', 2), patch(
+            'edcr.eddn.store.MIGRATIONS', {1: lambda db: db.execute('CREATE TABLE upgraded (value)')}
+        ), closing(memory_store()) as store:
+            result, _ = self.fetch(store)
+            self.assertEqual(result.counts.markets, 1)
+            self.assertEqual(store.counts().prices, 2)
+
     def test_known_file_checks_only_the_manifest(self):
         with closing(memory_store()) as store:
             result, requested = self.fetch(store, known_file=self.manifest['file'])
@@ -90,7 +98,7 @@ class SnapshotFetchTests(unittest.TestCase):
             return io.BytesIO(json.dumps(dict(self.manifest, schema=999)).encode())
 
         with closing(memory_store()) as store:
-            with self.assertRaisesRegex(ValueError, 'Unsupported market schema'):
+            with self.assertRaisesRegex(ValueError, 'update the hub'):
                 fetch_and_import(URL, store, urlopen=open_url, now=lambda: 1200, max_age_s=500, known_file=None)
             self.assertEqual(requested, [URL])
             self.assertEqual(store.counts().markets, 0)
@@ -200,7 +208,7 @@ class SnapshotFetchTests(unittest.TestCase):
             source = Path(tmp) / 'snapshot.sqlite3'
             # Import equivalence needs the stored rows; snapshot publication has its own tests.
             source.write_bytes(packed(updates))
-            imported, saved = EddnStore(actual), EddnStore(expected)
+            imported, saved = EddnStore(actual, backup=lambda start, target: None), EddnStore(expected, backup=lambda start, target: None)
             imported.save(initial)
             saved.save(initial)
             saved.save([item for item in updates if not isinstance(item, MarketSnapshot) or item.timestamp >= 700])
@@ -215,7 +223,7 @@ class SnapshotFetchTests(unittest.TestCase):
         with TemporaryDirectory() as tmp, closing(sqlite3.connect(':memory:')) as db:
             source = Path(tmp) / 'snapshot.sqlite3'
             source.write_bytes(self.database)
-            store = EddnStore(db)
+            store = EddnStore(db, backup=lambda start, target: None)
             store.apply(market(5))
             before = rows(db)
             with closing(sqlite3.connect(source)) as broken:
@@ -237,7 +245,7 @@ class SnapshotFetchTests(unittest.TestCase):
                 source.execute('PRAGMA user_version=999')
             data = gzip.compress(path.read_bytes())
             manifest = dict(self.manifest, bytes=len(data), sha256=hashlib.sha256(data).hexdigest())
-            store = EddnStore(db)
+            store = EddnStore(db, backup=lambda start, target: None)
             with self.assertRaisesRegex(ValueError, 'Unsupported market schema'):
                 self.fetch(store, compressed=data, manifest=manifest)
             self.assertEqual(store.counts().markets, 0)

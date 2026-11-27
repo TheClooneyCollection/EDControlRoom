@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import closing
+import importlib
+import sqlite3
 from pathlib import Path
 import sys
 import time
@@ -44,20 +47,42 @@ def run_listener(database: Path, relay: str, max_age_s: float, status_every: flo
         store.close()
 
 
+def check_database(database: Path) -> int:
+    """Report schema compatibility without initializing or migrating the database."""
+    try:
+        for module in ("edcr.eddn.listener", "edcr.eddn.store", "edcr.market_snapshot"):
+            importlib.import_module(module)
+        from edcr.eddn.store import SCHEMA_VERSION
+        version = 0
+        if database.exists():
+            with closing(sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True)) as db:
+                version = db.execute("PRAGMA user_version").fetchone()[0]
+        print(f"schema db={version} code={SCHEMA_VERSION}")
+        return int(version > SCHEMA_VERSION)
+    except Exception as error:
+        print(f"Smoke check failed: {error}", file=sys.stderr)
+        return 1
+
+
 def main(
     argv: list[str] | None,
     *,
     listen: Callable[[Path, str, float, float], None] = run_listener,
 ) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true", help="Check imports and database schema without writing")
     parser.add_argument("--db", type=Path, help="Override eddn.database_file")
     parser.add_argument("--relay", help="Override eddn.relay")
     parser.add_argument("--max-age-days", type=float, help="Override eddn.max_age_days")
     parser.add_argument("--status-every", type=float, default=30.0, help="Seconds between status lines")
     args = parser.parse_args(argv)
+    if args.check and args.db is not None:
+        return check_database(args.db)
     # Standalone collectors need only the shipped defaults, not a local config.
     config_path = DEFAULT_CONFIG_PATH if DEFAULT_CONFIG_PATH.exists() else DEFAULT_EDDN_CONFIG_PATH
     eddn = load_config(config_path).eddn
+    if args.check:
+        return check_database(eddn.database_file)
     listen(
         args.db or eddn.database_file,
         args.relay or eddn.relay,

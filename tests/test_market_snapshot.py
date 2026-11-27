@@ -127,7 +127,8 @@ class MarketSnapshotTests(unittest.TestCase):
             with closing(sqlite3.connect(database)) as db:
                 db.execute(f"PRAGMA user_version = {SCHEMA_VERSION + 1}")
             # Opening a future database must not relabel it as the current schema.
-            EddnStore.open(database).close()
+            with self.assertRaisesRegex(ValueError, "newer than this code"):
+                EddnStore.open(database).close()
             with self.assertRaisesRegex(ValueError, "Unsupported market schema"):
                 write_snapshot(database, root / "out", now=lambda: NOW)
             stderr = io.StringIO()

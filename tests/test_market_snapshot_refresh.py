@@ -55,7 +55,7 @@ class SnapshotRefreshTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         with closing(sqlite3.connect(":memory:")) as connection:
-            EddnStore(connection)
+            EddnStore(connection, backup=lambda start, target: None)
             cls.database = connection.serialize()
         cls.payload = gzip.compress(cls.database)
 

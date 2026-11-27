@@ -56,3 +56,31 @@ class EddnListenTests(unittest.TestCase):
             for path in (Path('config.toml'), Path('explicit.toml')):
                 with self.subTest(path=path), self.assertRaises(FileNotFoundError):
                     load_config(path)
+
+    def test_check_reports_missing_current_and_future_versions_without_writes(self):
+        from contextlib import closing, redirect_stdout
+        import io
+        import sqlite3
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'check.sqlite3'
+            for version in (None, 0, 1, 2):
+                with self.subTest(version=version):
+                    if version is not None:
+                        with closing(sqlite3.connect(path)) as db:
+                            db.execute(f'PRAGMA user_version={version}')
+                    before = path.read_bytes() if path.exists() else None
+                    output = io.StringIO()
+                    with redirect_stdout(output):
+                        result = main(['--check', '--db', str(path)], listen=lambda *_: self.fail('Must not listen'))
+                    self.assertEqual(result, int(version == 2))
+                    self.assertEqual(output.getvalue(), f'schema db={version or 0} code=1\n')
+                    self.assertEqual(path.read_bytes() if path.exists() else None, before)
+                    self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), [] if version is None else ['check.sqlite3'])
+
+    def test_check_import_failure_returns_failure(self):
+        from contextlib import redirect_stderr
+        import io
+        from unittest.mock import patch
+        with patch('tools.eddn_listen.importlib.import_module', side_effect=ImportError('broken import')), redirect_stderr(io.StringIO()) as output:
+            self.assertEqual(main(['--check', '--db', 'unused.sqlite3']), 1)
+        self.assertIn('broken import', output.getvalue())

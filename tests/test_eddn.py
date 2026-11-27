@@ -104,7 +104,7 @@ _schema_template.executescript(_SCHEMA)
 def memory_store() -> EddnStore:
     connection = sqlite3.connect(":memory:", check_same_thread=False)
     _schema_template.backup(connection)
-    return EddnStore(connection)
+    return EddnStore(connection, backup=lambda start, target: None)
 
 
 def prices(store: EddnStore) -> list[tuple[object, ...]]:

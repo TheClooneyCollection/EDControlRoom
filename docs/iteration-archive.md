@@ -3,8 +3,8 @@
 _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/iteration_logs.py render-archive`. Refresh it whenever iteration logs change before commit, push, or PR._
 
 - Legacy manual session baseline: `133`
-- Generated iteration count: `408`
-- Latest generated iteration number: `541`
+- Generated iteration count: `409`
+- Latest generated iteration number: `542`
 
 ## Iteration 134
 
@@ -11675,3 +11675,31 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 - The full suite already ran about 1.0 ms/test on main before M8 (1344 tests in 1.36 s), over the 0.0007 s/test budget; slowest are the haul and cheapest web tests. Not caused by M8.
 - A Spansh-only row can reappear when the hub excluded that station (`query_hub_services` returns only included rows).
 - Try `/services` live; the VPS picks the new code up through M9 auto-update, and the tables apply on listener start.
+
+## Iteration 542
+
+- When: `2026-11-27 23:34`
+- Area: `runtime`
+- Title: `eddn-schema-migrations-and-smoke-check`
+- Source: [2026-11-27-23-34___runtime____eddn-schema-migrations-and-smoke-check.md](iteration-logs/2026-11-27-23-34___runtime____eddn-schema-migrations-and-smoke-check.md)
+
+# Iteration Log
+
+- Area: `runtime`
+- Title: `eddn-schema-migrations-and-smoke-check`
+- Started: `2026-11-27 23:34`
+
+## Summary
+
+- Implement M9 slice A: store migrations, snapshot version compatibility and listener smoke check.
+
+## Changes
+
+- Require explicit backup callbacks; open backs up with VACUUM INTO and retains one pre-version copy. Each ladder step and its version commit together before additive schema setup.
+- Upgrade older downloaded snapshots; keep exact import validation and reject newer manifests with an actionable hub-update error.
+- Add read-only --check reporting, missing-file handling, migration failure/backup tests and snapshot import flow coverage. Update direct test constructors for the required callback.
+
+## Follow-ups
+
+- VPS updater/role implementation and authorized deployment belong to the separate ansible slice. No real schema bump or migration step is introduced.
+- Final full suite: 1353 tests pass (one skipped) in 1.092s; timing diagnostic 1.071s versus 0.9471s budget; existing Node web flows lead at 82ms/75ms. Baseline main `ad21253`: 1344 tests pass (one skipped) in 1.125s, also over budget. No unrelated hotspots changed.

@@ -7,6 +7,8 @@ WAL mode lets route queries read from their own connection while the listener wr
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
+from contextlib import closing
 import sqlite3
 import threading
 from dataclasses import dataclass
@@ -24,6 +26,45 @@ from edcr.eddn.messages import (
 )
 
 SCHEMA_VERSION = 1
+
+# Each step upgrades its input shape by one version, before additive schema setup.
+MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {}
+
+
+def migrate(db: sqlite3.Connection, *, target: int,
+            migrations: Mapping[int, Callable[[sqlite3.Connection], None]],
+            backup: Callable[[int, int], None]) -> int:
+    start = db.execute("PRAGMA user_version").fetchone()[0]
+    if start > target:
+        raise ValueError(f"Market database schema {start} is newer than this code ({target})")
+    version = start
+    if version == 0:
+        if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' LIMIT 1").fetchone():
+            return start
+        version = 1  # Stores predating version metadata have the v1 shape.
+    if version < target:
+        for step in range(version, target):
+            if step not in migrations:
+                raise ValueError(f"Missing market schema migration {step} -> {step + 1}")
+        backup(start, target)
+        for step in range(version, target):
+            with db:
+                db.execute("BEGIN")
+                migrations[step](db)
+                db.execute(f"PRAGMA user_version = {step + 1}")
+    elif start == 0:
+        db.execute("PRAGMA user_version = 1")
+    return start
+
+
+def migrate_file(path: Path) -> None:
+    """Upgrade a disposable downloaded copy; the published source is its backup."""
+    def source_is_backup(start: int, target: int) -> None:
+        pass
+
+    with closing(sqlite3.connect(path)) as db:
+        EddnStore(db, backup=source_is_backup)
+
 
 _SIGHTING_REFRESH_S = 600.0
 
@@ -120,8 +161,9 @@ class EddnStoreCounts:
 
 
 class EddnStore:
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: sqlite3.Connection, *, backup: Callable[[int, int], None]) -> None:
         self._db = connection
+        migrate(connection, target=SCHEMA_VERSION, migrations=MIGRATIONS, backup=backup)
         self._db.executescript(_SCHEMA)
         if self._db.execute("PRAGMA user_version").fetchone()[0] == 0:
             self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
@@ -135,7 +177,22 @@ class EddnStore:
         connection = sqlite3.connect(path, check_same_thread=False)
         connection.execute("PRAGMA journal_mode=WAL")
         connection.execute("PRAGMA synchronous=NORMAL")
-        return cls(connection)
+        def backup(start: int, target: int) -> None:
+            destination = path.with_name(f"{path.name}.pre-v{target}")
+            # A retry after a failed migration can encounter the previous backup.
+            staged = destination.with_name(destination.name + ".tmp")
+            staged.unlink(missing_ok=True)
+            connection.execute("VACUUM INTO ?", (str(staged),))
+            staged.replace(destination)
+            for old in path.parent.iterdir():
+                if old.name.startswith(path.name + ".pre-v") and old != destination:
+                    old.unlink()
+
+        try:
+            return cls(connection, backup=backup)
+        except BaseException:
+            connection.close()
+            raise
 
     def apply(self, update: EddnUpdate) -> bool:
         """Apply one update; False when the stored data is already as new or newer."""

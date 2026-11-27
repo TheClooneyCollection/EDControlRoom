@@ -20,7 +20,7 @@ from time import perf_counter
 from urllib.parse import urljoin
 from typing import ContextManager, Protocol, TypedDict, cast
 
-from edcr.eddn.store import SCHEMA_VERSION, SnapshotImport
+from edcr.eddn.store import SCHEMA_VERSION, SnapshotImport, migrate_file
 
 
 class Manifest(TypedDict):
@@ -106,7 +106,9 @@ def read_manifest(url: str, *, urlopen: UrlOpen) -> Manifest:
         value = json.loads(response.read())
     if not isinstance(value, dict):
         raise ValueError("Snapshot manifest must be an object")
-    if type(value.get("schema")) is not int or value["schema"] != SCHEMA_VERSION:
+    if type(value.get("schema")) is int and value["schema"] > SCHEMA_VERSION:
+        raise ValueError(f"VPS snapshot schema {value['schema']} is newer than this hub ({SCHEMA_VERSION}); update the hub")
+    if type(value.get("schema")) is not int or value["schema"] < 1:
         raise ValueError(f"Unsupported market schema {value.get('schema')}; expected {SCHEMA_VERSION}")
     for key in ("markets", "prices", "bytes"):
         if type(value.get(key)) is not int or value[key] < 0:
@@ -174,6 +176,8 @@ def fetch_and_import(
         return None
     with TemporaryDirectory(prefix="market-import-") as tmp:
         path = download_snapshot(manifest, manifest_url, Path(tmp), urlopen=urlopen)
+        if manifest["schema"] < SCHEMA_VERSION:
+            migrate_file(path)
         counts = store.import_database(path, min_updated_at=now() - max_age_s)
     return FetchResult(manifest["file"], manifest["created_at"], manifest["newest_market_at"],
                        manifest["bytes"], counts, perf_counter() - started)
