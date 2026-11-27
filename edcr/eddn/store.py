@@ -47,6 +47,15 @@ CREATE TABLE IF NOT EXISTS station (
     max_pad TEXT NOT NULL,
     updated_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS station_services_seen (
+    market_id INTEGER PRIMARY KEY,
+    updated_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS station_service (
+    service TEXT NOT NULL,
+    market_id INTEGER NOT NULL,
+    PRIMARY KEY (service, market_id)
+) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS market (
     market_id INTEGER PRIMARY KEY,
     system_name TEXT NOT NULL,
@@ -96,6 +105,8 @@ class SnapshotImport:
     stations: int
     systems: int
     carriers: int
+    # Number of accepted station service lists, including known empty lists.
+    services: int = 0
 
 
 @dataclass(frozen=True)
@@ -267,15 +278,38 @@ class EddnStore:
                     " ON CONFLICT(system_address) DO UPDATE SET scanned_at=excluded.scanned_at"
                     " WHERE excluded.scanned_at > carrier_scan.scanned_at"
                 ).rowcount
+                services = self._import_services()
                 db.execute("DROP TABLE import_stations")
                 db.execute("DROP TABLE import_markets")
                 db.commit()
-                return SnapshotImport(markets, prices, stations, systems, carriers)
+                return SnapshotImport(markets, prices, stations, systems, carriers, services)
             except BaseException:
                 db.rollback()
                 raise
             finally:
                 db.execute("DETACH DATABASE snapshot")
+
+    def _import_services(self) -> int:
+        db = self._db
+        if db.execute(
+            "SELECT 1 FROM snapshot.sqlite_master WHERE type='table' AND name='station_services_seen'"
+        ).fetchone() is None:
+            return 0
+        db.execute(
+            "CREATE TEMP TABLE import_services AS SELECT s.* FROM snapshot.station_services_seen s"
+            " LEFT JOIN main.station_services_seen t USING (market_id)"
+            " WHERE t.market_id IS NULL OR s.updated_at > t.updated_at"
+        )
+        db.execute("DELETE FROM main.station_service WHERE market_id IN (SELECT market_id FROM import_services)")
+        db.execute(
+            "INSERT OR IGNORE INTO main.station_service SELECT lower(s.service), s.market_id"
+            " FROM snapshot.station_service s JOIN import_services USING (market_id)"
+        )
+        accepted = db.execute(
+            "INSERT OR REPLACE INTO main.station_services_seen SELECT * FROM import_services"
+        ).rowcount
+        db.execute("DROP TABLE import_services")
+        return accepted
 
     def _apply_market(self, snapshot: MarketSnapshot) -> bool:
         if snapshot.carrier_access:
@@ -342,7 +376,26 @@ class EddnStore:
         )
         if cursor.rowcount > 0 and is_carrier_station(station.name, station.type):
             self._db.execute("UPDATE market SET is_carrier = 1 WHERE market_id = ?", (station.market_id,))
-        return cursor.rowcount > 0
+        services_changed = self._apply_services(station)
+        return cursor.rowcount > 0 or services_changed
+
+    def _apply_services(self, station: StationInfo) -> bool:
+        if station.services is None:
+            return False
+        cursor = self._db.execute(
+            "INSERT INTO station_services_seen (market_id, updated_at) VALUES (?, ?)"
+            " ON CONFLICT (market_id) DO UPDATE SET updated_at=excluded.updated_at"
+            " WHERE excluded.updated_at >= station_services_seen.updated_at",
+            (station.market_id, station.timestamp),
+        )
+        if cursor.rowcount == 0:
+            return False
+        self._db.execute("DELETE FROM station_service WHERE market_id = ?", (station.market_id,))
+        self._db.executemany(
+            "INSERT INTO station_service (service, market_id) VALUES (?, ?)",
+            [(service, station.market_id) for service in dict.fromkeys(s.lower() for s in station.services)],
+        )
+        return True
 
     def _apply_station_type(self, seen: StationTypeSeen) -> bool:
         """Set a known station's type; a new row needs the system address, from the system table."""
@@ -362,7 +415,7 @@ class EddnStore:
             return False
         return self._apply_station(StationInfo(
             market_id=seen.market_id, system_address=row[0], system_name=seen.system_name, name=seen.name,
-            type=seen.type, dist_ls=None, max_pad="", timestamp=seen.timestamp,
+            type=seen.type, dist_ls=None, max_pad="", timestamp=seen.timestamp, services=None,
         ))
 
     def _apply_carrier_name(self, carrier: CarrierName) -> bool:

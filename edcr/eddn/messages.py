@@ -67,6 +67,8 @@ class StationInfo:
     dist_ls: float | None
     max_pad: str
     timestamp: float
+    # None means no services list was supplied; an empty tuple is a known empty list.
+    services: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -271,6 +273,7 @@ def _station_info(message: dict[str, Any], address: int, system_name: str, times
     if not isinstance(market_id, int) or not isinstance(name, str):
         return None
     dist = message.get("DistFromStarLS")
+    services = message.get("StationServices")
     return StationInfo(
         market_id=market_id,
         system_address=address,
@@ -280,6 +283,8 @@ def _station_info(message: dict[str, Any], address: int, system_name: str, times
         dist_ls=float(dist) if isinstance(dist, (int, float)) else None,
         max_pad=_max_pad(message.get("LandingPads")),
         timestamp=timestamp,
+        services=tuple(dict.fromkeys(item.lower() for item in services))
+        if isinstance(services, list) and all(isinstance(item, str) for item in services) else None,
     )
 
 

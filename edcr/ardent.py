@@ -184,5 +184,6 @@ def _station_info(row: object) -> StationInfo | None:
         dist_ls=_number(row.get("distanceToArrival")),
         max_pad=_PADS.get(row.get("maxLandingPadSize"), ""),  # type: ignore[arg-type]
         timestamp=timestamp,
+        services=None,
     )
 
