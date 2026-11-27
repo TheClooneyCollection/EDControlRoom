@@ -90,14 +90,14 @@ def _hidden_reason(station: ServiceStation, query: ServiceQuery) -> str:
         return "carrier"
     if station.max_pad and PAD_ORDER[station.max_pad] < PAD_ORDER[query.pad]:
         return "pad"
-    if not math.isfinite(station.distance_ly) or (
-        query.radius_ly is not None and station.distance_ly > query.radius_ly
-    ):
+    if not math.isfinite(station.distance_ly):
+        return "no_coords"
+    if query.radius_ly is not None and station.distance_ly > query.radius_ly:
         return "radius"
     return ""
 
 
-def query_hub_services(db: Path, query: ServiceQuery, origin: tuple[float, float, float]
+def query_hub_services(db: Path, query: ServiceQuery, origin: tuple[float, float, float] | None
                        ) -> tuple[list[ServiceStation], dict[str, int]]:
     """Count each exclusion once; retain all qualifying rows until merging."""
     with closing(sqlite3.connect(db.resolve().as_uri() + "?mode=ro", uri=True)) as connection:
@@ -109,9 +109,11 @@ def query_hub_services(db: Path, query: ServiceQuery, origin: tuple[float, float
             (query.service,),
         ).fetchall()
     stations = []
-    hidden = dict.fromkeys(("carrier", "pad", "radius"), 0)
+    hidden = dict.fromkeys(("carrier", "pad", "radius", "no_coords"), 0)
     for mid, system, name, kind, pad, arrival, updated, x, y, z in rows:
-        distance = math.dist(origin, (x, y, z)) if x is not None else math.inf
+        distance = (math.dist(origin, (x, y, z))
+                    if origin is not None and all(value is not None for value in (x, y, z))
+                    else math.inf)
         station = ServiceStation("hub", mid, system, name, kind, is_carrier_station(name, kind),
                                  pad, arrival, distance, updated)
         reason = _hidden_reason(station, query)
@@ -123,8 +125,12 @@ def query_hub_services(db: Path, query: ServiceQuery, origin: tuple[float, float
 
 
 def merge_stations(hub: list[ServiceStation], spansh: list[ServiceStation],
-                   query: ServiceQuery) -> list[ServiceStation]:
-    """Newer service observations win; equal timestamps prefer the hub."""
+                   query: ServiceQuery) -> tuple[list[ServiceStation], dict[str, int], int]:
+    """Return the limited rows, local exclusions and qualifying merged total.
+
+    Newer service observations win; equal timestamps prefer the hub. Hub inputs
+    are already filtered, so exclusions here count the surviving Spansh rows.
+    """
     merged = {station.market_id: station for station in hub}
     for station in spansh:
         previous = merged.get(station.market_id)
@@ -133,12 +139,19 @@ def merge_stations(hub: list[ServiceStation], spansh: list[ServiceStation],
                 continue
             station = replace(station, max_pad=station.max_pad or previous.max_pad)
         merged[station.market_id] = station
-    return sorted((station for station in merged.values() if not _hidden_reason(station, query)),
-                  key=_order)[:query.limit]
+    hidden = dict.fromkeys(("carrier", "pad", "radius", "no_coords"), 0)
+    stations = []
+    for station in merged.values():
+        reason = _hidden_reason(station, query)
+        if reason:
+            hidden[reason] += 1
+        else:
+            stations.append(station)
+    return sorted(stations, key=_order)[:query.limit], hidden, len(stations)
 
 
 def services_payload(stations: list[ServiceStation], query: ServiceQuery,
-                     hidden: Mapping[str, int], hub_known: int, *, spansh_asked: bool,
+                     hidden: Mapping[str, int], hub_known: int, *, total: int, spansh_asked: bool,
                      spansh_count: int | None, spansh_error: str, now: float) -> dict[str, Any]:
     return {
         "service": query.service,
@@ -146,6 +159,7 @@ def services_payload(stations: list[ServiceStation], query: ServiceQuery,
         "query": asdict(query),
         "stations": [dict(asdict(station), age_s=max(0.0, now - station.services_at))
                      for station in stations],
+        "total": total,
         "hidden": dict(hidden),
         "hub_known": hub_known,
         "spansh": {"asked": spansh_asked, "count": spansh_count, "error": spansh_error},

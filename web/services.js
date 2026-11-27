@@ -53,8 +53,7 @@ function searchParams(useDefaults) {
 
 function renderResults(payload) {
   const stations = payload.stations || [];
-  const limit = payload.query.limit;
-  const shown = limit && stations.length >= limit ? `First ${stations.length} stations` : `${stations.length} stations`;
+  const shown = `First ${stations.length} of ${numberLabel(payload.total)} stations`;
   setText("results-status", stations.length ? `${shown} · ${payload.label || payload.service} · nearest first` : "No matching stations. Try widening the radius or relaxing the filters.");
   const rows = stations.map((station) => `<tr>
     <td>${escapeHtml(station.station_name)} ${station.is_carrier ? '<span class="carrier-badge">Carrier</span>' : ""}</td>
@@ -67,10 +66,10 @@ function renderResults(payload) {
     <td>${escapeHtml(station.source)}</td>
   </tr>`).join("");
   field("results").innerHTML = stations.length ? `<table class="service-table"><thead><tr><th>Station</th><th>System</th><th>Distance (ly)</th><th>Arrival (Ls)</th><th>Pad</th><th>Type</th><th>Services age</th><th>Source</th></tr></thead><tbody>${rows}</tbody></table>` : "";
-  const reasons = { carrier: "carriers hidden", pad: "hidden by pad", radius: "hidden by radius" };
+  const reasons = { carrier: "carriers hidden", pad: "hidden by pad", radius: "hidden by radius", no_coords: "hidden: no coordinates" };
   const hidden = Object.entries(payload.hidden || {}).filter(([, count]) => count > 0)
     .map(([reason, count]) => `${numberLabel(count)} ${reasons[reason] || `hidden by ${reason}`}`);
-  setText("hidden-counts", hidden.length ? `Hub: ${hidden.join(" · ")}` : "Hub: no stations hidden by filters.");
+  setText("hidden-counts", hidden.length ? `Hidden from retrieved results: ${hidden.join(" · ")}` : "No retrieved stations hidden by filters.");
   setText("coverage-status", `Hub knows services for ${numberLabel(payload.hub_known)} stations.`);
   const spansh = payload.spansh || {};
   setText("spansh-status", spansh.error ? `Spansh: ${spansh.error}` : spansh.asked

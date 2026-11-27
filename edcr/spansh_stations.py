@@ -162,12 +162,11 @@ def search_cheapest(query: CheapestQuery, commodity_name: str, post: PostJson,
     return offers, int(count), skipped
 
 
-def search_service(query: ServiceQuery, spansh_name: str, post: PostJson,
-                   origin: tuple[float, float, float]) -> tuple[list[ServiceStation], int]:
+def search_service(query: ServiceQuery, spansh_name: str, post: PostJson) -> tuple[list[ServiceStation], int]:
     """Fetch one distance-sorted page; malformed results reach the caller visibly.
 
-    The reference was resolved to origin by the caller; Spansh computes distances
-    from the same named reference, so station coordinates are not required.
+    Spansh computes distances from the named reference without a coordinate lookup.
+    Keep every returned pad size so merge_stations can count local exclusions.
     """
     filters: dict[str, Any] = {"services": [{"name": spansh_name}]}
     if query.radius_ly is not None:

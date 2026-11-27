@@ -1305,33 +1305,39 @@ def build_observer_server_app(
             return LinkReply(400, {"detail": str(exc)})
         if market_database_file is None or not market_database_file.exists():
             return LinkReply(404, {"detail": "The market database has no data yet"})
+        error = ""
         try:
             origin = hub_system_coordinates(market_database_file, query.reference_system)
             if origin is None and query.use_spansh:
                 try:
                     origin = lookup_system_coordinates(query.reference_system, spansh_post)
                 except Exception as exc:
-                    return LinkReply(502, {"detail": f"Cannot resolve system coordinates: {exc}"})
-            if origin is None:
+                    error = f"Cannot resolve system coordinates: {exc}"
+            if origin is None and not query.use_spansh:
                 return LinkReply(404, {"detail": "Unknown system"})
+            if origin is None and not error:
+                error = "No coordinates found for reference system"
             hub, hidden = query_hub_services(market_database_file, query, origin)
             with closing(sqlite3.connect(market_database_file.resolve().as_uri() + "?mode=ro", uri=True)) as store:
                 hub_known = store.execute("SELECT COUNT(*) FROM station_services_seen").fetchone()[0]
         except sqlite3.Error as exc:
             return LinkReply(503, {"detail": f"Cannot read the market database: {exc}"})
-        spansh, count, error = [], None, ""
+        spansh, count = [], None
         label = SERVICE_LABELS.get(query.service)
         asked = query.use_spansh and label is not None
         if asked:
             try:
-                spansh, count = search_service(query, label, spansh_post, origin)
+                spansh, count = search_service(query, label, spansh_post)
             except Exception as exc:
-                error = str(exc) or type(exc).__name__
+                error = "; ".join(filter(None, (error, str(exc) or type(exc).__name__)))
         elif query.use_spansh:
-            error = f"No Spansh service name is known for {query.service}; searched hub only"
-        stations = merge_stations(hub, spansh, query)
+            error = "; ".join(filter(None, (error,
+                f"No Spansh service name is known for {query.service}; searched hub only")))
+        stations, spansh_hidden, total = merge_stations(hub, spansh, query)
+        for reason, dropped in spansh_hidden.items():
+            hidden[reason] += dropped
         return LinkReply(200, services_payload(
-            stations, query, hidden, hub_known, spansh_asked=asked,
+            stations, query, hidden, hub_known, total=total, spansh_asked=asked,
             spansh_count=count, spansh_error=error, now=time.time()))
 
     async def nearest_services_endpoint(request: Request) -> JSONResponse:
@@ -1366,7 +1372,7 @@ def build_observer_server_app(
             return JSONResponse({"detail": str(exc)}, status_code=400)
         body = {"service": query.service, "system": query.reference_system,
                 "radius_ly": "" if query.radius_ly is None else str(query.radius_ly),
-                "pad": query.pad, "limit": str(query.limit),
+                "pad": query.pad,
                 "carriers": str(int(query.include_carriers)), "spansh": str(int(query.use_spansh))}
         if peer_link is not None:
             return await ask_hub(REQUEST_NEAREST_SERVICES, body)

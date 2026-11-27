@@ -10,6 +10,7 @@ from edcr.eddn.messages import StationInfo, SystemPosition
 from edcr.eddn.store import EddnStore
 from edcr.hub.protocol import HubUnreachable, REQUEST_NEAREST_SERVICES
 from edcr.spansh_stations import SYSTEM_SEARCH_URL
+from tests.test_station_services import remote
 from tests.shared_loop import TestClient
 from tests.test_control_room_server import _base_data_read_model
 from tests.test_hub import server, TOKEN
@@ -34,6 +35,8 @@ class ServicesEndpointTests(unittest.TestCase):
                         services=('carriermanagement',)),
             StationInfo(3, 1, 'Sol', 'Other Port', 'Coriolis', 50, 'L', 100,
                         services=('shipyard',)),
+            StationInfo(4, 2, 'Uncharted', 'Unranked Port', 'Coriolis', 50, 'L', 100,
+                        services=('no-coordinates-service',)),
         ])
         store.close()
 
@@ -63,8 +66,8 @@ class ServicesEndpointTests(unittest.TestCase):
         result = self.get(app, spansh='0').json()
         self.assertEqual((result['query']['reference_system'], result['query']['pad']), ('Sol', 'M'))
         self.assertEqual(result['query']['radius_ly'], 200)
-        self.assertEqual(result['hub_known'], 3)
-        self.assertEqual(result['hidden'], {'carrier': 0, 'pad': 1, 'radius': 0})
+        self.assertEqual(result['hub_known'], 4)
+        self.assertEqual(result['hidden'], {'carrier': 0, 'pad': 1, 'radius': 0, 'no_coords': 0})
         self.assertEqual([row['station_name'] for row in result['stations']], ['Port'])
         self.assertGreaterEqual(result['stations'][0]['age_s'], 0)
         self.assertEqual(result['spansh'], {'asked': False, 'count': None, 'error': ''})
@@ -72,6 +75,15 @@ class ServicesEndpointTests(unittest.TestCase):
         self.assertIsNone(result['query']['radius_ly'])
         self.assertTrue(result['query']['include_carriers'])
         self.assertEqual(len(result['stations']), 2)
+
+    def test_station_without_coordinates_has_its_own_reason_even_without_radius(self):
+        app = self.app()
+        for radius in ('200', ''):
+            result = self.answer(app, service='no-coordinates-service', radius_ly=radius).body
+            self.assertEqual(result['stations'], [])
+            self.assertEqual(result['hidden']['no_coords'], 1)
+            self.assertEqual(result['hidden']['radius'], 0)
+            self.assertEqual(result['total'], 0)
 
     def test_unknown_ship_uses_configured_pad(self):
         self.data = replace(self.data, ship=replace(self.data.ship, ship_type='unknown'))
@@ -130,14 +142,33 @@ class ServicesEndpointTests(unittest.TestCase):
         self.assertEqual(result['stations'], [])
         self.assertEqual(result['hidden']['radius'], 1)
 
-    def test_missing_or_failed_coordinate_lookup_has_explicit_error(self):
-        app = self.app(spansh_post=lambda *args: {'results': []})
-        self.assertEqual(self.answer(app, spansh='1', system='Unknown').status, 404)
-        def offline(*args):
-            raise OSError('Lookup offline')
-        reply = self.answer(self.app(spansh_post=offline), spansh='1', system='Unknown')
-        self.assertEqual(reply.status, 502)
-        self.assertIn('Lookup offline', reply.body['detail'])
+    def test_missing_or_failed_coordinates_keep_spansh_results_and_count_unranked_hub(self):
+        for missing in (True, False):
+            def post(url, body, timeout):
+                if url == SYSTEM_SEARCH_URL:
+                    if missing:
+                        return {'results': []}
+                    raise OSError('Lookup offline')
+                return {'count': 1, 'results': [remote(market_id=4)]}
+            reply = self.answer(self.app(spansh_post=post), spansh='1', system='Unknown',
+                                radius_ly='')
+            self.assertEqual(reply.status, 200)
+            self.assertEqual([row['market_id'] for row in reply.body['stations']], [4])
+            self.assertEqual(reply.body['total'], 1)
+            self.assertEqual(reply.body['hidden']['no_coords'], 1)
+            self.assertEqual(reply.body['hidden']['radius'], 0)
+            self.assertIn('coordinates' if missing else 'Lookup offline', reply.body['spansh']['error'])
+
+    def test_returned_spansh_exclusions_combine_with_hub_counts_and_total_before_limit(self):
+        rows = [remote(market_id=mid) for mid in range(10, 65)]
+        rows += [remote(market_id=70, large_pads=0, medium_pads=0),
+                 remote(market_id=71, type='Fleet Carrier'),
+                 remote(market_id=72, distance=201)]
+        result = self.answer(self.app(spansh_post=lambda *_: {'results': rows, 'count': len(rows)}),
+                             spansh='1').body
+        self.assertEqual(len(result['stations']), 50)
+        self.assertEqual(result['total'], 56)
+        self.assertEqual(result['hidden'], {'pad': 2, 'carrier': 1, 'radius': 1, 'no_coords': 0})
 
     def test_peer_forwards_resolved_defaults_with_search_timeout_and_reports_disconnect(self):
         hub = self.app()
@@ -152,6 +183,7 @@ class ServicesEndpointTests(unittest.TestCase):
         self.assertEqual(result['query']['pad'], 'M')
         self.assertEqual(sent[0][0], REQUEST_NEAREST_SERVICES)
         self.assertEqual(sent[0][1]['system'], 'Sol')
+        self.assertNotIn('limit', sent[0][1])
         self.assertEqual(sent[0][1]['radius_ly'], '')
         self.assertEqual(sent[0][2], 20)
         def disconnected(*args, **kwargs):

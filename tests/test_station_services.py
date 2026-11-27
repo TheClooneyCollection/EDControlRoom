@@ -91,14 +91,14 @@ class HubTests(unittest.TestCase):
     def test_nearest_stations_count_each_exclusion_once_and_keep_unknown_pad(self):
         rows, hidden = self.search()
         self.assertEqual([row.market_id for row in rows], [1, 2, 6])
-        self.assertEqual(hidden, {'carrier': 1, 'pad': 1, 'radius': 1})
+        self.assertEqual(hidden, {'carrier': 1, 'pad': 1, 'radius': 1, 'no_coords': 0})
         self.assertEqual((rows[0].services_at, rows[1].distance_ly, rows[-1].max_pad),
                          (NOW, 5, ''))
 
     def test_radius_is_inclusive_and_arrival_breaks_distance_ties(self):
         rows, hidden = self.search(radius_ly=5, pad='S')
         self.assertEqual([row.market_id for row in rows], [1, 3, 2, 6])
-        self.assertEqual(hidden, {'carrier': 1, 'pad': 0, 'radius': 1})
+        self.assertEqual(hidden, {'carrier': 1, 'pad': 0, 'radius': 1, 'no_coords': 0})
 
     def test_global_search_and_carrier_toggle_and_no_early_limit(self):
         rows, hidden = self.search(radius_ly=None, pad='S', include_carriers=True, limit=1)
@@ -108,18 +108,18 @@ class HubTests(unittest.TestCase):
 
     def test_unobserved_service_is_empty(self):
         self.assertEqual(self.search(service='carriervendor'),
-                         ([], {'carrier': 0, 'pad': 0, 'radius': 0}))
+                         ([], {'carrier': 0, 'pad': 0, 'radius': 0, 'no_coords': 0}))
 
 
 class MergePayloadTests(unittest.TestCase):
     def test_newest_wins_ties_prefer_hub_and_missing_pad_is_filled(self):
         for delta in (-1, 0, 1):
             row, = merge_stations([STATION], [replace(STATION, source='spansh',
-                                  max_pad='', services_at=NOW + delta)], QUERY)
+                                  max_pad='', services_at=NOW + delta)], QUERY)[0]
             self.assertEqual(row.source, 'spansh' if delta > 0 else 'hub')
             self.assertEqual(row.max_pad, 'L')
         row, = merge_stations([STATION], [replace(STATION, source='spansh',
-                              max_pad='M', services_at=NOW + 1)], replace(QUERY, pad='M'))
+                              max_pad='M', services_at=NOW + 1)], replace(QUERY, pad='M'))[0]
         self.assertEqual(row.max_pad, 'M')
 
     def test_merge_filters_remote_rows_sorts_and_limits(self):
@@ -128,21 +128,24 @@ class MergePayloadTests(unittest.TestCase):
                 replace(STATION, market_id=4, max_pad='S'),
                 replace(STATION, market_id=5, is_carrier=True),
                 replace(STATION, market_id=6, distance_ly=201)]
-        self.assertEqual([row.market_id for row in merge_stations(
-            [STATION], rows, replace(QUERY, limit=2))], [1, 3])
+        stations, hidden, total = merge_stations([STATION], rows, replace(QUERY, limit=2))
+        self.assertEqual([row.market_id for row in stations], [1, 3])
+        self.assertEqual(total, 3)
+        self.assertEqual(hidden, {"carrier": 1, "pad": 1, "radius": 1, "no_coords": 0})
 
     def test_payload_keeps_hub_results_on_remote_failure_and_reports_coverage(self):
         payload = services_payload([STATION], QUERY, {'carrier': 2, 'pad': 3, 'radius': 4}, 123,
-                                  spansh_asked=True, spansh_count=None,
+                                  total=1, spansh_asked=True, spansh_count=None,
                                   spansh_error='offline', now=NOW + 3600)
         self.assertEqual(payload['label'], 'Fleet Carrier Administration')
         self.assertEqual(payload['stations'][0]['age_s'], 3600)
         self.assertEqual(payload['hub_known'], 123)
+        self.assertEqual(payload['total'], 1)
         self.assertEqual(payload['query']['radius_ly'], 200)
         self.assertEqual(payload['hidden'], {'carrier': 2, 'pad': 3, 'radius': 4})
         self.assertEqual(payload['spansh'], {'asked': True, 'count': None, 'error': 'offline'})
         payload = services_payload([STATION], replace(QUERY, service='dock'), {}, 1,
-                                  spansh_asked=False, spansh_count=None,
+                                  total=1, spansh_asked=False, spansh_count=None,
                                   spansh_error='No Spansh name for dock', now=NOW - 1)
         self.assertEqual(payload['label'], 'dock')
         self.assertEqual(payload['stations'][0]['age_s'], 0)
@@ -152,14 +155,14 @@ class MergePayloadTests(unittest.TestCase):
 class SpanshTests(unittest.TestCase):
     def search(self, rows, **changes):
         return search_service(replace(QUERY, **changes), SERVICE_LABELS[QUERY.service],
-                              lambda *_: {'results': rows, 'count': len(rows)}, (0, 0, 0))
+                              lambda *_: {'results': rows, 'count': len(rows)})
 
     def test_request_shape_and_service_timestamp(self):
         requests = []
         def post(url, body, timeout):
             requests.append((url, body, timeout))
             return {'results': [remote()], 'count': 393}
-        rows, count = search_service(QUERY, SERVICE_LABELS[QUERY.service], post, (0, 0, 0))
+        rows, count = search_service(QUERY, SERVICE_LABELS[QUERY.service], post)
         self.assertEqual(count, 393)
         self.assertEqual(rows, [replace(STATION, source='spansh', station_type='Coriolis Starport',
                                         distance_ly=5)])
@@ -176,7 +179,7 @@ class SpanshTests(unittest.TestCase):
             requests.append(body)
             return {'results': [], 'count': 0}
         query = replace(QUERY, include_carriers=True, radius_ly=None, pad='M')
-        self.assertEqual(search_service(query, 'Shipyard', post, (0, 0, 0)), ([], 0))
+        self.assertEqual(search_service(query, 'Shipyard', post), ([], 0))
         self.assertEqual(requests[0]['filters'], {'services': [{'name': 'Shipyard'}]})
         for large, medium, small, expected in [(0, 2, 3, 'M'), (0, 0, 1, 'S'),
                                                (None, None, None, '')]:
@@ -184,6 +187,12 @@ class SpanshTests(unittest.TestCase):
                                          medium_pads=medium, small_pads=small)], include_carriers=True)
             self.assertEqual(rows[0].max_pad, expected)
             self.assertTrue(rows[0].is_carrier)
+
+    def test_small_pad_results_are_counted_when_merging(self):
+        rows, count = self.search([remote(large_pads=0, medium_pads=0)], pad='M')
+        stations, hidden, total = merge_stations([], rows, replace(QUERY, pad='M'))
+        self.assertEqual(count, 1)
+        self.assertEqual((stations, total, hidden['pad']), ([], 0, 1))
 
     def test_malformed_responses_are_visible_instead_of_silent_omissions(self):
         responses = [None, {}, {'error': 'offline'}, {'results': {}, 'count': 0},
@@ -194,10 +203,10 @@ class SpanshTests(unittest.TestCase):
         responses.extend({'results': [row], 'count': 1} for row in bad_rows)
         for response in responses:
             with self.subTest(response=response), self.assertRaisesRegex(ValueError, 'Spansh'):
-                search_service(QUERY, SERVICE_LABELS[QUERY.service], lambda *_: response, (0, 0, 0))
+                search_service(QUERY, SERVICE_LABELS[QUERY.service], lambda *_: response)
 
     def test_offline_error_reaches_caller_for_hub_fallback(self):
         def offline(*_):
             raise TimeoutError('offline')
         with self.assertRaisesRegex(TimeoutError, 'offline'):
-            search_service(QUERY, SERVICE_LABELS[QUERY.service], offline, (0, 0, 0))
+            search_service(QUERY, SERVICE_LABELS[QUERY.service], offline)
