@@ -39,6 +39,7 @@ window.EDCRNode = (() => {
         { href: "/haul", label: "Two-way haul", mobile: true, icon: '<path d="M3 12h5l2 5 4-14 2 9h5"/>' },
         { href: "/multi-haul", label: "Multi-leg haul", icon: '<path d="M4 18h5l3-12 3 12h5"/><path d="M4 6h4m8 0h4"/>' },
         { href: "/markets", label: "Markets", mobile: true, icon: '<path d="M4 20V10m6 10V4m6 16v-7m4 7H2"/>' },
+        { href: "/cheapest", label: "Cheapest", icon: '<path d="M12 3v18m5-14H9a3 3 0 0 0 0 6h6a3 3 0 0 1 0 6H6"/>' },
         {
           href: "/routes",
           label: "Routes",

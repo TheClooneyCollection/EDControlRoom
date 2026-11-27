@@ -129,6 +129,7 @@ HAUL_WEB_URL_PATH = "/haul"
 MULTI_HAUL_WEB_URL_PATH = "/multi-haul"
 CONTROLS_WEB_URL_PATH = "/controls"
 MARKETS_WEB_URL_PATH = "/markets"
+CHEAPEST_WEB_URL_PATH = "/cheapest"
 ROUTES_WEB_URL_PATH = "/routes"
 TRAVEL_WEB_URL_PATH = "/travel"
 CONFIG_WEB_URL_PATH = "/config"
@@ -142,6 +143,7 @@ _BROWSER_PROBE_PATH = (
 _HAUL_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "haul-v1.html"
 _MULTI_HAUL_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "multi-haul.html"
 _CONTROLS_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "controls.html"
+_CHEAPEST_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "cheapest.html"
 _MARKETS_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "markets.html"
 _ROUTES_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "routes.html"
 _TRAVEL_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "travel.html"
@@ -400,6 +402,21 @@ def build_observer_server_app(
             headers={"Cache-Control": "no-store"},
         )
 
+    async def cheapest_web(request):
+        data = data_provider()
+        return HTMLResponse(
+            _render_web_html(
+                _CHEAPEST_WEB_PATH,
+                web_config=_haul_web_config(
+                    data,
+                    auth=auth,
+                    request=request,
+                    web_default_access_token=web_default_access_token,
+                ),
+            ),
+            headers={"Cache-Control": "no-store"},
+        )
+
     async def routes_web(request):
         data = data_provider()
         return HTMLResponse(
@@ -453,6 +470,7 @@ def build_observer_server_app(
             "multi-haul.js": "text/javascript; charset=utf-8",
             "controls.js": "text/javascript; charset=utf-8",
             "markets.js": "text/javascript; charset=utf-8",
+            "cheapest.js": "text/javascript; charset=utf-8",
             "routes.js": "text/javascript; charset=utf-8",
             "travel.js": "text/javascript; charset=utf-8",
             "config.js": "text/javascript; charset=utf-8",
@@ -1746,6 +1764,7 @@ def build_observer_server_app(
             Route(MULTI_HAUL_WEB_URL_PATH, multi_haul_web),
             Route(CONTROLS_WEB_URL_PATH, controls_web),
             Route(MARKETS_WEB_URL_PATH, markets_web),
+            Route(CHEAPEST_WEB_URL_PATH, cheapest_web),
             Route(ROUTES_WEB_URL_PATH, routes_web),
             Route(TRAVEL_WEB_URL_PATH, travel_web),
             Route(CONFIG_WEB_URL_PATH, config_web),

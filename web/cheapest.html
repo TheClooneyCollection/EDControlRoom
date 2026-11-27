@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ED Control Room - Cheapest</title>
+  <link rel="icon" type="image/png" href="/assets/favicon.png">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="/assets/haul-ui.css">
+  <style>
+    main > .panel + .panel { margin-top: 16px; }
+    .cheapest-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+    .cheapest-field { display: grid; gap: 6px; }
+    .cheapest-actions { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; margin-top: 18px; }
+    .market-table-scroll { overflow-x: auto; }
+    .market-table { width: 100%; border-collapse: collapse; }
+    .market-table th, .market-table td { padding: 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+    .market-table th { color: var(--text-2); font-weight: 500; }
+    .market-table .numeric { text-align: right; font-family: var(--mono); }
+    .old-age { color: var(--amber); }
+    .carrier-badge { border: 1px solid var(--border); border-radius: var(--radius); padding: 2px 5px; font-size: 10px; color: var(--text-2); }
+    #results-status { overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Navigation">
+      <div class="brand">
+        <div class="brand-mark">ED</div>
+        <div>
+          <div class="brand-name">Control Room</div>
+          <div class="brand-sub">haul control</div>
+        </div>
+      </div>
+
+      <nav class="site-nav" id="site-nav" aria-label="Pages"></nav>
+      <script src="/assets/nav.js"></script>
+
+      <div class="chip hub-chip" id="hub-chip" hidden>Hub <strong>-</strong></div>
+
+      <div class="sidebar-foot">
+        <div class="status-row"><span><span class="dot"></span>Runtime</span><span id="status-runtime">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Journal</span><span id="status-journal">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Input target</span><span id="status-input-target">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Version</span><span id="status-version">-</span></div>
+      </div>
+    </aside>
+
+    <div>
+      <header class="topbar">
+        <div>
+          <div class="topbar-title">Cheapest</div>
+          <div class="topbar-sub">Find the cheapest commodity markets that fit your ship, from the hub and Spansh.</div>
+        </div>
+        <div class="chips" aria-label="Session status">
+          <div class="chip">Host <strong id="host-label">-</strong></div>
+          <div class="token-control">
+            <input class="token-input" id="access-token" type="password" placeholder="Access token" autocomplete="off" aria-label="Access token">
+            <button class="token-button" id="save-token" type="button">Save</button>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <section class="panel" aria-labelledby="search-title">
+          <div class="panel-head"><div class="panel-title" id="search-title">Find a commodity</div></div>
+          <form class="panel-body" id="cheapest-form">
+            <div class="cheapest-form">
+              <label class="cheapest-field"><span class="field-label">Commodity</span><input class="field" id="commodity" value="tritium" required autocomplete="off"></label>
+              <label class="cheapest-field"><span class="field-label">Reference system</span><input class="field" id="system" autocomplete="off" placeholder="Ship's current system"></label>
+              <label class="cheapest-field"><span class="field-label">Radius (ly)</span><input class="field" id="radius_ly" type="number" min="0" step="any" placeholder="Galaxy-wide"><span class="field-hint">Clear for galaxy-wide</span></label>
+              <label class="cheapest-field"><span class="field-label">Minimum supply (t)</span><input class="field" id="min_supply" type="number" min="0" step="1"></label>
+              <label class="cheapest-field"><span class="field-label">Required pad</span><select class="select" id="pad"><option value="" disabled>Ship default</option><option value="S">Small</option><option value="M">Medium</option><option value="L">Large</option></select></label>
+              <label class="cheapest-field"><span class="field-label">Maximum age (hours)</span><input class="field" id="max_age_hours" type="number" min="0" step="any"></label>
+            </div>
+            <div class="cheapest-actions">
+              <label><input id="carriers" type="checkbox"> Include carriers</label>
+              <label><input id="spansh" type="checkbox" checked> Include Spansh</label>
+              <button class="btn" id="search" type="submit">Search</button>
+            </div>
+          </form>
+        </section>
+        <section class="panel" aria-labelledby="results-title">
+          <div class="panel-head"><div class="panel-title" id="results-title">Cheapest markets</div></div>
+          <div class="panel-body" aria-live="polite">
+            <p id="results-status" class="field-hint">Loading ship defaults and markets…</p>
+            <div id="results" class="market-table-scroll"></div>
+            <p id="hidden-counts" class="field-hint"></p>
+            <p id="spansh-status" class="field-hint"></p>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    window.EDCR_WEB_CONFIG = {};
+  </script>
+  <script src="/assets/cheapest.js" defer></script>
+  <script src="/assets/hub-status.js" defer></script>
+</body>
+</html>
