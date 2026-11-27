@@ -11703,3 +11703,30 @@ _This file is generated from `docs/iteration-logs/` by `uv run python3 tools/ite
 
 - VPS updater/role implementation and authorized deployment belong to the separate ansible slice. No real schema bump or migration step is introduced.
 - Final full suite: 1353 tests pass (one skipped) in 1.092s; timing diagnostic 1.071s versus 0.9471s budget; existing Node web flows lead at 82ms/75ms. Baseline main `ad21253`: 1344 tests pass (one skipped) in 1.125s, also over budget. No unrelated hotspots changed.
+
+## Iteration 542
+
+- When: `2026-11-27 23:42`
+- Area: `runtime`
+- Title: `preserve-migration-backups-on-retry`
+- Source: [2026-11-27-23-42___runtime____preserve-migration-backups-on-retry.md](iteration-logs/2026-11-27-23-42___runtime____preserve-migration-backups-on-retry.md)
+
+# Iteration Log
+
+- Area: `runtime`
+- Title: `preserve-migration-backups-on-retry`
+- Started: `2026-11-27 23:42`
+
+## Summary
+
+- Address M9 slice A review: preserve the original rollback database and keep smoke checks from creating WAL sidecars.
+
+## Changes
+
+- Keep an existing target-version backup on retry after a partial ladder failure; prune older backups after a successful write or keep. Document execute-only migration steps.
+- Read user_version from the validated SQLite file header when no WAL file exists; use read-only SQLite when WAL data must be included. Report check-mode configuration errors consistently.
+- Tests cover retry from partially migrated v2 with original v1 backup, absent WAL sidecars, live WAL version, and malformed configuration. Full suite: 1357 tests, one skipped, 1.171s. Timing diagnostic: 1.121s, existing Node flows lead at 77ms each.
+
+## Follow-ups
+
+- Timing remains above 0.9499s budget; prior main baseline also exceeded budget (1344 tests / 1.125s). No unrelated test optimization. Await coordinator integration; no rebase or deployment performed.

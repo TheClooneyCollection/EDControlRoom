@@ -84,3 +84,41 @@ class EddnListenTests(unittest.TestCase):
         with patch('tools.eddn_listen.importlib.import_module', side_effect=ImportError('broken import')), redirect_stderr(io.StringIO()) as output:
             self.assertEqual(main(['--check', '--db', 'unused.sqlite3']), 1)
         self.assertIn('broken import', output.getvalue())
+
+    def test_check_wal_database_without_sidecars_creates_no_files(self):
+        from contextlib import closing, redirect_stdout
+        import io
+        import sqlite3
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'wal.sqlite3'
+            with closing(sqlite3.connect(path)) as db:
+                db.execute('PRAGMA journal_mode=WAL')
+                db.execute('PRAGMA user_version=1')
+            before = {p.name: p.read_bytes() for p in Path(tmp).iterdir()}
+            self.assertEqual(list(before), ['wal.sqlite3'])
+            with redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(main(['--check', '--db', str(path)]), 0)
+            self.assertEqual(output.getvalue(), 'schema db=1 code=1\n')
+            self.assertEqual({p.name: p.read_bytes() for p in Path(tmp).iterdir()}, before)
+
+    def test_check_reports_invalid_default_config(self):
+        from contextlib import redirect_stderr
+        import io
+        with TemporaryDirectory() as tmp, chdir(tmp):
+            Path('config.toml').write_text('[eddn', encoding='utf-8')
+            with redirect_stderr(io.StringIO()) as output:
+                self.assertEqual(main(['--check']), 1)
+            self.assertIn('Smoke check failed:', output.getvalue())
+
+    def test_check_reads_uncheckpointed_wal_schema(self):
+        from contextlib import closing, redirect_stdout
+        import io
+        import sqlite3
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'wal.sqlite3'
+            with closing(sqlite3.connect(path)) as db:
+                db.execute('PRAGMA journal_mode=WAL')
+                db.execute('PRAGMA user_version=2')
+                with redirect_stdout(io.StringIO()) as output:
+                    self.assertEqual(main(['--check', '--db', str(path)]), 1)
+                self.assertEqual(output.getvalue(), 'schema db=2 code=1\n')

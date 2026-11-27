@@ -28,6 +28,7 @@ from edcr.eddn.messages import (
 SCHEMA_VERSION = 1
 
 # Each step upgrades its input shape by one version, before additive schema setup.
+# Steps must use db.execute only, never executescript or commit: the ladder owns transactions.
 MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {}
 
 
@@ -181,9 +182,10 @@ class EddnStore:
             destination = path.with_name(f"{path.name}.pre-v{target}")
             # A retry after a failed migration can encounter the previous backup.
             staged = destination.with_name(destination.name + ".tmp")
-            staged.unlink(missing_ok=True)
-            connection.execute("VACUUM INTO ?", (str(staged),))
-            staged.replace(destination)
+            if not destination.exists():
+                staged.unlink(missing_ok=True)
+                connection.execute("VACUUM INTO ?", (str(staged),))
+                staged.replace(destination)
             for old in path.parent.iterdir():
                 if old.name.startswith(path.name + ".pre-v") and old != destination:
                     old.unlink()

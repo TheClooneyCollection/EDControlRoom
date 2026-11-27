@@ -55,8 +55,16 @@ def check_database(database: Path) -> int:
         from edcr.eddn.store import SCHEMA_VERSION
         version = 0
         if database.exists():
-            with closing(sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True)) as db:
-                version = db.execute("PRAGMA user_version").fetchone()[0]
+            if database.with_name(database.name + "-wal").exists():
+                with closing(sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True)) as db:
+                    version = db.execute("PRAGMA user_version").fetchone()[0]
+            else:
+                # Opening a WAL-mode database can create sidecars even with mode=ro.
+                with database.open("rb") as source:
+                    header = source.read(100)
+                if len(header) != 100 or header[:16] != b"SQLite format 3\x00":
+                    raise ValueError("Invalid SQLite database header")
+                version = int.from_bytes(header[60:64], "big")
         print(f"schema db={version} code={SCHEMA_VERSION}")
         return int(version > SCHEMA_VERSION)
     except Exception as error:
@@ -76,13 +84,19 @@ def main(
     parser.add_argument("--max-age-days", type=float, help="Override eddn.max_age_days")
     parser.add_argument("--status-every", type=float, default=30.0, help="Seconds between status lines")
     args = parser.parse_args(argv)
-    if args.check and args.db is not None:
-        return check_database(args.db)
+    if args.check:
+        try:
+            database = args.db
+            if database is None:
+                config_path = DEFAULT_CONFIG_PATH if DEFAULT_CONFIG_PATH.exists() else DEFAULT_EDDN_CONFIG_PATH
+                database = load_config(config_path).eddn.database_file
+            return check_database(database)
+        except Exception as error:
+            print(f"Smoke check failed: {error}", file=sys.stderr)
+            return 1
     # Standalone collectors need only the shipped defaults, not a local config.
     config_path = DEFAULT_CONFIG_PATH if DEFAULT_CONFIG_PATH.exists() else DEFAULT_EDDN_CONFIG_PATH
     eddn = load_config(config_path).eddn
-    if args.check:
-        return check_database(eddn.database_file)
     listen(
         args.db or eddn.database_file,
         args.relay or eddn.relay,

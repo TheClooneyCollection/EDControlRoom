@@ -77,3 +77,27 @@ class StoreMigrationTests(unittest.TestCase):
             with closing(sqlite3.connect(str(path) + '.pre-v2')) as backup:
                 self.assertEqual(backup.execute('PRAGMA user_version').fetchone()[0], 1)
                 self.assertIsNone(backup.execute("SELECT name FROM sqlite_master WHERE name='added'").fetchone())
+
+    def test_retry_after_partial_upgrade_preserves_original_backup(self):
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'market.sqlite3'
+            with closing(EddnStore.open(path)):
+                pass
+            def fail(db):
+                raise RuntimeError('second step fails')
+            with patch('edcr.eddn.store.SCHEMA_VERSION', 3), patch('edcr.eddn.store.MIGRATIONS', {
+                1: lambda db: db.execute('CREATE TABLE added (value)'), 2: fail,
+            }):
+                with self.assertRaisesRegex(RuntimeError, 'second step fails'):
+                    EddnStore.open(path)
+            backup_path = Path(str(path) + '.pre-v3')
+            original = backup_path.read_bytes()
+            with closing(sqlite3.connect(path)) as db:
+                self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], 2)
+            with patch('edcr.eddn.store.SCHEMA_VERSION', 3), patch('edcr.eddn.store.MIGRATIONS', {
+                2: lambda db: db.execute('INSERT INTO added VALUES (42)'),
+            }), closing(EddnStore.open(path)) as store:
+                self.assertEqual(store._db.execute('PRAGMA user_version').fetchone()[0], 3)
+            self.assertEqual(backup_path.read_bytes(), original)
+            with closing(sqlite3.connect(backup_path)) as db:
+                self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], 1)
