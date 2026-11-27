@@ -4,6 +4,10 @@ Prepend displaced older status blocks from `docs/status/control-room.md` here.
 
 Legacy pre-split global status history remains in `../../status-archive.md`.
 
+## Archived 2026-11-27 (M7)
+
+- Status, haul, market, and trade-route picker rendering now pass through explicit ViewModels; market/trade-route interactions use display-neutral ViewActions behind Textual adapters, `/` plus `/haul` preserve the two-way haul web UI and now include Travel Assist via `command.dispatch_travel`, while `/multi-haul` serves a separate shared-asset Spansh-style planner with ship-derived defaults, injected server/auth config, and authenticated websocket/session recovery.
+
 ## Archived 2026-11-14 (server log files)
 
 - `connect` currently intercepts prompt-owning commands like `haul`, `haul route`, `haul search`, `dest`, `home`, `help`, `history`, and `market` locally, then sends finalized `command.dispatch_haul_loop` / `command.dispatch_destination` payloads to the headless server; structured `command.dispatch_travel` is server-first and available to TUI/web clients.
