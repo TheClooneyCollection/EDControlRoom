@@ -3,6 +3,7 @@ from __future__ import annotations
 from edcr.control_room.server.route_inputs import with_ship_laden_range
 
 import asyncio
+from contextlib import closing
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 import json
@@ -39,7 +40,10 @@ from edcr.cheapest_markets import (
     CheapestResult, UnknownSystemError, cheapest_payload, hub_system_coordinates, merge_offers, parse_cheapest_query, query_hub_store,
 )
 from edcr.ship_types import ship_pad_size
-from edcr.spansh_stations import PostJson, lookup_system_coordinates, post_json, search_cheapest
+from edcr.station_services import (
+    SERVICE_LABELS, parse_service_query, query_hub_services, merge_stations, services_payload,
+)
+from edcr.spansh_stations import PostJson, lookup_system_coordinates, post_json, search_cheapest, search_service
 from edcr.config import TIME_MODEL_SOURCES, ConfigError, save_time_model
 from edcr.eddn.routes import TimeModel
 from edcr.trip_time_fit import FitShip, TripTimeModels, model_from_payload, parse_fit_ship
@@ -56,6 +60,7 @@ from edcr.hub.protocol import (
     PEER_LINK_PATH,
     REQUEST_CARRIER_NAMES,
     REQUEST_CHEAPEST_MARKETS,
+    REQUEST_NEAREST_SERVICES,
     REQUEST_MARKET_PRICES,
     REQUEST_EDDN_ROUTES,
     REQUEST_EDDN_STATUS,
@@ -130,6 +135,7 @@ MULTI_HAUL_WEB_URL_PATH = "/multi-haul"
 CONTROLS_WEB_URL_PATH = "/controls"
 MARKETS_WEB_URL_PATH = "/markets"
 CHEAPEST_WEB_URL_PATH = "/cheapest"
+SERVICES_WEB_URL_PATH = "/services"
 ROUTES_WEB_URL_PATH = "/routes"
 TRAVEL_WEB_URL_PATH = "/travel"
 CONFIG_WEB_URL_PATH = "/config"
@@ -143,6 +149,7 @@ _BROWSER_PROBE_PATH = (
 _HAUL_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "haul-v1.html"
 _MULTI_HAUL_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "multi-haul.html"
 _CONTROLS_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "controls.html"
+_SERVICES_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "services.html"
 _CHEAPEST_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "cheapest.html"
 _MARKETS_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "markets.html"
 _ROUTES_WEB_PATH = Path(__file__).resolve().parents[3] / "web" / "routes.html"
@@ -417,6 +424,21 @@ def build_observer_server_app(
             headers={"Cache-Control": "no-store"},
         )
 
+    async def services_web(request):
+        data = data_provider()
+        return HTMLResponse(
+            _render_web_html(
+                _SERVICES_WEB_PATH,
+                web_config=_haul_web_config(
+                    data,
+                    auth=auth,
+                    request=request,
+                    web_default_access_token=web_default_access_token,
+                ),
+            ),
+            headers={"Cache-Control": "no-store"},
+        )
+
     async def routes_web(request):
         data = data_provider()
         return HTMLResponse(
@@ -471,6 +493,7 @@ def build_observer_server_app(
             "controls.js": "text/javascript; charset=utf-8",
             "markets.js": "text/javascript; charset=utf-8",
             "cheapest.js": "text/javascript; charset=utf-8",
+            "services.js": "text/javascript; charset=utf-8",
             "routes.js": "text/javascript; charset=utf-8",
             "travel.js": "text/javascript; charset=utf-8",
             "config.js": "text/javascript; charset=utf-8",
@@ -1272,6 +1295,83 @@ def build_observer_server_app(
             return await ask_hub(REQUEST_CHEAPEST_MARKETS, body)
         return link_reply_response(await asyncio.to_thread(answer_cheapest_markets, body))
 
+    def answer_nearest_services(body: Any) -> LinkReply:
+        """Resolve service stations on the hub, including requests from peers."""
+        if not isinstance(body, dict) or any(not isinstance(v, str) for v in body.values()):
+            return LinkReply(400, {"detail": "service params must be an object of strings"})
+        try:
+            query = parse_service_query(body, current_system="", ship_pad="L")
+        except ValueError as exc:
+            return LinkReply(400, {"detail": str(exc)})
+        if market_database_file is None or not market_database_file.exists():
+            return LinkReply(404, {"detail": "The market database has no data yet"})
+        try:
+            origin = hub_system_coordinates(market_database_file, query.reference_system)
+            if origin is None and query.use_spansh:
+                try:
+                    origin = lookup_system_coordinates(query.reference_system, spansh_post)
+                except Exception as exc:
+                    return LinkReply(502, {"detail": f"Cannot resolve system coordinates: {exc}"})
+            if origin is None:
+                return LinkReply(404, {"detail": "Unknown system"})
+            hub, hidden = query_hub_services(market_database_file, query, origin)
+            with closing(sqlite3.connect(market_database_file.resolve().as_uri() + "?mode=ro", uri=True)) as store:
+                hub_known = store.execute("SELECT COUNT(*) FROM station_services_seen").fetchone()[0]
+        except sqlite3.Error as exc:
+            return LinkReply(503, {"detail": f"Cannot read the market database: {exc}"})
+        spansh, count, error = [], None, ""
+        label = SERVICE_LABELS.get(query.service)
+        asked = query.use_spansh and label is not None
+        if asked:
+            try:
+                spansh, count = search_service(query, label, spansh_post, origin)
+            except Exception as exc:
+                error = str(exc) or type(exc).__name__
+        elif query.use_spansh:
+            error = f"No Spansh service name is known for {query.service}; searched hub only"
+        stations = merge_stations(hub, spansh, query)
+        return LinkReply(200, services_payload(
+            stations, query, hidden, hub_known, spansh_asked=asked,
+            spansh_count=count, spansh_error=error, now=time.time()))
+
+    async def nearest_services_endpoint(request: Request) -> JSONResponse:
+        auth_failure = require_http_auth(request)
+        if auth_failure is not None:
+            return auth_failure
+        params = dict(request.query_params)
+        inputs = await asyncio.to_thread(route_ship_inputs)
+        ship_type = getattr(getattr(data_provider(), "ship", None), "ship_type", "") or ""
+        node_id = viewed_node(params)
+        if node_id is not None:
+            assert hub_side is not None
+            node = next((item for item in hub_side.registry.nodes() if item["node_id"] == node_id), None)
+            if node is None or not node["connected"]:
+                name = node["name"] if node is not None else node_id
+                return JSONResponse({"detail": f"Node {name} is unreachable: not linked to the hub",
+                                     "node": node_id}, status_code=502)
+            state = node["state"]
+            if (not isinstance(state, dict) or not isinstance(state.get("ship"), dict)
+                    or ("system" not in params and not isinstance(state.get("current_system"), str))):
+                return JSONResponse({"detail": "Node service inputs are unavailable; update/reconnect the peer and wait for its state.",
+                                     "node": node_id}, status_code=409)
+            ship = state["ship"]
+            inputs["current_system"] = state.get("current_system") or ""
+            ship_type = ship.get("type") or ""
+        fallback = str(inputs["search_defaults"].get("min_landing_pad") or "L").strip().upper()
+        fallback = {"SMALL": "S", "MEDIUM": "M", "LARGE": "L", "ANY": "S"}.get(fallback, fallback)
+        try:
+            query = parse_service_query(params, current_system=inputs["current_system"],
+                                         ship_pad=ship_pad_size(ship_type) or fallback)
+        except ValueError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=400)
+        body = {"service": query.service, "system": query.reference_system,
+                "radius_ly": "" if query.radius_ly is None else str(query.radius_ly),
+                "pad": query.pad, "limit": str(query.limit),
+                "carriers": str(int(query.include_carriers)), "spansh": str(int(query.use_spansh))}
+        if peer_link is not None:
+            return await ask_hub(REQUEST_NEAREST_SERVICES, body)
+        return link_reply_response(await asyncio.to_thread(answer_nearest_services, body))
+
     def link_reply_response(reply: LinkReply) -> JSONResponse:
         return JSONResponse(reply.body, status_code=reply.status)
 
@@ -1280,7 +1380,7 @@ def build_observer_server_app(
         try:
             reply = await asyncio.to_thread(
                 peer_link.request, kind, body,
-                timeout_s=(peer_link.search_timeout_s if kind in {REQUEST_EDDN_ROUTES, REQUEST_CHEAPEST_MARKETS}
+                timeout_s=(peer_link.search_timeout_s if kind in {REQUEST_EDDN_ROUTES, REQUEST_CHEAPEST_MARKETS, REQUEST_NEAREST_SERVICES}
                            else peer_link.request_timeout_s),
             )
         except HubUnreachable as exc:
@@ -1304,6 +1404,7 @@ def build_observer_server_app(
         REQUEST_HAUL_SEARCH: answer_haul_search,
         REQUEST_EDDN_ROUTES: answer_peer_eddn_routes,
         REQUEST_CHEAPEST_MARKETS: answer_cheapest_markets,
+        REQUEST_NEAREST_SERVICES: answer_nearest_services,
         REQUEST_TIME_MODEL: answer_time_model,
         REQUEST_EDDN_STATUS: answer_eddn_status,
         REQUEST_STATION_FACTS: answer_station_facts,
@@ -1775,6 +1876,7 @@ def build_observer_server_app(
             Route(CONTROLS_WEB_URL_PATH, controls_web),
             Route(MARKETS_WEB_URL_PATH, markets_web),
             Route(CHEAPEST_WEB_URL_PATH, cheapest_web),
+            Route(SERVICES_WEB_URL_PATH, services_web),
             Route(ROUTES_WEB_URL_PATH, routes_web),
             Route(TRAVEL_WEB_URL_PATH, travel_web),
             Route(CONFIG_WEB_URL_PATH, config_web),
@@ -1789,6 +1891,7 @@ def build_observer_server_app(
             Route("/api/carrier-names", carrier_names_endpoint),
             Route("/api/eddn-routes", eddn_routes_endpoint),
             Route("/api/cheapest-markets", cheapest_markets_endpoint),
+            Route("/api/nearest-services", nearest_services_endpoint),
             Route("/api/time-model", time_model_route, methods=["GET", "POST"]),
             Route("/api/hub-status", hub_status_endpoint),
             Route("/api/nodes", nodes_endpoint),
