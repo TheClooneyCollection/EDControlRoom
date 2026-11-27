@@ -2,7 +2,7 @@
 
 ## Status
 
-Decisions confirmed 2026-11-27; nothing built. Mission M7.
+Decisions confirmed 2026-11-27; built 2026-11-27 (slices A to D) on branch m7-cheapest-markets, not yet tried live. Mission M7.
 
 ## Why
 
