@@ -10,6 +10,8 @@ from typing import Any
 import httpx
 
 from edcr.cheapest_markets import CheapestQuery, MarketOffer
+from edcr.eddn.messages import is_carrier_station
+from edcr.station_services import ServiceQuery, ServiceStation
 
 PostJson = Callable[[str, dict[str, Any], float], object]
 SYSTEM_SEARCH_URL = "https://spansh.co.uk/api/systems/search"
@@ -158,3 +160,63 @@ def search_cheapest(query: CheapestQuery, commodity_name: str, post: PostJson,
         except (ValueError, OverflowError, OSError):
             skipped += 1
     return offers, int(count), skipped
+
+
+def search_service(query: ServiceQuery, spansh_name: str, post: PostJson,
+                   origin: tuple[float, float, float]) -> tuple[list[ServiceStation], int]:
+    """Fetch one distance-sorted page; malformed results reach the caller visibly.
+
+    The reference was resolved to origin by the caller; Spansh computes distances
+    from the same named reference, so station coordinates are not required.
+    """
+    filters: dict[str, Any] = {"services": [{"name": spansh_name}]}
+    if query.radius_ly is not None:
+        filters["distance"] = {"min": 0, "max": query.radius_ly}
+    if not query.include_carriers:
+        filters["type"] = {"value": list(NON_CARRIER_TYPES)}
+    if query.pad == "L":
+        filters["has_large_pad"] = {"value": True}
+    response = post(SEARCH_URL, {
+        "filters": filters, "sort": [{"distance": {"direction": "asc"}}],
+        "size": 50, "page": 0, "reference_system": query.reference_system,
+    }, 10.0)
+    if not isinstance(response, dict):
+        raise ValueError("Spansh response: expected an object")
+    if "error" in response:
+        raise ValueError(f"Spansh error: {response['error']}")
+    rows = response.get("results")
+    if not isinstance(rows, list):
+        raise ValueError("Spansh response: results must be a list")
+    count = _number(response.get("count"), "count", integer=True)
+    if count < len(rows):
+        raise ValueError("Spansh response: count is smaller than the result list")
+    stations = []
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("Spansh response: station row must be an object")
+        services = row.get("services")
+        if not isinstance(services, list) or not any(
+            isinstance(service, dict) and service.get("name") == spansh_name for service in services
+        ):
+            raise ValueError(f"Spansh response: missing service {spansh_name}")
+        pad = ""
+        for field, size in (("large_pads", "L"), ("medium_pads", "M"), ("small_pads", "S")):
+            if row.get(field) is not None:
+                number = _number(row[field], field, integer=True)
+                if number and not pad:
+                    pad = size
+        kind = _text(row, "type")
+        name = _text(row, "name")
+        try:
+            updated = _timestamp(row.get("updated_at"))
+        except ValueError as exc:
+            raise ValueError("Spansh response: invalid updated_at") from exc
+        stations.append(ServiceStation(
+            source="spansh", market_id=_number(row.get("market_id"), "market_id", integer=True),
+            system_name=_text(row, "system_name"), station_name=name, station_type=kind,
+            is_carrier=kind == "Fleet Carrier" or is_carrier_station(name, kind), max_pad=pad,
+            dist_ls=(None if row.get("distance_to_arrival") is None else
+                     _number(row["distance_to_arrival"], "distance_to_arrival")),
+            distance_ly=_number(row.get("distance"), "distance"), services_at=updated,
+        ))
+    return stations, int(count)
