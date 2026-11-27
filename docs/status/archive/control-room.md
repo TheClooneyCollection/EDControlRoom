@@ -4,6 +4,10 @@ Prepend displaced older status blocks from `docs/status/control-room.md` here.
 
 Legacy pre-split global status history remains in `../../status-archive.md`.
 
+## Archived 2026-11-27 (M8)
+
+- Web `/controls` is a button board for single routines (undock, dock, jump, escape, boost, buy/sell/sell-all) plus pause/resume, stop after run/now, instant toggle and reload config/keymap, with a live activity feed; each panel shows `Idle` or `Busy: <routine>`, idle-only buttons disable while a routine runs, Flight has a big red `STOP NOW`, and instant mode is a switch. A Nav panel plots, travels and sets home; a Voice panel speaks free text or prefilled TTS presets through the host voice (`say`) and live-tunes Piper model, length, noise, noise W, sentence pause and volume (`voice set`), with Save writing `[tts.piper]` (`voice save`). Linked from every page's nav. Built on the existing `command.submit_input` and `command.cancel_active_routine` paths; not yet tried in a real browser.
+
 ## Archived 2026-11-27 (M7)
 
 - Status, haul, market, and trade-route picker rendering now pass through explicit ViewModels; market/trade-route interactions use display-neutral ViewActions behind Textual adapters, `/` plus `/haul` preserve the two-way haul web UI and now include Travel Assist via `command.dispatch_travel`, while `/multi-haul` serves a separate shared-asset Spansh-style planner with ship-derived defaults, injected server/auth config, and authenticated websocket/session recovery.
