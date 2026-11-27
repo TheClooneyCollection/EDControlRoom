@@ -6,7 +6,7 @@ import unittest
 
 from edcr.cheapest_markets import (
     CheapestQuery, CheapestResult, MarketOffer, UnknownSystemError,
-    cheapest_payload, merge_offers, parse_cheapest_query, query_hub_store,
+    cheapest_payload, hub_system_coordinates, merge_offers, parse_cheapest_query, query_hub_store,
 )
 from edcr.eddn.messages import CommodityPrice, MarketSnapshot, StationInfo, SystemPosition
 from edcr.eddn.store import EddnStore
@@ -91,7 +91,7 @@ class HubStoreTests(unittest.TestCase):
         cls.temp.cleanup()
 
     def test_ship_search_counts_first_failure_and_keeps_unknown_pads(self):
-        offers, hidden, hidden_markets = query_hub_store(self.db, QUERY, now=NOW)
+        offers, hidden, hidden_markets = query_hub_store(self.db, QUERY, now=NOW, reference_coordinates=hub_system_coordinates(self.db, "Sol"))
         self.assertEqual([o.market_id for o in offers], [7, 1, 12, 13])
         self.assertEqual(hidden, {'carrier': 3, 'pad': 1, 'supply': 1, 'age': 1, 'radius': 2})
         self.assertEqual(offers[0].distance_ly, 5.0)
@@ -99,43 +99,43 @@ class HubStoreTests(unittest.TestCase):
         self.assertEqual((offers[-1].station_type, offers[-1].dist_ls), ('', None))
 
     def test_carrier_toggle_exposes_suspect_prices_strictly_below_threshold(self):
-        offers, hidden, hidden_markets = query_hub_store(self.db, replace(QUERY, include_carriers=True), now=NOW)
+        offers, hidden, hidden_markets = query_hub_store(self.db, replace(QUERY, include_carriers=True), now=NOW, reference_coordinates=hub_system_coordinates(self.db, "Sol"))
         self.assertEqual([(o.market_id, o.suspect_price) for o in offers[:2]], [(10, True), (11, False)])
         self.assertEqual(hidden['carrier'], 0)
         self.assertEqual(hidden['pad'], 2)
 
-    def test_unknown_reference_errors_without_spansh_and_keeps_rows_with_it(self):
+    def test_unknown_reference_errors_without_spansh_and_hides_rows_with_radius(self):
         query = replace(QUERY, reference_system='Missing')
         with self.assertRaisesRegex(UnknownSystemError, 'Unknown system: Missing'):
-            query_hub_store(self.db, replace(query, use_spansh=False), now=NOW)
-        offers, hidden, hidden_markets = query_hub_store(self.db, query, now=NOW)
-        self.assertEqual(len(offers), 6)
+            query_hub_store(self.db, replace(query, use_spansh=False), now=NOW, reference_coordinates=None)
+        offers, hidden, hidden_markets = query_hub_store(self.db, query, now=NOW, reference_coordinates=None)
+        self.assertEqual(offers, [])
         self.assertTrue(all(o.distance_ly is None for o in offers))
-        self.assertEqual(hidden['radius'], 0)
+        self.assertEqual(hidden['radius'], 6)
 
     def test_no_reference_means_no_distance_and_no_radius(self):
-        offers, hidden, hidden_markets = query_hub_store(self.db, replace(QUERY, reference_system=''), now=NOW)
+        offers, hidden, hidden_markets = query_hub_store(self.db, replace(QUERY, reference_system=''), now=NOW, reference_coordinates=hub_system_coordinates(self.db, "Sol"))
         self.assertEqual(len(offers), 6)
         self.assertTrue(all(o.distance_ly is None for o in offers))
         self.assertEqual(hidden['radius'], 0)
 
     def test_global_radius_keeps_distance_and_unknown_locations(self):
-        offers, hidden, hidden_markets = query_hub_store(self.db, replace(QUERY, radius_ly=None), now=NOW)
+        offers, hidden, hidden_markets = query_hub_store(self.db, replace(QUERY, radius_ly=None), now=NOW, reference_coordinates=hub_system_coordinates(self.db, "Sol"))
         self.assertEqual(len(offers), 6)
         self.assertEqual(hidden['radius'], 0)
         self.assertEqual(next(o for o in offers if o.market_id == 6).distance_ly, 101)
 
     def test_radius_and_age_boundaries_are_inclusive_case_insensitive_reference(self):
-        offers, _, _ = query_hub_store(self.db, replace(QUERY, reference_system='sOL', radius_ly=5), now=NOW)
+        offers, _, _ = query_hub_store(self.db, replace(QUERY, reference_system='sOL', radius_ly=5), now=NOW, reference_coordinates=hub_system_coordinates(self.db, "Sol"))
         self.assertIn(12, [o.market_id for o in offers])
 
     def test_commodity_without_sellers_is_empty(self):
-        offers, hidden, hidden_markets = query_hub_store(self.db, replace(QUERY, commodity='gold'), now=NOW)
+        offers, hidden, hidden_markets = query_hub_store(self.db, replace(QUERY, commodity='gold'), now=NOW, reference_coordinates=hub_system_coordinates(self.db, "Sol"))
         self.assertEqual(offers, [])
         self.assertEqual(sum(hidden.values()), 0)
 
     def test_hidden_hub_rows_block_older_or_equal_remote_snapshots(self):
-        hub, hidden, excluded = query_hub_store(self.db, QUERY, now=NOW)
+        hub, hidden, excluded = query_hub_store(self.db, QUERY, now=NOW, reference_coordinates=hub_system_coordinates(self.db, "Sol"))
         remote = [replace(row, source='spansh', supply=900, max_pad='', updated_at=row.updated_at - delta)
                   for row in excluded.values() for delta in (0, 1)]
         offers, total = merge_offers(hub, remote, QUERY, excluded)
@@ -144,7 +144,7 @@ class HubStoreTests(unittest.TestCase):
         self.assertEqual(sum(hidden.values()), 8)
 
     def test_hub_does_not_limit_before_merge(self):
-        offers, _, _ = query_hub_store(self.db, replace(QUERY, limit=1), now=NOW)
+        offers, _, _ = query_hub_store(self.db, replace(QUERY, limit=1), now=NOW, reference_coordinates=hub_system_coordinates(self.db, "Sol"))
         self.assertEqual(len(offers), 4)
 
 

@@ -4,7 +4,7 @@ from dataclasses import replace
 import unittest
 
 from edcr.cheapest_markets import CheapestQuery
-from edcr.spansh_stations import SEARCH_URL, search_cheapest, spansh_search_body
+from edcr.spansh_stations import SYSTEM_SEARCH_URL, lookup_system_coordinates, SEARCH_URL, search_cheapest, spansh_search_body
 
 NOW = 1795773600.0
 QUERY = CheapestQuery("tritium", "Adach", 100.0, 720, "L", 168.0, False, True, 50)
@@ -133,3 +133,36 @@ class SpanshStationsTests(unittest.TestCase):
             "results": [station(market_updated_at="2026-11-27 10:00:00")], "count": 1,
         }, now=NOW)
         self.assertEqual(offers[0].updated_at, NOW)
+
+
+class SystemCoordinatesTests(unittest.TestCase):
+    def test_exact_case_insensitive_match_and_signed_coordinates(self):
+        requests = []
+        def post(url, body, timeout):
+            requests.append((url, body, timeout))
+            # Coordinate fields from the single-row live Adach probe.
+            return {'count': 2, 'results': [
+                {'name': 'Adach', 'x': -117.71875, 'y': -85.125, 'z': 82.4375}]}
+        self.assertEqual(lookup_system_coordinates('Adach', post), (-117.71875, -85.125, 82.4375))
+        # Literal request body confirmed against the live API (size=1).
+        self.assertEqual(requests[0], (SYSTEM_SEARCH_URL, {
+            'filters': {'name': {'value': 'Adach'}}, 'size': 1, 'page': 0,
+        }, 10.0))
+        self.assertEqual(lookup_system_coordinates('ADACH', post), (-117.71875, -85.125, 82.4375))
+
+    def test_empty_or_non_exact_results_do_not_supply_coordinates(self):
+        for rows in ([], [{'name': 'Adachi', 'x': 1, 'y': 2, 'z': 3}]):
+            self.assertIsNone(lookup_system_coordinates('Adach', lambda *_: {'results': rows}))
+
+    def test_transport_failure_reaches_caller(self):
+        def offline(*_):
+            raise OSError('offline')
+        with self.assertRaisesRegex(OSError, 'offline'):
+            lookup_system_coordinates('Adach', offline)
+
+    def test_bad_responses_and_coordinates_report_error(self):
+        for response in (None, {}, {'error': 'offline'}, {'results': {}},
+                         *({'results': [{'name': 'Adach', 'x': value, 'y': 0, 'z': 0}]}
+                           for value in (None, True, '1', float('nan'), float('inf')))):
+            with self.subTest(response=response), self.assertRaisesRegex(ValueError, 'Spansh'):
+                lookup_system_coordinates('Adach', lambda *_: response)

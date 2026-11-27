@@ -99,23 +99,30 @@ def _toggle(params: Mapping[str, str], name: str, default: str) -> bool:
     return value == "1"
 
 
-def query_hub_store(db: Path, query: CheapestQuery, *, now: float) -> tuple[list[MarketOffer], dict[str, int], dict[int, MarketOffer]]:
-    """Read all selling rows before filtering so each exclusion has one reason.
+def hub_system_coordinates(db: Path, name: str) -> tuple[float, float, float] | None:
+    """Resolve the latest stored position without contacting external services."""
+    if not name:
+        return None
+    with closing(sqlite3.connect(db.resolve().as_uri() + "?mode=ro", uri=True)) as connection:
+        return connection.execute(
+            "SELECT x, y, z FROM system WHERE name = ? COLLATE NOCASE "
+            "ORDER BY updated_at DESC LIMIT 1", (name,),
+        ).fetchone()
 
-    UnknownSystemError maps to HTTP 404. With Spansh enabled an unknown reference
-    leaves hub distances unknown and disables its radius filter. Missing destination
-    coordinates fail an active radius filter. No limit is applied before merging.
+
+def query_hub_store(db: Path, query: CheapestQuery, *, now: float,
+                    reference_coordinates: tuple[float, float, float] | None
+                    ) -> tuple[list[MarketOffer], dict[str, int], dict[int, MarketOffer]]:
+    """Filter selling rows; unknown distances fail an active radius filter.
+
+    The caller resolves the reference from the hub, then optionally Spansh.
+    No limit is applied before merging. Each exclusion has one reason.
     """
+    reference = reference_coordinates if query.reference_system else None
+    if query.reference_system and reference is None and not query.use_spansh:
+        raise UnknownSystemError(f"Unknown system: {query.reference_system}")
     hidden = dict.fromkeys(("carrier", "pad", "supply", "age", "radius"), 0)
     with closing(sqlite3.connect(db.resolve().as_uri() + "?mode=ro", uri=True)) as connection:
-        reference = None
-        if query.reference_system:
-            reference = connection.execute(
-                "SELECT x, y, z FROM system WHERE name = ? COLLATE NOCASE "
-                "ORDER BY updated_at DESC LIMIT 1", (query.reference_system,),
-            ).fetchone()
-            if reference is None and not query.use_spansh:
-                raise UnknownSystemError(f"Unknown system: {query.reference_system}")
         rows = connection.execute(
             "SELECT m.market_id, m.system_name, m.station_name, m.is_carrier, m.updated_at, "
             "p.buy, p.supply, COALESCE(s.type, ''), COALESCE(s.max_pad, ''), s.dist_ls, "
@@ -142,7 +149,7 @@ def query_hub_store(db: Path, query: CheapestQuery, *, now: float) -> tuple[list
             reason = "supply"
         elif offer.updated_at < now - query.max_age_hours * 3600:
             reason = "age"
-        elif reference is not None and query.radius_ly is not None and (
+        elif query.reference_system and query.radius_ly is not None and (
             offer.distance_ly is None or offer.distance_ly > query.radius_ly
         ):
             reason = "radius"

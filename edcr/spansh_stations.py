@@ -12,6 +12,7 @@ import httpx
 from edcr.cheapest_markets import CheapestQuery, MarketOffer
 
 PostJson = Callable[[str, dict[str, Any], float], object]
+SYSTEM_SEARCH_URL = "https://spansh.co.uk/api/systems/search"
 SEARCH_URL = "https://spansh.co.uk/api/stations/search"
 NON_CARRIER_TYPES = (
     "Asteroid base", "Coriolis Starport", "Ocellus Starport", "Orbis Starport",
@@ -24,6 +25,29 @@ def post_json(url: str, body: dict[str, Any], timeout: float) -> object:
     response = httpx.post(url, json=body, timeout=timeout)
     response.raise_for_status()
     return response.json()
+
+
+def lookup_system_coordinates(name: str, post: PostJson) -> tuple[float, float, float] | None:
+    """Find one exact system name; transport and malformed responses reach the caller."""
+    response = post(SYSTEM_SEARCH_URL, {
+        "filters": {"name": {"value": name}}, "size": 1, "page": 0,
+    }, 10.0)
+    if not isinstance(response, dict):
+        raise ValueError("Spansh response: expected an object")
+    if "error" in response:
+        raise ValueError(f"Spansh error: {response['error']}")
+    rows = response.get("results")
+    if not isinstance(rows, list):
+        raise ValueError("Spansh response: results must be a list")
+    for row in rows:
+        if not isinstance(row, dict) or str(row.get("name", "")).casefold() != name.casefold():
+            continue
+        coordinates = tuple(row.get(axis) for axis in ("x", "y", "z"))
+        if any(isinstance(value, bool) or not isinstance(value, (int, float))
+               or not math.isfinite(value) for value in coordinates):
+            raise ValueError("Spansh response: invalid system coordinates")
+        return tuple(float(value) for value in coordinates)
+    return None
 
 
 def spansh_search_body(query: CheapestQuery, commodity_name: str) -> dict[str, Any]:

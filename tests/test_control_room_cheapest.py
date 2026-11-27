@@ -12,6 +12,7 @@ from edcr.eddn.messages import CommodityPrice, MarketSnapshot, StationInfo, Syst
 from edcr.eddn.store import EddnStore
 from edcr.hub.protocol import HubUnreachable, REQUEST_CHEAPEST_MARKETS
 from edcr.recent_markets import MarketSnapshot as RecentMarket, save_recent_markets
+from edcr.spansh_stations import SYSTEM_SEARCH_URL
 from edcr.ship_types import SHIP_PAD_SIZES, SHIP_TYPE_NAMES, ship_pad_size
 from tests.shared_loop import TestClient
 from tests.test_control_room_server import _base_data_read_model
@@ -100,9 +101,42 @@ class CheapestEndpointTests(unittest.TestCase):
         self.assertEqual(self.get(server(spansh_post=unexpected_post), spansh='0').status_code, 404)
         self.assertEqual(app.state.link_handlers[REQUEST_CHEAPEST_MARKETS]([]).status, 400)
 
-    def test_unknown_system_with_spansh_keeps_hub_rows_without_distance(self):
-        result = self.get(self.app(spansh_post=lambda *args: {'count': 0, 'results': []}), system='Unknown').json()
-        self.assertIsNone(result['offers'][0]['distance_ly'])
+    def test_unknown_system_coordinates_apply_radius_to_hub_rows(self):
+        def post(url, body, timeout):
+            if url == SYSTEM_SEARCH_URL:
+                return {'results': [{'name': 'Unknown', 'x': -3, 'y': 4, 'z': 0}]}
+            return {'count': 0, 'results': []}
+        app = self.app(spansh_post=post)
+        result = self.get(app, system='Unknown', radius_ly='5').json()
+        self.assertEqual(result['offers'][0]['distance_ly'], 5)
+        self.assertEqual(result['hidden']['radius'], 0)
+        result = self.get(app, system='Unknown', radius_ly='4').json()
+        self.assertEqual(result['offers'], [])
+        self.assertEqual(result['hidden']['radius'], 1)
+
+    def test_unknown_system_empty_or_failed_lookup_respects_radius(self):
+        for failure in (False, True):
+            def post(url, body, timeout):
+                if url == SYSTEM_SEARCH_URL and failure:
+                    raise OSError('Coordinate lookup offline')
+                return {'count': 0, 'results': []}
+            app = self.app(spansh_post=post)
+            for radius in ('100', ''):
+                with self.subTest(failure=failure, radius=radius):
+                    result = self.get(app, system='Unknown', radius_ly=radius).json()
+                    self.assertEqual(len(result['offers']), 0 if radius else 1)
+                    self.assertEqual(result['hidden']['radius'], 1 if radius else 0)
+                    if not radius:
+                        self.assertIsNone(result['offers'][0]['distance_ly'])
+                    self.assertEqual(result['spansh']['error'], 'Coordinate lookup offline' if failure else '')
+
+    def test_known_system_never_requests_spansh_coordinates(self):
+        def post(url, body, timeout):
+            if url == SYSTEM_SEARCH_URL:
+                self.fail('Known hub system must not trigger a coordinate lookup')
+            return {'count': 0, 'results': []}
+        result = self.get(self.app(spansh_post=post), system='sOL').json()
+        self.assertEqual(result['offers'][0]['distance_ly'], 0)
         self.assertEqual(result['spansh']['error'], '')
 
     def test_peer_forwards_resolved_defaults_and_search_timeout_to_hub(self):

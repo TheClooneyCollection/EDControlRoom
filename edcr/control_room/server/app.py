@@ -36,10 +36,10 @@ from edcr.eddn.route_query import (
     run_route_query,
 )
 from edcr.cheapest_markets import (
-    CheapestResult, UnknownSystemError, cheapest_payload, merge_offers, parse_cheapest_query, query_hub_store,
+    CheapestResult, UnknownSystemError, cheapest_payload, hub_system_coordinates, merge_offers, parse_cheapest_query, query_hub_store,
 )
 from edcr.ship_types import ship_pad_size
-from edcr.spansh_stations import PostJson, post_json, search_cheapest
+from edcr.spansh_stations import PostJson, lookup_system_coordinates, post_json, search_cheapest
 from edcr.config import TIME_MODEL_SOURCES, ConfigError, save_time_model
 from edcr.eddn.routes import TimeModel
 from edcr.trip_time_fit import FitShip, TripTimeModels, model_from_payload, parse_fit_ship
@@ -1205,22 +1205,29 @@ def build_observer_server_app(
         names = {item.commodity: item.name for snapshot in read_recent_markets() for item in market_items(snapshot)}
         name = names.get(query.commodity, query.commodity.title())
         now = time.time()
+        spansh, count, errors = [], None, []
         try:
-            hub, hidden, hidden_markets = query_hub_store(market_database_file, query, now=now)
+            reference = hub_system_coordinates(market_database_file, query.reference_system)
+            if query.reference_system and reference is None and query.use_spansh:
+                try:
+                    reference = lookup_system_coordinates(query.reference_system, spansh_post)
+                except Exception as exc:
+                    errors.append(str(exc) or type(exc).__name__)
+            hub, hidden, hidden_markets = query_hub_store(
+                market_database_file, query, now=now, reference_coordinates=reference)
         except UnknownSystemError:
             return LinkReply(404, {"detail": "Unknown system"})
         except sqlite3.Error as exc:
             return LinkReply(503, {"detail": f"Cannot read the market database: {exc}"})
-        spansh, count, error = [], None, ""
         if query.use_spansh:
             try:
                 spansh, count, skipped = search_cheapest(query, name, spansh_post, now=now)
                 if skipped:
-                    error = f"{skipped} Spansh rows skipped"
+                    errors.append(f"{skipped} Spansh rows skipped")
             except Exception as exc:
-                error = str(exc) or type(exc).__name__
+                errors.append(str(exc) or type(exc).__name__)
         offers, total = merge_offers(hub, spansh, query, hidden_markets)
-        result = CheapestResult(offers, hidden, count, error, total)
+        result = CheapestResult(offers, hidden, count, "; ".join(errors), total)
         return LinkReply(200, cheapest_payload(result, query, name, now=now))
 
     async def cheapest_markets_endpoint(request: Request) -> JSONResponse:
