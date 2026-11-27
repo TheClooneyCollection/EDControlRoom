@@ -124,8 +124,10 @@ Order: A, then B and D in parallel, then C.
 
 ## Deploy
 
-1. Hub: normal update. New tables are created on open; existing data is untouched.
-2. VPS listener: same code update so its snapshots carry services. Only with the user's go; follow the stop-and-restart notes for the VPS listener. Until then the hub's services come from its own listener and Spansh.
+No manual migration step anywhere. `EddnStore.__init__` creates the new tables with `CREATE TABLE IF NOT EXISTS` on every open, so starting the new version migrates the DB, and existing data is untouched. This fits the planned VPS auto-update (pull latest main, restart): a restart is the whole migration.
+
+1. Hub: normal update and restart.
+2. VPS listener: the same, so its snapshots carry services. Until the VPS auto-update exists, only with the user's go, following the stop-and-restart notes for the VPS listener. Until then the hub's services come from its own listener and Spansh.
 
 ## Verification
 
