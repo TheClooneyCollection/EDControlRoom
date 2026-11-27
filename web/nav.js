@@ -58,6 +58,7 @@ window.EDCRNode = (() => {
           icon: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>' +
             '<rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>'
         },
+        { href: "/services", label: "Services", icon: '<path d="M5 21V5h14v16M3 21h18M9 9h6m-6 4h6m-6 4h6"/>' },
         { href: "/travel", label: "Travel", icon: '<path d="M3 11l18-8-8 18-2-8-8-2z"/>' }
       ]
     },

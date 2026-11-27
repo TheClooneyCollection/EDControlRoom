@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ED Control Room - Services</title>
+  <link rel="icon" type="image/png" href="/assets/favicon.png">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="/assets/haul-ui.css">
+  <style>
+    main > .panel + .panel { margin-top: 16px; }
+    .services-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+    .services-field { display: grid; gap: 6px; }
+    .services-actions { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; margin-top: 18px; }
+    .service-table-scroll { overflow-x: auto; }
+    .service-table { width: 100%; border-collapse: collapse; }
+    .service-table th, .service-table td { padding: 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+    .service-table th { color: var(--text-2); font-weight: 500; }
+    .service-table .numeric { text-align: right; font-family: var(--mono); }
+    .services-field[hidden] { display: none; }
+    .carrier-badge { border: 1px solid var(--border); border-radius: var(--radius); padding: 2px 5px; font-size: 10px; color: var(--text-2); }
+    #results-status { overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Navigation">
+      <div class="brand">
+        <div class="brand-mark">ED</div>
+        <div>
+          <div class="brand-name">Control Room</div>
+          <div class="brand-sub">haul control</div>
+        </div>
+      </div>
+
+      <nav class="site-nav" id="site-nav" aria-label="Pages"></nav>
+      <script src="/assets/nav.js"></script>
+
+      <div class="chip hub-chip" id="hub-chip" hidden>Hub <strong>-</strong></div>
+
+      <div class="sidebar-foot">
+        <div class="status-row"><span><span class="dot"></span>Runtime</span><span id="status-runtime">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Journal</span><span id="status-journal">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Input target</span><span id="status-input-target">-</span></div>
+        <div class="status-row"><span><span class="dot"></span>Version</span><span id="status-version">-</span></div>
+      </div>
+    </aside>
+
+    <div>
+      <header class="topbar">
+        <div>
+          <div class="topbar-title">Services</div>
+          <div class="topbar-sub">Find nearby stations with the services you need, from the hub and Spansh.</div>
+        </div>
+        <div class="chips" aria-label="Session status">
+          <div class="chip">Host <strong id="host-label">-</strong></div>
+          <div class="token-control">
+            <input class="token-input" id="access-token" type="password" placeholder="Access token" autocomplete="off" aria-label="Access token">
+            <button class="token-button" id="save-token" type="button">Save</button>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <section class="panel" aria-labelledby="search-title">
+          <div class="panel-head"><div class="panel-title" id="search-title">Find a station service</div></div>
+          <form class="panel-body" id="services-form">
+            <div class="services-form">
+              <label class="services-field"><span class="field-label">Service</span><select class="select" id="service">
+                <option value="carriermanagement">Fleet Carrier Administration</option>
+                <option value="carriervendor">Fleet Carrier Vendor</option>
+                <option value="facilitator">Interstellar Factors</option>
+                <option value="materialtrader">Material Trader</option>
+                <option value="techbroker">Technology Broker</option>
+                <option value="shipyard">Shipyard</option>
+                <option value="outfitting">Outfitting</option>
+                <option value="blackmarket">Black Market</option>
+                <option value="custom">Other service symbol…</option>
+              </select></label>
+              <label class="services-field" id="custom-service-field" hidden><span class="field-label">Service symbol</span><input class="field" id="custom-service" autocomplete="off" placeholder="e.g. repair" disabled></label>
+              <label class="services-field"><span class="field-label">Reference system</span><input class="field" id="system" autocomplete="off" placeholder="Ship's current system"></label>
+              <label class="services-field"><span class="field-label">Radius (ly)</span><input class="field" id="radius_ly" value="200" type="number" min="0" step="any" placeholder="Galaxy-wide"><span class="field-hint">Clear for galaxy-wide</span></label>
+              <label class="services-field"><span class="field-label">Required pad</span><select class="select" id="pad"><option value="" selected>Ship default</option><option value="S">Small</option><option value="M">Medium</option><option value="L">Large</option></select></label>
+            </div>
+            <div class="services-actions">
+              <label><input id="carriers" type="checkbox"> Include carriers</label>
+              <label><input id="spansh" type="checkbox" checked> Include Spansh</label>
+              <button class="btn" id="search" type="submit">Search</button>
+            </div>
+          </form>
+        </section>
+        <section class="panel" aria-labelledby="results-title">
+          <div class="panel-head"><div class="panel-title" id="results-title">Nearest stations</div></div>
+          <div class="panel-body" aria-live="polite">
+            <p id="results-status" class="field-hint">Loading ship defaults and services…</p>
+            <div id="results" class="service-table-scroll"></div>
+            <p id="hidden-counts" class="field-hint"></p>
+            <p id="coverage-status" class="field-hint"></p>
+            <p id="spansh-status" class="field-hint"></p>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    window.EDCR_WEB_CONFIG = {};
+  </script>
+  <script src="/assets/services.js" defer></script>
+  <script src="/assets/hub-status.js" defer></script>
+</body>
+</html>
