@@ -1,5 +1,9 @@
 # Haul Status Archive
 
+## 2026-11-28 — completed trip-time implementation detail
+
+- Journal events and fitted trip time ([plan 0016](../plans/0016-journal-events-and-trip-time-fit.md)), all 5 steps built 2026-11-13. Every role runs a `journal-sync` thread that stores every journal line (chat and friends left out) in `[hub] journal_events_file` under its node id; a peer sends them up as `journal_events` outbox items, and `tools/journal_events.py` counts them. `edcr/trip_time_fit.py` fits the trip time per `ShipID` (30 legs, else pooled, else config; a field under 10 supporting legs stays configured) and `[eddn.time_model] source`/`fit_days`/`fit_ship` (`current`, `pooled` or a ShipID) pick the set. `/config` edits the configured values, the source and the ship (names from the latest Loadout via `edcr/ship_types.py`), and `POST /api/time-model` writes `config.toml` and applies live (hub and standalone only; a peer gets 409 and uses the hub's model). Next: a live check that a peer's events reach the hub.
+
 Prepend displaced older status blocks from `docs/status/haul.md` here.
 
 Legacy pre-split global status history remains in `../../status-archive.md`.
