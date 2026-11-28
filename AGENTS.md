@@ -68,6 +68,7 @@ Use [docs/iteration-logs/](docs/iteration-logs/) for concise per-iteration notes
 
 ## Working Rules
 
+- Every push to `main` deploys the VPS EDDN listener within about 10 minutes of a green `Tests` run. A schema change to an existing table must be a step in the `MIGRATIONS` ladder in `edcr/eddn/store.py`. New tables can still use `IF NOT EXISTS`.
 - Keep platform-specific code isolated behind interfaces.
 - Prefer explicit configuration over hardcoded paths.
 - Treat macOS as the primary target until the diagnostic path is stable.
